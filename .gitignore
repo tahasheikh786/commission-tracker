@@ -1,0 +1,11 @@
+# client (Node)
+client/node_modules
+client/.next
+client/.env
+
+# server (Python)
+server/__pycache__/
+server/.env
+
+# general
+*.log
