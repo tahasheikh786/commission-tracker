@@ -1,10 +1,25 @@
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-sqlalchemy==2.0.23
-asyncpg==0.29.0
-python-dotenv==1.0.0
-pydantic==2.5.0
-python-multipart==0.0.6
-boto3==1.34.0
-pdf2image==1.16.3
-Pillow==10.1.0 
+# Web framework
+fastapi
+
+# ASGI server for FastAPI
+uvicorn
+
+# Database
+sqlalchemy[asyncio]
+asyncpg
+
+# AWS Textract SDK
+boto3
+
+# PDF to Image conversion (for AWS Textract, uses poppler on system)
+pdf2image
+pillow
+
+# Environment variable support
+python-dotenv
+
+# Data validation / serialization
+pydantic
+
+# File upload support in FastAPI
+python-multipart
