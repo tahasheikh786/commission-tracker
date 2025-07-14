@@ -13,7 +13,7 @@ export default function ReviewPage() {
     useEffect(() => {
         async function fetchReviews() {
             setLoading(true)
-            const res = await fetch('http://localhost:8000/review/all/')
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/review/all/`)
             const data = await res.json()
             setSubmissions(data)
             setLoading(false)

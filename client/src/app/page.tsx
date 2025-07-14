@@ -79,7 +79,7 @@ export default function UploadPage() {
     if (!uploaded?.upload_id) return
     setSubmitting(true)
     try {
-      const res = await fetch('http://localhost:8000/review/approve/', {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/review/approve/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -111,7 +111,7 @@ export default function UploadPage() {
     if (!uploaded?.upload_id) return
     setSubmitting(true)
     try {
-      const res = await fetch('http://localhost:8000/review/reject/', {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/review/reject/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -171,7 +171,7 @@ export default function UploadPage() {
     if (!fetchMappingRef.current && !fetchingMapping && !showFieldMapper) {
       fetchMappingRef.current = true
       setFetchingMapping(true)
-      fetch(`http://localhost:8000/companies/${company.id}/mapping/`)
+      fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${company.id}/mapping/`)
         .then(r => r.json())
         .then(map => {
           let mappingObj = null

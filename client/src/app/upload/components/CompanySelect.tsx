@@ -19,7 +19,7 @@ export default function CompanySelect({
 
   useEffect(() => {
     setLoading(true)
-    fetch('http://localhost:8000/companies/')
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/`)
       .then(r => r.json())
       .then(setCompanies)
       .catch(() => toast.error("Failed to load companies"))
@@ -42,7 +42,7 @@ export default function CompanySelect({
     }
     setAddLoading(true)
     try {
-      const res = await fetch('http://localhost:8000/companies/', {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newCompany })
