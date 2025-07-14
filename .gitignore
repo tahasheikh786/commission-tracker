@@ -1,11 +1,15 @@
-# client (Node)
-client/node_modules
-client/.next
+# Client ignores
+client/node_modules/
+client/.next/
 client/.env
 
-# server (Python)
-server/__pycache__/
+# Server ignores
+server/venv/
 server/.env
+server/**/.env
+server/__pycache__/
+server/**/__pycache__/
+server/**/*.pyc
 
-# general
+# General
 *.log
