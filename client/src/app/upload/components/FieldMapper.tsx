@@ -88,7 +88,7 @@ export default function FieldMapper({
 
   // GET mapping: parse backend rows to our {mapping, fields}
   useEffect(() => {
-    fetch(`http://localhost:8000/companies/${company.id}/mapping/`)
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${company.id}/mapping/`)
       .then(r => r.json())
       .then(data => {
         if (Array.isArray(data) && data.length > 0) {
@@ -144,7 +144,7 @@ export default function FieldMapper({
 
   async function handleSave() {
     setSaving(true)
-    await fetch(`http://localhost:8000/companies/${company.id}/mapping/`, {
+    await fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${company.id}/mapping/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(mapping),

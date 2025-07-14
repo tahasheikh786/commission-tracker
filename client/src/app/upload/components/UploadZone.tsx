@@ -94,7 +94,7 @@ export default function UploadZone({
 
     try {
       toast.loading('Extracting tables...', { id: 'extracting' })
-      const res = await fetch('http://localhost:8000/extract-tables/', {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/extract-tables/`, {
         method: 'POST',
         body: formData,
       })
