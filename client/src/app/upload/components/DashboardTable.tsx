@@ -90,7 +90,7 @@ export default function DashboardTable({
     row: string[],
     globalRowIdx: number
   }
-  let allRows: RowWithGroup[] = []
+  const allRows: RowWithGroup[] = []
   let runningIdx = 0
   rows.forEach((table, groupIdx) => {
     allRows.push({ type: 'header', groupIdx, header: table.header })
@@ -131,7 +131,11 @@ export default function DashboardTable({
   function toggleRow(idx: number) {
     setSelectedRows(sel => {
       const next = new Set(sel)
-      next.has(idx) ? next.delete(idx) : next.add(idx)
+      if (next.has(idx)) {
+        next.delete(idx)
+      } else {
+        next.add(idx)
+      }
       return next
     })
   }
