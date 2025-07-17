@@ -11,20 +11,31 @@ export default function EditMappingModal({ carrier, onClose }: { carrier: any, o
   const [loading, setLoading] = useState(true);
   const [lastStatement, setLastStatement] = useState<any>(null);
 
+
+  function getLabelFromStandardFields(fieldKey: string) {
+    return (STANDARD_FIELDS.find(f => f.field === fieldKey)?.label) || fieldKey;
+  }
+
   // Fetch mapping and column headers
   useEffect(() => {
-    async function fetchData() { 
+    async function fetchData() {
       setLoading(true);
       // Fetch last statement to get available columns
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${carrier.id}/statements/`);
       const arr = await res.json();
       const last = arr?.[0];
-      setColumns(last?.raw_data?.[0]?.header || []);
-      setLastStatement(last);
 
       // Fetch mapping from backend
       const mapRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${carrier.id}/mapping/`);
-      const mappingArr = await mapRes.json();
+      const mappingArr: { field_key: string; column_name: string }[] = await mapRes.json();
+
+      const fallbackColumns = mappingArr?.map((row: { column_name: string }) => row.column_name).filter(Boolean) || [];
+      setColumns(last?.raw_data?.[0]?.header && last?.raw_data?.[0]?.header.length > 0
+        ? last.raw_data[0].header
+        : fallbackColumns
+      );
+
+      setLastStatement(last);
 
       // If array: [{field_key, column_name, ...}], else (shouldn't happen) use STANDARD_FIELDS
       if (Array.isArray(mappingArr) && mappingArr.length > 0) {
@@ -32,8 +43,12 @@ export default function EditMappingModal({ carrier, onClose }: { carrier: any, o
         const fields: { field: string; label: string }[] = [];
         mappingArr.forEach((row: any) => {
           map[row.field_key] = row.column_name;
-          fields.push({ field: row.field_key, label: row.column_name || row.field_key });
+          fields.push({
+            field: row.field_key,
+            label: getLabelFromStandardFields(row.field_key)  // Always use pretty label!
+          });
         });
+
         setMapping(map);
         setFieldConfig(fields);
       } else {
@@ -63,54 +78,54 @@ export default function EditMappingModal({ carrier, onClose }: { carrier: any, o
 
   return (
     <Modal onClose={onClose}>
-    <div className="w-full max-w-full px-2 md:px-10 py-8">
-  <div className="font-bold text-xl mb-6 text-center">
-    Edit Mappings for <span className="text-blue-600">{carrier.name}</span>
-  </div>
-  {loading ? (
-    <div className="text-blue-600 text-center py-8 text-lg">Loading...</div>
-  ) : (
-    <div className="flex flex-col md:flex-row gap-8 items-start">
-      <div className="w-full lg:w-1/2 max-w-full">
-        <FieldMapper
-          company={carrier}
-          columns={columns}
-          onSave={handleSave}
-          onSkip={onClose}
-          initialFields={fieldConfig}
-          initialMapping={mapping}
-        />
-      </div>
-      <div className="w-full lg:w-1/2 bg-white border rounded-2xl shadow p-4">
-        <div className="font-semibold text-blue-700 mb-2">Extracted Table Preview</div>
-        {columns && columns.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="min-w-[420px] text-sm">
-              <thead>
-                <tr>
-                  {columns.map((col, i) => (
-                    <th key={i} className="px-2 py-2 border-b font-bold">{col}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {lastStatement?.raw_data?.[0]?.data?.slice?.(0, 6)?.map((row: string[], i: number) => (
-                  <tr key={i} className="hover:bg-blue-50">
-                    {row.map((cell, j) => (
-                      <td key={j} className="px-2 py-2 border-b">{cell}</td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+      <div className="w-full max-w-full px-2 md:px-10 py-8">
+        <div className="font-bold text-xl mb-6 text-center">
+          Edit Mappings for <span className="text-blue-600">{carrier.name}</span>
+        </div>
+        {loading ? (
+          <div className="text-blue-600 text-center py-8 text-lg">Loading...</div>
         ) : (
-          <div className="text-gray-400">No sample data</div>
+          <div className="flex flex-col md:flex-row gap-8 items-start">
+            <div className="w-full lg:w-1/2 max-w-full">
+              <FieldMapper
+                company={carrier}
+                columns={columns}
+                onSave={handleSave}
+                onSkip={onClose}
+                initialFields={fieldConfig}
+                initialMapping={mapping}
+              />
+            </div>
+            <div className="w-full lg:w-1/2 bg-white border rounded-2xl shadow p-4">
+              <div className="font-semibold text-blue-700 mb-2">Extracted Table Preview</div>
+              {columns && columns.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="min-w-[420px] text-sm">
+                    <thead>
+                      <tr>
+                        {columns.map((col, i) => (
+                          <th key={i} className="px-2 py-2 border-b font-bold">{col}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {lastStatement?.raw_data?.[0]?.data?.slice?.(0, 6)?.map((row: string[], i: number) => (
+                        <tr key={i} className="hover:bg-blue-50">
+                          {row.map((cell, j) => (
+                            <td key={j} className="px-2 py-2 border-b">{cell}</td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-gray-400">No sample data</div>
+              )}
+            </div>
+          </div>
         )}
       </div>
-    </div>
-  )}
-</div>
 
     </Modal>
   );

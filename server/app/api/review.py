@@ -14,12 +14,14 @@ class ApprovePayload(BaseModel):
     upload_id: UUID
     final_data: List[Dict[str, Any]]
     field_config: Optional[List[Dict[str, str]]] = None
+    plan_types: Optional[List[str]] = None
 
 class RejectPayload(BaseModel):
     upload_id: UUID
     final_data: List[Dict[str, Any]]
     rejection_reason: str
     field_config: Optional[List[Dict[str, str]]] = None
+    plan_types: Optional[List[str]] = None
 
 @router.post("/approve/")
 async def approve_statement(
@@ -32,6 +34,7 @@ async def approve_statement(
         final_data=payload.final_data,
         status="Approved",
         field_config=payload.field_config,
+        plan_types=payload.plan_types,
     )
     return {"success": True, "review": schemas.StatementReview.from_orm(updated)}
 
@@ -47,6 +50,7 @@ async def reject_statement(
         status="Rejected",
         field_config=payload.field_config,
         rejection_reason=payload.rejection_reason,
+        plan_types=payload.plan_types,
     )
     return {"success": True, "review": schemas.StatementReview.from_orm(updated)}
 

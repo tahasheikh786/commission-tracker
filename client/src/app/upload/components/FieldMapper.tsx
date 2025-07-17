@@ -19,6 +19,8 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 
+// NOTE: initialFields and initialMapping must be preprocessed as in EditMappingModal.
+// initialMapping should be { field: column }, and initialFields should be [{ field, label }], with pretty labels from STANDARD_FIELDS if available.
 function fuzzyMatch(a: string, b: string) {
   return (
     a.toLowerCase().replace(/[^a-z]/g, '') === b.toLowerCase().replace(/[^a-z]/g, '') ||
@@ -63,6 +65,15 @@ function DraggableRow({
   )
 }
 
+const PLAN_TYPES = [
+  { value: 'medical', label: 'Medical' },
+  { value: 'dental', label: 'Dental' },
+  { value: 'vision', label: 'Vision' },
+  { value: 'life', label: 'Life' },
+  { value: 'disability', label: 'Disability' },
+  { value: 'other', label: 'Other' },
+]
+
 export default function FieldMapper({
   company,
   columns,
@@ -70,23 +81,31 @@ export default function FieldMapper({
   onSkip,
   initialFields = STANDARD_FIELDS,
   initialMapping,
+  initialPlanTypes = [],
 }: {
   company: { id: string, name: string }
   columns: string[]
-  onSave: (mapping: Record<string, string>, fields: FieldConf[]) => void
+  onSave: (mapping: Record<string, string>, fields: FieldConf[], planTypes: string[]) => void
   onSkip: () => void
   initialFields?: FieldConf[]
   initialMapping?: Record<string, string> | null
+  initialPlanTypes?: string[]
 }) {
   const [fields, setFields] = useState<FieldConf[]>(initialFields)
   const [mapping, setMapping] = useState<Record<string, string>>(initialMapping || {})
   const [saving, setSaving] = useState(false)
   const [customFieldName, setCustomFieldName] = useState('')
+  const [planTypes, setPlanTypes] = useState<string[]>(initialPlanTypes)
 
   // DnD-kit sensors
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   )
+
+  // For dropdowns: fallback to mapped carrier fields if columns empty
+  const allDropdownColumns = columns && columns.length > 0
+    ? columns
+    : Array.from(new Set(Object.values(mapping).filter(Boolean)))
 
   // Sync mapping and fields if props change
   useEffect(() => {
@@ -97,10 +116,13 @@ export default function FieldMapper({
     if (initialMapping) {
       setMapping(initialMapping)
     } else {
-      // Fuzzy match: try to auto-map by label
+      // Fuzzy match: try to auto-map by label or field name
       const map: Record<string, string> = {}
       for (const f of initialFields) {
-        const found = columns.find(col => fuzzyMatch(col, f.label))
+        let found = columns.find(col => fuzzyMatch(col, f.label))
+        if (!found) {
+          found = columns.find(col => fuzzyMatch(col, f.field))
+        }
         if (found) map[f.field] = found
       }
       setMapping(map)
@@ -132,6 +154,12 @@ export default function FieldMapper({
     })
   }
 
+  function handlePlanTypeChange(value: string) {
+    setPlanTypes((prev) =>
+      prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]
+    )
+  }
+
   async function handleSave() {
     setSaving(true)
     await fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${company.id}/mapping/`, {
@@ -141,7 +169,7 @@ export default function FieldMapper({
     })
     setSaving(false)
     toast.success("Mapping saved!")
-    onSave(mapping, fields)
+    onSave(mapping, fields, planTypes)
   }
 
   // DnD: handle reorder
@@ -157,6 +185,26 @@ export default function FieldMapper({
   return (
     <div className="bg-white rounded-3xl shadow-2xl p-10 mb-8 border max-w-4xl mx-auto w-full min-w-[340px]">
       <h2 className="text-2xl font-bold mb-8 text-gray-800">Map Extracted Columns</h2>
+      {/* Plan Type Selection */}
+      <div className="mb-8">
+        <label className="block text-lg font-semibold text-gray-700 mb-2">Plan Types</label>
+        <div className="flex flex-wrap gap-3">
+          {PLAN_TYPES.map(pt => (
+            <label key={pt.value} className={
+              `inline-flex items-center px-4 py-2 rounded-xl border border-gray-300 bg-gradient-to-br from-blue-50 to-purple-50 shadow-sm cursor-pointer transition-all hover:shadow-md ${planTypes.includes(pt.value) ? 'ring-2 ring-blue-400 bg-blue-100' : ''}`
+            }>
+              <input
+                type="checkbox"
+                className="form-checkbox accent-blue-600 mr-2 h-5 w-5"
+                checked={planTypes.includes(pt.value)}
+                onChange={() => handlePlanTypeChange(pt.value)}
+              />
+              <span className="text-base font-medium text-gray-800">{pt.label}</span>
+            </label>
+          ))}
+        </div>
+        <div className="text-sm text-gray-500 mt-2">Select all plan types included in this statement. You can select multiple.</div>
+      </div>
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
@@ -207,7 +255,7 @@ export default function FieldMapper({
                             onChange={e => setFieldMap(f.field, e.target.value)}
                           >
                             <option value="">-</option>
-                            {columns.map(col => (
+                            {allDropdownColumns.map(col => (
                               <option key={col} value={col}>{col}</option>
                             ))}
                           </select>

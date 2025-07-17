@@ -104,7 +104,11 @@ export default function CarrierTab() {
       <CarrierList
         carriers={carriers}
         selected={selected}
-        onSelect={setSelected}
+        onSelect={c => {
+          setSelected(c);
+          // Update the carrier in the list if name changed
+          setCarriers(prev => prev.map(car => car.id === c.id ? { ...car, name: c.name } : car));
+        }}
         loading={loadingCarriers}
         onDelete={handleCarrierDelete} 
       />

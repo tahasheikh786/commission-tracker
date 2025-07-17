@@ -22,10 +22,14 @@ export default function UploadPage() {
   const [showRejectModal, setShowRejectModal] = useState(false)
   const [rejectReason, setRejectReason] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [planTypes, setPlanTypes] = useState<string[]>([])
 
 
   const fetchMappingRef = useRef(false)
   const router = useRouter()
+  function getLabelFromStandardFields(fieldKey: string) {
+    return (STANDARD_FIELDS.find(f => f.field === fieldKey)?.label) || fieldKey;
+  }
 
   function handleReset() {
     setCompany(null)
@@ -41,16 +45,22 @@ export default function UploadPage() {
   }
 
   // Must match UploadZone's onParsed prop!
-  function handleUploadResult({ tables, upload_id, file_name, file }: any) {
+  function handleUploadResult({ tables, upload_id, file_name, file, plan_types, field_config }: any) {
     setUploaded({ tables, upload_id, file_name, file })
     setMapping(null)
     setFinalTables([])
-    setFieldConfig(STANDARD_FIELDS)
+    setFieldConfig(field_config || STANDARD_FIELDS)
     fetchMappingRef.current = false
     setShowFieldMapper(false)
     setSkipped(false)
     setShowRejectModal(false)
     setRejectReason('')
+    if (plan_types) setPlanTypes(plan_types)
+  }
+
+  // NEW: Handle table name changes from ExtractedTables
+  function handleExtractedTablesChange(newTables: any[]) {
+    setUploaded((prev: any) => prev ? { ...prev, tables: newTables } : prev)
   }
 
   function applyMapping(
@@ -72,7 +82,8 @@ export default function UploadPage() {
     }
     const dashboardHeader = fieldConfigOverride.map(f => f.field)
     const dashboardRows = mappedRows.map(obj => dashboardHeader.map(f => obj[f] || ""))
-    setFinalTables([{ header: dashboardHeader, rows: dashboardRows }])
+    // Preserve table names if present
+    setFinalTables([{ header: dashboardHeader, rows: dashboardRows, name: tables[0]?.name || '' }])
   }
 
   async function handleApprove() {
@@ -86,6 +97,7 @@ export default function UploadPage() {
           upload_id: uploaded.upload_id,
           final_data: finalTables,
           field_config: fieldConfig,
+          plan_types: planTypes,
         }),
       })
       if (!res.ok) {
@@ -119,6 +131,7 @@ export default function UploadPage() {
           final_data: finalTables, // <- include this!
           rejection_reason: rejectReason,
           field_config: fieldConfig,
+          plan_types: planTypes,
         }),
       })
       if (!res.ok) {
@@ -175,26 +188,32 @@ export default function UploadPage() {
         .then(r => r.json())
         .then(map => {
           let mappingObj = null
-          let fieldsArr = STANDARD_FIELDS
+          let fieldsArr = fieldConfig
+          let loadedPlanTypes = null
           if (map && typeof map === 'object') {
             if (map.mapping) {
               mappingObj = map.mapping
-              fieldsArr = map.fields || STANDARD_FIELDS
+              fieldsArr = map.fields || fieldConfig
+              if (map.plan_types) loadedPlanTypes = map.plan_types
             } else if (Array.isArray(map)) {
               mappingObj = {}
               fieldsArr = []
               map.forEach((row: any) => {
                 mappingObj[row.field_key] = row.column_name
                 if (!fieldsArr.some(f => f.field === row.field_key))
-                  fieldsArr.push({ field: row.field_key, label: row.field_key })
+                  fieldsArr.push({
+                    field: row.field_key,
+                    label: getLabelFromStandardFields(row.field_key) // Use pretty label!
+                  })
               })
-              if (!fieldsArr.length) fieldsArr = STANDARD_FIELDS
+              if (!fieldsArr.length) fieldsArr = fieldConfig
             }
           }
           if (mappingObj && Object.keys(mappingObj).length) {
             setMapping(mappingObj)
             setFieldConfig(fieldsArr)
             applyMapping(uploaded.tables, mappingObj, fieldsArr)
+            if (loadedPlanTypes) setPlanTypes(loadedPlanTypes)
           }
           setFetchingMapping(false)
         })
@@ -237,22 +256,24 @@ export default function UploadPage() {
               <FieldMapper
                 company={company}
                 columns={uploaded.tables[0].header}
-                onSave={(map, fieldConf) => {
+                initialPlanTypes={planTypes}
+                onSave={(map, fieldConf, selectedPlanTypes) => {
                   setMapping(map)
                   setFieldConfig(fieldConf)
+                  setPlanTypes(selectedPlanTypes)
                   applyMapping(uploaded.tables, map, fieldConf)
                   setShowFieldMapper(false)
                 }}
                 onSkip={() => {
-                  setFinalTables(uploaded.tables)
-                  setFieldConfig(
-                    uploaded.tables[0]?.header?.map((h: string) => ({ field: h, label: h })) || []
-                  )
+                  // Preserve table names if present
+                  setFinalTables(uploaded.tables.map((t: any) => ({ ...t })))
+                  setFieldConfig(fieldConfig)
                   setShowFieldMapper(false)
                   setMapping(null)
                   setSkipped(true)
                 }}
                 initialFields={fieldConfig}
+                initialMapping={mapping}
               />
             </div>
             {/* Divider */}
@@ -260,7 +281,7 @@ export default function UploadPage() {
             {/* RIGHT: Table (7/10 columns) */}
             <div className="col-span-7 flex flex-col items-stretch px-6 py-6 min-w-0">
               <h2 className="font-semibold text-gray-700 mb-2">Extracted Table Preview</h2>
-              <ExtractedTables tables={uploaded.tables} />
+              <ExtractedTables tables={uploaded.tables} onTablesChange={handleExtractedTablesChange} />
             </div>
           </div>
           <div className="flex justify-center mt-8">
@@ -314,6 +335,7 @@ export default function UploadPage() {
               fileUrl={uploaded?.file?.url || null}
               readOnly={false}
               onTableChange={setFinalTables}
+              planTypes={planTypes}
             />
 
             <div className="flex justify-center gap-6 mt-8">

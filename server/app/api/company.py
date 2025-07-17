@@ -8,6 +8,9 @@ from pydantic import BaseModel
 class CompanyIds(BaseModel):
     company_ids: List[str]
 
+class CompanyUpdate(BaseModel):
+    name: str
+
 router = APIRouter()
 
 @router.get("/companies/", response_model=List[schemas.Company])
@@ -38,3 +41,11 @@ async def delete_multiple_companies(request: CompanyIds, db: AsyncSession = Depe
         except Exception as e:
             return {"error": f"Failed to delete company with ID {company_id}: {str(e)}"}
     return {"message": "Selected companies deleted successfully"}
+
+@router.patch("/companies/{company_id}", response_model=schemas.Company)
+async def update_company(company_id: str, update: CompanyUpdate, db: AsyncSession = Depends(get_db)):
+    company = await crud.get_company_by_id(db, company_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    updated_company = await crud.update_company_name(db, company_id, update.name)
+    return updated_company
