@@ -28,8 +28,8 @@ export default function EditMappingModal({ carrier, onClose }: { carrier: any, o
 
       // If array: [{field_key, column_name, ...}], else (shouldn't happen) use STANDARD_FIELDS
       if (Array.isArray(mappingArr) && mappingArr.length > 0) {
-        let map: Record<string, string> = {};
-        let fields: { field: string; label: string }[] = [];
+        const map: Record<string, string> = {};
+        const fields: { field: string; label: string }[] = [];
         mappingArr.forEach((row: any) => {
           map[row.field_key] = row.column_name;
           fields.push({ field: row.field_key, label: row.column_name || row.field_key });
