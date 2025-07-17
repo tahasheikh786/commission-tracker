@@ -82,14 +82,16 @@ export default function FieldMapper({
   initialFields = STANDARD_FIELDS,
   initialMapping,
   initialPlanTypes = [],
+  tableNames = [],
 }: {
   company: { id: string, name: string }
   columns: string[]
-  onSave: (mapping: Record<string, string>, fields: FieldConf[], planTypes: string[]) => void
+  onSave: (mapping: Record<string, string>, fields: FieldConf[], planTypes: string[], tableNames?: string[]) => void
   onSkip: () => void
   initialFields?: FieldConf[]
   initialMapping?: Record<string, string> | null
   initialPlanTypes?: string[]
+  tableNames?: string[]
 }) {
   const [fields, setFields] = useState<FieldConf[]>(initialFields)
   const [mapping, setMapping] = useState<Record<string, string>>(initialMapping || {})
@@ -162,14 +164,21 @@ export default function FieldMapper({
 
   async function handleSave() {
     setSaving(true)
+    // Compose MappingConfig object
+    const config = {
+      mapping,
+      plan_types: planTypes,
+      table_names: tableNames,
+      field_config: fields,
+    }
     await fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${company.id}/mapping/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(mapping),
+      body: JSON.stringify(config),
     })
     setSaving(false)
     toast.success("Mapping saved!")
-    onSave(mapping, fields, planTypes)
+    onSave(mapping, fields, planTypes, tableNames)
   }
 
   // DnD: handle reorder

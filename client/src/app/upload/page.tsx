@@ -190,11 +190,13 @@ export default function UploadPage() {
           let mappingObj = null
           let fieldsArr = fieldConfig
           let loadedPlanTypes = null
+          let loadedTableNames = null
           if (map && typeof map === 'object') {
             if (map.mapping) {
               mappingObj = map.mapping
-              fieldsArr = map.fields || fieldConfig
+              fieldsArr = map.field_config || fieldConfig
               if (map.plan_types) loadedPlanTypes = map.plan_types
+              if (map.table_names) loadedTableNames = map.table_names
             } else if (Array.isArray(map)) {
               mappingObj = {}
               fieldsArr = []
@@ -214,6 +216,7 @@ export default function UploadPage() {
             setFieldConfig(fieldsArr)
             applyMapping(uploaded.tables, mappingObj, fieldsArr)
             if (loadedPlanTypes) setPlanTypes(loadedPlanTypes)
+            // Optionally set table names if needed
           }
           setFetchingMapping(false)
         })
@@ -257,10 +260,22 @@ export default function UploadPage() {
                 company={company}
                 columns={uploaded.tables[0].header}
                 initialPlanTypes={planTypes}
-                onSave={(map, fieldConf, selectedPlanTypes) => {
+                onSave={async (map, fieldConf, selectedPlanTypes) => {
                   setMapping(map)
                   setFieldConfig(fieldConf)
                   setPlanTypes(selectedPlanTypes)
+                  // Compose MappingConfig object
+                  const config = {
+                    mapping: map,
+                    plan_types: selectedPlanTypes,
+                    table_names: uploaded.tables.map((t: any) => t.name || ''),
+                    field_config: fieldConf,
+                  }
+                  await fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${company.id}/mapping/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config),
+                  })
                   applyMapping(uploaded.tables, map, fieldConf)
                   setShowFieldMapper(false)
                 }}

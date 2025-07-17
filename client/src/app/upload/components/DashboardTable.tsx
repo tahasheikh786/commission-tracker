@@ -292,6 +292,17 @@ export default function DashboardTable({
       </div>
       <table className="min-w-full">
         <thead className="bg-gradient-to-br from-blue-100 to-purple-50">
+
+           {/* Render table name row if present */}
+           {rows.map((table, groupIdx) => (
+            table.name ? (
+              <tr key={`name-${groupIdx}`}>
+                <td colSpan={fieldConfig.length + (!readOnly ? 2 : 1)} className="py-2 px-4 text-lg font-bold text-blue-700 bg-blue-50 border-b text-center">
+                  {table.name}
+                </td>
+              </tr>
+            ) : null
+          ))}
           <tr>
             {!readOnly && (
               <th className="py-3 px-3 border-b w-8 text-center">
@@ -313,33 +324,8 @@ export default function DashboardTable({
           </tr>
         </thead>
         <tbody>
+         
           {pagedRowsWithHeaders.map((item, i) => {
-            // Show table name before each group (now always)
-            if (item.type === 'header') {
-              return (
-                <>
-                  {item.name && (
-                    <tr key={`name-${item.groupIdx}-${i}`}>
-                      <td colSpan={fieldConfig.length + (!readOnly ? 2 : 1)} className="py-2 px-4 text-lg font-bold text-blue-700 bg-blue-50 border-b">
-                        {item.name}
-                      </td>
-                    </tr>
-                  )}
-                  <tr key={`header-${item.groupIdx}-${i}`} className="bg-blue-100">
-                    {!readOnly && <td className="py-2 px-3 border-b align-top text-center font-bold"></td>}
-                    {item.header.map((h, colIdx) => (
-                      <th
-                        key={colIdx}
-                        className="px-4 py-3 text-left font-bold text-gray-700 border-b"
-                      >
-                        {h}
-                      </th>
-                    ))}
-                    {!readOnly && <td className="py-3 px-2 border-b w-40"></td>}
-                  </tr>
-                </>
-              )
-            }
             if (item.type === 'row') {
               const row = item.row
               const globalIdx = item.globalRowIdx
