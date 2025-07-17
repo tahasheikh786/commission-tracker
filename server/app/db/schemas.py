@@ -39,6 +39,7 @@ class StatementUpload(BaseModel):
     status: str
     raw_data: List[Dict[str, Any]]  # <--- Accepts a list of table dicts!
     mapping_used: Optional[dict] = None
+    plan_types: Optional[List[str]] = None
 
     class Config:
         orm_mode = True
@@ -54,6 +55,7 @@ class StatementReview(BaseModel):
     final_data: Optional[List[Dict[str, Any]]] = None
     field_config: Optional[List[Dict[str, str]]] = None
     rejection_reason: Optional[str] = None
+    plan_types: Optional[List[str]] = None
 
     class Config:
         from_attributes = True  # For Pydantic v2

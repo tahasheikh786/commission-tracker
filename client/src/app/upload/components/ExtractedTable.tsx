@@ -6,6 +6,7 @@ import clsx from 'clsx'
 type TableData = {
   header: string[]
   rows: string[][]
+  name?: string // <-- add table name
 }
 
 function isHeaderLikeRow(row: string[]) {
@@ -53,11 +54,12 @@ function Pagination({
 
 const ROWS_OPTIONS = [10, 25, 50];
 
-export default function ExtractedTables({ tables: backendTables }: { tables: TableData[] }) {
+export default function ExtractedTables({ tables: backendTables, onTablesChange }: { tables: TableData[], onTablesChange?: (tables: TableData[]) => void }) {
   const [tab, setTab] = useState(0)
   const [tables, setTables] = useState(backendTables.map(table => ({
     ...table,
-    rows: [...table.rows]
+    rows: [...table.rows],
+    name: table.name || ''
   })))
   const [editRow, setEditRow] = useState<{ t: number, r: number } | null>(null)
   const [editValues, setEditValues] = useState<string[]>([])
@@ -171,6 +173,14 @@ export default function ExtractedTables({ tables: backendTables }: { tables: Tab
     setRowsPerPages(rpp => rpp.map((x, i) => i === tabIdx ? val : x))
     setPages(pgs => pgs.map((p, i) => (i === tabIdx ? 1 : p)));
   }
+  // Add handler for table name change
+  function handleTableNameChange(idx: number, name: string) {
+    setTables(tables => {
+      const newTables = tables.map((t, i) => i === idx ? { ...t, name } : t)
+      if (onTablesChange) onTablesChange(newTables)
+      return newTables
+    })
+  }
 
   return (
     <div className="w-full">
@@ -187,6 +197,17 @@ export default function ExtractedTables({ tables: backendTables }: { tables: Tab
             onClick={() => setTab(idx)}
           >{`Table ${idx + 1}`}</button>
         ))}
+      </div>
+      {/* Table name input */}
+      <div className="mb-2 flex items-center gap-2">
+        <label className="text-sm font-medium">Table Name (optional):</label>
+        <input
+          type="text"
+          className="border rounded px-2 py-1 text-sm shadow-sm focus:ring-2 focus:ring-blue-200"
+          value={tables[tab].name || ''}
+          onChange={e => handleTableNameChange(tab, e.target.value)}
+          placeholder={`Table ${tab + 1}`}
+        />
       </div>
       <div className="flex items-center justify-between mb-2 flex-wrap gap-2 px-2">
         <div className="flex items-center gap-2">

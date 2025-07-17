@@ -79,7 +79,8 @@ async def save_statement_review(
     final_data,
     status: str,
     field_config,
-    rejection_reason: str = None
+    rejection_reason: str = None,
+    plan_types: list = None
 ):
     from app.db.models import StatementUpload
     upload = await db.get(StatementUpload, upload_id)
@@ -90,6 +91,8 @@ async def save_statement_review(
     upload.status = status
     upload.rejection_reason = rejection_reason
     upload.mapping_used = field_config  # optional
+    if plan_types is not None:
+        upload.plan_types = plan_types
     await db.commit()
     await db.refresh(upload)
     return upload
@@ -148,4 +151,15 @@ async def delete_statement(db: AsyncSession, statement_id: str):
     
     await db.delete(statement)
     await db.commit()
+
+async def update_company_name(db, company_id: str, new_name: str):
+    from .models import Company
+    result = await db.execute(select(Company).where(Company.id == company_id))
+    company = result.scalar_one_or_none()
+    if not company:
+        raise Exception(f"Company with ID {company_id} not found.")
+    company.name = new_name
+    await db.commit()
+    await db.refresh(company)
+    return company
 

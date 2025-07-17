@@ -77,9 +77,13 @@ def count_non_numeric(row):
     return sum(1 for cell in row if cell and not is_number(cell))
 
 def header_likely(row):
-    """Header if most cells are not numbers, and some cells are long (5+ chars)."""
+    """Header if most cells are not numbers, some cells are long (5+ chars), and no cell contains digits."""
     if not row or not any(cell.strip() for cell in row):
         return False
+    # New: If any cell contains a digit, not a header
+    for cell in row:
+        if any(char.isdigit() for char in cell):
+            return False
     non_numeric = count_non_numeric(row)
     return (
         non_numeric >= len(row) * 0.6 and  # mostly non-numeric

@@ -6,9 +6,22 @@ import clsx from 'clsx'
 type TableData = {
   header: string[]
   rows: string[][]
+  name?: string // <-- add table name support
 }
 
 type FieldConfig = { field: string, label: string }
+
+type DashboardTableProps = {
+  tables: TableData[],
+  fieldConfig: FieldConfig[],
+  onEditMapping: () => void,
+  company?: { id: string, name: string } | null,
+  fileName?: string,
+  fileUrl?: string | null,
+  readOnly?: boolean,
+  onTableChange?: (tables: TableData[]) => void,
+  planTypes?: string[]
+}
 
 function fixPercent(val: string): string {
   if (!val) return val
@@ -55,17 +68,9 @@ export default function DashboardTable({
   fileName,
   fileUrl,
   readOnly = false,
-  onTableChange, // <-- NEW!
-}: {
-  tables: TableData[],
-  fieldConfig: FieldConfig[],
-  onEditMapping: () => void,
-  company?: { id: string, name: string } | null,
-  fileName?: string,
-  fileUrl?: string | null,
-  readOnly?: boolean,
-  onTableChange?: (tables: TableData[]) => void, // <-- NEW!
-}) {
+  onTableChange,
+  planTypes = [],
+}: DashboardTableProps) {
   // --- Main Table State (tracks edits/deletes) ---
   const [rows, setRows] = useState<TableData[]>(tables)
   // If `tables` prop changes (new upload, remap, etc), update local state
@@ -83,7 +88,8 @@ export default function DashboardTable({
   type RowWithGroup = {
     type: 'header',
     groupIdx: number,
-    header: string[]
+    header: string[],
+    name?: string // <-- add name for group
   } | {
     type: 'row',
     groupIdx: number,
@@ -93,7 +99,7 @@ export default function DashboardTable({
   const allRows: RowWithGroup[] = []
   let runningIdx = 0
   rows.forEach((table, groupIdx) => {
-    allRows.push({ type: 'header', groupIdx, header: table.header })
+    allRows.push({ type: 'header', groupIdx, header: table.header, name: table.name })
     table.rows.forEach(row => {
       allRows.push({ type: 'row', groupIdx, row, globalRowIdx: runningIdx++ })
     })
@@ -111,13 +117,12 @@ export default function DashboardTable({
   let lastGroupIdx: number | null = null
   pagedDataRows.forEach(row => {
     if (lastGroupIdx !== row.groupIdx) {
-      if (row.groupIdx !== 0) {
-        pagedRowsWithHeaders.push({
-          type: 'header',
-          groupIdx: row.groupIdx,
-          header: rows[row.groupIdx]?.header ?? []
-        })
-      }
+      pagedRowsWithHeaders.push({
+        type: 'header',
+        groupIdx: row.groupIdx,
+        header: rows[row.groupIdx]?.header ?? [],
+        name: rows[row.groupIdx]?.name
+      })
       lastGroupIdx = row.groupIdx
     }
     pagedRowsWithHeaders.push(row)
@@ -234,6 +239,16 @@ export default function DashboardTable({
 
   return (
     <div className="mt-8 mb-20 shadow-lg rounded-2xl p-5 border bg-white overflow-x-auto w-full">
+      {planTypes && planTypes.length > 0 && (
+        <div className="mb-4 flex flex-wrap gap-2 items-center">
+          <span className="font-semibold text-gray-700 text-base mr-2">Plan Types:</span>
+          {planTypes.map(pt => (
+            <span key={pt} className="inline-block px-3 py-1 rounded-full bg-blue-100 text-blue-700 font-medium text-sm border border-blue-300">
+              {pt.charAt(0).toUpperCase() + pt.slice(1)}
+            </span>
+          ))}
+        </div>
+      )}
       <div className="flex items-center justify-between mb-2 flex-wrap gap-2 px-2">
         <div className="flex items-center gap-2">
           <label className="text-sm font-medium">Rows per page:</label>
@@ -299,20 +314,30 @@ export default function DashboardTable({
         </thead>
         <tbody>
           {pagedRowsWithHeaders.map((item, i) => {
-            if (item.type === 'header' && item.groupIdx !== 0) {
+            // Show table name before each group (now always)
+            if (item.type === 'header') {
               return (
-                <tr key={`header-${item.groupIdx}-${i}`} className="bg-blue-100">
-                  {!readOnly && <td className="py-2 px-3 border-b align-top text-center font-bold"></td>}
-                  {item.header.map((h, colIdx) => (
-                    <th
-                      key={colIdx}
-                      className="px-4 py-3 text-left font-bold text-gray-700 border-b"
-                    >
-                      {h}
-                    </th>
-                  ))}
-                  {!readOnly && <td className="py-3 px-2 border-b w-40"></td>}
-                </tr>
+                <>
+                  {item.name && (
+                    <tr key={`name-${item.groupIdx}-${i}`}>
+                      <td colSpan={fieldConfig.length + (!readOnly ? 2 : 1)} className="py-2 px-4 text-lg font-bold text-blue-700 bg-blue-50 border-b">
+                        {item.name}
+                      </td>
+                    </tr>
+                  )}
+                  <tr key={`header-${item.groupIdx}-${i}`} className="bg-blue-100">
+                    {!readOnly && <td className="py-2 px-3 border-b align-top text-center font-bold"></td>}
+                    {item.header.map((h, colIdx) => (
+                      <th
+                        key={colIdx}
+                        className="px-4 py-3 text-left font-bold text-gray-700 border-b"
+                      >
+                        {h}
+                      </th>
+                    ))}
+                    {!readOnly && <td className="py-3 px-2 border-b w-40"></td>}
+                  </tr>
+                </>
               )
             }
             if (item.type === 'row') {

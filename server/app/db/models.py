@@ -34,3 +34,4 @@ class StatementUpload(Base):
     final_data = Column(JSON)  # <--- Add this if missing!
     field_config = Column(JSON) # <--- (Optional, if you want field_config too)
     rejection_reason = Column(Text)  # <--- Add this if missing!
+    plan_types = Column(JSON)  # Store list of plan types (Medical, Dental, etc)
