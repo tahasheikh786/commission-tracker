@@ -27,9 +27,12 @@ export default function EditMappingModal({ carrier, onClose }: { carrier: any, o
 
       // Fetch mapping from backend
       const mapRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${carrier.id}/mapping/`);
-      const mappingArr: { field_key: string; column_name: string }[] = await mapRes.json();
+      const mappingObj = await mapRes.json();
 
-      const fallbackColumns = mappingArr?.map((row: { column_name: string }) => row.column_name).filter(Boolean) || [];
+      let fallbackColumns: string[] = [];
+      if (mappingObj && mappingObj.mapping) {
+        fallbackColumns = Object.values(mappingObj.mapping).filter(Boolean) as string[] || [];
+      }
       setColumns(last?.raw_data?.[0]?.header && last?.raw_data?.[0]?.header.length > 0
         ? last.raw_data[0].header
         : fallbackColumns
@@ -37,22 +40,10 @@ export default function EditMappingModal({ carrier, onClose }: { carrier: any, o
 
       setLastStatement(last);
 
-      // If array: [{field_key, column_name, ...}], else (shouldn't happen) use STANDARD_FIELDS
-      if (Array.isArray(mappingArr) && mappingArr.length > 0) {
-        const map: Record<string, string> = {};
-        const fields: { field: string; label: string }[] = [];
-        mappingArr.forEach((row: any) => {
-          map[row.field_key] = row.column_name;
-          fields.push({
-            field: row.field_key,
-            label: getLabelFromStandardFields(row.field_key)  // Always use pretty label!
-          });
-        });
-
-        setMapping(map);
-        setFieldConfig(fields);
+      if (mappingObj && mappingObj.mapping) {
+        setMapping(mappingObj.mapping);
+        setFieldConfig(mappingObj.field_config || STANDARD_FIELDS);
       } else {
-        // fallback to standard fields if no mapping found
         setMapping({});
         setFieldConfig(STANDARD_FIELDS);
       }
@@ -62,11 +53,17 @@ export default function EditMappingModal({ carrier, onClose }: { carrier: any, o
   }, [carrier.id]);
 
   // Save mapping on FieldMapper save
-  async function handleSave(map: Record<string, string>, fieldConf: any[]) {
+  async function handleSave(map: Record<string, string>, fieldConf: any[], planTypes: string[]) {
+    const config = {
+      mapping: map,
+      plan_types: planTypes,
+      table_names: [], // Table names can be passed in if needed
+      field_config: fieldConf,
+    };
     const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${carrier.id}/mapping/`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(map),
+      body: JSON.stringify(config),
     });
     if (res.ok) {
       toast.success("Mapping updated!");

@@ -163,3 +163,36 @@ async def update_company_name(db, company_id: str, new_name: str):
     await db.refresh(company)
     return company
 
+async def get_latest_statement_upload_for_company(db, company_id):
+    from app.db.models import StatementUpload
+    result = await db.execute(
+        select(StatementUpload)
+        .where(StatementUpload.company_id == company_id)
+        .order_by(StatementUpload.uploaded_at.desc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+async def save_company_mapping_config(db, company_id, plan_types, table_names, field_config):
+    from app.db.models import StatementUpload
+    # Get the latest upload for this company
+    result = await db.execute(
+        select(StatementUpload)
+        .where(StatementUpload.company_id == company_id)
+        .order_by(StatementUpload.uploaded_at.desc())
+        .limit(1)
+    )
+    upload = result.scalar_one_or_none()
+    if upload:
+        upload.plan_types = plan_types
+        # Save table names into raw_data if possible
+        if upload.raw_data and table_names:
+            for i, t in enumerate(upload.raw_data):
+                if i < len(table_names):
+                    if isinstance(t, dict):
+                        t['name'] = table_names[i]
+        upload.field_config = field_config
+        await db.commit()
+        await db.refresh(upload)
+    return upload
+

@@ -61,3 +61,10 @@ class StatementReview(BaseModel):
         from_attributes = True  # For Pydantic v2
 
 
+class MappingConfig(BaseModel):
+    mapping: Dict[str, str]
+    plan_types: List[str] = []
+    table_names: List[str] = []
+    field_config: List[Dict[str, str]] = []
+
+
