@@ -3,6 +3,7 @@ from .schemas import CompanyCreate, CompanyFieldMappingCreate, StatementUpload
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from datetime import datetime
 from sqlalchemy.future import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 
 async def get_company_by_name(db, name: str):
@@ -108,3 +109,43 @@ async def get_all_statement_reviews(db):
         }
         for row in result.all()
     ]
+
+async def get_statements_for_company(db, company_id):
+    """Returns all uploads/statements for a given company (carrier)"""
+    from app.db.models import StatementUpload
+    result = await db.execute(
+        select(StatementUpload)
+        .where(StatementUpload.company_id == company_id)
+        .order_by(StatementUpload.uploaded_at.desc())
+    )
+    return result.scalars().all()
+
+
+async def delete_company(db: AsyncSession, company_id: str):
+    # Fetch the company to ensure it exists
+    company = await db.execute(select(Company).where(Company.id == company_id))
+    company = company.scalar_one_or_none()
+    
+    if company:
+        # Delete the company if found
+        await db.delete(company)
+        await db.commit()
+    else:
+        raise Exception(f"Company with ID {company_id} not found.")
+
+# Add missing get_statement_by_id function
+async def get_statement_by_id(db: AsyncSession, statement_id: str):
+    from app.db.models import StatementUpload
+    result = await db.execute(select(StatementUpload).where(StatementUpload.id == statement_id))
+    return result.scalar_one_or_none()
+
+# Add missing delete_statement function
+async def delete_statement(db: AsyncSession, statement_id: str):
+    from app.db.models import StatementUpload
+    statement = await get_statement_by_id(db, statement_id)
+    if not statement:
+        raise Exception(f"Statement with ID {statement_id} not found")
+    
+    await db.delete(statement)
+    await db.commit()
+
