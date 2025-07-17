@@ -69,15 +69,17 @@ export default function FieldMapper({
   onSave,
   onSkip,
   initialFields = STANDARD_FIELDS,
+  initialMapping,
 }: {
   company: { id: string, name: string }
   columns: string[]
   onSave: (mapping: Record<string, string>, fields: FieldConf[]) => void
   onSkip: () => void
   initialFields?: FieldConf[]
+  initialMapping?: Record<string, string> | null
 }) {
   const [fields, setFields] = useState<FieldConf[]>(initialFields)
-  const [mapping, setMapping] = useState<Record<string, string>>({})
+  const [mapping, setMapping] = useState<Record<string, string>>(initialMapping || {})
   const [saving, setSaving] = useState(false)
   const [customFieldName, setCustomFieldName] = useState('')
 
@@ -86,37 +88,25 @@ export default function FieldMapper({
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   )
 
-  // GET mapping: parse backend rows to our {mapping, fields}
+  // Sync mapping and fields if props change
   useEffect(() => {
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${company.id}/mapping/`)
-      .then(r => r.json())
-      .then(data => {
-        if (Array.isArray(data) && data.length > 0) {
-          const newMapping: Record<string, string> = {}
-          const newFields: FieldConf[] = []
-          data.forEach((row: any) => {
-            newMapping[row.field_key] = row.column_name
-            if (!newFields.some(f => f.field === row.field_key)) {
-              // <---- CHANGE IS HERE
-              const std = STANDARD_FIELDS.find(sf => sf.field === row.field_key)
-              newFields.push({ field: row.field_key, label: std?.label || row.field_key })
-            }
-          })
-          setMapping(newMapping)
-          setFields(newFields.length ? newFields : initialFields)
-        } else {
-          // Try fuzzy map as before
-          const map: Record<string, string> = {}
-          for (const f of fields) {
-            const found = columns.find(col => fuzzyMatch(col, f.label))
-            if (found) map[f.field] = found
-          }
-          setMapping(map)
-        }
-      })
-    // eslint-disable-next-line
-  }, [company.id, columns])
+    setFields(initialFields)
+  }, [JSON.stringify(initialFields)])
 
+  useEffect(() => {
+    if (initialMapping) {
+      setMapping(initialMapping)
+    } else {
+      // Fuzzy match: try to auto-map by label
+      const map: Record<string, string> = {}
+      for (const f of initialFields) {
+        const found = columns.find(col => fuzzyMatch(col, f.label))
+        if (found) map[f.field] = found
+      }
+      setMapping(map)
+    }
+    // eslint-disable-next-line
+  }, [initialMapping, columns])
 
   function setFieldMap(field: string, col: string) {
     setMapping(m => ({ ...m, [field]: col }))
@@ -165,8 +155,8 @@ export default function FieldMapper({
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-2xl p-8 mb-8 border max-w-3xl mx-auto">
-      <h2 className="text-2xl font-bold mb-6 text-gray-800">Map Extracted Columns</h2>
+    <div className="bg-white rounded-3xl shadow-2xl p-10 mb-8 border max-w-4xl mx-auto w-full min-w-[340px]">
+      <h2 className="text-2xl font-bold mb-8 text-gray-800">Map Extracted Columns</h2>
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
@@ -176,94 +166,95 @@ export default function FieldMapper({
           items={fields.map(f => f.field)}
           strategy={verticalListSortingStrategy}
         >
-          <table className="w-full mb-6">
-            <thead>
-              <tr>
-                <th className="w-8"></th>
-                <th className="py-2 px-4 text-left">Field name</th>
-                <th className="py-2 px-4 text-left">Extracted column</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {fields.map((f, i) => (
-                <DraggableRow key={f.field} id={f.field}>
-                  {({ attributes, listeners, isDragging }) => (
-                    <>
-                      <td className="py-2 px-2 cursor-grab select-none" {...attributes} {...listeners}>
-                        <GripVertical size={20} className="text-gray-400" />
-                      </td>
-                      <td className="py-2 px-4 flex items-center gap-2">
-                        <input
-                          className="border-b border-gray-300 bg-transparent px-1 focus:outline-none font-medium text-gray-800 w-full"
-                          value={f.label}
-                          onChange={e => handleRenameField(i, e.target.value)}
-                          aria-label="Edit field label"
-                        />
-                        <button
-                          onClick={() => handleDeleteField(i)}
-                          className="ml-1 p-1 text-red-500 hover:bg-red-100 rounded"
-                          title="Delete field"
-                          aria-label="Remove field"
-                        >
-                          <X size={16} />
-                        </button>
-                      </td>
-                      <td className="py-2 px-4">
-                        <select
-                          className="border rounded px-2 py-1 w-full"
-                          value={mapping[f.field] || ""}
-                          onChange={e => setFieldMap(f.field, e.target.value)}
-                        >
-                          <option value="">-</option>
-                          {columns.map(col => (
-                            <option key={col} value={col}>{col}</option>
-                          ))}
-                        </select>
-                      </td>
-                      <td></td>
-                    </>
-                  )}
-                </DraggableRow>
-              ))}
-            </tbody>
-          </table>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[520px] mb-6 text-base">
+              <thead>
+                <tr>
+                  <th className="w-8"></th>
+                  <th className="py-2 px-4 text-left">Database name</th>
+                  <th className="py-2 px-4 text-left">Carrier Field</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {fields.map((f, i) => (
+                  <DraggableRow key={f.field} id={f.field}>
+                    {({ attributes, listeners, isDragging }) => (
+                      <>
+                        <td className="py-2 px-2 cursor-grab select-none" {...attributes} {...listeners}>
+                          <GripVertical size={20} className="text-gray-400" />
+                        </td>
+                        <td className="py-2 px-4 flex items-center gap-2">
+                          <input
+                            className="border-b border-gray-300 bg-transparent px-1 focus:outline-none font-medium text-gray-800 w-full"
+                            value={f.label}
+                            onChange={e => handleRenameField(i, e.target.value)}
+                            aria-label="Edit field label"
+                          />
+                          <button
+                            onClick={() => handleDeleteField(i)}
+                            className="ml-1 p-1 text-red-500 hover:bg-red-100 rounded"
+                            title="Delete field"
+                            aria-label="Remove field"
+                          >
+                            <X size={16} />
+                          </button>
+                        </td>
+                        <td className="py-2 px-4">
+                          <select
+                            className="border rounded-lg px-3 py-2 w-full min-w-[140px] text-base"
+                            value={mapping[f.field] || ""}
+                            onChange={e => setFieldMap(f.field, e.target.value)}
+                          >
+                            <option value="">-</option>
+                            {columns.map(col => (
+                              <option key={col} value={col}>{col}</option>
+                            ))}
+                          </select>
+                        </td>
+                        <td></td>
+                      </>
+                    )}
+                  </DraggableRow>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </SortableContext>
       </DndContext>
-      <div className="flex items-center gap-2 mb-5">
+      <div className="flex items-center gap-3 mb-5">
         <input
-          className="border rounded px-2 py-1 flex-1"
+          className="border rounded px-3 py-2 flex-1 text-base"
           placeholder="New field name"
           value={customFieldName}
           onChange={e => setCustomFieldName(e.target.value)}
         />
         <button
           type="button"
-          className="inline-flex items-center gap-2 px-4 py-2 rounded bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-bold shadow hover:scale-105 transition"
+          className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-bold shadow hover:scale-105 transition"
           onClick={handleAddCustomField}
         >
           <Plus size={18} /> Add field
         </button>
       </div>
-      <div className="flex gap-4 mt-4">
+      <div className="flex gap-5 mt-6">
         <button
           onClick={handleSave}
           disabled={saving}
-          className="px-5 py-2 rounded bg-gradient-to-br from-blue-600 to-indigo-500 text-white font-semibold shadow hover:scale-105 transition"
+          className="px-6 py-2 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-500 text-white font-semibold shadow hover:scale-105 transition text-base"
         >
-          Save Mapping
+          {saving ? "Saving..." : "Save Mapping"}
         </button>
         {onSkip && (
           <button
             type="button"
             onClick={onSkip}
-            className="ml-2 px-5 py-2 rounded bg-gray-300 text-gray-700 font-semibold shadow hover:bg-gray-400 transition"
+            className="px-6 py-2 rounded-xl bg-gray-300 text-gray-700 font-semibold shadow hover:bg-gray-400 transition text-base"
           >
             Skip and Use Extracted Table
           </button>
         )}
       </div>
-
     </div>
   )
 }

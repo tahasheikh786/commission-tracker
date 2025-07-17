@@ -37,7 +37,7 @@ export default function CompanySelect({
   async function handleAdd() {
     if (!newCompany.trim()) return
     if (companies.some(c => c.name.toLowerCase() === newCompany.trim().toLowerCase())) {
-      toast.error('Company already exists!')
+      toast.error('Carrier already exists!')
       return
     }
     setAddLoading(true)
@@ -50,7 +50,7 @@ export default function CompanySelect({
       const data = await res.json();
 
       if (!res.ok) {
-        toast.error(data?.detail || "Failed to add company")
+        toast.error(data?.detail || "Failed to add carrier")
         return;
       }
 
@@ -59,9 +59,9 @@ export default function CompanySelect({
         setCompanies([...companies, newEntry])
         onChange(newEntry)
         setNewCompany('')
-        toast.success('Company added!')
+        toast.success('Carrier added!')
       } else {
-        toast.error('Failed to add company')
+        toast.error('Failed to add carrier')
       }
     } catch (err) {
       toast.error("Network error, please try again.")
@@ -82,14 +82,14 @@ export default function CompanySelect({
   return (
     <div className="my-8">
       <label className="block mb-2 font-semibold text-gray-700 text-lg">
-        Select or Add Company
+        Select or Add Carrier
       </label>
 
       <div className="relative">
         <Select
           isClearable
           isSearchable
-          placeholder="Select company..."
+          placeholder="Select carrier..."
           options={options}
           value={selectedCompany ? { value: selectedCompany.id, label: selectedCompany.name } : null}
           onChange={handleSelect}
@@ -120,17 +120,17 @@ export default function CompanySelect({
             onClick={() => onChange(null)}
             className="text-blue-700 underline hover:text-blue-900"
           >
-            Clear selection to add/select another company
+            Clear selection to add/select another Carrier
           </button>
         ) : (
-          <span>Type and add a new company if not found in the list.</span>
+          <span>Type and add a new Carrier if not found in the list.</span>
         )}
       </div>
 
       <div className="flex items-center gap-2 mt-5">
         <input
           type="text"
-          placeholder="New company name"
+          placeholder="New carrier name"
           value={newCompany}
           onChange={e => setNewCompany(e.target.value)}
           className="border px-4 py-2 rounded flex-1 bg-white shadow-inner text-lg"
