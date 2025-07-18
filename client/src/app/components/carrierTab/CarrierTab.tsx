@@ -5,19 +5,8 @@ import CarrierStatementsTable from "./CarrierStatementsTable";
 import EditMappingModal from "./EditMappingModal";
 import CompareModal from "./CompareModal";
 import StatementPreviewModal from "./StatementPreviewModal";
-
-// Loader component (minimalist, can reuse elsewhere)
-function Loader({ className = "" }: { className?: string }) {
-  return (
-    <div className={"flex justify-center items-center w-full py-12 " + className}>
-      <svg className="animate-spin h-8 w-8 text-blue-600" viewBox="0 0 24 24">
-        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-      </svg>
-      <span className="ml-3 text-blue-700 font-medium animate-pulse">Loading...</span>
-    </div>
-  );
-}
+import toast from 'react-hot-toast';
+import Loader from "@/app/upload/components/Loader";
 
 type Carrier = { id: string; name: string };
 type Statement = {
@@ -65,19 +54,21 @@ export default function CarrierTab() {
 
   // Handle deletion of selected statements
   const handleDelete = (ids: string[]) => {
-    if (!selected) return;  // Make sure a carrier is selected before proceeding
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${selected.id}/statements`, {  // Use company_id from selected
+    if (!selected) return;
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${selected.id}/statements`, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ statement_ids: ids }),  // Properly passing statement_ids
+      body: JSON.stringify({ statement_ids: ids }),
     })
-      .then(() => {
-        setStatements(statements.filter(statement => !ids.includes(statement.id)));  // Remove deleted statements from state
+      .then(res => {
+        if (!res.ok) throw new Error('Failed to delete statements');
+        setStatements(statements.filter(statement => !ids.includes(statement.id)));
+        toast.success('Statements deleted successfully!');
       })
       .catch((error) => {
-        console.error('Error deleting statements:', error);
+        toast.error('Error deleting statements.');
       });
   };
 
@@ -89,11 +80,13 @@ export default function CarrierTab() {
       },
       body: JSON.stringify({ company_ids: ids }),
     })
-      .then(() => {
+      .then(res => {
+        if (!res.ok) throw new Error('Failed to delete carriers');
         setCarriers(carriers.filter(carrier => !ids.includes(carrier.id)));
+        toast.success('Carriers deleted successfully!');
       })
       .catch((error) => {
-        console.error('Error deleting carriers:', error);
+        toast.error('Error deleting carriers.');
       });
   };
   

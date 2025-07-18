@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
 import { X, Plus, GripVertical } from 'lucide-react'
 import { STANDARD_FIELDS } from '@/constants/fields'
+import Loader from './Loader';
 
 import {
   DndContext,
@@ -171,14 +172,20 @@ export default function FieldMapper({
       table_names: tableNames,
       field_config: fields,
     }
-    await fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${company.id}/mapping/`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(config),
-    })
-    setSaving(false)
-    toast.success("Mapping saved!")
-    onSave(mapping, fields, planTypes, tableNames)
+    try {
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${company.id}/mapping/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config),
+      })
+      toast.success("Mapping saved!")
+      onSave(mapping, fields, planTypes, tableNames)
+    } catch (error) {
+      toast.error("Failed to save mapping.")
+      console.error(error)
+    } finally {
+      setSaving(false)
+    }
   }
 
   // DnD: handle reorder
@@ -192,7 +199,8 @@ export default function FieldMapper({
   }
 
   return (
-    <div className="bg-white rounded-3xl shadow-2xl p-10 mb-8 border max-w-4xl mx-auto w-full min-w-[340px]">
+    <div className="relative">
+      {saving && <Loader message="Saving mapping..." />}
       <h2 className="text-2xl font-bold mb-8 text-gray-800">Map Extracted Columns</h2>
       {/* Plan Type Selection */}
       <div className="mb-8">

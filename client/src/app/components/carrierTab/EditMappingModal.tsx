@@ -3,6 +3,7 @@ import FieldMapper from "../../upload/components/FieldMapper";
 import { useEffect, useState } from "react";
 import { STANDARD_FIELDS } from "@/constants/fields";
 import toast from "react-hot-toast";
+import Loader from '../../upload/components/Loader';
 
 export default function EditMappingModal({ carrier, onClose }: { carrier: any, onClose: () => void }) {
   const [mapping, setMapping] = useState<Record<string, string> | null>(null);
@@ -80,7 +81,7 @@ export default function EditMappingModal({ carrier, onClose }: { carrier: any, o
           Edit Mappings for <span className="text-blue-600">{carrier.name}</span>
         </div>
         {loading ? (
-          <div className="text-blue-600 text-center py-8 text-lg">Loading...</div>
+          <Loader message="Loading mapping..." />
         ) : (
           <div className="flex flex-col md:flex-row gap-8 items-start">
             <div className="w-full lg:w-1/2 max-w-full">

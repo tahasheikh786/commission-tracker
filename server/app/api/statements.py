@@ -5,8 +5,10 @@ from app.config import get_db
 from typing import List
 from uuid import UUID
 from pydantic import BaseModel
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 import os
+from app.services.s3_utils import get_s3_file_url, generate_presigned_url
+from urllib.parse import unquote
 
 router = APIRouter()
 
@@ -17,7 +19,8 @@ class DeleteStatementsRequest(BaseModel):
 async def get_statements_for_company(company_id: UUID, db: AsyncSession = Depends(get_db)):
     """Returns all uploads/statements for a given company (carrier)"""
     statements = await crud.get_statements_for_company(db, company_id)
-    return statements
+    # Convert ORM objects to StatementReview, including raw_data
+    return [schemas.StatementReview.model_validate(s) for s in statements]
 
 # In your CRUD:
 async def get_statements_for_company(db, company_id):
@@ -29,12 +32,19 @@ async def get_statements_for_company(db, company_id):
     )
     return result.scalars().all()
 
-@router.get("/pdfs/{file_name}")
-async def get_pdf(file_name: str):
-    file_path = os.path.join("pdfs", file_name)
-    if not os.path.exists(file_path):
+@router.get("/pdfs/{file_path:path}")
+async def get_pdf(file_path: str):
+    file_path = unquote(file_path)
+    if file_path.startswith("statements/"):
+        presigned_url = generate_presigned_url(file_path)
+        if not presigned_url:
+            raise HTTPException(status_code=404, detail="Could not generate S3 presigned URL")
+        return RedirectResponse(presigned_url)
+    local_path = os.path.join("pdfs", file_path)
+    if not os.path.exists(local_path):
         raise HTTPException(status_code=404, detail="File not found")
-    return FileResponse(file_path, media_type="application/pdf", filename=file_name)
+    return FileResponse(local_path, media_type="application/pdf", headers={"Content-Disposition": "inline"})
+
 
 @router.delete("/companies/{company_id}/statements/{statement_id}")
 async def delete_statement(statement_id: str, db: AsyncSession = Depends(get_db)):

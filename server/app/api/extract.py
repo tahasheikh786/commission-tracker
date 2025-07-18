@@ -7,6 +7,7 @@ import os
 import shutil
 from datetime import datetime
 from uuid import uuid4
+from app.services.s3_utils import upload_file_to_s3, get_s3_file_url
 
 router = APIRouter(tags=["extract"])
 
@@ -29,7 +30,15 @@ async def extract_tables(
         os.remove(file_path)
         raise HTTPException(status_code=404, detail="Company not found")
 
+    s3_key = f"statements/{company_id}/{file.filename}"
+    s3_url = None
     try:
+        # Upload to S3
+        uploaded = upload_file_to_s3(file_path, s3_key)
+        if not uploaded:
+            raise HTTPException(status_code=500, detail="Failed to upload file to S3.")
+        s3_url = get_s3_file_url(s3_key)
+
         # Returns an array of cleaned tables
         tables = detector.extract_tables_from_pdf(file_path)
         if not tables:
@@ -45,13 +54,17 @@ async def extract_tables(
             raw_data=tables,  # store as list of tables
             mapping_used=None
         )
+        # Store s3_key or s3_url in file_name for now (or add a new field if needed)
+        db_upload.file_name = s3_key
         await crud.save_statement_upload(db, db_upload)
     finally:
         os.remove(file_path)
 
-    # Return upload_id along with tables!
+    # Return upload_id along with tables and s3_url!
     return {
         "tables": tables,
         "upload_id": str(upload_id),
-        "file_name": file.filename
+        "file_name": file.filename,
+        "s3_url": s3_url,
+        "s3_key": s3_key
     }

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
 import Select from 'react-select'
+import Loader from './Loader';
 
 type Company = { id: string; name: string }
 type Option = { value: string; label: string }
@@ -105,11 +106,7 @@ export default function CompanySelect({
         />
         {loading && (
           <div className="absolute top-0 left-0 right-0 bottom-0 flex items-center justify-center bg-white/70 z-10 rounded">
-            {/* Simple spinner */}
-            <svg className="animate-spin h-6 w-6 text-blue-500" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/>
-            </svg>
+            <Loader message="Loading carriers..." className="py-4" />
           </div>
         )}
       </div>
