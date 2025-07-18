@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { SubmissionProvider } from "@/context/SubmissionContext";
+import { Toaster } from "@/app/toast";
 
 // import Providers from "./providers";
 // import { Toaster } from "@/components/ui/sonner";
@@ -34,7 +35,7 @@ export default function RootLayout({
         <SubmissionProvider>
           {children}
         </SubmissionProvider>
-        {/* <Toaster closeButton /> */}
+        <Toaster />
       </body>
     </html>
   );

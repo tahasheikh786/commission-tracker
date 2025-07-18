@@ -3,6 +3,7 @@ import { useDropzone } from 'react-dropzone'
 import toast from 'react-hot-toast'
 import { useCallback, useState } from 'react'
 import clsx from 'clsx'
+import Loader from './Loader';
 
 type TableData = {
   header: string[]
@@ -128,7 +129,7 @@ export default function UploadZone({
 
   return (
     <div className="relative">
-      {loading && <Spinner />}
+      {loading && <Loader message="Extracting tables, please wait…" />}
 
       <div
         {...getRootProps()}

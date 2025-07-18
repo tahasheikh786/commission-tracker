@@ -56,6 +56,7 @@ class StatementReview(BaseModel):
     field_config: Optional[List[Dict[str, str]]] = None
     rejection_reason: Optional[str] = None
     plan_types: Optional[List[str]] = None
+    raw_data: Optional[List[Dict[str, Any]]] = None  # <-- Add this line
 
     class Config:
         from_attributes = True  # For Pydantic v2

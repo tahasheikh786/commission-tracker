@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
+import Loader from '@/app/upload/components/Loader';
 
 type Carrier = { id: string; name: string };
 
@@ -81,12 +83,12 @@ export default function CarrierList({ carriers, selected, onSelect, loading, onD
         onSelect({ ...carrier, name: updated.name });
         setEditingCarrierId(null);
         setEditName('');
+        toast.success('Carrier name updated!');
       } else {
-        // Optionally show error
-        alert('Failed to update carrier name.');
+        toast.error('Failed to update carrier name.');
       }
     } catch (e) {
-      alert('Network error.');
+      toast.error('Network error.');
     }
     setUpdating(false);
   };
@@ -123,7 +125,7 @@ export default function CarrierList({ carriers, selected, onSelect, loading, onD
         )}
       </div>
       {loading ? (
-        <div className="flex justify-center items-center">Loading...</div>
+        <Loader />
       ) : (
         <ul>
           {paginatedCarriers.map(carrier => (

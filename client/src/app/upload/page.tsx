@@ -9,6 +9,7 @@ import FieldMapper from './components/FieldMapper'
 import { Toaster, toast } from 'react-hot-toast'
 import { STANDARD_FIELDS } from '@/constants/fields'
 import Modal from '@/app/components/Modal'
+import Loader from './components/Loader';
 
 export default function UploadPage() {
   const [company, setCompany] = useState<{ id: string, name: string } | null>(null)
@@ -173,8 +174,15 @@ export default function UploadPage() {
           <div className="text-center text-sm text-gray-500 mt-2">
             Please select a carrier and upload a PDF commission statement.
           </div>
-          <Toaster position="top-center" />
         </div>
+      </main>
+    )
+  }
+
+  if (fetchingMapping && !showFieldMapper) {
+    return (
+      <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-100 to-blue-50">
+        <Loader message="Loading saved mapping..." />
       </main>
     )
   }
@@ -221,14 +229,6 @@ export default function UploadPage() {
           setFetchingMapping(false)
         })
         .catch(() => setFetchingMapping(false))
-    }
-
-    if (fetchingMapping && !showFieldMapper) {
-      return (
-        <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-100 to-blue-50">
-          <div className="text-lg font-semibold text-blue-700 animate-pulse">Loading saved mapping...</div>
-        </main>
-      )
     }
 
     return (
@@ -304,7 +304,6 @@ export default function UploadPage() {
               Start Over
             </button>
           </div>
-          <Toaster position="top-center" />
         </div>
       </main>
     )
@@ -317,13 +316,7 @@ export default function UploadPage() {
       <>
         {submitting && (
           <div className="fixed inset-0 bg-black bg-opacity-20 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 flex flex-col items-center shadow-lg">
-              <svg className="animate-spin h-8 w-8 text-blue-600 mb-3" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-              </svg>
-              <div className="text-blue-700 font-bold text-lg">Submitting...</div>
-            </div>
+            <Loader message="Submitting..." />
           </div>
         )}
         <main className="min-h-screen bg-gradient-to-br from-gray-100 to-blue-50 flex items-center justify-center px-4">
@@ -391,7 +384,6 @@ export default function UploadPage() {
                 </div>
               </Modal>
             )}
-            <Toaster position="top-center" />
           </div>
         </main>
       </>
