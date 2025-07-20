@@ -75,6 +75,7 @@ const PLAN_TYPES = [
   { value: 'other', label: 'Other' },
 ]
 
+// Remove mergeStandardAndCustomFields and just use initialFields as-is
 export default function FieldMapper({
   company,
   columns,
@@ -94,7 +95,8 @@ export default function FieldMapper({
   initialPlanTypes?: string[]
   tableNames?: string[]
 }) {
-  const [fields, setFields] = useState<FieldConf[]>(initialFields)
+  // Use initialFields as-is (from backend field_config)
+  const [fields, setFields] = useState<FieldConf[]>(initialFields && initialFields.length > 0 ? initialFields : STANDARD_FIELDS)
   const [mapping, setMapping] = useState<Record<string, string>>(initialMapping || {})
   const [saving, setSaving] = useState(false)
   const [customFieldName, setCustomFieldName] = useState('')
@@ -112,7 +114,7 @@ export default function FieldMapper({
 
   // Sync mapping and fields if props change
   useEffect(() => {
-    setFields(initialFields)
+    setFields(initialFields && initialFields.length > 0 ? initialFields : STANDARD_FIELDS)
   }, [JSON.stringify(initialFields)])
 
   useEffect(() => {
@@ -242,46 +244,48 @@ export default function FieldMapper({
                 </tr>
               </thead>
               <tbody>
-                {fields.map((f, i) => (
-                  <DraggableRow key={f.field} id={f.field}>
-                    {({ attributes, listeners, isDragging }) => (
-                      <>
-                        <td className="py-2 px-2 cursor-grab select-none" {...attributes} {...listeners}>
-                          <GripVertical size={20} className="text-gray-400" />
-                        </td>
-                        <td className="py-2 px-4 flex items-center gap-2">
-                          <input
-                            className="border-b border-gray-300 bg-transparent px-1 focus:outline-none font-medium text-gray-800 w-full"
-                            value={f.label}
-                            onChange={e => handleRenameField(i, e.target.value)}
-                            aria-label="Edit field label"
-                          />
-                          <button
-                            onClick={() => handleDeleteField(i)}
-                            className="ml-1 p-1 text-red-500 hover:bg-red-100 rounded"
-                            title="Delete field"
-                            aria-label="Remove field"
-                          >
-                            <X size={16} />
-                          </button>
-                        </td>
-                        <td className="py-2 px-4">
-                          <select
-                            className="border rounded-lg px-3 py-2 w-full min-w-[140px] text-base"
-                            value={mapping[f.field] || ""}
-                            onChange={e => setFieldMap(f.field, e.target.value)}
-                          >
-                            <option value="">-</option>
-                            {allDropdownColumns.map(col => (
-                              <option key={col} value={col}>{col}</option>
-                            ))}
-                          </select>
-                        </td>
-                        <td></td>
-                      </>
-                    )}
-                  </DraggableRow>
-                ))}
+                {fields.map((f, i) => {
+                  return (
+                    <DraggableRow key={f.field} id={f.field}>
+                      {({ attributes, listeners, isDragging }) => (
+                        <>
+                          <td className="py-2 px-2 cursor-grab select-none" {...attributes} {...listeners}>
+                            <GripVertical size={20} className="text-gray-400" />
+                          </td>
+                          <td className="py-2 px-4 flex items-center gap-2">
+                            <input
+                              className="border-b border-gray-300 bg-transparent px-1 focus:outline-none font-medium text-gray-800 w-full"
+                              value={f.label}
+                              onChange={e => handleRenameField(i, e.target.value)}
+                              aria-label="Edit field label"
+                            />
+                            <button
+                              onClick={() => handleDeleteField(i)}
+                              className="ml-1 p-1 text-red-500 hover:bg-red-100 rounded"
+                              title="Delete field"
+                              aria-label="Remove field"
+                            >
+                              <X size={16} />
+                            </button>
+                          </td>
+                          <td className="py-2 px-4">
+                            <select
+                              className="border rounded-lg px-3 py-2 w-full min-w-[140px] text-base"
+                              value={mapping[f.field] || ""}
+                              onChange={e => setFieldMap(f.field, e.target.value)}
+                            >
+                              <option value="">-</option>
+                              {allDropdownColumns.map(col => (
+                                <option key={col} value={col}>{col}</option>
+                              ))}
+                            </select>
+                          </td>
+                          <td></td>
+                        </>
+                      )}
+                    </DraggableRow>
+                  )
+                })}
               </tbody>
             </table>
           </div>

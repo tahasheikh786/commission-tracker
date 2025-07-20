@@ -130,22 +130,24 @@ def clean_and_merge_tables(raw_tables):
         if not t or not t[0]:
             continue
         candidate_header = [cell.strip() for cell in t[0]]
+        # Fallback: if first row is not a header, but second row is, use second row as header
+        if not header_likely(candidate_header) and len(t) > 1 and header_likely([cell.strip() for cell in t[1]]):
+            candidate_header = [cell.strip() for cell in t[1]]
+            data_start_idx = 2
+        else:
+            data_start_idx = 1
         if header_likely(candidate_header):
             if last_header is not None and are_headers_similar(last_header, candidate_header):
-                # Same as previous header: treat as page break, continue collecting rows
-                cur_rows += t[1:]
+                cur_rows += t[data_start_idx:]
             elif last_header is not None and not are_headers_similar(last_header, candidate_header):
-                # New/different header: save last table, start new one
                 if cur_rows:
                     merged.append({"header": last_header, "rows": cur_rows})
                 last_header = candidate_header
-                cur_rows = t[1:]
+                cur_rows = t[data_start_idx:]
             else:
-                # First table/page
                 last_header = candidate_header
-                cur_rows = t[1:]
+                cur_rows = t[data_start_idx:]
         else:
-            # No header detected: continuation of previous table
             if last_header is not None:
                 cur_rows += t
             else:
