@@ -54,13 +54,14 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
         {selectedStatements.size > 0 && (
           <button
             onClick={handleDelete}
-            className="px-4 py-2 bg-red-600 text-white rounded font-semibold hover:bg-red-700 transition"
+            className="px-4 py-2 bg-red-600 text-white rounded font-semibold hover:bg-red-700 transition focus:outline-none focus:ring-2 focus:ring-red-400"
+            aria-label="Delete selected statements"
           >
             Delete Selected
           </button>
         )}
       </div>
-      <table className="w-full text-left rounded-lg overflow-hidden">
+      <table className="w-full text-left rounded-lg overflow-hidden shadow border bg-white" role="table" aria-label="Carrier statements">
         <thead>
           <tr className="text-gray-600 font-semibold bg-blue-50">
             <th className="p-2">
@@ -68,7 +69,8 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
                 type="checkbox"
                 checked={selectAll}
                 onChange={handleSelectAllChange}
-                className="mr-2"
+                className="mr-2 accent-blue-600 w-4 h-4"
+                aria-label="Select all statements"
               />
             </th>
             <th className="p-2">Statement</th>
@@ -80,13 +82,14 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
         </thead>
         <tbody>
           {statements.map((statement, idx) => (
-            <tr key={statement.id} className="hover:bg-blue-50 transition">
+            <tr key={statement.id} className="hover:bg-blue-50 transition focus-within:bg-blue-100">
               <td className="p-2">
                 <input
                   type="checkbox"
                   checked={selectedStatements.has(statement.id)}
                   onChange={() => handleCheckboxChange(statement.id)}
-                  className="mr-2"
+                  className="mr-2 accent-blue-600 w-4 h-4"
+                  aria-label={`Select statement ${statement.file_name}`}
                 />
               </td>
               <td className="p-2">{statement.file_name}</td>
@@ -106,15 +109,17 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
               <td className="p-2 flex gap-2 justify-center">
                 <button
                   title="View mapped table"
-                  className="text-blue-600 hover:bg-blue-100 p-1 rounded"
+                  className="text-blue-600 hover:bg-blue-100 p-1 rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
                   onClick={() => onPreview(idx)}
+                  aria-label={`View mapped table for ${statement.file_name}`}
                 >
                   <Eye size={18} />
                 </button>
                 <button
                   title="Compare mapped & extracted"
-                  className="text-purple-600 hover:bg-purple-100 p-1 rounded"
+                  className="text-purple-600 hover:bg-purple-100 p-1 rounded focus:outline-none focus:ring-2 focus:ring-purple-400"
                   onClick={() => onCompare(idx)}
+                  aria-label={`Compare mapped and extracted for ${statement.file_name}`}
                 >
                   <LayoutList size={18} />
                 </button>
