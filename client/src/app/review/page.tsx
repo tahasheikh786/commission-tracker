@@ -85,7 +85,11 @@ export default function ReviewPage() {
                         {submissions[previewIdx].final_data && submissions[previewIdx].final_data.length > 0 ? (
                             <DashboardTable
                                 tables={submissions[previewIdx].final_data}
-                                fieldConfig={submissions[previewIdx].field_config || []}
+                                fieldConfig={
+                                  (submissions[previewIdx].field_config && submissions[previewIdx].field_config.length > 0)
+                                    ? submissions[previewIdx].field_config
+                                    : (submissions[previewIdx].final_data[0]?.header || []).map((col: string) => ({ field: col, label: col }))
+                                }
                                 onEditMapping={() => { }} // No mapping in preview
                                 readOnly
                             />

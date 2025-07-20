@@ -188,7 +188,7 @@ export default function UploadPage() {
   }
 
   // 2. If mapping exists, auto-apply; else, show FieldMapper (skip if skipped)
-  if ((!mapping || showFieldMapper) && uploaded?.tables?.length && company && !skipped) {
+  if ((!mapping || showFieldMapper) && uploaded?.tables?.length && company && (!skipped || showFieldMapper)) {
     if (!fetchMappingRef.current && !fetchingMapping && !showFieldMapper) {
       fetchMappingRef.current = true
       setFetchingMapping(true)
@@ -202,7 +202,17 @@ export default function UploadPage() {
           if (map && typeof map === 'object') {
             if (map.mapping) {
               mappingObj = map.mapping
-              fieldsArr = map.field_config || fieldConfig
+              // Use backend's field_config as-is if present
+              if (Array.isArray(map.field_config) && map.field_config.length > 0) {
+                fieldsArr = map.field_config
+              } else if (mappingObj) {
+                fieldsArr = Object.keys(mappingObj).map(field => ({
+                  field,
+                  label: getLabelFromStandardFields(field)
+                }))
+              } else {
+                fieldsArr = STANDARD_FIELDS
+              }
               if (map.plan_types) loadedPlanTypes = map.plan_types
               if (map.table_names) loadedTableNames = map.table_names
             } else if (Array.isArray(map)) {
@@ -264,7 +274,7 @@ export default function UploadPage() {
                   setMapping(map)
                   setFieldConfig(fieldConf)
                   setPlanTypes(selectedPlanTypes)
-                  // Compose MappingConfig object
+                  // Always send the current fields as field_config
                   const config = {
                     mapping: map,
                     plan_types: selectedPlanTypes,
@@ -278,14 +288,20 @@ export default function UploadPage() {
                   })
                   applyMapping(uploaded.tables, map, fieldConf)
                   setShowFieldMapper(false)
+                  setSkipped(false)
                 }}
                 onSkip={() => {
-                  // Preserve table names if present
-                  setFinalTables(uploaded.tables.map((t: any) => ({ ...t })))
-                  setFieldConfig(fieldConfig)
-                  setShowFieldMapper(false)
-                  setMapping(null)
-                  setSkipped(true)
+                  // Set fieldConfig to match extracted table headers
+                  const extractedHeaders = uploaded.tables.map((t: any) => t.header);
+                  const extractedFieldConfig = uploaded.tables.map((t: any) => t.header.map((col: string) => ({ field: col, label: col })));
+                  // Save table names and plan types per table
+                  const tableNames = uploaded.tables.map((t: any) => t.name || '');
+                  setFinalTables(uploaded.tables.map((t: any) => ({ ...t })));
+                  setFieldConfig(extractedFieldConfig[0]); // Use first table's config for DashboardTable
+                  setShowFieldMapper(false);
+                  setMapping(null);
+                  setSkipped(true);
+                  setPlanTypes(planTypes); // preserve selected plan types
                 }}
                 initialFields={fieldConfig}
                 initialMapping={mapping}
@@ -337,7 +353,10 @@ export default function UploadPage() {
             <DashboardTable
               tables={finalTables}
               fieldConfig={fieldConfig}
-              onEditMapping={() => setShowFieldMapper(true)}
+              onEditMapping={() => {
+                setShowFieldMapper(true);
+                setSkipped(false);
+              }}
               company={company}
               fileName={uploaded?.file_name || "uploaded.pdf"}
               fileUrl={uploaded?.file?.url || null}

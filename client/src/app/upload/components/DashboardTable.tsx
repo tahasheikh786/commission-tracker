@@ -292,17 +292,19 @@ export default function DashboardTable({
       </div>
       <table className="min-w-full">
         <thead className="bg-gradient-to-br from-blue-100 to-purple-50">
-
-           {/* Render table name row if present */}
-           {rows.map((table, groupIdx) => (
-            table.name ? (
-              <tr key={`name-${groupIdx}`}>
-                <td colSpan={fieldConfig.length + (!readOnly ? 2 : 1)} className="py-2 px-4 text-lg font-bold text-blue-700 bg-blue-50 border-b text-center">
-                  {table.name}
-                </td>
-              </tr>
-            ) : null
-          ))}
+          {/* Render table name row only above the corresponding table's header */}
+          {pagedRowsWithHeaders.map((item, i) => {
+            if (item.type === 'header' && item.name) {
+              return (
+                <tr key={`name-${item.groupIdx}-${i}`}>
+                  <td colSpan={fieldConfig.length + (!readOnly ? 2 : 1)} className="py-2 px-4 text-lg font-bold text-blue-700 bg-blue-50 border-b text-center">
+                    {item.name}
+                  </td>
+                </tr>
+              )
+            }
+            return null;
+          })}
           <tr>
             {!readOnly && (
               <th className="py-3 px-3 border-b w-8 text-center">

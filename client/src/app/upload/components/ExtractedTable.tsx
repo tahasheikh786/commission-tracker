@@ -267,6 +267,27 @@ export default function ExtractedTables({ tables: backendTables, onTablesChange,
           >
             <Table2 size={18} />
             {tbl.name ? tbl.name : `Table ${idx + 1}`}
+            {/* Delete table button */}
+            {tables.length > 1 && (
+              <button
+                className="ml-2 text-red-500 hover:bg-red-100 rounded p-1"
+                title="Delete this table"
+                onClick={e => { e.stopPropagation(); setTables((prevTables) => {
+                  const newTables = prevTables.filter((_, i) => i !== idx);
+                  // Update all related state arrays
+                  setPages(pgs => pgs.length > 1 ? pgs.filter((_, i) => i !== idx) : [1]);
+                  setRowsPerPages(rpp => rpp.length > 1 ? rpp.filter((_, i) => i !== idx) : [ROWS_OPTIONS[0]]);
+                  setSelectedRows(selRows => selRows.length > 1 ? selRows.filter((_, i) => i !== idx) : [new Set<number>()]);
+                  setColWidths(widths => widths.length > 1 ? widths.filter((_, i) => i !== idx) : [newTables[0]?.header.map(() => 160) || []]);
+                  // If current tab is deleted or out of bounds, go to first tab
+                  setTab(t => t >= newTables.length ? 0 : t);
+                  if (onTablesChange) onTablesChange(newTables);
+                  return newTables;
+                }) }}
+              >
+                <X size={14} />
+              </button>
+            )}
           </button>
         ))}
         <button
