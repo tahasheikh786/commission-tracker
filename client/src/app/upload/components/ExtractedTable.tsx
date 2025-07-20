@@ -1,12 +1,19 @@
 'use client'
-import { useState } from 'react'
-import { Pencil, Trash2, X, Check } from 'lucide-react'
+import { useState, useRef } from 'react'
+import { Pencil, Trash2, X, Check, Download, ArrowUpDown, ArrowDown, ArrowUp, Table2 } from 'lucide-react'
 import clsx from 'clsx'
 
 type TableData = {
   header: string[]
   rows: string[][]
   name?: string // <-- add table name
+}
+
+type ExtractedTablesProps = {
+  tables: TableData[],
+  onTablesChange?: (tables: TableData[]) => void,
+  highlightedRow?: { tableIdx: number, rowIdx: number } | null,
+  onRowHover?: (tableIdx: number, rowIdx: number | null) => void,
 }
 
 function isHeaderLikeRow(row: string[]) {
@@ -54,7 +61,21 @@ function Pagination({
 
 const ROWS_OPTIONS = [10, 25, 50];
 
-export default function ExtractedTables({ tables: backendTables, onTablesChange }: { tables: TableData[], onTablesChange?: (tables: TableData[]) => void }) {
+function downloadCSV(table: TableData, name: string) {
+  const csv = [
+    table.header.join(','),
+    ...table.rows.map(row => row.map(cell => '"' + (cell || '').replace(/"/g, '""') + '"').join(','))
+  ].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = (name || 'table') + '.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export default function ExtractedTables({ tables: backendTables, onTablesChange, highlightedRow, onRowHover }: ExtractedTablesProps) {
   const [tab, setTab] = useState(0)
   const [tables, setTables] = useState(backendTables.map(table => ({
     ...table,
@@ -66,16 +87,33 @@ export default function ExtractedTables({ tables: backendTables, onTablesChange 
   const [pages, setPages] = useState(Array(tables.length).fill(1))
   const [rowsPerPages, setRowsPerPages] = useState(Array(tables.length).fill(ROWS_OPTIONS[0]))
   const [selectedRows, setSelectedRows] = useState<Array<Set<number>>>(tables.map(() => new Set<number>()))
+  const [sort, setSort] = useState<{ col: number, dir: 'asc' | 'desc' } | null>(null)
+  const [colWidths, setColWidths] = useState<Array<number[]>>(tables.map(t => t.header.map(() => 160)))
+  const resizingCol = useRef<{ table: number, col: number } | null>(null)
+
+  // Sorting logic
+  const sortedRows = (() => {
+    if (!sort) return tables[tab].rows;
+    const { col, dir } = sort;
+    return [...tables[tab].rows].sort((a, b) => {
+      const va = a[col] || '';
+      const vb = b[col] || '';
+      if (!isNaN(Number(va)) && !isNaN(Number(vb))) {
+        return dir === 'asc' ? Number(va) - Number(vb) : Number(vb) - Number(va);
+      }
+      return dir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+    });
+  })();
 
   const currentRowsPerPage = rowsPerPages[tab];
   const currentPage = pages[tab];
-  const pageCount = Math.max(1, Math.ceil(tables[tab].rows.length / currentRowsPerPage));
-  const pagedRows = tables[tab].rows.slice(
+  const pageCount = Math.max(1, Math.ceil(sortedRows.length / currentRowsPerPage));
+  const pagedRows = sortedRows.slice(
     (currentPage - 1) * currentRowsPerPage,
     currentPage * currentRowsPerPage
   );
   const globalIndices = Array.from({ length: pagedRows.length }, (_, i) => (currentPage - 1) * currentRowsPerPage + i);
-  const totalItems = tables[tab].rows.length;
+  const totalItems = sortedRows.length;
   const showingFrom = (currentPage - 1) * currentRowsPerPage + 1;
   const showingTo = Math.min(currentPage * currentRowsPerPage, totalItems);
 
@@ -173,7 +211,6 @@ export default function ExtractedTables({ tables: backendTables, onTablesChange 
     setRowsPerPages(rpp => rpp.map((x, i) => i === tabIdx ? val : x))
     setPages(pgs => pgs.map((p, i) => (i === tabIdx ? 1 : p)));
   }
-  // Add handler for table name change
   function handleTableNameChange(idx: number, name: string) {
     setTables(tables => {
       const newTables = tables.map((t, i) => i === idx ? { ...t, name } : t)
@@ -181,22 +218,64 @@ export default function ExtractedTables({ tables: backendTables, onTablesChange 
       return newTables
     })
   }
+  // Column resizing
+  function startResize(tableIdx: number, colIdx: number, e: React.MouseEvent) {
+    resizingCol.current = { table: tableIdx, col: colIdx };
+    document.body.style.cursor = 'col-resize';
+    const startX = e.clientX;
+    const startWidth = colWidths[tableIdx][colIdx];
+    function onMove(ev: MouseEvent) {
+      const delta = ev.clientX - startX;
+      setColWidths(widths => widths.map((arr, t) => t === tableIdx ? arr.map((w, c) => c === colIdx ? Math.max(60, startWidth + delta) : w) : arr));
+    }
+    function onUp() {
+      resizingCol.current = null;
+      document.body.style.cursor = '';
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    }
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }
+  // Sorting
+  function handleSort(colIdx: number) {
+    setSort(s => {
+      if (!s || s.col !== colIdx) return { col: colIdx, dir: 'asc' };
+      if (s.dir === 'asc') return { col: colIdx, dir: 'desc' };
+      return null;
+    });
+  }
 
   return (
     <div className="w-full">
-      <div className="flex space-x-2 border-b mb-4">
+      {/* Tabs for multiple tables */}
+      <div className="flex space-x-2 border-b mb-4 overflow-x-auto" role="tablist" aria-label="Extracted tables">
         {tables.map((tbl, idx) => (
           <button
             key={idx}
             className={clsx(
-              "py-2 px-4 rounded-t-lg font-semibold transition-all",
+              "py-2 px-4 rounded-t-lg font-semibold transition-all flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-blue-400",
               tab === idx
                 ? "bg-gradient-to-br from-blue-600 to-purple-600 text-white shadow"
                 : "bg-gray-100 text-gray-600 hover:bg-gray-200"
             )}
             onClick={() => setTab(idx)}
-          >{`Table ${idx + 1}`}</button>
+            role="tab"
+            aria-selected={tab === idx}
+            aria-controls={`table-panel-${idx}`}
+            tabIndex={0}
+          >
+            <Table2 size={18} />
+            {tbl.name ? tbl.name : `Table ${idx + 1}`}
+          </button>
         ))}
+        <button
+          className="ml-auto px-3 py-2 rounded bg-blue-50 text-blue-700 hover:bg-blue-100 flex items-center gap-1 text-sm font-medium"
+          onClick={() => downloadCSV(tables[tab], tables[tab].name || `table${tab + 1}`)}
+          aria-label="Download as CSV"
+        >
+          <Download size={16} /> CSV
+        </button>
       </div>
       {/* Table name input */}
       <div className="mb-2 flex items-center gap-2">
@@ -207,6 +286,7 @@ export default function ExtractedTables({ tables: backendTables, onTablesChange 
           value={tables[tab].name || ''}
           onChange={e => handleTableNameChange(tab, e.target.value)}
           placeholder={`Table ${tab + 1}`}
+          aria-label="Table name"
         />
       </div>
       <div className="flex items-center justify-between mb-2 flex-wrap gap-2 px-2">
@@ -216,6 +296,7 @@ export default function ExtractedTables({ tables: backendTables, onTablesChange 
             value={currentRowsPerPage}
             onChange={e => setRowsPerPage(tab, Number(e.target.value))}
             className="border rounded px-2 py-1 text-sm shadow-sm focus:ring-2 focus:ring-blue-200"
+            aria-label="Rows per page"
           >
             {ROWS_OPTIONS.map(opt => (
               <option key={opt} value={opt}>{opt}</option>
@@ -232,16 +313,17 @@ export default function ExtractedTables({ tables: backendTables, onTablesChange 
           )}
           disabled={selectedRows[tab].size === 0}
           onClick={deleteSelectedRowsOnPage}
+          aria-label="Delete selected rows"
         >
           <Trash2 size={16} className="mr-1" />
           Delete selected
         </button>
       </div>
       <div className="rounded-xl border shadow-lg overflow-x-auto bg-white">
-        <table className="min-w-full">
-          <thead className="bg-gradient-to-br from-blue-50 to-purple-50">
+        <table className="min-w-full" role="table" aria-label={`Extracted table ${tab + 1}`}> 
+          <thead className="bg-gradient-to-br from-blue-50 to-purple-50 sticky top-0 z-10">
             <tr>
-              <th className="py-3 px-3 border-b w-8 text-center">
+              <th className="py-3 px-3 border-b w-8 text-center sticky left-0 bg-gradient-to-br from-blue-50 to-purple-50 z-20">
                 <input
                   type="checkbox"
                   className="accent-blue-600 w-4 h-4"
@@ -251,9 +333,29 @@ export default function ExtractedTables({ tables: backendTables, onTablesChange 
                 />
               </th>
               {tables[tab].header.map((col, i) => (
-                <th key={i} className="py-3 px-4 text-sm font-bold border-b">{fixPercent(col)}</th>
+                <th
+                  key={i}
+                  className="py-3 px-4 text-sm font-bold border-b sticky top-0 bg-gradient-to-br from-blue-50 to-purple-50 z-10 group"
+                  style={{ minWidth: colWidths[tab][i], maxWidth: 400, position: 'relative' }}
+                  tabIndex={0}
+                  aria-sort={sort && sort.col === i ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
+                >
+                  <div className="flex items-center gap-1 cursor-pointer select-none" onClick={() => handleSort(i)}>
+                    {fixPercent(col)}
+                    {sort && sort.col === i ? (
+                      sort.dir === 'asc' ? <ArrowUp size={16} /> : <ArrowDown size={16} />
+                    ) : <ArrowUpDown size={14} className="opacity-40 group-hover:opacity-80" />}
+                  </div>
+                  {/* Column resize handle */}
+                  <span
+                    className="absolute right-0 top-0 h-full w-2 cursor-col-resize z-30"
+                    onMouseDown={e => startResize(tab, i, e)}
+                    tabIndex={-1}
+                    aria-label="Resize column"
+                  />
+                </th>
               ))}
-              <th className="py-3 px-2 border-b w-24">Actions</th>
+              <th className="py-3 px-2 border-b w-24 sticky right-0 bg-gradient-to-br from-blue-50 to-purple-50 z-20">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -261,7 +363,7 @@ export default function ExtractedTables({ tables: backendTables, onTablesChange 
               const globalIdx = globalIndices[rIdx];
               const isEditing = editRow && editRow.t === tab && editRow.r === globalIdx;
               const headerLike = isHeaderLikeRow(row);
-
+              const isHighlighted = highlightedRow && highlightedRow.tableIdx === tab && highlightedRow.rowIdx === globalIdx;
               if (headerLike) {
                 return (
                   <tr key={globalIdx} className="bg-blue-100">
@@ -274,8 +376,18 @@ export default function ExtractedTables({ tables: backendTables, onTablesChange 
                 );
               }
               return (
-                <tr key={globalIdx} className={isEditing ? "bg-blue-50" : "hover:bg-gray-50"}>
-                  <td className="py-2 px-3 border-b align-top text-center">
+                <tr
+                  key={globalIdx}
+                  className={clsx(
+                    isEditing ? "bg-blue-50" : isHighlighted ? "bg-yellow-100 ring-2 ring-yellow-400" : "hover:bg-gray-50",
+                    "transition-colors"
+                  )}
+                  tabIndex={0}
+                  aria-selected={isHighlighted ? 'true' : 'false'}
+                  onMouseEnter={() => onRowHover && onRowHover(tab, globalIdx)}
+                  onMouseLeave={() => onRowHover && onRowHover(tab, null)}
+                >
+                  <td className="py-2 px-3 border-b align-top text-center sticky left-0 bg-white z-10">
                     <input
                       type="checkbox"
                       className="accent-blue-600 w-4 h-4"
@@ -285,7 +397,11 @@ export default function ExtractedTables({ tables: backendTables, onTablesChange 
                     />
                   </td>
                   {row.map((val, i) => (
-                    <td key={i} className="py-2 px-4 border-b align-top">
+                    <td
+                      key={i}
+                      className="py-2 px-4 border-b align-top"
+                      style={{ minWidth: colWidths[tab][i], maxWidth: 400 }}
+                    >
                       {isEditing
                         ? (
                           <input
@@ -298,22 +414,22 @@ export default function ExtractedTables({ tables: backendTables, onTablesChange 
                       }
                     </td>
                   ))}
-                  <td className="py-2 px-2 border-b align-top">
+                  <td className="py-2 px-2 border-b align-top sticky right-0 bg-white z-10">
                     {!isEditing ? (
                       <div className="flex space-x-2">
-                        <button className="p-1 text-blue-500 hover:bg-blue-50 rounded" onClick={() => startEdit(tab, globalIdx)} title="Edit">
+                        <button className="p-1 text-blue-500 hover:bg-blue-50 rounded" onClick={() => startEdit(tab, globalIdx)} title="Edit" aria-label="Edit row">
                           <Pencil size={18} />
                         </button>
-                        <button className="p-1 text-red-500 hover:bg-red-50 rounded" onClick={() => deleteRow(tab, globalIdx)} title="Delete">
+                        <button className="p-1 text-red-500 hover:bg-red-50 rounded" onClick={() => deleteRow(tab, globalIdx)} title="Delete" aria-label="Delete row">
                           <Trash2 size={18} />
                         </button>
                       </div>
                     ) : (
                       <div className="flex space-x-2">
-                        <button className="p-1 text-green-600 hover:bg-green-100 rounded" onClick={saveEdit} title="Save">
+                        <button className="p-1 text-green-600 hover:bg-green-100 rounded" onClick={saveEdit} title="Save" aria-label="Save edit">
                           <Check size={20} />
                         </button>
-                        <button className="p-1 text-gray-600 hover:bg-gray-200 rounded" onClick={cancelEdit} title="Cancel">
+                        <button className="p-1 text-gray-600 hover:bg-gray-200 rounded" onClick={cancelEdit} title="Cancel" aria-label="Cancel edit">
                           <X size={20} />
                         </button>
                       </div>

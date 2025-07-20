@@ -50,4 +50,4 @@ def generate_presigned_url(s3_key, expiration=3600):
         return url
     except ClientError as e:
         print(f"Presigned URL error: {e}")
-        return None 
+        return None

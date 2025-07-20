@@ -67,3 +67,12 @@ async def delete_multiple_statements(
             continue
         await crud.delete_statement(db, str(statement_id))
     return {"message": "Selected statements deleted successfully"}
+
+@router.get("/statements/presigned-url/")
+def get_presigned_pdf_url(s3_key: str):
+    url = generate_presigned_url(s3_key)
+    print(url)
+    print(s3_key)
+    if not url:
+        raise HTTPException(status_code=404, detail="Could not generate presigned URL")
+    return {"url": url}

@@ -148,6 +148,8 @@ export default function CarrierTab() {
         <CompareModal
           statement={statements[showCompareIdx]}
           onClose={() => setShowCompareIdx(null)}
+          // highlightedRow={highlightedRow}
+          // onRowHover={setHighlightedRow}
         />
       )}
     </div>
