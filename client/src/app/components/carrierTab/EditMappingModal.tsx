@@ -55,7 +55,7 @@ export default function EditMappingModal({
     }
 
     fetchDatabaseFields()
-  }, [])
+  }, [fieldConfig.length])
 
   // Fetch existing mapping
   useEffect(() => {
