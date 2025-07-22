@@ -1,5 +1,5 @@
 'use client'
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Pencil, Trash2, X, Check, Download, ArrowUpDown, ArrowDown, ArrowUp, Table2 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -76,12 +76,129 @@ function downloadCSV(table: TableData, name: string) {
 }
 
 export default function ExtractedTables({ tables: backendTables, onTablesChange, highlightedRow, onRowHover }: ExtractedTablesProps) {
+  // Merge tables with identical headers
+  function mergeTablesByHeader(tables: TableData[]): TableData[] {
+    const merged: TableData[] = [];
+    const processed = new Set<number>();
+    
+    tables.forEach((table, index) => {
+      if (processed.has(index)) return;
+      
+      // Normalize header by removing empty strings
+      const normalizedHeader = table.header.filter(cell => cell.trim());
+      
+      // Find all tables with similar headers
+      const similarTables = [table];
+      processed.add(index);
+      
+      for (let j = index + 1; j < tables.length; j++) {
+        if (processed.has(j)) continue;
+        
+        const otherHeader = tables[j].header.filter(cell => cell.trim());
+        
+        // Check if headers are extremely similar
+        if (areHeadersExtremelySimilar(normalizedHeader, otherHeader)) {
+          similarTables.push(tables[j]);
+          processed.add(j);
+        }
+      }
+      
+      // Merge all similar tables
+      const mergedTable: TableData = {
+        header: normalizedHeader,
+        rows: [],
+        name: similarTables.map(t => t.name).filter(Boolean).join(', ') || ''
+      };
+      
+      similarTables.forEach(similarTable => {
+        // Normalize rows to match the normalized header
+        const normalizedRows = similarTable.rows.map(row => {
+          const paddedRow = [...row];
+          while (paddedRow.length < normalizedHeader.length) {
+            paddedRow.push('');
+          }
+          return paddedRow.slice(0, normalizedHeader.length);
+        });
+        mergedTable.rows.push(...normalizedRows);
+      });
+      
+      merged.push(mergedTable);
+    });
+    
+    return merged;
+  }
+  
+  function areHeadersExtremelySimilar(h1: string[], h2: string[]): boolean {
+    if (h1.length !== h2.length) return false;
+    
+    // Check if headers are identical after normalization
+    for (let i = 0; i < h1.length; i++) {
+      if (h1[i].trim().toLowerCase() !== h2[i].trim().toLowerCase()) {
+        return false;
+      }
+    }
+    
+    return true;
+  }
+
+  // Use merged tables for state
   const [tab, setTab] = useState(0)
-  const [tables, setTables] = useState(backendTables.map(table => ({
+  const [tables, setTables] = useState(() => mergeTablesByHeader(backendTables).map(table => ({
     ...table,
     rows: [...table.rows],
     name: table.name || ''
   })))
+  
+  // Ref to prevent infinite loops in onTablesChange
+  const lastCallbackRef = useRef<string>('')
+
+  // Update local tables when backendTables change
+  useEffect(() => {
+    const mergedTables = mergeTablesByHeader(backendTables).map(table => ({
+      ...table,
+      rows: [...table.rows],
+      name: table.name || ''
+    }));
+    setTables(mergedTables);
+  }, [backendTables]);
+
+  // Synchronize state arrays when tables change length
+  useEffect(() => {
+    setPages(pgs => {
+      if (tables.length === pgs.length) return pgs;
+      return Array(tables.length).fill(1);
+    });
+    setRowsPerPages(rpp => {
+      if (tables.length === rpp.length) return rpp;
+      return Array(tables.length).fill(ROWS_OPTIONS[0]);
+    });
+    setSelectedRows(selRows => {
+      if (tables.length === selRows.length) return selRows;
+      return tables.map(() => new Set<number>());
+    });
+    setColWidths(widths => {
+      if (tables.length === widths.length) return widths;
+      return tables.map(t => t.header.map(() => 160));
+    });
+    setTab(t => t >= tables.length ? 0 : t);
+  }, [tables.length]);
+
+  // Call onTablesChange only when tables changes, but avoid infinite loops
+  useEffect(() => {
+    if (onTablesChange && tables.length > 0) {
+      // Create a hash of the current tables to prevent unnecessary callbacks
+      const tablesHash = JSON.stringify(tables.map(t => ({ header: t.header, rowCount: t.rows.length, name: t.name })));
+      
+      if (tablesHash !== lastCallbackRef.current) {
+        lastCallbackRef.current = tablesHash;
+        onTablesChange(tables);
+      }
+    }
+  }, [tables, onTablesChange]);
+
+  // Guard: If no tables or invalid tab, render nothing
+  if (!tables.length || !tables[tab]) return null;
+
   const [editRow, setEditRow] = useState<{ t: number, r: number } | null>(null)
   const [editValues, setEditValues] = useState<string[]>([])
   const [pages, setPages] = useState(Array(tables.length).fill(1))
@@ -212,11 +329,7 @@ export default function ExtractedTables({ tables: backendTables, onTablesChange,
     setPages(pgs => pgs.map((p, i) => (i === tabIdx ? 1 : p)));
   }
   function handleTableNameChange(idx: number, name: string) {
-    setTables(tables => {
-      const newTables = tables.map((t, i) => i === idx ? { ...t, name } : t)
-      if (onTablesChange) onTablesChange(newTables)
-      return newTables
-    })
+    setTables(tables => tables.map((t, i) => i === idx ? { ...t, name } : t));
   }
   // Column resizing
   function startResize(tableIdx: number, colIdx: number, e: React.MouseEvent) {
@@ -251,44 +364,40 @@ export default function ExtractedTables({ tables: backendTables, onTablesChange,
       {/* Tabs for multiple tables */}
       <div className="flex space-x-2 border-b mb-4 overflow-x-auto" role="tablist" aria-label="Extracted tables">
         {tables.map((tbl, idx) => (
-          <button
-            key={idx}
-            className={clsx(
-              "py-2 px-4 rounded-t-lg font-semibold transition-all flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-blue-400",
-              tab === idx
-                ? "bg-gradient-to-br from-blue-600 to-purple-600 text-white shadow"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-            )}
-            onClick={() => setTab(idx)}
-            role="tab"
-            aria-selected={tab === idx}
-            aria-controls={`table-panel-${idx}`}
-            tabIndex={0}
-          >
-            <Table2 size={18} />
-            {tbl.name ? tbl.name : `Table ${idx + 1}`}
-            {/* Delete table button */}
+          <div key={idx} className="relative flex items-center">
+            <button
+              className={clsx(
+                "py-2 px-4 rounded-t-lg font-semibold transition-all flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-blue-400",
+                tab === idx
+                  ? "bg-gradient-to-br from-blue-600 to-purple-600 text-white shadow"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              )}
+              onClick={() => setTab(idx)}
+              role="tab"
+              aria-selected={tab === idx}
+              aria-controls={`table-panel-${idx}`}
+              tabIndex={0}
+            >
+              <Table2 size={18} />
+              {tbl.name ? tbl.name : `Table ${idx + 1}`}
+            </button>
+            {/* Delete table button OUTSIDE the tab button */}
             {tables.length > 1 && (
               <button
-                className="ml-2 text-red-500 hover:bg-red-100 rounded p-1"
+                className="ml-2 text-red-500 hover:bg-red-100 rounded p-1 absolute right-0 top-1/2 -translate-y-1/2"
                 title="Delete this table"
-                onClick={e => { e.stopPropagation(); setTables((prevTables) => {
-                  const newTables = prevTables.filter((_, i) => i !== idx);
-                  // Update all related state arrays
-                  setPages(pgs => pgs.length > 1 ? pgs.filter((_, i) => i !== idx) : [1]);
-                  setRowsPerPages(rpp => rpp.length > 1 ? rpp.filter((_, i) => i !== idx) : [ROWS_OPTIONS[0]]);
-                  setSelectedRows(selRows => selRows.length > 1 ? selRows.filter((_, i) => i !== idx) : [new Set<number>()]);
-                  setColWidths(widths => widths.length > 1 ? widths.filter((_, i) => i !== idx) : [newTables[0]?.header.map(() => 160) || []]);
-                  // If current tab is deleted or out of bounds, go to first tab
-                  setTab(t => t >= newTables.length ? 0 : t);
-                  if (onTablesChange) onTablesChange(newTables);
-                  return newTables;
-                }) }}
+                onClick={e => {
+                  e.stopPropagation();
+                  setTables(prevTables => {
+                    const newTables = prevTables.filter((_, i) => i !== idx);
+                    return newTables;
+                  });
+                }}
               >
                 <X size={14} />
               </button>
             )}
-          </button>
+          </div>
         ))}
         <button
           className="ml-auto px-3 py-2 rounded bg-blue-50 text-blue-700 hover:bg-blue-100 flex items-center gap-1 text-sm font-medium"
@@ -330,9 +439,9 @@ export default function ExtractedTables({ tables: backendTables, onTablesChange,
         <button
           className={clsx(
             "flex items-center px-3 py-1.5 rounded bg-red-600 text-white font-medium shadow hover:bg-red-700 transition",
-            selectedRows[tab].size > 0 ? "" : "opacity-50 cursor-not-allowed"
+            (selectedRows[tab]?.size ?? 0) > 0 ? "" : "opacity-50 cursor-not-allowed"
           )}
-          disabled={selectedRows[tab].size === 0}
+          disabled={(selectedRows[tab]?.size ?? 0) === 0}
           onClick={deleteSelectedRowsOnPage}
           aria-label="Delete selected rows"
         >

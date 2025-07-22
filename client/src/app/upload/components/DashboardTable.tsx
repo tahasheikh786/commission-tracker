@@ -71,10 +71,14 @@ export default function DashboardTable({
   onTableChange,
   planTypes = [],
 }: DashboardTableProps) {
+  console.log('DashboardTable received tables:', tables)
+  console.log('DashboardTable received fieldConfig:', fieldConfig)
+  
   // --- Main Table State (tracks edits/deletes) ---
   const [rows, setRows] = useState<TableData[]>(tables)
   // If `tables` prop changes (new upload, remap, etc), update local state
   useEffect(() => {
+    console.log('DashboardTable updating rows with:', tables)
     setRows(tables)
   }, [tables])
 

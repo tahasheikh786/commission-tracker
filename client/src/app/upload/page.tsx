@@ -1,21 +1,25 @@
 'use client'
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import CompanySelect from './components/CompanySelect'
-import UploadZone from './components/UploadZone'
+import AdvancedUploadZone from './components/AdvancedUploadZone'
 import ExtractedTables from './components/ExtractedTable'
 import DashboardTable from './components/DashboardTable'
 import FieldMapper from './components/FieldMapper'
-import { Toaster, toast } from 'react-hot-toast'
-import { STANDARD_FIELDS } from '@/constants/fields'
+import QualityReport from './components/QualityReport'
+import { toast } from 'react-hot-toast'
 import Modal from '@/app/components/Modal'
 import Loader from './components/Loader';
+
+type FieldConfig = { field: string, label: string }
 
 export default function UploadPage() {
   const [company, setCompany] = useState<{ id: string, name: string } | null>(null)
   const [uploaded, setUploaded] = useState<any>(null)
   const [mapping, setMapping] = useState<Record<string, string> | null>(null)
-  const [fieldConfig, setFieldConfig] = useState<{ field: string, label: string }[]>(STANDARD_FIELDS)
+  const [fieldConfig, setFieldConfig] = useState<FieldConfig[]>([])
+  const [databaseFields, setDatabaseFields] = useState<FieldConfig[]>([])
+  const [loadingFields, setLoadingFields] = useState(false)
   const [finalTables, setFinalTables] = useState<any[]>([])
   const [fetchingMapping, setFetchingMapping] = useState(false)
   const [showFieldMapper, setShowFieldMapper] = useState(false)
@@ -24,12 +28,54 @@ export default function UploadPage() {
   const [rejectReason, setRejectReason] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [planTypes, setPlanTypes] = useState<string[]>([])
-
+  
+  // Quality assessment features
+  const [qualitySummary, setQualitySummary] = useState<any>(null)
+  const [showQualityReport, setShowQualityReport] = useState(false)
 
   const fetchMappingRef = useRef(false)
   const router = useRouter()
-  function getLabelFromStandardFields(fieldKey: string) {
-    return (STANDARD_FIELDS.find(f => f.field === fieldKey)?.label) || fieldKey;
+  
+  // Reset fetchMappingRef when upload changes
+  useEffect(() => {
+    fetchMappingRef.current = false
+  }, [uploaded?.upload_id])
+
+  // Fetch database fields from backend
+  useEffect(() => {
+    async function fetchDatabaseFields() {
+      try {
+        setLoadingFields(true)
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/database-fields/?active_only=true`)
+        if (response.ok) {
+          const data = await response.json()
+          const fieldsFromBackend = data.map((field: any) => ({
+            field: field.field_key,
+            label: field.display_name
+          }))
+          setDatabaseFields(fieldsFromBackend)
+          
+          // Set as default fieldConfig if not already set
+          if (fieldConfig.length === 0) {
+            setFieldConfig(fieldsFromBackend)
+          }
+        } else {
+          console.error('Failed to fetch database fields')
+          toast.error('Failed to load database fields')
+        }
+      } catch (error) {
+        console.error('Error fetching database fields:', error)
+        toast.error('Failed to load database fields')
+      } finally {
+        setLoadingFields(false)
+      }
+    }
+
+    fetchDatabaseFields()
+  }, [])
+  
+  function getLabelFromDatabaseFields(fieldKey: string) {
+    return (databaseFields.find(f => f.field === fieldKey)?.label) || fieldKey;
   }
 
   function handleReset() {
@@ -37,26 +83,44 @@ export default function UploadPage() {
     setUploaded(null)
     setMapping(null)
     setFinalTables([])
-    setFieldConfig(STANDARD_FIELDS)
+    setFieldConfig(databaseFields)
     fetchMappingRef.current = false
     setShowFieldMapper(false)
     setSkipped(false)
     setShowRejectModal(false)
     setRejectReason('')
+    setQualitySummary(null)
+    setShowQualityReport(false)
   }
 
-  // Must match UploadZone's onParsed prop!
-  function handleUploadResult({ tables, upload_id, file_name, file, plan_types, field_config }: any) {
+  // Handle upload result with quality assessment
+  function handleUploadResult({ tables, upload_id, file_name, file, plan_types, field_config, quality_summary, extraction_config }: any) {
     setUploaded({ tables, upload_id, file_name, file })
     setMapping(null)
     setFinalTables([])
-    setFieldConfig(field_config || STANDARD_FIELDS)
+    setFieldConfig(field_config || databaseFields)
     fetchMappingRef.current = false
     setShowFieldMapper(false)
     setSkipped(false)
     setShowRejectModal(false)
     setRejectReason('')
     if (plan_types) setPlanTypes(plan_types)
+    
+    // Quality assessment features
+    if (quality_summary) {
+      setQualitySummary(quality_summary)
+      // Show quality summary toast
+      const confidence = quality_summary.overall_confidence
+      const score = (quality_summary.average_quality_score * 100).toFixed(1)
+      
+      if (confidence.includes('HIGH')) {
+        toast.success(`Excellent extraction quality: ${score}%`)
+      } else if (confidence.includes('MEDIUM')) {
+        toast.success(`Good extraction quality: ${score}%`)
+      } else {
+        toast.error(`Low extraction quality: ${score}%. Consider using different settings.`)
+      }
+    }
   }
 
   // NEW: Handle table name changes from ExtractedTables
@@ -67,31 +131,60 @@ export default function UploadPage() {
   function applyMapping(
     tables: any[],
     mapping: Record<string, string>,
-    fieldConfigOverride: { field: string, label: string }[]
+    fieldConfigOverride: FieldConfig[]
   ) {
+    console.log('applyMapping called with:', { tables, mapping, fieldConfigOverride })
+    
     const mappedRows = []
-    for (const table of tables) {
-      for (const row of table.rows) {
-        const obj: any = {}
-        for (const dashField in mapping) {
-          const colName = mapping[dashField]
-          const idx = table.header.findIndex((h: string) => h === colName)
-          obj[dashField] = (idx !== -1) ? row[idx] : ''
-        }
-        mappedRows.push(obj)
-      }
-    }
     const dashboardHeader = fieldConfigOverride.map(f => f.field)
-    const dashboardRows = mappedRows.map(obj => dashboardHeader.map(f => obj[f] || ""))
-    // Preserve table names if present
-    setFinalTables([{ header: dashboardHeader, rows: dashboardRows, name: tables[0]?.name || '' }])
+    
+    for (const table of tables) {
+      console.log('Processing table:', table)
+      const tableRows = []
+      for (const row of table.rows) {
+        console.log('Processing row:', row, 'Type:', typeof row, 'Is Array:', Array.isArray(row))
+        
+        // Ensure row is an array
+        if (!Array.isArray(row)) {
+          console.error('Row is not an array:', row)
+          continue
+        }
+        
+        // Create an array of values in the correct order based on fieldConfig
+        const mappedRow: string[] = []
+        for (const field of dashboardHeader) {
+          const column = mapping[field]
+          if (column) {
+            const colIndex = table.header.indexOf(column)
+            if (colIndex !== -1 && row[colIndex] !== undefined) {
+              mappedRow.push(row[colIndex])
+            } else {
+              mappedRow.push('')
+            }
+          } else {
+            mappedRow.push('')
+          }
+        }
+        tableRows.push(mappedRow)
+      }
+      mappedRows.push({
+        ...table,
+        header: dashboardHeader, // Use field keys as header
+        rows: tableRows,
+        field_config: fieldConfigOverride,
+      })
+    }
+    
+    console.log('Final mapped rows:', mappedRows)
+    setFinalTables(mappedRows)
   }
 
   async function handleApprove() {
-    if (!uploaded?.upload_id) return
+    if (!company || !uploaded?.upload_id) return
+    
     setSubmitting(true)
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/review/approve/`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/review/approve/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -101,78 +194,121 @@ export default function UploadPage() {
           plan_types: planTypes,
         }),
       })
-      if (!res.ok) {
-        const err = await res.json()
-        toast.error(err?.detail || "Approve failed!")
-        setSubmitting(false)
-        return
+      
+      if (response.ok) {
+        toast.success('Statement approved successfully!')
+        router.push('/review')
+      } else {
+        const error = await response.json()
+        toast.error(error.detail || 'Failed to approve statement')
       }
-      toast.success("Submission approved!")
-      setTimeout(() => router.push('/review'), 1200)
-    } catch (err) {
-      toast.error("Network error!")
+    } catch (error) {
+      console.error('Error approving statement:', error)
+      toast.error('Failed to approve statement')
+    } finally {
       setSubmitting(false)
     }
   }
 
   function handleReject() {
     setShowRejectModal(true)
-    setRejectReason('')
   }
 
   async function handleRejectSubmit() {
-    if (!uploaded?.upload_id) return
+    if (!company || !uploaded?.upload_id || !rejectReason.trim()) return
+    
     setSubmitting(true)
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/review/reject/`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/review/reject/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           upload_id: uploaded.upload_id,
-          final_data: finalTables, // <- include this!
+          final_data: finalTables,
           rejection_reason: rejectReason,
           field_config: fieldConfig,
           plan_types: planTypes,
         }),
       })
-      if (!res.ok) {
-        const err = await res.json()
-        toast.error(err?.detail || "Reject failed!")
-        setSubmitting(false)
-        return
+      
+      if (response.ok) {
+        toast.success('Statement rejected successfully!')
+        router.push('/review')
+      } else {
+        const error = await response.json()
+        toast.error(error.detail || 'Failed to reject statement')
       }
-      toast.success("Submission rejected!")
-      setTimeout(() => router.push('/review'), 1200)
-    } catch (err) {
-      toast.error("Network error!")
+    } catch (error) {
+      console.error('Error rejecting statement:', error)
+      toast.error('Failed to reject statement')
+    } finally {
       setSubmitting(false)
+      setShowRejectModal(false)
     }
   }
 
-  // 1. Company select & upload zone
+  // 1. Show upload interface if no company selected or no upload yet
   if (!company || !uploaded) {
     return (
       <main className="min-h-screen bg-gradient-to-br from-gray-100 to-blue-50 flex items-center justify-center px-4">
-        <div className="w-full max-w-6xl mx-auto shadow-2xl bg-white/80 rounded-3xl p-14 border">
+        <div className="w-full max-w-7xl mx-auto shadow-2xl bg-white/90 rounded-3xl p-10 border">
           <h1 className="text-4xl font-extrabold mb-8 text-gray-800 text-center tracking-tight">
             <span className="bg-gradient-to-r from-blue-600 to-indigo-500 text-transparent bg-clip-text">
               Commission Statement Upload
             </span>
           </h1>
-          <div className="flex flex-col md:flex-row gap-12 mb-6">
-            <div className="flex-1 min-w-[250px]">
-              <CompanySelect value={company?.id} onChange={c => { setCompany(c) }} />
+          
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+            {/* Left Column - Carrier Selection */}
+            <div className="space-y-6">
+              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6 border border-blue-100">
+                <h2 className="text-2xl font-bold text-gray-800 mb-4">
+                  <span className="bg-gradient-to-r from-blue-600 to-indigo-600 text-transparent bg-clip-text">
+                    Select or Add Carrier
+                  </span>
+                </h2>
+                <CompanySelect value={company?.id} onChange={setCompany} />
+              </div>
+              
+              <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6 border border-green-100">
+                <h3 className="text-lg font-semibold text-gray-800 mb-3">
+                  <span className="bg-gradient-to-r from-green-600 to-emerald-600 text-transparent bg-clip-text">
+                    Upload Requirements
+                  </span>
+                </h3>
+                <ul className="space-y-2 text-sm text-gray-600">
+                  <li className="flex items-center gap-2">
+                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                    PDF commission statements only
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                    Maximum file size: 10MB
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                    Automatic quality assessment
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                    AI-powered data extraction
+                  </li>
+                </ul>
+              </div>
             </div>
-            <div className="flex-1 min-w-[320px]">
-              <UploadZone
+            
+            {/* Right Column - Upload Zone */}
+            <div className="flex flex-col h-full">
+              <AdvancedUploadZone
                 onParsed={handleUploadResult}
                 disabled={!company}
                 companyId={company?.id || ''}
               />
             </div>
           </div>
-          <div className="text-center text-sm text-gray-500 mt-2">
-            Please select a carrier and upload a PDF commission statement.
+          
+          <div className="text-center text-sm text-gray-500 mt-6">
+            AI-powered extraction with quality assessment and validation
           </div>
         </div>
       </main>
@@ -188,17 +324,18 @@ export default function UploadPage() {
   }
 
   // 2. If mapping exists, auto-apply; else, show FieldMapper (skip if skipped)
-  if ((!mapping || showFieldMapper) && uploaded?.tables?.length && company && (!skipped || showFieldMapper)) {
-    if (!fetchMappingRef.current && !fetchingMapping && !showFieldMapper) {
+  if (uploaded?.tables?.length && company && (showFieldMapper || (!mapping && !skipped))) {
+    // Only fetch mapping once when needed
+    if (!fetchMappingRef.current && !fetchingMapping && !showFieldMapper && !mapping) {
       fetchMappingRef.current = true
       setFetchingMapping(true)
       fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${company.id}/mapping/`)
         .then(r => r.json())
         .then(map => {
-          let mappingObj = null
+          let mappingObj: Record<string, string> | null = null
           let fieldsArr = fieldConfig
-          let loadedPlanTypes = null
-          let loadedTableNames = null
+          let loadedPlanTypes: string[] | null = null
+          let loadedTableNames: string[] | null = null
           if (map && typeof map === 'object') {
             if (map.mapping) {
               mappingObj = map.mapping
@@ -208,10 +345,10 @@ export default function UploadPage() {
               } else if (mappingObj) {
                 fieldsArr = Object.keys(mappingObj).map(field => ({
                   field,
-                  label: getLabelFromStandardFields(field)
+                  label: getLabelFromDatabaseFields(field)
                 }))
               } else {
-                fieldsArr = STANDARD_FIELDS
+                fieldsArr = databaseFields
               }
               if (map.plan_types) loadedPlanTypes = map.plan_types
               if (map.table_names) loadedTableNames = map.table_names
@@ -219,11 +356,11 @@ export default function UploadPage() {
               mappingObj = {}
               fieldsArr = []
               map.forEach((row: any) => {
-                mappingObj[row.field_key] = row.column_name
+                mappingObj![row.field_key] = row.column_name
                 if (!fieldsArr.some(f => f.field === row.field_key))
                   fieldsArr.push({
                     field: row.field_key,
-                    label: getLabelFromStandardFields(row.field_key) // Use pretty label!
+                    label: getLabelFromDatabaseFields(row.field_key) // Use pretty label!
                   })
               })
               if (!fieldsArr.length) fieldsArr = fieldConfig
@@ -243,18 +380,21 @@ export default function UploadPage() {
 
     return (
       <main className="min-h-screen bg-gradient-to-br from-gray-100 to-blue-50 flex items-center justify-center px-4">
-        <div className="w-full mx-auto shadow-2xl bg-white/90 rounded-3xl p-10 border">
-          <h1 className="text-3xl font-bold mb-8 text-gray-800 text-center tracking-tight">
+        <div className="w-full max-w-7xl mx-auto shadow-2xl bg-white/90 rounded-3xl p-8 border">
+          <h1 className="text-3xl font-bold mb-6 text-gray-800 text-center tracking-tight">
             <span className="bg-gradient-to-r from-blue-600 to-indigo-500 text-transparent bg-clip-text">
               Map Fields for {company.name}
             </span>
           </h1>
-          <div className="grid grid-cols-10 gap-0 relative w-full min-h-[650px]">
-            {/* LEFT: Field Mapper (3/10 columns) */}
-            <div className="col-span-3 flex flex-col items-stretch justify-center px-4 py-6 min-w-[320px] max-w-[500px]">
-              <div className="mb-6">
+          
+          
+          {/* Single Column Layout */}
+          <div className="space-y-8">
+            {/* Field Mapper Section */}
+            <div>
+            <div className="mb-4">
                 <div className="flex items-center gap-3 mb-2">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-600 to-indigo-400 flex items-center justify-center shadow text-white text-xl font-bold">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-600 to-indigo-400 flex items-center justify-center shadow text-white text-sm font-bold">
                     <span>1</span>
                   </div>
                   <span className="text-xl font-semibold text-gray-800 tracking-tight">
@@ -262,59 +402,82 @@ export default function UploadPage() {
                   </span>
                 </div>
                 <p className="text-gray-500 text-sm pl-1">
-                  Match each required field to the correct column in your uploaded table.<br />
-                  This helps us standardize your commission statement.
+                  Match each required field to the correct column in your uploaded table. Helps us standardize your commission statement.
                 </p>
               </div>
-              <FieldMapper
-                company={company}
-                columns={uploaded.tables[0].header}
-                initialPlanTypes={planTypes}
-                onSave={async (map, fieldConf, selectedPlanTypes) => {
-                  setMapping(map)
-                  setFieldConfig(fieldConf)
-                  setPlanTypes(selectedPlanTypes)
-                  // Always send the current fields as field_config
-                  const config = {
-                    mapping: map,
-                    plan_types: selectedPlanTypes,
-                    table_names: uploaded.tables.map((t: any) => t.name || ''),
-                    field_config: fieldConf,
-                  }
-                  await fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${company.id}/mapping/`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(config),
-                  })
-                  applyMapping(uploaded.tables, map, fieldConf)
-                  setShowFieldMapper(false)
-                  setSkipped(false)
-                }}
-                onSkip={() => {
-                  // Set fieldConfig to match extracted table headers
-                  const extractedHeaders = uploaded.tables.map((t: any) => t.header);
-                  const extractedFieldConfig = uploaded.tables.map((t: any) => t.header.map((col: string) => ({ field: col, label: col })));
-                  // Save table names and plan types per table
-                  const tableNames = uploaded.tables.map((t: any) => t.name || '');
-                  setFinalTables(uploaded.tables.map((t: any) => ({ ...t })));
-                  setFieldConfig(extractedFieldConfig[0]); // Use first table's config for DashboardTable
-                  setShowFieldMapper(false);
-                  setMapping(null);
-                  setSkipped(true);
-                  setPlanTypes(planTypes); // preserve selected plan types
-                }}
-                initialFields={fieldConfig}
-                initialMapping={mapping}
-              />
+              {uploaded.tables[0]?.header && uploaded.tables[0].header.length > 0 && (
+                <FieldMapper
+                  company={company}
+                  columns={uploaded.tables[0].header}
+                  initialPlanTypes={planTypes}
+                  onSave={async (map, fieldConf, selectedPlanTypes) => {
+                    setMapping(map)
+                    setFieldConfig(fieldConf)
+                    setPlanTypes(selectedPlanTypes)
+                    // Always send the current fields as field_config
+                    const config = {
+                      mapping: map,
+                      plan_types: selectedPlanTypes,
+                      table_names: uploaded.tables.map((t: any) => t.name || ''),
+                      field_config: fieldConf,
+                    }
+                    await fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${company.id}/mapping/`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify(config),
+                    })
+                    applyMapping(uploaded.tables, map, fieldConf)
+                    setShowFieldMapper(false)
+                    setSkipped(false)
+                  }}
+                  onSkip={() => {
+                    // Set fieldConfig to match extracted table headers
+                    const extractedHeaders = uploaded.tables.map((t: any) => t.header);
+                    const extractedFieldConfig = uploaded.tables.map((t: any) => t.header.map((col: string) => ({ field: col, label: col })));
+                    // Save table names and plan types per table
+                    const tableNames = uploaded.tables.map((t: any) => t.name || '');
+                    
+                    // Ensure the tables have the correct structure for DashboardTable
+                    const processedTables = uploaded.tables.map((t: any) => ({
+                      ...t,
+                      header: t.header || [],
+                      rows: t.rows || []
+                    }));
+                    
+                    setFinalTables(processedTables);
+                    setFieldConfig(extractedFieldConfig[0]); // Use first table's config for DashboardTable
+                    setShowFieldMapper(false);
+                    setMapping(null);
+                    setSkipped(true);
+                    setPlanTypes(planTypes); // preserve selected plan types
+                  }}
+                  initialFields={fieldConfig}
+                  initialMapping={mapping}
+                />
+              )}
             </div>
-            {/* Divider */}
-            <div className="hidden md:block absolute left-[30%] top-0 h-full w-0.5 bg-gradient-to-b from-blue-100 to-purple-200 opacity-60 rounded-full shadow pointer-events-none" />
-            {/* RIGHT: Table (7/10 columns) */}
-            <div className="col-span-7 flex flex-col items-stretch px-6 py-6 min-w-0">
-              <h2 className="font-semibold text-gray-700 mb-2">Extracted Table Preview</h2>
-              <ExtractedTables tables={uploaded.tables} onTablesChange={handleExtractedTablesChange} />
+
+            {/* Extracted Tables Section */}
+            <div>
+              <div className="mb-4">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-green-600 to-emerald-400 flex items-center justify-center shadow text-white text-sm font-bold">
+                    <span>2</span>
+                  </div>
+                  <span className="text-xl font-semibold text-gray-800 tracking-tight">
+                    Extracted Table Preview
+                  </span>
+                </div>
+                <p className="text-gray-500 text-sm pl-1">
+                  Review the extracted data from your uploaded PDF. You can edit, delete, or modify the data as needed.
+                </p>
+              </div>
+              <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                <ExtractedTables tables={uploaded.tables} onTablesChange={handleExtractedTablesChange} />
+              </div>
             </div>
           </div>
+
           <div className="flex justify-center mt-8">
             <button onClick={handleReset} className="px-4 py-2 rounded bg-gray-300 text-gray-700 hover:bg-gray-400">
               Start Over
@@ -335,6 +498,15 @@ export default function UploadPage() {
             <Loader message="Submitting..." />
           </div>
         )}
+        
+        {/* Quality Report Modal */}
+        {showQualityReport && uploaded?.upload_id && (
+          <QualityReport 
+            uploadId={uploaded.upload_id} 
+            onClose={() => setShowQualityReport(false)} 
+          />
+        )}
+        
         <main className="min-h-screen bg-gradient-to-br from-gray-100 to-blue-50 flex items-center justify-center px-4">
           <div className="w-full max-w-[1800px] md:w-[92vw] mx-auto shadow-2xl bg-white/90 rounded-3xl p-10 border">
             <h1 className="text-4xl font-extrabold mb-8 text-gray-800 text-center tracking-tight">
@@ -342,6 +514,30 @@ export default function UploadPage() {
                 Commission Statement Upload
               </span>
             </h1>
+            
+            {/* Quality Summary Banner */}
+            {qualitySummary && (
+              <div className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="text-2xl">📊</div>
+                    <div>
+                      <h3 className="font-semibold text-blue-800">Extraction Quality: {(qualitySummary.average_quality_score * 100).toFixed(1)}%</h3>
+                      <p className="text-sm text-blue-600">
+                        {qualitySummary.valid_tables} of {qualitySummary.total_tables} tables validated successfully
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowQualityReport(true)}
+                    className="px-3 py-1 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700"
+                  >
+                    View Full Report
+                  </button>
+                </div>
+              </div>
+            )}
+            
             <div className="flex justify-center mb-4">
               <button
                 onClick={handleReset}

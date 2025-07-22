@@ -68,4 +68,27 @@ class MappingConfig(BaseModel):
     table_names: List[str] = []
     field_config: List[Dict[str, str]] = []
 
+class DatabaseFieldBase(BaseModel):
+    field_key: str
+    display_name: str
+    description: Optional[str] = None
+    is_active: bool = True
+
+class DatabaseFieldCreate(DatabaseFieldBase):
+    pass
+
+class DatabaseFieldUpdate(BaseModel):
+    field_key: Optional[str] = None
+    display_name: Optional[str] = None
+    description: Optional[str] = None
+    is_active: Optional[bool] = None
+
+class DatabaseField(DatabaseFieldBase):
+    id: UUID
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        orm_mode = True
+
 

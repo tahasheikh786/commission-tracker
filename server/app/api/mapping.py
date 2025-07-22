@@ -20,6 +20,7 @@ async def get_company_mapping(company_id: str, db: AsyncSession = Depends(get_db
     # Fetch mapping, plan_types, table_names, and field_config for the company
     mapping_rows = await crud.get_company_mappings(db, company_id)
     mapping = {row.field_key: row.column_name for row in mapping_rows}
+    
     # For now, fetch the latest StatementUpload for this company to get plan_types, table_names, field_config
     latest_upload = await crud.get_latest_statement_upload_for_company(db, company_id)
     plan_types = latest_upload.plan_types if latest_upload and latest_upload.plan_types else []
@@ -28,7 +29,11 @@ async def get_company_mapping(company_id: str, db: AsyncSession = Depends(get_db
         for t in latest_upload.raw_data:
             if isinstance(t, dict) and t.get('name'):
                 table_names.append(t['name'])
-    field_config = latest_upload.field_config if latest_upload and latest_upload.field_config else []
+    
+    # Get field_config from database fields instead of upload
+    database_fields = await crud.get_all_database_fields(db, active_only=True)
+    field_config = [{"field": field.field_key, "label": field.display_name} for field in database_fields]
+    
     return MappingConfig(
         mapping=mapping,
         plan_types=plan_types,
