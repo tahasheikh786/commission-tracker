@@ -1,5 +1,5 @@
 'use client'
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { Plus, Edit, Trash2, Save, X, Eye, EyeOff } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -42,7 +42,7 @@ export default function DatabaseFieldsManager() {
   })
 
   // Fetch database fields
-  const fetchFields = async () => {
+  const fetchFields = useCallback(async () => {
     try {
       setLoading(true)
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/database-fields/?active_only=${!showInactive}`)
@@ -55,11 +55,11 @@ export default function DatabaseFieldsManager() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [showInactive])
 
   useEffect(() => {
     fetchFields()
-  }, [showInactive])
+  }, [fetchFields])
 
   // Initialize default fields
   const initializeFields = async () => {
