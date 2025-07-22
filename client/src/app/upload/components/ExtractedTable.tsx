@@ -6,7 +6,7 @@ import clsx from 'clsx'
 type TableData = {
   header: string[]
   rows: string[][]
-  name?: string // <-- add table name
+  name?: string
 }
 
 type ExtractedTablesProps = {
@@ -16,6 +16,7 @@ type ExtractedTablesProps = {
   onRowHover?: (tableIdx: number, rowIdx: number | null) => void,
 }
 
+// Helper functions moved outside component
 function isHeaderLikeRow(row: string[]) {
   const minStringCells = 3;
   const nonempty = row.filter(cell => cell && cell.trim());
@@ -32,6 +33,86 @@ function fixPercent(val: string): string {
     .replace(/OLO/g, '%')
     .replace(/010/g, '%');
 }
+
+function downloadCSV(table: TableData, name: string) {
+  const csv = [
+    table.header.join(','),
+    ...table.rows.map(row => row.map(cell => '"' + (cell || '').replace(/"/g, '""') + '"').join(','))
+  ].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = (name || 'table') + '.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function areHeadersExtremelySimilar(h1: string[], h2: string[]): boolean {
+  if (h1.length !== h2.length) return false;
+  
+  // Check if headers are identical after normalization
+  for (let i = 0; i < h1.length; i++) {
+    if (h1[i].trim().toLowerCase() !== h2[i].trim().toLowerCase()) {
+      return false;
+    }
+  }
+  
+  return true;
+}
+
+function mergeTablesByHeader(tables: TableData[]): TableData[] {
+  const merged: TableData[] = [];
+  const processed = new Set<number>();
+  
+  tables.forEach((table, index) => {
+    if (processed.has(index)) return;
+    
+    // Normalize header by removing empty strings
+    const normalizedHeader = table.header.filter(cell => cell.trim());
+    
+    // Find all tables with similar headers
+    const similarTables = [table];
+    processed.add(index);
+    
+    for (let j = index + 1; j < tables.length; j++) {
+      if (processed.has(j)) continue;
+      
+      const otherHeader = tables[j].header.filter(cell => cell.trim());
+      
+      // Check if headers are extremely similar
+      if (areHeadersExtremelySimilar(normalizedHeader, otherHeader)) {
+        similarTables.push(tables[j]);
+        processed.add(j);
+      }
+    }
+    
+    // Merge all similar tables
+    const mergedTable: TableData = {
+      header: normalizedHeader,
+      rows: [],
+      name: similarTables.map(t => t.name).filter(Boolean).join(', ') || ''
+    };
+    
+    similarTables.forEach(similarTable => {
+      // Normalize rows to match the normalized header
+      const normalizedRows = similarTable.rows.map(row => {
+        const paddedRow = [...row];
+        while (paddedRow.length < normalizedHeader.length) {
+          paddedRow.push('');
+        }
+        return paddedRow.slice(0, normalizedHeader.length);
+      });
+      mergedTable.rows.push(...normalizedRows);
+    });
+    
+    merged.push(mergedTable);
+  });
+  
+  return merged;
+}
+
+const ROWS_OPTIONS = [10, 25, 50];
 
 function Pagination({
   page, setPage, pageCount
@@ -59,98 +140,25 @@ function Pagination({
   )
 }
 
-const ROWS_OPTIONS = [10, 25, 50];
-
-function downloadCSV(table: TableData, name: string) {
-  const csv = [
-    table.header.join(','),
-    ...table.rows.map(row => row.map(cell => '"' + (cell || '').replace(/"/g, '""') + '"').join(','))
-  ].join('\n');
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = (name || 'table') + '.csv';
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
 export default function ExtractedTables({ tables: backendTables, onTablesChange, highlightedRow, onRowHover }: ExtractedTablesProps) {
-  // Merge tables with identical headers
-  function mergeTablesByHeader(tables: TableData[]): TableData[] {
-    const merged: TableData[] = [];
-    const processed = new Set<number>();
-    
-    tables.forEach((table, index) => {
-      if (processed.has(index)) return;
-      
-      // Normalize header by removing empty strings
-      const normalizedHeader = table.header.filter(cell => cell.trim());
-      
-      // Find all tables with similar headers
-      const similarTables = [table];
-      processed.add(index);
-      
-      for (let j = index + 1; j < tables.length; j++) {
-        if (processed.has(j)) continue;
-        
-        const otherHeader = tables[j].header.filter(cell => cell.trim());
-        
-        // Check if headers are extremely similar
-        if (areHeadersExtremelySimilar(normalizedHeader, otherHeader)) {
-          similarTables.push(tables[j]);
-          processed.add(j);
-        }
-      }
-      
-      // Merge all similar tables
-      const mergedTable: TableData = {
-        header: normalizedHeader,
-        rows: [],
-        name: similarTables.map(t => t.name).filter(Boolean).join(', ') || ''
-      };
-      
-      similarTables.forEach(similarTable => {
-        // Normalize rows to match the normalized header
-        const normalizedRows = similarTable.rows.map(row => {
-          const paddedRow = [...row];
-          while (paddedRow.length < normalizedHeader.length) {
-            paddedRow.push('');
-          }
-          return paddedRow.slice(0, normalizedHeader.length);
-        });
-        mergedTable.rows.push(...normalizedRows);
-      });
-      
-      merged.push(mergedTable);
-    });
-    
-    return merged;
-  }
-  
-  function areHeadersExtremelySimilar(h1: string[], h2: string[]): boolean {
-    if (h1.length !== h2.length) return false;
-    
-    // Check if headers are identical after normalization
-    for (let i = 0; i < h1.length; i++) {
-      if (h1[i].trim().toLowerCase() !== h2[i].trim().toLowerCase()) {
-        return false;
-      }
-    }
-    
-    return true;
-  }
-
-  // Use merged tables for state
+  // All hooks organized at the top - must be called before any early returns
   const [tab, setTab] = useState(0)
   const [tables, setTables] = useState(() => mergeTablesByHeader(backendTables).map(table => ({
     ...table,
     rows: [...table.rows],
     name: table.name || ''
   })))
+  const [editRow, setEditRow] = useState<{ t: number, r: number } | null>(null)
+  const [editValues, setEditValues] = useState<string[]>([])
+  const [pages, setPages] = useState(Array(tables.length).fill(1))
+  const [rowsPerPages, setRowsPerPages] = useState(Array(tables.length).fill(ROWS_OPTIONS[0]))
+  const [selectedRows, setSelectedRows] = useState<Array<Set<number>>>(tables.map(() => new Set<number>()))
+  const [sort, setSort] = useState<{ col: number, dir: 'asc' | 'desc' } | null>(null)
+  const [colWidths, setColWidths] = useState<Array<number[]>>(tables.map(t => t.header.map(() => 160)))
   
-  // Ref to prevent infinite loops in onTablesChange
+  // Refs
   const lastCallbackRef = useRef<string>('')
+  const resizingCol = useRef<{ table: number, col: number } | null>(null)
 
   // Update local tables when backendTables change
   useEffect(() => {
@@ -196,19 +204,10 @@ export default function ExtractedTables({ tables: backendTables, onTablesChange,
     }
   }, [tables, onTablesChange]);
 
-  // Guard: If no tables or invalid tab, render nothing
+  // Guard: If no tables or invalid tab, render nothing - AFTER all hooks
   if (!tables.length || !tables[tab]) return null;
 
-  const [editRow, setEditRow] = useState<{ t: number, r: number } | null>(null)
-  const [editValues, setEditValues] = useState<string[]>([])
-  const [pages, setPages] = useState(Array(tables.length).fill(1))
-  const [rowsPerPages, setRowsPerPages] = useState(Array(tables.length).fill(ROWS_OPTIONS[0]))
-  const [selectedRows, setSelectedRows] = useState<Array<Set<number>>>(tables.map(() => new Set<number>()))
-  const [sort, setSort] = useState<{ col: number, dir: 'asc' | 'desc' } | null>(null)
-  const [colWidths, setColWidths] = useState<Array<number[]>>(tables.map(t => t.header.map(() => 160)))
-  const resizingCol = useRef<{ table: number, col: number } | null>(null)
-
-  // Sorting logic
+  // Computed values
   const sortedRows = (() => {
     if (!sort) return tables[tab].rows;
     const { col, dir } = sort;
@@ -234,9 +233,11 @@ export default function ExtractedTables({ tables: backendTables, onTablesChange,
   const showingFrom = (currentPage - 1) * currentRowsPerPage + 1;
   const showingTo = Math.min(currentPage * currentRowsPerPage, totalItems);
 
+  // Event handlers
   function isRowSelected(idx: number) {
     return selectedRows[tab].has(idx);
   }
+
   function toggleRow(idx: number) {
     setSelectedRows(selRows =>
       selRows.map((s, i) => {
@@ -248,6 +249,7 @@ export default function ExtractedTables({ tables: backendTables, onTablesChange,
       })
     )
   }
+
   function toggleSelectAllOnPage() {
     const selected = selectedRows[tab];
     const allSelected = globalIndices.every(idx => selected.has(idx));
@@ -266,6 +268,7 @@ export default function ExtractedTables({ tables: backendTables, onTablesChange,
       })
     );
   }
+
   function deleteSelectedRowsOnPage() {
     setTables(tables =>
       tables.map((tbl, tblIdx) => {
@@ -283,6 +286,7 @@ export default function ExtractedTables({ tables: backendTables, onTablesChange,
       setEditRow(null)
     }
   }
+
   function deleteRow(t: number, r: number) {
     setTables(tables =>
       tables.map((tbl, idx) =>
@@ -299,14 +303,17 @@ export default function ExtractedTables({ tables: backendTables, onTablesChange,
     );
     if (editRow?.t === t && editRow.r === r) setEditRow(null)
   }
+
   function startEdit(t: number, r: number) {
     setEditRow({ t, r })
     setEditValues([...tables[t].rows[r]])
   }
+
   function cancelEdit() {
     setEditRow(null)
     setEditValues([])
   }
+
   function saveEdit() {
     setTables(tables =>
       tables.map((tbl, tIdx) =>
@@ -318,20 +325,24 @@ export default function ExtractedTables({ tables: backendTables, onTablesChange,
     setEditRow(null)
     setEditValues([])
   }
+
   function onEditCell(i: number, v: string) {
     setEditValues(vals => vals.map((val, idx) => idx === i ? v : val))
   }
+
   function setPage(tabIdx: number, page: number) {
     setPages(pgs => pgs.map((p, idx) => idx === tabIdx ? page : p))
   }
+
   function setRowsPerPage(tabIdx: number, val: number) {
     setRowsPerPages(rpp => rpp.map((x, i) => i === tabIdx ? val : x))
     setPages(pgs => pgs.map((p, i) => (i === tabIdx ? 1 : p)));
   }
+
   function handleTableNameChange(idx: number, name: string) {
     setTables(tables => tables.map((t, i) => i === idx ? { ...t, name } : t));
   }
-  // Column resizing
+
   function startResize(tableIdx: number, colIdx: number, e: React.MouseEvent) {
     resizingCol.current = { table: tableIdx, col: colIdx };
     document.body.style.cursor = 'col-resize';
@@ -350,7 +361,7 @@ export default function ExtractedTables({ tables: backendTables, onTablesChange,
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
   }
-  // Sorting
+
   function handleSort(colIdx: number) {
     setSort(s => {
       if (!s || s.col !== colIdx) return { col: colIdx, dir: 'asc' };
