@@ -5,6 +5,7 @@ import CarrierStatementsTable from "./CarrierStatementsTable";
 import EditMappingModal from "./EditMappingModal";
 import CompareModal from "./CompareModal";
 import StatementPreviewModal from "./StatementPreviewModal";
+import DatabaseFieldsManager from "./DatabaseFieldsManager";
 import toast from 'react-hot-toast';
 import Loader from "@/app/upload/components/Loader";
 
@@ -29,6 +30,7 @@ export default function CarrierTab() {
   const [showCompareIdx, setShowCompareIdx] = useState<number | null>(null);
   const [loadingCarriers, setLoadingCarriers] = useState(true);
   const [loadingStatements, setLoadingStatements] = useState(false);
+  const [activeTab, setActiveTab] = useState<'carriers' | 'database-fields'>('carriers');
 
   // Fetch carriers on mount
   useEffect(() => {
@@ -93,44 +95,74 @@ export default function CarrierTab() {
   
 
   return (
-    <div className="w-full max-w-[1600px] mx-auto flex flex-col md:flex-row gap-10 px-2 md:px-10 py-6">
-      <CarrierList
-        carriers={carriers}
-        selected={selected}
-        onSelect={c => {
-          setSelected(c);
-          // Update the carrier in the list if name changed
-          setCarriers(prev => prev.map(car => car.id === c.id ? { ...car, name: c.name } : car));
-        }}
-        loading={loadingCarriers}
-        onDelete={handleCarrierDelete} 
-      />
-      <div className="flex-1 bg-white/80 rounded-2xl shadow p-6 min-h-[320px]">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-3 gap-3">
-          <div className="text-2xl font-bold text-blue-900">
-            {selected?.name || "Select a carrier"}
-          </div>
-          {selected && (
-            <button
-              className="px-4 py-2 bg-violet-600 text-white rounded font-semibold hover:bg-violet-700 transition"
-              onClick={() => setShowEditMapping(true)}
-            >
-              Edit Mappings
-            </button>
-          )}
-        </div>
-        {loadingStatements ? (
-          <Loader />
-        ) : (
-          <CarrierStatementsTable
-            statements={statements}
-            setStatements={setStatements}
-            onPreview={setShowPreviewIdx}
-            onCompare={setShowCompareIdx}
-            onDelete={handleDelete}  // Pass delete handler here
-          />
-        )}
+    <div className="w-full max-w-[1600px] mx-auto px-2 md:px-10 py-6">
+      {/* Tab Navigation */}
+      <div className="flex gap-1 mb-6 bg-gray-100 p-1 rounded-lg w-fit">
+        <button
+          onClick={() => setActiveTab('carriers')}
+          className={`px-4 py-2 rounded-md font-medium transition ${
+            activeTab === 'carriers'
+              ? 'bg-white text-blue-600 shadow-sm'
+              : 'text-gray-600 hover:text-gray-900'
+          }`}
+        >
+          Carriers
+        </button>
+        <button
+          onClick={() => setActiveTab('database-fields')}
+          className={`px-4 py-2 rounded-md font-medium transition ${
+            activeTab === 'database-fields'
+              ? 'bg-white text-blue-600 shadow-sm'
+              : 'text-gray-600 hover:text-gray-900'
+          }`}
+        >
+          Database Fields
+        </button>
       </div>
+
+      {activeTab === 'carriers' ? (
+        <div className="flex flex-col md:flex-row gap-10">
+          <CarrierList
+            carriers={carriers}
+            selected={selected}
+            onSelect={c => {
+              setSelected(c);
+              // Update the carrier in the list if name changed
+              setCarriers(prev => prev.map(car => car.id === c.id ? { ...car, name: c.name } : car));
+            }}
+            loading={loadingCarriers}
+            onDelete={handleCarrierDelete} 
+          />
+          <div className="flex-1 bg-white/80 rounded-2xl shadow p-6 min-h-[320px]">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-3 gap-3">
+              <div className="text-2xl font-bold text-blue-900">
+                {selected?.name || "Select a carrier"}
+              </div>
+              {selected && (
+                <button
+                  className="px-4 py-2 bg-violet-600 text-white rounded font-semibold hover:bg-violet-700 transition"
+                  onClick={() => setShowEditMapping(true)}
+                >
+                  Edit Mappings
+                </button>
+              )}
+            </div>
+            {loadingStatements ? (
+              <Loader />
+            ) : (
+              <CarrierStatementsTable
+                statements={statements}
+                setStatements={setStatements}
+                onPreview={setShowPreviewIdx}
+                onCompare={setShowCompareIdx}
+                onDelete={handleDelete}  // Pass delete handler here
+              />
+            )}
+          </div>
+        </div>
+      ) : (
+        <DatabaseFieldsManager />
+      )}
       {/* Modals */}
       {showEditMapping && selected && (
         <EditMappingModal

@@ -23,3 +23,15 @@ pydantic
 
 # File upload support in FastAPI
 python-multipart
+
+# Advanced Table Extraction Dependencies (Python 3.13 Compatible)
+opencv-python-headless==4.8.1.78
+pytesseract==0.3.10
+numpy<2.0.0
+Pillow>=10.0.0
+
+# Image processing enhancements
+imageio==2.31.1
+
+# Note: scikit-learn and scipy removed due to Python 3.13 compatibility issues
+# Alternative text similarity functions implemented using built-in Python libraries 
