@@ -166,8 +166,14 @@ export default function CarrierTab() {
       {/* Modals */}
       {showEditMapping && selected && (
         <EditMappingModal
-          carrier={selected}
+          company={selected}
           onClose={() => setShowEditMapping(false)}
+          onSave={(mapping, fields, planTypes) => {
+            // Handle save logic here
+            console.log('Saving mapping:', { mapping, fields, planTypes });
+            setShowEditMapping(false);
+            toast.success('Mapping saved successfully!');
+          }}
         />
       )}
       {showPreviewIdx !== null && statements[showPreviewIdx] && (
