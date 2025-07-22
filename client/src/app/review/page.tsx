@@ -80,8 +80,8 @@ export default function ReviewPage() {
             )}
             {previewIdx !== null && submissions[previewIdx] && (
                 <Modal onClose={() => setPreviewIdx(null)}>
-                    <div className="max-w-3xl max-h-[80vh] overflow-auto">
-                        <div className="mb-2 font-semibold">Table Preview</div>
+                    <div className="w-full lg:max-w-7xl max-h-[80vh] overflow-auto mx-auto">
+                        <div className="mb-2 font-semibold">Mapped Table Preview</div>
                         {submissions[previewIdx].final_data && submissions[previewIdx].final_data.length > 0 ? (
                             <DashboardTable
                                 tables={submissions[previewIdx].final_data}
@@ -95,7 +95,7 @@ export default function ReviewPage() {
                             />
                         ) : (
                             <div className="text-gray-500 py-8 text-center">
-                                No data available for this statement.
+                                No mapped data available for this statement.
                             </div>
                         )}
                     </div>
