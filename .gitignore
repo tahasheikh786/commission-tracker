@@ -11,5 +11,10 @@ server/__pycache__/
 server/**/__pycache__/
 server/**/*.pyc
 
+# Large model files (handled by Git LFS or downloaded during deployment)
+server/docling_models/model_artifacts/tableformer/accurate/tableformer_accurate.safetensors
+server/docling_models/model_artifacts/tableformer/fast/tableformer_fast.safetensors
+*.safetensors
+
 # General
 *.log
