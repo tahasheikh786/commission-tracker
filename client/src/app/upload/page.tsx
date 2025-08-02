@@ -8,7 +8,7 @@ import ExtractedTables from './components/ExtractedTable'
 import TableEditor from './components/TableEditor'
 import DashboardTable from './components/DashboardTable'
 import FieldMapper from './components/FieldMapper'
-import QualityReport from './components/QualityReport'
+
 import { toast } from 'react-hot-toast'
 import Modal from '@/app/components/Modal'
 import Loader from './components/Loader';
@@ -38,9 +38,7 @@ export default function UploadPage() {
   const [extractionHistory, setExtractionHistory] = useState<any[][]>([])
   const [currentExtractionIndex, setCurrentExtractionIndex] = useState(0)
   
-  // Quality assessment features
-  const [qualitySummary, setQualitySummary] = useState<any>(null)
-  const [showQualityReport, setShowQualityReport] = useState(false)
+
   
   // Loading state for another extraction method
   const [isUsingAnotherExtraction, setIsUsingAnotherExtraction] = useState(false)
@@ -111,8 +109,6 @@ export default function UploadPage() {
     setOriginalFile(null)
     setExtractionHistory([])
     setCurrentExtractionIndex(0)
-    setQualitySummary(null)
-    setShowQualityReport(false)
     setIsUsingAnotherExtraction(false)
     setHasUsedAnotherExtraction(false)
   }
@@ -147,21 +143,7 @@ export default function UploadPage() {
     setRejectReason('')
     if (plan_types) setPlanTypes(plan_types)
     
-    // Quality assessment features
-    if (quality_summary) {
-      setQualitySummary(quality_summary)
-      // Show quality summary toast
-      const confidence = quality_summary.overall_confidence
-      const score = (quality_summary.average_quality_score * 100).toFixed(1)
-      
-      if (confidence.includes('HIGH')) {
-        toast.success(`Excellent extraction quality: ${score}%`)
-      } else if (confidence.includes('MEDIUM')) {
-        toast.success(`Good extraction quality: ${score}%`)
-      } else {
-        toast.error(`Low extraction quality: ${score}%. Consider using different settings.`)
-      }
-    }
+
   }
 
   // NEW: Handle table name changes from ExtractedTables
@@ -686,13 +668,7 @@ export default function UploadPage() {
           </div>
         )}
         
-        {/* Quality Report Modal */}
-        {showQualityReport && uploaded?.upload_id && (
-          <QualityReport 
-            uploadId={uploaded.upload_id} 
-            onClose={() => setShowQualityReport(false)} 
-          />
-        )}
+
         
         <main className="min-h-screen bg-gradient-to-br from-gray-100 to-blue-50 flex items-center justify-center px-4">
           <div className="w-full max-w-[1800px] md:w-[92vw] mx-auto shadow-2xl bg-white/90 rounded-3xl p-10 border">
@@ -702,28 +678,7 @@ export default function UploadPage() {
               </span>
             </h1>
             
-            {/* Quality Summary Banner */}
-            {qualitySummary && (
-              <div className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="text-2xl">📊</div>
-                    <div>
-                      <h3 className="font-semibold text-blue-800">Extraction Quality: {(qualitySummary.average_quality_score * 100).toFixed(1)}%</h3>
-                      <p className="text-sm text-blue-600">
-                        {qualitySummary.valid_tables} of {qualitySummary.total_tables} tables validated successfully
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setShowQualityReport(true)}
-                    className="px-3 py-1 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700"
-                  >
-                    View Full Report
-                  </button>
-                </div>
-              </div>
-            )}
+
             
             <div className="flex justify-center mb-4">
               <button
