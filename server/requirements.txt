@@ -1,37 +1,38 @@
 # Web framework
-fastapi
-
-# ASGI server for FastAPI
-uvicorn
+fastapi==0.104.1
+uvicorn==0.24.0
 
 # Database
 sqlalchemy[asyncio]
 asyncpg
 
-# AWS Textract SDK
+# AWS S3 SDK (for file storage)
 boto3
 
-# PDF to Image conversion (for AWS Textract, uses poppler on system)
-pdf2image
-pillow
+# Google Document AI SDK
+google-cloud-documentai==2.25.0
+google-cloud-storage==2.14.0
+google-auth==2.28.1
+
+# PDF processing
+PyMuPDF==1.23.8
+pdfplumber==0.11.0
 
 # Environment variable support
 python-dotenv
 
 # Data validation / serialization
-pydantic
+pydantic>=2.6.0,<3.0.0
 
 # File upload support in FastAPI
-python-multipart
+python-multipart==0.0.6
 
-# Advanced Table Extraction Dependencies (Python 3.13 Compatible)
+# Image processing (for Google Document AI preprocessing)
 opencv-python-headless==4.8.1.78
-pytesseract==0.3.10
 numpy<2.0.0
 Pillow>=10.0.0
 
-# Image processing enhancements
-imageio==2.31.1
-
-# Note: scikit-learn and scipy removed due to Python 3.13 compatibility issues
-# Alternative text similarity functions implemented using built-in Python libraries 
+# Backend extraction dependencies
+pandas==2.2.2
+python-dateutil==2.8.2
+docling==2.43.0 

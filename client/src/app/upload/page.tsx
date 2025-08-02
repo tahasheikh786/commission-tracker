@@ -1,9 +1,11 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { Pencil } from 'lucide-react'
 import CompanySelect from './components/CompanySelect'
 import AdvancedUploadZone from './components/AdvancedUploadZone'
 import ExtractedTables from './components/ExtractedTable'
+import TableEditor from './components/TableEditor'
 import DashboardTable from './components/DashboardTable'
 import FieldMapper from './components/FieldMapper'
 import QualityReport from './components/QualityReport'
@@ -23,15 +25,28 @@ export default function UploadPage() {
   const [finalTables, setFinalTables] = useState<any[]>([])
   const [fetchingMapping, setFetchingMapping] = useState(false)
   const [showFieldMapper, setShowFieldMapper] = useState(false)
+  const [showTableEditor, setShowTableEditor] = useState(false)
   const [skipped, setSkipped] = useState(false)
   const [showRejectModal, setShowRejectModal] = useState(false)
   const [rejectReason, setRejectReason] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [planTypes, setPlanTypes] = useState<string[]>([])
+  const [editedTables, setEditedTables] = useState<any[]>([])
+  const [originalFile, setOriginalFile] = useState<File | null>(null)
+  
+  // Extraction history management
+  const [extractionHistory, setExtractionHistory] = useState<any[][]>([])
+  const [currentExtractionIndex, setCurrentExtractionIndex] = useState(0)
   
   // Quality assessment features
   const [qualitySummary, setQualitySummary] = useState<any>(null)
   const [showQualityReport, setShowQualityReport] = useState(false)
+  
+  // Loading state for another extraction method
+  const [isUsingAnotherExtraction, setIsUsingAnotherExtraction] = useState(false)
+  
+  // Track if another extraction method has been used
+  const [hasUsedAnotherExtraction, setHasUsedAnotherExtraction] = useState(false)
 
   const fetchMappingRef = useRef(false)
   const router = useRouter()
@@ -86,21 +101,47 @@ export default function UploadPage() {
     setFieldConfig(databaseFields)
     fetchMappingRef.current = false
     setShowFieldMapper(false)
+    setShowTableEditor(false)
     setSkipped(false)
     setShowRejectModal(false)
     setRejectReason('')
+    setSubmitting(false)
+    setPlanTypes([])
+    setEditedTables([])
+    setOriginalFile(null)
+    setExtractionHistory([])
+    setCurrentExtractionIndex(0)
     setQualitySummary(null)
     setShowQualityReport(false)
+    setIsUsingAnotherExtraction(false)
+    setHasUsedAnotherExtraction(false)
   }
 
   // Handle upload result with quality assessment
   function handleUploadResult({ tables, upload_id, file_name, file, plan_types, field_config, quality_summary, extraction_config }: any) {
+    // Store original file for re-extraction
+    if (file && !originalFile) {
+      setOriginalFile(file)
+    }
+    
+    // Add current tables to extraction history if this is a new extraction
+    if (extractionHistory.length === 0) {
+      // First extraction
+      setExtractionHistory([tables])
+      setCurrentExtractionIndex(0)
+    } else {
+      // Subsequent extraction - add to history
+      setExtractionHistory(prev => [...prev, tables])
+      setCurrentExtractionIndex(prev => prev + 1)
+    }
+    
     setUploaded({ tables, upload_id, file_name, file })
     setMapping(null)
     setFinalTables([])
     setFieldConfig(field_config || databaseFields)
     fetchMappingRef.current = false
     setShowFieldMapper(false)
+    setShowTableEditor(true) // Show table editor first
     setSkipped(false)
     setShowRejectModal(false)
     setRejectReason('')
@@ -126,6 +167,118 @@ export default function UploadPage() {
   // NEW: Handle table name changes from ExtractedTables
   function handleExtractedTablesChange(newTables: any[]) {
     setUploaded((prev: any) => prev ? { ...prev, tables: newTables } : prev)
+  }
+
+  // Table Editor handlers
+  async function handleSaveEditedTables(tables: any[]) {
+    if (!company || !uploaded?.upload_id) return
+    
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/table-editor/save-tables/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          upload_id: uploaded.upload_id,
+          company_id: company.id,
+          tables: tables
+        }),
+      })
+      
+      if (response.ok) {
+        setEditedTables(tables)
+        toast.success('Tables saved successfully!')
+        return true
+      } else {
+        const error = await response.json()
+        toast.error(error.detail || 'Failed to save tables')
+        return false
+      }
+    } catch (error) {
+      console.error('Error saving tables:', error)
+      toast.error('Failed to save tables')
+      return false
+    }
+  }
+
+  async function handleUseAnotherExtraction() {
+    if (!company || !originalFile) {
+      toast.error('No file available for re-extraction')
+      return
+    }
+    
+    try {
+      // Set loading state for the entire screen
+      setIsUsingAnotherExtraction(true)
+      
+      // Don't close table editor - we want to stay there
+      setEditedTables([])
+      
+      // Show loading state
+      toast.loading('Re-extracting with DOCAI...', { id: 're-extracting' })
+      
+      // Call the DOCAI extraction endpoint with the original file
+      const formData = new FormData()
+      formData.append('file', originalFile)
+      formData.append('company_id', company.id)
+      
+      const extractResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/extract-tables-docai/`, {
+        method: 'POST',
+        body: formData,
+      })
+      
+      toast.dismiss('re-extracting')
+      
+      if (!extractResponse.ok) {
+        const errorData = await extractResponse.json().catch(() => ({}))
+        throw new Error(errorData.detail || 'DOCAI extraction failed')
+      }
+      
+      const result = await extractResponse.json()
+      
+      // Handle the extraction result - this will update the tables and stay in table editor
+      handleUploadResult({
+        tables: result.tables || [],
+        upload_id: result.upload_id,
+        file_name: result.s3_key || originalFile.name,
+        file: originalFile,
+        quality_summary: result.quality_summary,
+        extraction_config: result.extraction_config
+      })
+      
+      // Mark that another extraction method has been used
+      setHasUsedAnotherExtraction(true)
+      
+      toast.success('DOCAI extraction completed successfully!')
+      
+    } catch (error) {
+      toast.dismiss('re-extracting')
+      console.error('Error during DOCAI re-extraction:', error)
+      toast.error(`DOCAI extraction failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    } finally {
+      // Clear loading state
+      setIsUsingAnotherExtraction(false)
+    }
+  }
+
+  function handleGoToFieldMapping() {
+    setShowTableEditor(false)
+    setShowFieldMapper(true)
+  }
+
+  function handleGoToPreviousExtraction() {
+    if (currentExtractionIndex > 0) {
+      const previousIndex = currentExtractionIndex - 1
+      const previousTables = extractionHistory[previousIndex]
+      
+      setCurrentExtractionIndex(previousIndex)
+      setUploaded((prev: any) => prev ? { ...prev, tables: previousTables } : prev)
+      setEditedTables([])
+      toast.success('Switched to previous extraction')
+    }
+  }
+
+  function handleCloseTableEditor() {
+    setShowTableEditor(false)
   }
 
   function applyMapping(
@@ -323,7 +476,30 @@ export default function UploadPage() {
     )
   }
 
-  // 2. If mapping exists, auto-apply; else, show FieldMapper (skip if skipped)
+  // 2. Show Table Editor first (new step)
+  if (uploaded?.tables?.length && company && showTableEditor) {
+    return (
+      <TableEditor
+        tables={uploaded.tables}
+        onTablesChange={(newTables) => {
+          setUploaded((prev: any) => prev ? { ...prev, tables: newTables } : prev)
+        }}
+        onSave={handleSaveEditedTables}
+        onUseAnotherExtraction={handleUseAnotherExtraction}
+        onGoToFieldMapping={handleGoToFieldMapping}
+        onGoToPreviousExtraction={handleGoToPreviousExtraction}
+        onClose={handleCloseTableEditor}
+        uploaded={uploaded}
+        loading={submitting || isUsingAnotherExtraction}
+        extractionHistory={extractionHistory}
+        currentExtractionIndex={currentExtractionIndex}
+        isUsingAnotherExtraction={isUsingAnotherExtraction}
+        hasUsedAnotherExtraction={hasUsedAnotherExtraction}
+      />
+    )
+  }
+
+  // 3. If mapping exists, auto-apply; else, show FieldMapper (skip if skipped)
   if (uploaded?.tables?.length && company && (showFieldMapper || (!mapping && !skipped))) {
     // Only fetch mapping once when needed
     if (!fetchMappingRef.current && !fetchingMapping && !showFieldMapper && !mapping) {
@@ -405,10 +581,10 @@ export default function UploadPage() {
                   Match each required field to the correct column in your uploaded table. Helps us standardize your commission statement.
                 </p>
               </div>
-              {uploaded.tables[0]?.header && uploaded.tables[0].header.length > 0 && (
+              {(editedTables.length > 0 ? editedTables : uploaded.tables)[0]?.header && (editedTables.length > 0 ? editedTables : uploaded.tables)[0].header.length > 0 && (
                 <FieldMapper
                   company={company}
-                  columns={uploaded.tables[0].header}
+                  columns={(editedTables.length > 0 ? editedTables : uploaded.tables)[0].header}
                   initialPlanTypes={planTypes}
                   onSave={async (map, fieldConf, selectedPlanTypes) => {
                     setMapping(map)
@@ -418,7 +594,7 @@ export default function UploadPage() {
                     const config = {
                       mapping: map,
                       plan_types: selectedPlanTypes,
-                      table_names: uploaded.tables.map((t: any) => t.name || ''),
+                      table_names: (editedTables.length > 0 ? editedTables : uploaded.tables).map((t: any) => t.name || ''),
                       field_config: fieldConf,
                     }
                     await fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${company.id}/mapping/`, {
@@ -426,19 +602,20 @@ export default function UploadPage() {
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify(config),
                     })
-                    applyMapping(uploaded.tables, map, fieldConf)
+                    applyMapping(editedTables.length > 0 ? editedTables : uploaded.tables, map, fieldConf)
                     setShowFieldMapper(false)
                     setSkipped(false)
                   }}
                   onSkip={() => {
                     // Set fieldConfig to match extracted table headers
-                    const extractedHeaders = uploaded.tables.map((t: any) => t.header);
-                    const extractedFieldConfig = uploaded.tables.map((t: any) => t.header.map((col: string) => ({ field: col, label: col })));
+                    const tablesToUse = editedTables.length > 0 ? editedTables : uploaded.tables;
+                    const extractedHeaders = tablesToUse.map((t: any) => t.header);
+                    const extractedFieldConfig = tablesToUse.map((t: any) => t.header.map((col: string) => ({ field: col, label: col })));
                     // Save table names and plan types per table
-                    const tableNames = uploaded.tables.map((t: any) => t.name || '');
+                    const tableNames = tablesToUse.map((t: any) => t.name || '');
                     
                     // Ensure the tables have the correct structure for DashboardTable
-                    const processedTables = uploaded.tables.map((t: any) => ({
+                    const processedTables = tablesToUse.map((t: any) => ({
                       ...t,
                       header: t.header || [],
                       rows: t.rows || []
@@ -473,12 +650,22 @@ export default function UploadPage() {
                 </p>
               </div>
               <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-                <ExtractedTables tables={uploaded.tables} onTablesChange={handleExtractedTablesChange} />
+                <ExtractedTables 
+                  tables={editedTables.length > 0 ? editedTables : uploaded.tables} 
+                  onTablesChange={handleExtractedTablesChange} 
+                />
               </div>
             </div>
           </div>
 
-          <div className="flex justify-center mt-8">
+          <div className="flex justify-center gap-4 mt-8">
+            <button 
+              onClick={() => setShowTableEditor(true)} 
+              className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700 flex items-center gap-2"
+            >
+              <Pencil className="w-4 h-4" />
+              Back to Table Editor
+            </button>
             <button onClick={handleReset} className="px-4 py-2 rounded bg-gray-300 text-gray-700 hover:bg-gray-400">
               Start Over
             </button>

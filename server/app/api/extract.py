@@ -1,9 +1,8 @@
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import crud, schemas
-from app.services.advanced_table_extractor_simple import AdvancedTableExtractor
-from app.services.quality_assessor import CommissionStatementValidator
-from app.services.extraction_config import get_config
+from app.services.extraction_pipeline import TableExtractionPipeline
+from app.services.extraction_utils import transform_pipeline_response_to_client_format
 from app.config import get_db
 import os
 import shutil
@@ -18,9 +17,8 @@ logger = logging.getLogger(__name__)
 UPLOAD_DIR = "pdfs"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-# Use advanced extraction by default
-extractor = AdvancedTableExtractor()
-validator = CommissionStatementValidator()
+# Use new extraction pipeline
+extraction_pipeline = TableExtractionPipeline()
 
 @router.post("/extract-tables/")
 async def extract_tables(
@@ -29,16 +27,14 @@ async def extract_tables(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Default table extraction using advanced AI-powered system
+    Default table extraction using advanced AI-powered system with Docling
     """
+    start_time = datetime.now()
     logger.info(f"Starting advanced extraction for {file.filename}")
     
     # Validate file type
     if not file.filename.lower().endswith('.pdf'):
         raise HTTPException(status_code=400, detail="Only PDF files are supported")
-    
-    # Get default extraction configuration
-    config = get_config("default")
     
     file_path = os.path.join(UPLOAD_DIR, file.filename)
     
@@ -60,115 +56,260 @@ async def extract_tables(
             raise HTTPException(status_code=500, detail="Failed to upload file to S3.")
         s3_url = get_s3_file_url(s3_key)
 
-        # Extract tables with advanced system
-        logger.info("Starting advanced table extraction...")
-        tables = extractor.extract_tables_from_pdf(file_path)
+        # Extract tables with new pipeline (simple backend-like flow)
+        logger.info("Starting advanced table extraction with Docling...")
+        extraction_result = extraction_pipeline.extract_tables(file_path)
         
-        if not tables:
+        if not extraction_result.get("success"):
             raise HTTPException(
                 status_code=400, 
-                detail="No tables found in the uploaded PDF. Try adjusting extraction parameters."
+                detail=f"Extraction failed: {extraction_result.get('error', 'Unknown error')}"
             )
         
-        # Quality assessment and validation
-        validated_tables = []
-        quality_summary = {
-            "total_tables": len(tables),
-            "valid_tables": 0,
-            "average_quality_score": 0.0,
-            "overall_confidence": "LOW",
-            "issues_found": [],
-            "recommendations": []
-        }
+        # Transform response to client format (like backend)
+        client_response = transform_pipeline_response_to_client_format(extraction_result, file.filename)
         
-        all_issues = []
-        all_recommendations = []
-        quality_scores = []
+        # Add extraction timing and metadata
+        extraction_time = (datetime.now() - start_time).total_seconds()
+        client_response["extraction_time_seconds"] = extraction_time
         
-        for i, table in enumerate(tables):
-            logger.info(f"Validating table {i+1}/{len(tables)}")
-            
-            validation_result = validator.validate_table(table)
-            
-            # Use corrected data if available
-            final_table = validation_result.corrected_data or table.get('rows', [])
-            
-            table_metrics = validation_result.quality_metrics
-            quality_scores.append(table_metrics.overall_score)
-            
-            if table_metrics.overall_score >= config.min_quality_score:
-                quality_summary["valid_tables"] += 1
-            
-            # Add table with quality metrics
-            validated_table = {
-                "header": table.get('header', []),
-                "rows": final_table,
-                "metadata": {
-                    **table.get('metadata', {}),
-                    "quality_metrics": {
-                        "overall_score": table_metrics.overall_score,
-                        "completeness": table_metrics.completeness,
-                        "consistency": table_metrics.consistency,
-                        "accuracy": table_metrics.accuracy,
-                        "structure_quality": table_metrics.structure_quality,
-                        "data_quality": table_metrics.data_quality,
-                        "confidence_level": table_metrics.confidence_level,
-                        "is_valid": validation_result.is_valid,
-                        "issues": validation_result.quality_metrics.issues,
-                        "recommendations": validation_result.quality_metrics.recommendations
-                    }
-                }
-            }
-            
-            validated_tables.append(validated_table)
-            all_issues.extend(validation_result.quality_metrics.issues)
-            all_recommendations.extend(validation_result.quality_metrics.recommendations)
+        # Add detailed extraction log if available
+        if "extraction_log" in extraction_result:
+            client_response["extraction_log"] = extraction_result["extraction_log"]
         
-        # Calculate overall quality metrics
-        if quality_scores:
-            quality_summary["average_quality_score"] = sum(quality_scores) / len(quality_scores)
-            
-            if quality_summary["average_quality_score"] >= 0.8:
-                quality_summary["overall_confidence"] = "VERY_HIGH"
-            elif quality_summary["average_quality_score"] >= 0.6:
-                quality_summary["overall_confidence"] = "HIGH"
-            elif quality_summary["average_quality_score"] >= 0.4:
-                quality_summary["overall_confidence"] = "MEDIUM"
-            else:
-                quality_summary["overall_confidence"] = "LOW"
+        # Add pipeline metadata
+        if "metadata" in extraction_result:
+            client_response["pipeline_metadata"] = extraction_result["metadata"]
         
-        quality_summary["issues_found"] = list(set(all_issues))
-        quality_summary["recommendations"] = list(set(all_recommendations))
-
+        # Create statement upload record for database
         upload_id = uuid4()
         db_upload = schemas.StatementUpload(
             id=upload_id,
-            company_id=company.id,
-            file_name=file.filename,
+            company_id=company_id,
+            file_name=s3_key,  # Use S3 key as file_name
             uploaded_at=datetime.utcnow(),
-            status="success",
-            raw_data=validated_tables,  # store validated tables with quality metrics
+            status="extracted",  # Initial status
+            raw_data=extraction_result.get("tables", []),  # Store tables as raw_data
             mapping_used=None
         )
-        # Store s3_key or s3_url in file_name for now (or add a new field if needed)
-        db_upload.file_name = s3_key
+        
         await crud.save_statement_upload(db, db_upload)
         
-    finally:
+        # Clean up local file
         os.remove(file_path)
+        
+        # Add server-specific fields to response
+        client_response.update({
+            "success": True,
+            "extraction_id": str(upload_id),
+            "upload_id": str(upload_id),  # Frontend expects upload_id
+            "s3_url": s3_url,
+            "s3_key": s3_key  # Add S3 key for PDF URL construction
+        })
+        
+        return client_response
+        
+    except HTTPException:
+        # Clean up file on error
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        raise
+    except Exception as e:
+        logger.error(f"Extraction error: {str(e)}")
+        # Clean up file on error
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        raise HTTPException(status_code=500, detail=f"Extraction failed: {str(e)}")
 
-    # Return upload_id along with tables, quality summary, and s3_url
-    return {
-        "tables": validated_tables,
-        "upload_id": str(upload_id),
-        "file_name": file.filename,
-        "s3_url": s3_url,
-        "s3_key": s3_key,
-        "quality_summary": quality_summary,
-        "extraction_config": {
-            "dpi": config.dpi,
-            "header_similarity_threshold": config.header_similarity_threshold,
-            "min_quality_score": config.min_quality_score,
-            "description": "Default AI-powered extraction"
+@router.post("/extract-tables-docai/")
+async def extract_tables_docai(
+    file: UploadFile = File(...),
+    company_id: str = Form(...),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Force DOCAI extraction for when user wants to try a different extraction method
+    """
+    start_time = datetime.now()
+    logger.info(f"Starting DOCAI extraction for {file.filename}")
+    
+    # Validate file type
+    if not file.filename.lower().endswith('.pdf'):
+        raise HTTPException(status_code=400, detail="Only PDF files are supported")
+    
+    file_path = os.path.join(UPLOAD_DIR, file.filename)
+    
+    try:
+        # Save uploaded file
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
+        # Get company info
+        company = await crud.get_company_by_id(db, company_id)
+        if not company:
+            os.remove(file_path)
+            raise HTTPException(status_code=404, detail="Company not found")
+
+        # Upload to S3
+        s3_key = f"statements/{company_id}/{file.filename}"
+        uploaded = upload_file_to_s3(file_path, s3_key)
+        if not uploaded:
+            raise HTTPException(status_code=500, detail="Failed to upload file to S3.")
+        s3_url = get_s3_file_url(s3_key)
+
+        # Force DOCAI extraction
+        logger.info("Starting DOCAI table extraction...")
+        extraction_result = extraction_pipeline.extract_tables(file_path, force_extractor="google_docai")
+        
+        if not extraction_result.get("success"):
+            raise HTTPException(
+                status_code=400, 
+                detail=f"DOCAI extraction failed: {extraction_result.get('error', 'Unknown error')}"
+            )
+        
+        # Transform response to client format
+        client_response = transform_pipeline_response_to_client_format(extraction_result, file.filename)
+        
+        # Add extraction timing and metadata
+        extraction_time = (datetime.now() - start_time).total_seconds()
+        client_response["extraction_time_seconds"] = extraction_time
+        
+        # Add detailed extraction log if available
+        if "extraction_log" in extraction_result:
+            client_response["extraction_log"] = extraction_result["extraction_log"]
+        
+        # Add pipeline metadata
+        if "metadata" in extraction_result:
+            client_response["pipeline_metadata"] = extraction_result["metadata"]
+        
+        # Create statement upload record for database
+        upload_id = uuid4()
+        db_upload = schemas.StatementUpload(
+            id=upload_id,
+            company_id=company_id,
+            file_name=s3_key,  # Use S3 key as file_name
+            uploaded_at=datetime.utcnow(),
+            status="extracted",  # Initial status
+            raw_data=extraction_result.get("tables", []),  # Store tables as raw_data
+            mapping_used=None
+        )
+        
+        await crud.save_statement_upload(db, db_upload)
+        
+        # Clean up local file
+        os.remove(file_path)
+        
+        # Add server-specific fields to response
+        client_response.update({
+            "success": True,
+            "extraction_id": str(upload_id),
+            "upload_id": str(upload_id),  # Frontend expects upload_id
+            "s3_url": s3_url,
+            "s3_key": s3_key  # Add S3 key for PDF URL construction
+        })
+        
+        return client_response
+        
+    except HTTPException:
+        # Clean up file on error
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        raise
+    except Exception as e:
+        logger.error(f"DOCAI extraction error: {str(e)}")
+        # Clean up file on error
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        raise HTTPException(status_code=500, detail=f"DOCAI extraction failed: {str(e)}")
+
+@router.get("/extractors/status")
+async def get_extractor_status():
+    """
+    Get status of all available extractors
+    """
+    try:
+        status = extraction_pipeline.get_extractor_status()
+        return {
+            "success": True,
+            "status": status
         }
-    }
+    except Exception as e:
+        logger.error(f"Error getting extractor status: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get extractor status: {str(e)}")
+
+
+@router.get("/test-form-parser-adapter")
+async def test_form_parser_adapter():
+    """
+    Test the new Form Parser adapter functionality
+    """
+    try:
+        from app.services.extractor_google_docai import GoogleDocAIExtractor
+        
+        extractor = GoogleDocAIExtractor()
+        test_result = extractor.test_form_parser_adapter()
+        
+        return {
+            "success": True,
+            "test_result": test_result,
+            "message": "Form Parser adapter test completed"
+        }
+    except Exception as e:
+        logger.error(f"Error testing Form Parser adapter: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/extract-single-table/")
+async def extract_single_table(
+    file: UploadFile = File(...),
+    table_index: int = Form(0),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Extract a single table by index
+    """
+    logger.info(f"Starting single table extraction for {file.filename}, table index: {table_index}")
+    
+    # Validate file type
+    if not file.filename.lower().endswith('.pdf'):
+        raise HTTPException(status_code=400, detail="Only PDF files are supported")
+    
+    file_path = os.path.join(UPLOAD_DIR, file.filename)
+    
+    try:
+        # Save uploaded file
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
+        # Extract single table
+        logger.info(f"Extracting table at index {table_index}")
+        extraction_result = extraction_pipeline.extract_single_table(file_path, table_index)
+        
+        if not extraction_result.get("success"):
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Extraction failed: {extraction_result.get('error', 'Unknown error')}"
+            )
+        
+        table = extraction_result.get("table", {})
+        
+        # Clean up local file
+        os.remove(file_path)
+        
+        return {
+            "success": True,
+            "table_index": table_index,
+            "table": table,
+            "metadata": extraction_result.get("metadata", {})
+        }
+        
+    except HTTPException:
+        # Clean up file on error
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        raise
+    except Exception as e:
+        logger.error(f"Single table extraction error: {str(e)}")
+        # Clean up file on error
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        raise HTTPException(status_code=500, detail=f"Extraction failed: {str(e)}")

@@ -35,14 +35,24 @@ async def get_statements_for_company(db, company_id):
 @router.get("/pdfs/{file_path:path}")
 async def get_pdf(file_path: str):
     file_path = unquote(file_path)
+    print(f"PDF request received for file_path: {file_path}")
+    
     if file_path.startswith("statements/"):
+        print(f"Generating presigned URL for S3 file: {file_path}")
         presigned_url = generate_presigned_url(file_path)
         if not presigned_url:
+            print(f"Failed to generate presigned URL for: {file_path}")
             raise HTTPException(status_code=404, detail="Could not generate S3 presigned URL")
+        print(f"Redirecting to presigned URL: {presigned_url}")
         return RedirectResponse(presigned_url)
+    
     local_path = os.path.join("pdfs", file_path)
+    print(f"Checking local path: {local_path}")
     if not os.path.exists(local_path):
+        print(f"Local file not found: {local_path}")
         raise HTTPException(status_code=404, detail="File not found")
+    
+    print(f"Serving local file: {local_path}")
     return FileResponse(local_path, media_type="application/pdf", headers={"Content-Disposition": "inline"})
 
 

@@ -28,31 +28,37 @@ async def approve_statement(
     payload: ApprovePayload,
     db: AsyncSession = Depends(get_db)
 ):
-    updated = await crud.save_statement_review(
-        db,
-        upload_id=payload.upload_id,
-        final_data=payload.final_data,
-        status="Approved",
-        field_config=payload.field_config,
-        plan_types=payload.plan_types,
-    )
-    return {"success": True, "review": schemas.StatementReview.from_orm(updated)}
+    try:
+        updated = await crud.save_statement_review(
+            db,
+            upload_id=payload.upload_id,
+            final_data=payload.final_data,
+            status="Approved",
+            field_config=payload.field_config,
+            plan_types=payload.plan_types,
+        )
+        return {"success": True, "review": schemas.StatementReview.from_orm(updated)}
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 @router.post("/reject/")
 async def reject_statement(
     payload: RejectPayload,
     db: AsyncSession = Depends(get_db)
 ):
-    updated = await crud.save_statement_review(
-        db,
-        upload_id=payload.upload_id,
-        final_data=payload.final_data,
-        status="Rejected",
-        field_config=payload.field_config,
-        rejection_reason=payload.rejection_reason,
-        plan_types=payload.plan_types,
-    )
-    return {"success": True, "review": schemas.StatementReview.from_orm(updated)}
+    try:
+        updated = await crud.save_statement_review(
+            db,
+            upload_id=payload.upload_id,
+            final_data=payload.final_data,
+            status="Rejected",
+            field_config=payload.field_config,
+            rejection_reason=payload.rejection_reason,
+            plan_types=payload.plan_types,
+        )
+        return {"success": True, "review": schemas.StatementReview.from_orm(updated)}
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 @router.get("/all/")
 async def get_all_reviews(db: AsyncSession = Depends(get_db)):

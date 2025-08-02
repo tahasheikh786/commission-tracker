@@ -38,6 +38,11 @@ def get_s3_file_url(s3_key):
 
 def generate_presigned_url(s3_key, expiration=3600):
     try:
+        print(f"Generating presigned URL for S3 key: {s3_key}")
+        print(f"Using bucket: {S3_BUCKET_NAME}")
+        print(f"Using region: {AWS_REGION}")
+        print(f"AWS credentials available: {bool(AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY)}")
+        
         url = s3_client.generate_presigned_url(
             'get_object',
             Params={
@@ -47,7 +52,13 @@ def generate_presigned_url(s3_key, expiration=3600):
             },
             ExpiresIn=expiration
         )
+        print(f"Generated presigned URL: {url}")
         return url
     except ClientError as e:
         print(f"Presigned URL error: {e}")
+        print(f"Error code: {e.response['Error']['Code']}")
+        print(f"Error message: {e.response['Error']['Message']}")
+        return None
+    except Exception as e:
+        print(f"Unexpected error generating presigned URL: {e}")
         return None

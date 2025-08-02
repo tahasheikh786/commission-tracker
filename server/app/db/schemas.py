@@ -44,6 +44,24 @@ class StatementUpload(BaseModel):
     class Config:
         orm_mode = True
 
+class ExtractionCreate(BaseModel):
+    company_id: str
+    filename: str
+    s3_url: str
+    total_tables: int
+    valid_tables: int
+    quality_score: float
+    confidence: str
+    extraction_metadata: Dict[str, Any]
+    quality_metadata: Dict[str, Any]
+
+class Extraction(ExtractionCreate):
+    id: UUID
+    created_at: datetime
+
+    class Config:
+        orm_mode = True
+
 # app/api/schemas.py
 
 class StatementReview(BaseModel):

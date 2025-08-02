@@ -293,7 +293,7 @@ export default function AdvancedUploadZone({
       if (onParsed) onParsed({
         tables: json.tables || [],
         upload_id: json.upload_id,
-        file_name: file.name,
+        file_name: json.s3_key || file.name, // Use S3 key if available, fallback to original filename
         file,
         quality_summary: json.quality_summary,
         extraction_config: json.extraction_config

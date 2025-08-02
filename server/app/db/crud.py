@@ -1,5 +1,5 @@
-from .models import Company, CompanyFieldMapping, DatabaseField
-from .schemas import CompanyCreate, CompanyFieldMappingCreate, StatementUpload, DatabaseFieldCreate, DatabaseFieldUpdate
+from .models import Company, CompanyFieldMapping, DatabaseField, Extraction, EditedTable
+from .schemas import CompanyCreate, CompanyFieldMappingCreate, StatementUpload, DatabaseFieldCreate, DatabaseFieldUpdate, ExtractionCreate
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from datetime import datetime
 from sqlalchemy.future import select
@@ -73,6 +73,29 @@ async def get_company_by_id(db, company_id):
     result = await db.execute(select(Company).where(Company.id == company_id))
     return result.scalar_one_or_none()
 
+async def create_extraction(db, extraction: ExtractionCreate):
+    """
+    Create a new extraction record.
+    """
+    # Convert quality_score from float (0-1) to integer (0-100)
+    quality_score_int = int(extraction.quality_score * 100)
+    
+    db_extraction = Extraction(
+        company_id=extraction.company_id,
+        filename=extraction.filename,
+        s3_url=extraction.s3_url,
+        total_tables=extraction.total_tables,
+        valid_tables=extraction.valid_tables,
+        quality_score=quality_score_int,
+        confidence=extraction.confidence,
+        extraction_metadata=extraction.extraction_metadata,
+        quality_metadata=extraction.quality_metadata
+    )
+    db.add(db_extraction)
+    await db.commit()
+    await db.refresh(db_extraction)
+    return db_extraction
+
 async def save_statement_review(
     db, *,
     upload_id: UUID,
@@ -85,7 +108,7 @@ async def save_statement_review(
     from app.db.models import StatementUpload
     upload = await db.get(StatementUpload, upload_id)
     if not upload:
-        raise Exception("Upload not found")
+        raise Exception(f"StatementUpload with ID {upload_id} not found. Please ensure the upload was created successfully.")
 
     upload.final_data = final_data
     upload.status = status
@@ -305,4 +328,88 @@ async def initialize_default_database_fields(db: AsyncSession):
         await db.refresh(field)
     
     return created_fields
+
+
+# Edited Table CRUD functions
+async def save_edited_tables(db: AsyncSession, tables_data: list):
+    """
+    Save edited tables to the database.
+    """
+    saved_tables = []
+    
+    for table_data in tables_data:
+        db_table = EditedTable(
+            upload_id=table_data["upload_id"],
+            company_id=table_data["company_id"],
+            name=table_data["name"],
+            header=table_data["header"],
+            rows=table_data["rows"]
+        )
+        db.add(db_table)
+        saved_tables.append(db_table)
+    
+    await db.commit()
+    
+    # Refresh all saved tables to get their IDs
+    for table in saved_tables:
+        await db.refresh(table)
+    
+    return saved_tables
+
+
+async def get_edited_tables(db: AsyncSession, upload_id: str):
+    """
+    Retrieve edited tables for a specific upload.
+    """
+    result = await db.execute(
+        select(EditedTable).where(EditedTable.upload_id == upload_id)
+    )
+    return result.scalars().all()
+
+
+async def update_upload_tables(db: AsyncSession, upload_id: str, tables_data: list):
+    """
+    Update the original upload with the edited tables.
+    """
+    from .models import StatementUpload as StatementUploadModel
+    
+    # Convert tables data to the format expected by the upload
+    tables_for_upload = []
+    for table_data in tables_data:
+        table_for_upload = {
+            "name": table_data["name"],
+            "header": table_data["header"],
+            "rows": table_data["rows"]
+        }
+        tables_for_upload.append(table_for_upload)
+    
+    # Update the upload record
+    result = await db.execute(
+        select(StatementUploadModel).where(StatementUploadModel.id == upload_id)
+    )
+    upload = result.scalar_one_or_none()
+    
+    if upload:
+        upload.raw_data = tables_for_upload
+        upload.updated_at = datetime.utcnow()
+        await db.commit()
+        await db.refresh(upload)
+    
+    return upload
+
+
+async def delete_edited_tables(db: AsyncSession, upload_id: str):
+    """
+    Delete all edited tables for a specific upload.
+    """
+    result = await db.execute(
+        select(EditedTable).where(EditedTable.upload_id == upload_id)
+    )
+    tables = result.scalars().all()
+    
+    for table in tables:
+        await db.delete(table)
+    
+    await db.commit()
+    return len(tables)
 
