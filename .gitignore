@@ -16,5 +16,9 @@ server/docling_models/model_artifacts/tableformer/accurate/tableformer_accurate.
 server/docling_models/model_artifacts/tableformer/fast/tableformer_fast.safetensors
 *.safetensors
 
+# Google Cloud credentials (sensitive)
+server/pdf-tables-extractor-*.json
+*.json
+
 # General
 *.log
