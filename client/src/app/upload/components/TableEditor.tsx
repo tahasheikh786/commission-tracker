@@ -30,7 +30,9 @@ import {
   ZoomOut,
   ExternalLink,
   Merge,
-  Undo2
+  Undo2,
+  Sparkles,
+  Brain
 } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 
@@ -60,6 +62,8 @@ type TableEditorProps = {
   currentExtractionIndex?: number
   isUsingAnotherExtraction?: boolean
   hasUsedAnotherExtraction?: boolean
+  onImproveExtraction?: () => void
+  isImprovingExtraction?: boolean
 }
 
 type CellEdit = {
@@ -115,7 +119,9 @@ export default function TableEditor({
   extractionHistory = [],
   currentExtractionIndex = 0,
   isUsingAnotherExtraction = false,
-  hasUsedAnotherExtraction = false
+  hasUsedAnotherExtraction = false,
+  onImproveExtraction,
+  isImprovingExtraction
 }: TableEditorProps) {
   const [currentTableIdx, setCurrentTableIdx] = useState(0)
   const [editingCell, setEditingCell] = useState<CellEdit | null>(null)
@@ -190,9 +196,9 @@ export default function TableEditor({
 
   }, [tables, extractionHistory, currentExtractionIndex])
 
-  const isDoclingExtraction = () => {
+  const isGoogleDocAIExtraction = () => {
     const method = getCurrentExtractionMethod()
-    return method === 'docling' || method === 'docling_Docling'
+    return method === 'google_docai' || method === 'google_docai_form_parser' || method === 'google_docai_layout_parser'
   }
 
   const hasExtractionHistory = () => {
@@ -596,7 +602,7 @@ export default function TableEditor({
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-8 shadow-xl flex flex-col items-center gap-4">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-            <div className="text-lg font-semibold text-gray-800">Re-extracting with DOCAI...</div>
+            <div className="text-lg font-semibold text-gray-800">Re-extracting with Docling...</div>
             <div className="text-sm text-gray-600 text-center">
               Please wait while we process your document with a different extraction method.
             </div>
@@ -604,330 +610,309 @@ export default function TableEditor({
         </div>
       )}
       
-      {/* Main Content - 2 Row Layout */}
+      {/* Main Content - Side by Side Layout */}
       <div className="flex flex-col h-full">
-        {/* Row 1: Extracted Table - Full Width */}
-        <div className="flex-1 bg-white border-b border-gray-200 overflow-hidden">
-          <div className="h-full flex flex-col">
-            <div className="px-6 py-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900">Table Editor</h2>
-                <p className="text-sm text-gray-600 mt-1">Edit your extracted data before proceeding to field mapping</p>
-              </div>
-              
-              <div className="flex items-center gap-3">
-                {/* Search */}
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                  <input
-                    type="text"
-                    placeholder="Search tables..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
-                  />
-                </div>
-
-                {/* Undo/Redo */}
-                <button
-                  onClick={undo}
-                  disabled={undoStack.length === 0}
-                  className="p-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 bg-white rounded-lg border border-gray-200 hover:border-gray-300"
-                  title="Undo"
-                >
-                  <RotateCcw className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={redo}
-                  disabled={redoStack.length === 0}
-                  className="p-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 bg-white rounded-lg border border-gray-200 hover:border-gray-300"
-                  title="Redo"
-                >
-                  <RotateCcw className="w-4 h-4 transform scale-x-[-1]" />
-                </button>
-
-                {/* Revert Merge */}
-                {mergeHistory.length > 0 && (
-                  <button
-                    onClick={revertLastMerge}
-                    className="p-2 text-orange-600 hover:text-orange-700 bg-white rounded-lg border border-orange-200 hover:border-orange-300"
-                    title="Revert last merge"
-                  >
-                    <Undo2 className="w-4 h-4" />
-                  </button>
-                )}
-
-              </div>
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-purple-50 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <h2 className="text-xl font-bold text-gray-900">Table Editor</h2>
+            {uploaded && (
+              <span className="text-sm text-gray-500 bg-white px-3 py-1 rounded-full border">
+                {uploaded.file_name}
+              </span>
+            )}
+          </div>
+          
+          <div className="flex items-center gap-3">
+            {/* Search */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <input
+                type="text"
+                placeholder="Search tables..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-sm"
+              />
             </div>
 
-            {/* Table Navigation */}
-            <div className="px-6 py-3 border-b border-gray-200 bg-white flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <h3 className="font-semibold text-gray-900">Tables</h3>
+            {/* Undo/Redo */}
+            <button
+              onClick={undo}
+              disabled={undoStack.length === 0}
+              className="p-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 bg-white rounded-lg border border-gray-200 hover:border-gray-300"
+              title="Undo"
+            >
+              <RotateCcw className="w-4 h-4" />
+            </button>
+            <button
+              onClick={redo}
+              disabled={redoStack.length === 0}
+              className="p-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 bg-white rounded-lg border border-gray-200 hover:border-gray-300"
+              title="Redo"
+            >
+              <RotateCcw className="w-4 h-4 transform scale-x-[-1]" />
+            </button>
+
+            {/* Revert Merge */}
+            {mergeHistory.length > 0 && (
+              <button
+                onClick={revertLastMerge}
+                className="p-2 text-orange-600 hover:text-orange-700 bg-white rounded-lg border border-orange-200 hover:border-orange-300"
+                title="Revert last merge"
+              >
+                <Undo2 className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Side by Side Content */}
+        <div className="flex-1 flex flex-row gap-6 p-6 bg-gradient-to-br from-white via-blue-50 to-purple-50 min-h-0">
+          {/* PDF Preview - Left Side */}
+          {uploaded && (
+            <div className="w-2/5 min-w-0 flex flex-col rounded-2xl shadow-xl bg-white border border-blue-100 overflow-hidden">
+              <div className="sticky top-0 z-10 bg-white/90 px-4 py-3 border-b font-semibold text-blue-700 flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <FileText size={16} />
+                  Original PDF
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleZoomOut}
+                    className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                  >
+                    <ZoomOut size={14} />
+                  </button>
+                  <span className="text-xs text-gray-500 min-w-[3rem] text-center">{Math.round(zoom * 100)}%</span>
+                  <button
+                    onClick={handleZoomIn}
+                    className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                  >
+                    <ZoomIn size={14} />
+                  </button>
+                  <button
+                    onClick={handleDownload}
+                    className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                  >
+                    <Download size={14} />
+                  </button>
+                </div>
+              </div>
+              <div className="flex-1 min-h-0 min-w-0 overflow-auto bg-gray-50">
+                {pdfDisplayUrl ? (
+                  <div className="w-full h-full flex flex-col items-center justify-center min-h-0 min-w-0 p-4">
+                    <div className="w-full h-full overflow-auto">
+                      <embed
+                        src={pdfDisplayUrl}
+                        type="application/pdf"
+                        width="100%"
+                        height="100%"
+                        className="w-full h-full"
+                        style={{ transform: `scale(${zoom})`, transformOrigin: 'top left' }}
+                        aria-label="PDF preview"
+                      />
+                    </div>
+                    <div className="text-xs text-gray-500 mt-2 px-2 text-center bg-white/80 rounded p-2">
+                      If the PDF is blank, <b>your browser may block cross-origin (CORS) PDF previews</b>.<br />
+                      <a href={pdfDisplayUrl} className="underline" target="_blank" rel="noopener noreferrer">Open PDF in a new tab</a> to view.
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-gray-400 text-sm flex items-center justify-center h-full">No PDF file found.</div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Table Editor - Right Side */}
+          <div className="w-3/5 min-w-0 flex flex-col rounded-2xl shadow-xl bg-white border border-purple-100 overflow-hidden">
+            <div className="sticky top-0 z-10 bg-white/90 px-4 py-3 border-b font-semibold text-purple-700 flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <Settings size={16} />
+                Extracted Tables
+              </span>
+              <div className="flex items-center gap-2">
+                {/* Table Navigation */}
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setCurrentTableIdx(Math.max(0, currentTableIdx - 1))}
                     disabled={currentTableIdx === 0}
-                    className="p-2 text-gray-500 hover:text-gray-700 disabled:opacity-50 bg-white rounded-lg border border-gray-200 hover:border-gray-300"
+                    className="p-1.5 text-gray-500 hover:text-gray-700 disabled:opacity-50 bg-white rounded border border-gray-200 hover:border-gray-300"
                   >
-                    <ChevronLeft className="w-4 h-4" />
+                    <ChevronLeft size={14} />
                   </button>
-                  <span className="text-sm text-gray-600 font-medium">
+                  <span className="text-xs text-gray-600 font-medium min-w-[4rem] text-center">
                     {currentTableIdx + 1} of {tables.length}
                   </span>
                   <button
                     onClick={() => setCurrentTableIdx(Math.min(tables.length - 1, currentTableIdx + 1))}
                     disabled={currentTableIdx === tables.length - 1}
-                    className="p-2 text-gray-500 hover:text-gray-700 disabled:opacity-50 bg-white rounded-lg border border-gray-200 hover:border-gray-300"
+                    className="p-1.5 text-gray-500 hover:text-gray-700 disabled:opacity-50 bg-white rounded border border-gray-200 hover:border-gray-300"
                   >
-                    <ChevronRight className="w-4 h-4" />
+                    <ChevronRight size={14} />
                   </button>
                 </div>
+                
+                {/* GPT-4o Vision Improvement Button */}
+                {onImproveExtraction && (
+                  <button
+                    onClick={onImproveExtraction}
+                    disabled={loading || isUsingAnotherExtraction || isImprovingExtraction}
+                    className="px-3 py-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2 text-sm"
+                    title="Use GPT-4o Vision to improve table extraction accuracy"
+                  >
+                    {isImprovingExtraction ? (
+                      <>
+                        <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                        Improving...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-3 h-3" />
+                        Improve with GPT-4o
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
-
-              {/* Table Name */}
-              <input
-                type="text"
-                value={currentTable?.name || ''}
-                onChange={(e) => {
-                  const newTables = [...tables]
-                  newTables[currentTableIdx].name = e.target.value
-                  onTablesChange(newTables)
-                }}
-                className="text-lg font-semibold text-gray-900 bg-transparent border-none outline-none focus:ring-2 focus:ring-blue-500 rounded px-3 py-1"
-                placeholder="Table Name"
-              />
             </div>
             
-            <div className="flex-1 overflow-auto p-6">
+            <div className="flex-1 min-h-0 min-w-0 overflow-auto p-4">
               {currentTable && (
-                <div className="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
-                  {/* Table Header */}
-                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-gray-200">
-                    <div className="flex">
-                      {currentTable.header.map((header, colIdx) => (
-                        <div
-                          key={colIdx}
-                          className={`flex-1 p-4 border-r border-gray-200 last:border-r-0 relative group cursor-pointer ${
-                            mergeSelection && mergeSelection.tableIdx === currentTableIdx && mergeSelection.colIdx === colIdx 
-                              ? 'bg-blue-200' 
-                              : ''
-                          }`}
-                          onClick={() => handleColumnClick(currentTableIdx, colIdx)}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="font-semibold text-gray-900">{header}</span>
-                            <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1" data-column-menu>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  setShowColumnMenu(showColumnMenu?.tableIdx === currentTableIdx && showColumnMenu?.colIdx === colIdx ? null : { tableIdx: currentTableIdx, colIdx })
-                                }}
-                                className="p-1 text-gray-500 hover:text-gray-700 bg-white rounded"
-                                title="Column actions"
-                                data-column-menu
-                              >
-                                <MoreVertical className="w-3 h-3" />
-                              </button>
-                            </div>
-                          </div>
-                          
-                          {/* Column Actions Menu */}
-                          {showColumnMenu?.tableIdx === currentTableIdx && showColumnMenu?.colIdx === colIdx && (
-                            <div className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-10 min-w-[160px]" data-column-menu>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  const newName = prompt('Enter new column name:', header)
-                                  if (newName) renameColumn(currentTableIdx, colIdx, newName)
-                                }}
-                                className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
-                                data-column-menu
-                              >
-                                <Edit3 className="w-3 h-3" />
-                                Rename Column
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  startMergeSelection(currentTableIdx, colIdx)
-                                }}
-                                className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
-                                data-column-menu
-                              >
-                                <Merge className="w-3 h-3" />
-                                Merge with Another Column
-                              </button>
-                              <hr className="my-1" />
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  deleteColumn(currentTableIdx, colIdx)
-                                }}
-                                className="w-full px-3 py-2 text-left text-sm hover:bg-red-50 text-red-600 flex items-center gap-2"
-                                data-column-menu
-                              >
-                                <Trash2 className="w-3 h-3" />
-                                Delete Column
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      ))}
+                <div className="mb-6">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                      <span>Table {currentTableIdx + 1}</span>
+                      {currentTable.name && (
+                        <span className="text-sm font-normal text-gray-500">- {currentTable.name}</span>
+                      )}
+                    </h3>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => deleteTable(currentTableIdx)}
+                        className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
+                      >
+                        <Trash2 size={14} />
+                      </button>
                     </div>
                   </div>
-
-                  {/* Table Rows */}
-                  <div className="max-h-96 overflow-auto">
-                    {currentTable.rows.map((row, rowIdx) => (
-                      <div
-                        key={rowIdx}
-                        className="flex border-b border-gray-200 last:border-b-0 hover:bg-gray-50 group relative"
-                      >
-                        {/* Row Editing Mode */}
-                        {editingRow?.tableIdx === currentTableIdx && editingRow?.rowIdx === rowIdx ? (
-                          <>
-                            {editingRow.values.map((value, colIdx) => (
-                              <div
+                  
+                  {/* Table Name Input */}
+                  <div className="mb-4">
+                    <input
+                      type="text"
+                      value={currentTable?.name || ''}
+                      onChange={(e) => {
+                        const newTables = [...tables]
+                        newTables[currentTableIdx].name = e.target.value
+                        onTablesChange(newTables)
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                      placeholder="Table name..."
+                    />
+                  </div>
+                  
+                  <div className="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
+                    <div className="overflow-x-auto w-full">
+                      <table className="w-full min-w-full">
+                        <thead>
+                          <tr className="bg-gray-50">
+                            {currentTable.header.map((header, colIdx) => (
+                              <th
                                 key={colIdx}
-                                className="flex-1 p-4 border-r border-gray-200 last:border-r-0 relative"
+                                className="px-3 py-2 text-left text-xs font-medium text-gray-900 border-b border-gray-200 whitespace-nowrap"
                               >
-                                <input
-                                  type="text"
-                                  value={value}
-                                  onChange={(e) => updateRowEditValue(colIdx, e.target.value)}
-                                  className="w-full px-3 py-1 border border-blue-500 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                  placeholder={`Enter ${currentTable.header[colIdx] || 'value'}`}
-                                />
-                              </div>
+                                <div className="flex items-center gap-1">
+                                  <span className="truncate">{header}</span>
+                                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button
+                                      onClick={() => startCellEdit(currentTableIdx, -1, colIdx)}
+                                      className="p-0.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                                    >
+                                      <Pencil size={10} />
+                                    </button>
+                                    <button
+                                      onClick={() => deleteColumn(currentTableIdx, colIdx)}
+                                      className="p-0.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                    >
+                                      <Trash2 size={10} />
+                                    </button>
+                                  </div>
+                                </div>
+                              </th>
                             ))}
-                            <div className="flex items-center gap-1 p-4">
-                              <button
-                                onClick={saveRowEdit}
-                                className="p-2 text-green-600 hover:text-green-700 bg-white rounded border border-green-200"
-                                title="Save row"
-                              >
-                                <Check className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={cancelRowEdit}
-                                className="p-2 text-red-600 hover:text-red-700 bg-white rounded border border-red-200"
-                                title="Cancel row edit"
-                              >
-                                <X className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            {row.map((cell, colIdx) => (
-                              <div
-                                key={colIdx}
-                                className="flex-1 p-4 border-r border-gray-200 last:border-r-0 relative"
-                              >
-                                {editingCell?.tableIdx === currentTableIdx &&
-                                 editingCell?.rowIdx === rowIdx &&
-                                 editingCell?.colIdx === colIdx ? (
-                                  <div className="flex items-center gap-1">
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-900 border-b border-gray-200 w-20 whitespace-nowrap">
+                              Actions
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {currentTable.rows.map((row, rowIdx) => (
+                            <tr key={rowIdx} className="hover:bg-gray-50 group">
+                              {row.map((cell, colIdx) => (
+                                <td
+                                  key={colIdx}
+                                  className="px-3 py-2 text-xs text-gray-900 border-b border-gray-100 whitespace-nowrap"
+                                >
+                                  {editingCell && editingCell.tableIdx === currentTableIdx && editingCell.rowIdx === rowIdx && editingCell.colIdx === colIdx ? (
                                     <input
                                       type="text"
                                       value={editingCell.value}
-                                      onChange={(e) => setEditingCell({...editingCell, value: e.target.value})}
-                                      onKeyDown={(e) => {
-                                        if (e.key === 'Enter') saveCellEdit()
-                                        if (e.key === 'Escape') cancelCellEdit()
-                                      }}
-                                      className="flex-1 px-3 py-1 border border-blue-500 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                      onChange={(e) => setEditingCell({ ...editingCell, value: e.target.value })}
+                                      onBlur={saveCellEdit}
+                                      onKeyDown={(e) => e.key === 'Enter' && saveCellEdit()}
+                                      className="w-full px-2 py-1 border border-blue-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs"
                                       autoFocus
                                     />
-                                    <button
-                                      onClick={saveCellEdit}
-                                      className="p-1 text-green-600 hover:text-green-700 bg-white rounded"
-                                    >
-                                      <Check className="w-3 h-3" />
-                                    </button>
-                                    <button
-                                      onClick={cancelCellEdit}
-                                      className="p-1 text-red-600 hover:text-red-700 bg-white rounded"
-                                    >
-                                      <X className="w-3 h-3" />
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <div className="flex items-center justify-between">
-                                    <span 
-                                      className="flex-1 cursor-pointer hover:bg-blue-50 px-2 py-1 rounded"
+                                  ) : (
+                                    <div
+                                      className="cursor-pointer hover:bg-blue-50 rounded px-1 py-0.5 transition-colors truncate"
                                       onClick={() => startCellEdit(currentTableIdx, rowIdx, colIdx)}
+                                      title={cell}
                                     >
-                                      {cell || ''}
-                                    </span>
-                                  </div>
-                                )}
-                              </div>
-                            ))}
-                            
-                            {/* Row Actions Menu - Fixed positioning */}
-                            <div className="flex items-center justify-center p-4 relative">
-                              <div className="relative" ref={rowMenuRef} data-row-menu>
-                                <button
-                                  onClick={() => setShowRowMenu(showRowMenu?.tableIdx === currentTableIdx && showRowMenu?.rowIdx === rowIdx ? null : { tableIdx: currentTableIdx, rowIdx })}
-                                  className="p-2 text-gray-500 hover:text-gray-700 bg-white rounded-lg border border-gray-200 hover:border-gray-300 shadow-sm"
-                                  data-row-menu
-                                >
-                                  <MoreVertical className="w-4 h-4" />
-                                </button>
-                                
-                                {showRowMenu?.tableIdx === currentTableIdx && showRowMenu?.rowIdx === rowIdx && (
-                                  <div className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-10 min-w-[160px]" data-row-menu>
-                                    <button
-                                      onClick={() => startRowEdit(currentTableIdx, rowIdx)}
-                                      className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
-                                      data-row-menu
-                                    >
-                                      <Edit3 className="w-3 h-3" />
-                                      Edit Row
-                                    </button>
-                                    <button
-                                      onClick={() => addRowAbove(currentTableIdx, rowIdx)}
-                                      className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
-                                      data-row-menu
-                                    >
-                                      <ArrowUp className="w-3 h-3" />
-                                      Add Row Above
-                                    </button>
-                                    <button
-                                      onClick={() => addRowBelow(currentTableIdx, rowIdx)}
-                                      className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
-                                      data-row-menu
-                                    >
-                                      <ArrowDown className="w-3 h-3" />
-                                      Add Row Below
-                                    </button>
-                                    <button
-                                      onClick={() => duplicateRow(currentTableIdx, rowIdx)}
-                                      className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
-                                      data-row-menu
-                                    >
-                                      <Copy className="w-3 h-3" />
-                                      Duplicate Row
-                                    </button>
-                                    <hr className="my-1" />
-                                    <button
-                                      onClick={() => deleteRow(currentTableIdx, rowIdx)}
-                                      className="w-full px-3 py-2 text-left text-sm hover:bg-red-50 text-red-600 flex items-center gap-2"
-                                      data-row-menu
-                                    >
-                                      <Trash2 className="w-3 h-3" />
-                                      Delete Row
-                                    </button>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    ))}
+                                      {cell}
+                                    </div>
+                                  )}
+                                </td>
+                              ))}
+                              <td className="px-3 py-2 text-xs text-gray-900 border-b border-gray-100 whitespace-nowrap">
+                                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <button
+                                    onClick={() => addRowAbove(currentTableIdx, rowIdx)}
+                                    className="p-0.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                                    title="Add row above"
+                                  >
+                                    <ArrowUp size={10} />
+                                  </button>
+                                  <button
+                                    onClick={() => addRowBelow(currentTableIdx, rowIdx)}
+                                    className="p-0.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                                    title="Add row below"
+                                  >
+                                    <ArrowDown size={10} />
+                                  </button>
+                                  <button
+                                    onClick={() => duplicateRow(currentTableIdx, rowIdx)}
+                                    className="p-0.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                                    title="Duplicate row"
+                                  >
+                                    <Copy size={10} />
+                                  </button>
+                                  <button
+                                    onClick={() => deleteRow(currentTableIdx, rowIdx)}
+                                    className="p-0.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                    title="Delete row"
+                                  >
+                                    <Trash2 size={10} />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 </div>
               )}
@@ -935,138 +920,67 @@ export default function TableEditor({
           </div>
         </div>
 
-        {/* Row 2: PDF Preview - Full Width */}
-        <div className="h-1/2 bg-white border-t border-gray-200 overflow-hidden">
-          <div className="h-full flex flex-col">
-            <div className="px-6 py-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900">PDF Preview</h2>
-                <p className="text-sm text-gray-600 mt-1">{uploaded?.file_name}</p>
-              </div>
-              <nav aria-label="PDF toolbar" className="flex gap-2">
+        {/* Footer Actions */}
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-6 py-4 shadow-lg">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              {/* Show different buttons based on extraction method and history */}
+              {isGoogleDocAIExtraction() && !hasExtractionHistory() && !isUsingAnotherExtraction && !hasUsedAnotherExtraction && (
                 <button
-                  onClick={handleZoomOut}
-                  aria-label="Zoom out"
-                  className="p-2 rounded hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white border border-gray-200"
+                  onClick={onUseAnotherExtraction}
+                  className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center gap-2"
                 >
-                  <ZoomOut size={20} />
+                  <RotateCcw className="w-4 h-4" />
+                  Try Docling Extraction
                 </button>
+              )}
+              
+              {hasExtractionHistory() && canGoToPreviousExtraction() && onGoToPreviousExtraction && (
                 <button
-                  onClick={handleZoomIn}
-                  aria-label="Zoom in"
-                  className="p-2 rounded hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white border border-gray-200"
+                  onClick={onGoToPreviousExtraction}
+                  className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 flex items-center gap-2"
                 >
-                  <ZoomIn size={20} />
+                  <ChevronLeft className="w-4 h-4" />
+                  Use Previous Extraction
                 </button>
+              )}
+              
+              {hasExtractionHistory() && !isGoogleDocAIExtraction() && !isUsingAnotherExtraction && !hasUsedAnotherExtraction && (
                 <button
-                  onClick={handleDownload}
-                  aria-label="Download PDF"
-                  className="p-2 rounded hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white border border-gray-200"
+                  onClick={onUseAnotherExtraction}
+                  className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center gap-2"
                 >
-                  <Download size={20} />
+                  <RotateCcw className="w-4 h-4" />
+                  Try Docling Extraction
                 </button>
-                <a
-                  href={pdfDisplayUrl || '#'}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label="Open PDF in new tab"
-                  className="p-2 rounded hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white border border-gray-200"
-                >
-                  <ExternalLink size={20} />
-                </a>
-              </nav>
-            </div>
-            
-            <div className="flex-1 overflow-hidden">
-              {pdfDisplayUrl ? (
-                <div
-                  ref={embedRef}
-                  className="w-full h-full flex flex-col items-center justify-center"
-                >
-                  <embed
-                    src={pdfDisplayUrl}
-                    type="application/pdf"
-                    width="100%"
-                    height="100%"
-                    className="w-full h-full"
-                    style={{ transform: `scale(${zoom})`, transformOrigin: 'top left' }}
-                    aria-label="PDF preview"
-                  />
-                  <div className="text-xs text-gray-500 mt-2 px-2 text-center">
-                    If the PDF is blank, <b>your browser may block cross-origin (CORS) PDF previews for presigned URLs</b>.<br />
-                    <a href={pdfDisplayUrl} className="underline" target="_blank" rel="noopener noreferrer">Open PDF in a new tab</a> to view or download.
-                  </div>
-                </div>
-              ) : (
-                <div className="text-gray-400 text-sm flex items-center justify-center h-full">
-                  No PDF file found.
-                </div>
               )}
             </div>
+
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-gray-600">
+                {tables.reduce((acc, table) => acc + table.rows.length, 0)} total rows
+              </span>
+              <button
+                onClick={onGoToFieldMapping}
+                disabled={loading || isUsingAnotherExtraction}
+                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2 font-medium"
+              >
+                <FileText className="w-4 h-4" />
+                Save & Go to Field Mapping
+              </button>
+            </div>
           </div>
         </div>
+
+        {/* Hidden file input for import */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".csv"
+          onChange={importTable}
+          className="hidden"
+        />
       </div>
-
-      {/* Footer Actions */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-6 py-4 shadow-lg">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            {/* Show different buttons based on extraction method and history */}
-            {isDoclingExtraction() && !hasExtractionHistory() && !isUsingAnotherExtraction && !hasUsedAnotherExtraction && (
-              <button
-                onClick={onUseAnotherExtraction}
-                className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center gap-2"
-              >
-                <RotateCcw className="w-4 h-4" />
-                Use Another Extraction Method
-              </button>
-            )}
-            
-            {hasExtractionHistory() && canGoToPreviousExtraction() && onGoToPreviousExtraction && (
-              <button
-                onClick={onGoToPreviousExtraction}
-                className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 flex items-center gap-2"
-              >
-                <ChevronLeft className="w-4 h-4" />
-                Use Previous Extraction
-              </button>
-            )}
-            
-            {hasExtractionHistory() && !isDoclingExtraction() && !isUsingAnotherExtraction && !hasUsedAnotherExtraction && (
-              <button
-                onClick={onUseAnotherExtraction}
-                className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center gap-2"
-              >
-                <RotateCcw className="w-4 h-4" />
-                Use Another Extraction Method
-              </button>
-            )}
-          </div>
-
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-gray-600">
-              {tables.reduce((acc, table) => acc + table.rows.length, 0)} total rows
-            </span>
-            <button
-              onClick={onGoToFieldMapping}
-              disabled={loading || isUsingAnotherExtraction}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2 font-medium"
-            >
-              <FileText className="w-4 h-4" />
-              Save & Go to Field Mapping
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Hidden file input for import */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".csv"
-        onChange={importTable}
-        className="hidden"
-      />
     </div>
   )
 }

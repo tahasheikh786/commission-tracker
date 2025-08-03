@@ -1,11 +1,13 @@
 import os
+import sys
 import json
 import logging
 import base64
+import random
 from typing import Dict, List, Any, Optional, Tuple, TYPE_CHECKING
 from datetime import datetime
 import io
-from PIL import Image
+from PIL import Image, ImageEnhance, ImageFilter, ImageDraw, ImageFont
 import cv2
 import numpy as np
 
@@ -18,6 +20,18 @@ try:
 except ImportError:
     GOOGLE_DOCAI_AVAILABLE = False
     print("Warning: Google Document AI not available. Install with: pip install google-cloud-documentai google-cloud-storage google-auth")
+
+# Critical Configuration Parameters
+HEADER_CONFIDENCE_THRESHOLD = 0.3
+CELL_CONFIDENCE_THRESHOLD = 0.2
+PATTERN_MATCH_THRESHOLD = 0.6
+HEADER_SIMILARITY_THRESHOLD = 0.8
+
+# Processing parameters
+MAX_RETRIES = 3
+DPI_SETTING = 600
+CONTRAST_ENHANCEMENT = 1.2
+SHARPNESS_ENHANCEMENT = 1.1
 
 
 def extract_rows_from_tableblock(tableblock: Dict[str, Any]) -> Tuple[List[str], List[List[str]]]:
@@ -275,7 +289,7 @@ class GoogleDocAIExtractor:
     
     def extract_tables(self, pdf_path: str) -> List[Dict[str, Any]]:
         """
-        Extract tables from scanned PDF using Google Document AI.
+        Extract tables from scanned PDF using Google Document AI with enhanced preprocessing and retry logic.
         
         Args:
             pdf_path: Path to the PDF file
@@ -288,33 +302,46 @@ class GoogleDocAIExtractor:
         
         try:
             print(f"🔍 Google Document AI: Processing {pdf_path}")
+            import sys
+            sys.stdout.flush()  # Force flush the output
             
             # Read the PDF file
             with open(pdf_path, "rb") as pdf_file:
                 pdf_content = pdf_file.read()
             
-            # Use original content for now to avoid preprocessing issues
-            preprocessed_content = pdf_content
+            # Enhanced preprocessing with PIL-based image enhancement
+            preprocessed_content = self._enhanced_preprocess_pdf(pdf_content, pdf_path)
             
-            # Configure processing request (simplified for Layout Parser)
+            # Configure processing request with optimized field mask
             request = documentai.ProcessRequest(
                 name=self.processor_name,
                 raw_document=documentai.RawDocument(
                     content=preprocessed_content,
                     mime_type="application/pdf"
-                )
+                ),
+                # Simplified field mask for table extraction
+                field_mask="text,pages.tables,pages.pageNumber,pages.dimension"
             )
             
-            # Process the document
-            print("🔄 Google Document AI: Processing document...")
-            result = self.client.process_document(request=request)
-            document = result.document
+            # Process the document with retry logic
+            print("🔄 Google Document AI: Starting document processing...")
+            sys.stdout.flush()
+            document = self._process_document_with_retry(request)
+            print("✅ Google Document AI: Document processing completed")
+            sys.stdout.flush()
             
             # Save JSON response for debugging
             self._save_json_response(document, pdf_path)
             
+            # Create Document AI detection overlays
+            self._create_docai_detection_overlays(document, pdf_path)
+            
             # Extract tables from the processed document
+            print("🔍 Google Document AI: Extracting tables from processed document...")
+            sys.stdout.flush()
             tables = self._extract_tables_from_document(document)
+            print(f"📊 Google Document AI: Found {len(tables)} tables in document")
+            sys.stdout.flush()
             
             # Log extraction method used
             form_parser_count = sum(1 for table in tables if table.get("metadata", {}).get("extraction_method") == "google_docai_form_parser")
@@ -324,12 +351,127 @@ class GoogleDocAIExtractor:
                 print(f"✅ Google Document AI: Extracted {len(tables)} tables ({form_parser_count} using Form Parser, {spatial_count} using spatial clustering)")
             else:
                 print(f"✅ Google Document AI: Extracted {len(tables)} tables using spatial clustering")
+            sys.stdout.flush()
+            
+            # Create processing summary
+            self._create_processing_summary(document, pdf_path, tables)
             
             return tables
             
         except Exception as e:
             print(f"❌ Google Document AI extraction failed: {e}")
             raise
+
+    def _enhanced_preprocess_pdf(self, pdf_content: bytes, pdf_filename: str = None) -> bytes:
+        """
+        Enhanced PDF preprocessing with PIL-based image enhancement.
+        
+        Args:
+            pdf_content: Original PDF content
+            pdf_filename: Original PDF filename for saving enhanced images
+            
+        Returns:
+            Preprocessed PDF content
+        """
+        try:
+            print("🔧 Enhanced preprocessing: Converting PDF to images...")
+            
+            # Convert PDF to images
+            images = self._pdf_to_images(pdf_content)
+            
+            # Create output directory for enhanced images
+            if pdf_filename:
+                base_name = os.path.splitext(os.path.basename(pdf_filename))[0]
+                output_dir = os.path.join(os.getcwd(), 'enhanced_images', base_name)
+                os.makedirs(output_dir, exist_ok=True)
+                print(f"📁 Saving enhanced images to: {output_dir}")
+            
+            # Enhance each image
+            enhanced_images = []
+            for i, image in enumerate(images):
+                print(f"🔧 Enhanced preprocessing: Processing image {i+1}/{len(images)}")
+                
+                # Convert to RGB if needed
+                if image.mode != 'RGB':
+                    image = image.convert('RGB')
+                
+                # Save original image
+                if pdf_filename:
+                    original_path = os.path.join(output_dir, f"original_page_{i+1:02d}.png")
+                    image.save(original_path, 'PNG')
+                    print(f"💾 Saved original image: {original_path}")
+                
+                # Apply contrast enhancement
+                enhancer = ImageEnhance.Contrast(image)
+                image = enhancer.enhance(CONTRAST_ENHANCEMENT)
+                
+                # Apply sharpness enhancement
+                enhancer = ImageEnhance.Sharpness(image)
+                image = enhancer.enhance(SHARPNESS_ENHANCEMENT)
+                
+                # Apply noise reduction (slight blur then sharpen)
+                image = image.filter(ImageFilter.GaussianBlur(0.5))
+                enhancer = ImageEnhance.Sharpness(image)
+                image = enhancer.enhance(1.2)
+                
+                # Save enhanced image
+                if pdf_filename:
+                    enhanced_path = os.path.join(output_dir, f"enhanced_page_{i+1:02d}.png")
+                    image.save(enhanced_path, 'PNG')
+                    print(f"💾 Saved enhanced image: {enhanced_path}")
+                
+                enhanced_images.append(image)
+            
+            # Convert enhanced images back to PDF
+            print("🔧 Enhanced preprocessing: Converting enhanced images back to PDF...")
+            enhanced_pdf_content = self._images_to_pdf(enhanced_images)
+            
+            print(f"🔧 Enhanced preprocessing: Completed - {len(enhanced_images)} images processed")
+            return enhanced_pdf_content
+            
+        except Exception as e:
+            print(f"⚠️ Enhanced preprocessing failed, using original content: {e}")
+            return pdf_content
+
+    def _process_document_with_retry(self, request: documentai.ProcessRequest) -> Any:
+        """
+        Process document with retry logic and exponential backoff.
+        
+        Args:
+            request: Document AI processing request
+            
+        Returns:
+            Processed document
+        """
+        for attempt in range(MAX_RETRIES):
+            try:
+                print(f"🔄 Google Document AI: Processing document (attempt {attempt + 1}/{MAX_RETRIES})...")
+                sys.stdout.flush()
+                
+                # Add random delay to avoid rate limiting
+                if attempt > 0:
+                    delay = (2 ** attempt) + random.uniform(0, 1)
+                    print(f"⏳ Waiting {delay:.1f} seconds before retry...")
+                    sys.stdout.flush()
+                    time.sleep(delay)
+                
+                result = self.client.process_document(request=request)
+                document = result.document
+                
+                print(f"✅ Google Document AI: Processing successful on attempt {attempt + 1}")
+                sys.stdout.flush()
+                return document
+                
+            except Exception as e:
+                print(f"❌ Google Document AI: Processing failed on attempt {attempt + 1}: {e}")
+                
+                if attempt == MAX_RETRIES - 1:
+                    print(f"❌ Google Document AI: All {MAX_RETRIES} attempts failed")
+                    raise
+                else:
+                    print(f"🔄 Google Document AI: Retrying...")
+        
+        raise Exception("All retry attempts failed")
     
     def _save_json_response(self, document: Any, pdf_path: str):
         """
@@ -423,6 +565,162 @@ class GoogleDocAIExtractor:
             
         except Exception as e:
             print(f"⚠️ Failed to save JSON response: {e}")
+    
+    def _create_docai_detection_overlays(self, document: Any, pdf_path: str):
+        """
+        Create visual overlays showing Document AI detections on the enhanced images.
+        
+        Args:
+            document: Document AI response document
+            pdf_path: Original PDF file path
+        """
+        try:
+            base_name = os.path.splitext(os.path.basename(pdf_path))[0]
+            enhanced_dir = os.path.join(os.getcwd(), 'enhanced_images', base_name)
+            
+            if not os.path.exists(enhanced_dir):
+                print(f"⚠️ Enhanced images directory not found: {enhanced_dir}")
+                return
+            
+            # Create overlays directory
+            overlays_dir = os.path.join(enhanced_dir, 'docai_overlays')
+            os.makedirs(overlays_dir, exist_ok=True)
+            print(f"📁 Creating Document AI detection overlays in: {overlays_dir}")
+            
+            # Process each page
+            for page_num, page in enumerate(document.pages):
+                # Load the enhanced image for this page
+                enhanced_image_path = os.path.join(enhanced_dir, f"enhanced_page_{page_num + 1:02d}.png")
+                
+                if not os.path.exists(enhanced_image_path):
+                    print(f"⚠️ Enhanced image not found: {enhanced_image_path}")
+                    continue
+                
+                # Load the image
+                image = Image.open(enhanced_image_path)
+                draw = ImageDraw.Draw(image)
+                
+                # Draw table detections
+                if hasattr(page, 'tables') and page.tables:
+                    for table_idx, table in enumerate(page.tables):
+                        if hasattr(table, 'layout') and hasattr(table.layout, 'bounding_poly'):
+                            vertices = table.layout.bounding_poly.vertices
+                            if len(vertices) >= 4:
+                                # Draw table bounding box (red)
+                                points = [(vertex.x, vertex.y) for vertex in vertices]
+                                draw.polygon(points, outline='red', width=3)
+                                
+                                # Add table label
+                                draw.text((points[0][0], points[0][1] - 20), 
+                                        f"Table {table_idx + 1}", fill='red', font=ImageFont.load_default())
+                
+                # Draw form field detections
+                if hasattr(page, 'form_fields') and page.form_fields:
+                    for field_idx, field in enumerate(page.form_fields):
+                        if hasattr(field, 'layout') and hasattr(field.layout, 'bounding_poly'):
+                            vertices = field.layout.bounding_poly.vertices
+                            if len(vertices) >= 4:
+                                # Draw form field bounding box (blue)
+                                points = [(vertex.x, vertex.y) for vertex in vertices]
+                                draw.polygon(points, outline='blue', width=2)
+                                
+                                # Add field label
+                                field_text = self._extract_text_from_text_anchor(field.field_name, document) if hasattr(field, 'field_name') and field.field_name else f"Field {field_idx + 1}"
+                                draw.text((points[0][0], points[0][1] - 15), 
+                                        field_text[:20], fill='blue', font=ImageFont.load_default())
+                
+                # Draw text block detections
+                if hasattr(page, 'blocks') and page.blocks:
+                    for block_idx, block in enumerate(page.blocks):
+                        if hasattr(block, 'layout') and hasattr(block.layout, 'bounding_poly'):
+                            vertices = block.layout.bounding_poly.vertices
+                            if len(vertices) >= 4:
+                                # Draw text block bounding box (green)
+                                points = [(vertex.x, vertex.y) for vertex in vertices]
+                                draw.polygon(points, outline='green', width=1)
+                
+                # Save the overlay image
+                overlay_path = os.path.join(overlays_dir, f"page_{page_num + 1:02d}_overlay.png")
+                image.save(overlay_path, 'PNG')
+                print(f"💾 Saved Document AI overlay: {overlay_path}")
+            
+            print(f"✅ Created Document AI detection overlays for {len(document.pages)} pages")
+            
+        except Exception as e:
+            print(f"⚠️ Failed to create Document AI overlays: {e}")
+    
+    def _create_processing_summary(self, document: Any, pdf_path: str, tables: List[Dict[str, Any]]):
+        """
+        Create a summary report of the processing results.
+        
+        Args:
+            document: Document AI response document
+            pdf_path: Original PDF file path
+            tables: Extracted tables
+        """
+        try:
+            base_name = os.path.splitext(os.path.basename(pdf_path))[0]
+            enhanced_dir = os.path.join(os.getcwd(), 'enhanced_images', base_name)
+            
+            if not os.path.exists(enhanced_dir):
+                return
+            
+            # Create summary file
+            summary_path = os.path.join(enhanced_dir, 'processing_summary.txt')
+            
+            with open(summary_path, 'w', encoding='utf-8') as f:
+                f.write(f"Document AI Processing Summary\n")
+                f.write(f"============================\n\n")
+                f.write(f"Original PDF: {pdf_path}\n")
+                f.write(f"Processing Date: {datetime.now().isoformat()}\n")
+                f.write(f"Total Pages: {len(document.pages)}\n\n")
+                
+                # Document AI statistics
+                total_tables = 0
+                total_form_fields = 0
+                total_text_blocks = 0
+                
+                for page_num, page in enumerate(document.pages):
+                    f.write(f"Page {page_num + 1}:\n")
+                    
+                    # Tables
+                    page_tables = len(page.tables) if hasattr(page, 'tables') and page.tables else 0
+                    total_tables += page_tables
+                    f.write(f"  - Tables detected: {page_tables}\n")
+                    
+                    # Form fields
+                    page_fields = len(page.form_fields) if hasattr(page, 'form_fields') and page.form_fields else 0
+                    total_form_fields += page_fields
+                    f.write(f"  - Form fields detected: {page_fields}\n")
+                    
+                    # Text blocks
+                    page_blocks = len(page.blocks) if hasattr(page, 'blocks') and page.blocks else 0
+                    total_text_blocks += page_blocks
+                    f.write(f"  - Text blocks detected: {page_blocks}\n")
+                    
+                    f.write("\n")
+                
+                f.write(f"Total Statistics:\n")
+                f.write(f"  - Total tables detected: {total_tables}\n")
+                f.write(f"  - Total form fields detected: {total_form_fields}\n")
+                f.write(f"  - Total text blocks detected: {total_text_blocks}\n")
+                f.write(f"  - Tables successfully extracted: {len(tables)}\n\n")
+                
+                # Table details
+                if tables:
+                    f.write(f"Extracted Tables:\n")
+                    for i, table in enumerate(tables):
+                        f.write(f"  Table {i + 1}:\n")
+                        f.write(f"    - Headers: {len(table.get('headers', []))}\n")
+                        f.write(f"    - Rows: {len(table.get('rows', []))}\n")
+                        f.write(f"    - Confidence: {table.get('confidence', 0.0):.3f}\n")
+                        f.write(f"    - Extraction method: {table.get('metadata', {}).get('extraction_method', 'unknown')}\n")
+                        f.write("\n")
+            
+            print(f"📄 Processing summary saved to: {summary_path}")
+            
+        except Exception as e:
+            print(f"⚠️ Failed to create processing summary: {e}")
     
     def _preprocess_pdf_for_ocr(self, pdf_content: bytes) -> bytes:
         """
@@ -634,9 +932,24 @@ class GoogleDocAIExtractor:
                         if table_data and table_data.get("rows"):
                             tables.append(table_data)
                             print(f"✅ Successfully converted Form Parser table: {len(table_data.get('headers', []))} headers, {len(table_data.get('rows', []))} rows")
+                        else:
+                            # Fallback: Try to extract table from raw text using spatial analysis
+                            print(f"⚠️ Form Parser table {table_idx} has no rows, trying fallback extraction...")
+                            fallback_table = self._extract_table_from_raw_text(page, page_num, table_idx, document)
+                            if fallback_table and fallback_table.get("rows"):
+                                tables.append(fallback_table)
+                                print(f"✅ Fallback extraction successful: {len(fallback_table.get('headers', []))} headers, {len(fallback_table.get('rows', []))} rows")
                     
                     except Exception as e:
                         print(f"Error extracting Form Parser table {table_idx} from page {page_num}: {e}")
+                        # Try fallback extraction
+                        try:
+                            fallback_table = self._extract_table_from_raw_text(page, page_num, table_idx, document)
+                            if fallback_table and fallback_table.get("rows"):
+                                tables.append(fallback_table)
+                                print(f"✅ Fallback extraction successful after error: {len(fallback_table.get('headers', []))} headers, {len(fallback_table.get('rows', []))} rows")
+                        except Exception as fallback_error:
+                            print(f"Fallback extraction also failed: {fallback_error}")
                         continue
             
             return tables
@@ -672,10 +985,148 @@ class GoogleDocAIExtractor:
         except Exception as e:
             print(f"Error extracting text from text anchor: {e}")
             return ""
+
+    def _extract_table_from_raw_text(self, page: Any, page_num: int, table_idx: int, document: Any) -> Dict[str, Any]:
+        """
+        Fallback method to extract table from raw text when Document AI table structure is incomplete.
+        
+        Args:
+            page: Document AI page
+            page_num: Page number
+            table_idx: Table index
+            document: Document AI document
+            
+        Returns:
+            Table dictionary in standard format
+        """
+        try:
+            # Get all text blocks from the page
+            text_blocks = []
+            if hasattr(page, 'blocks'):
+                for block in page.blocks:
+                    if hasattr(block, 'layout') and hasattr(block.layout, 'text_anchor'):
+                        text = self._extract_text_from_text_anchor(block.layout.text_anchor, document)
+                        if text.strip():
+                            # Get bounding box for spatial analysis
+                            bbox = None
+                            if hasattr(block.layout, 'bounding_poly') and block.layout.bounding_poly.vertices:
+                                vertices = block.layout.bounding_poly.vertices
+                                if len(vertices) >= 4:
+                                    bbox = {
+                                        'x': vertices[0].x,
+                                        'y': vertices[0].y,
+                                        'width': vertices[2].x - vertices[0].x,
+                                        'height': vertices[2].y - vertices[0].y
+                                    }
+                            
+                            text_blocks.append({
+                                'text': text.strip(),
+                                'bbox': bbox,
+                                'confidence': getattr(block.layout, 'confidence', 0.0)
+                            })
+            
+            if not text_blocks:
+                return {"headers": [], "rows": [], "confidence": 0.0}
+            
+            # Sort text blocks by vertical position (top to bottom)
+            text_blocks.sort(key=lambda x: x['bbox']['y'] if x['bbox'] else 0)
+            
+            # Group text blocks into rows based on vertical proximity
+            rows = []
+            current_row = []
+            last_y = None
+            
+            for block in text_blocks:
+                if block['bbox']:
+                    current_y = block['bbox']['y']
+                    if last_y is None or abs(current_y - last_y) < 20:  # 20px tolerance
+                        current_row.append(block)
+                    else:
+                        if current_row:
+                            rows.append(current_row)
+                        current_row = [block]
+                    last_y = current_y
+                else:
+                    current_row.append(block)
+            
+            if current_row:
+                rows.append(current_row)
+            
+            # Extract headers from first row
+            headers = []
+            if rows:
+                header_blocks = rows[0]
+                headers = [block['text'] for block in header_blocks]
+                rows = rows[1:]  # Remove header row from data rows
+            
+            # Extract data rows
+            data_rows = []
+            for row_blocks in rows:
+                row_data = [block['text'] for block in row_blocks]
+                if any(cell.strip() for cell in row_data):  # Only add non-empty rows
+                    data_rows.append(row_data)
+            
+            # Normalize row lengths
+            if headers:
+                max_cols = len(headers)
+                normalized_rows = []
+                for row in data_rows:
+                    normalized_row = row[:max_cols] + [""] * (max_cols - len(row))
+                    normalized_rows.append(normalized_row)
+                data_rows = normalized_rows
+            
+            return {
+                "headers": headers,
+                "rows": data_rows,
+                "confidence": 0.5,  # Lower confidence for fallback method
+                "bbox": {},
+                "page_number": page_num + 1,
+                "table_index": table_idx,
+                "extractor": "google_docai_fallback",
+                "metadata": {
+                    "page_number": page_num + 1,
+                    "table_index": table_idx,
+                    "extraction_method": "google_docai_fallback",
+                    "timestamp": datetime.now().isoformat(),
+                    "source_format": "raw_text_analysis"
+                }
+            }
+            
+        except Exception as e:
+            print(f"Error in fallback table extraction: {e}")
+            return {"headers": [], "rows": [], "confidence": 0.0}
     
+    def _extract_cell_text_with_confidence(self, cell: Any, document: Any) -> Tuple[str, float]:
+        """
+        Extract text from a Document AI cell object with confidence scoring.
+        
+        Args:
+            cell: Document AI cell object
+            document: Document AI document object
+            
+        Returns:
+            Tuple of (extracted_text, confidence_score)
+        """
+        try:
+            if not hasattr(cell, 'layout') or not cell.layout:
+                return "", 0.0
+            
+            text_anchor = cell.layout.text_anchor
+            if not text_anchor:
+                return "", 0.0
+            
+            text = self._extract_text_from_text_anchor(text_anchor, document)
+            confidence = getattr(cell.layout, 'confidence', 0.0)
+            
+            return text, confidence
+            
+        except Exception as e:
+            print(f"Error extracting cell text with confidence: {e}")
+            return "", 0.0
+
     def _extract_cell_text(self, cell: Any, document: Any) -> str:
         """
-        Extract text from a Document AI table cell.
+        Extract text from a Document AI table cell (legacy method).
         
         Args:
             cell: Document AI table cell object
@@ -684,17 +1135,146 @@ class GoogleDocAIExtractor:
         Returns:
             Extracted cell text
         """
+        text, _ = self._extract_cell_text_with_confidence(cell, document)
+        return text
+
+    def _extract_alternative_text(self, cell: Any, document: Any) -> str:
+        """
+        Extract alternative text for low-confidence cells using multiple strategies.
+        
+        Args:
+            cell: Document AI cell object
+            document: Document AI document object
+            
+        Returns:
+            Alternative text string
+        """
         try:
+            # Strategy 1: Try to get text from bounding box
+            if hasattr(cell, 'layout') and hasattr(cell.layout, 'bounding_poly'):
+                bbox = cell.layout.bounding_poly
+                # Extract text from the bounding box area
+                return self._extract_text_from_bbox(bbox, document)
+            
+            # Strategy 2: Try to get text from text segments
             if hasattr(cell, 'layout') and hasattr(cell.layout, 'text_anchor'):
-                return self._extract_text_from_text_anchor(cell.layout.text_anchor, document)
+                text_anchor = cell.layout.text_anchor
+                if text_anchor and hasattr(text_anchor, 'text_segments'):
+                    # Try to extract from all text segments
+                    text_parts = []
+                    for segment in text_anchor.text_segments:
+                        if hasattr(segment, 'start_index') and hasattr(segment, 'end_index'):
+                            try:
+                                text_part = document.text[segment.start_index:segment.end_index]
+                                text_parts.append(text_part)
+                            except (IndexError, AttributeError):
+                                continue
+                    if text_parts:
+                        return " ".join(text_parts)
+            
+            return ""
+            
+        except Exception as e:
+            print(f"Error extracting alternative text: {e}")
+            return ""
+
+    def _extract_text_from_bbox(self, bbox: Any, document: Any) -> str:
+        """
+        Extract text from a bounding box area.
+        
+        Args:
+            bbox: Bounding box object
+            document: Document AI document object
+            
+        Returns:
+            Extracted text string
+        """
+        try:
+            # This is a simplified implementation
+            # In a full implementation, you would extract text from the specific area
             return ""
         except Exception as e:
-            print(f"Error extracting cell text: {e}")
+            print(f"Error extracting text from bbox: {e}")
             return ""
+
+    def _generate_header_from_data(self, rows: List[List[str]], column_index: int) -> str:
+        """
+        Generate a header based on the data in a specific column.
+        
+        Args:
+            rows: Table data rows
+            column_index: Index of the column to analyze
+            
+        Returns:
+            Generated header string
+        """
+        try:
+            if not rows or column_index >= len(rows[0]):
+                return f"Column_{column_index+1}"
+            
+            # Get all values in this column
+            column_values = []
+            for row in rows:
+                if column_index < len(row):
+                    value = row[column_index].strip()
+                    if value:
+                        column_values.append(value)
+            
+            if not column_values:
+                return f"Column_{column_index+1}"
+            
+            # Analyze the data to generate a meaningful header
+            # Look for patterns like dates, numbers, names, etc.
+            sample_values = column_values[:5]  # Look at first 5 values
+            
+            # Check if it looks like dates
+            date_pattern = any(self._looks_like_date(val) for val in sample_values)
+            if date_pattern:
+                return "Date"
+            
+            # Check if it looks like numbers
+            number_pattern = any(self._looks_like_number(val) for val in sample_values)
+            if number_pattern:
+                return "Amount"
+            
+            # Check if it looks like names
+            name_pattern = any(self._looks_like_name(val) for val in sample_values)
+            if name_pattern:
+                return "Name"
+            
+            # Default to a generic header
+            return f"Column_{column_index+1}"
+            
+        except Exception as e:
+            print(f"Error generating header from data: {e}")
+            return f"Column_{column_index+1}"
+
+    def _looks_like_date(self, value: str) -> bool:
+        """Check if a value looks like a date."""
+        import re
+        date_patterns = [
+            r'\d{1,2}/\d{1,2}/\d{2,4}',
+            r'\d{1,2}-\d{1,2}-\d{2,4}',
+            r'\d{4}-\d{2}-\d{2}'
+        ]
+        return any(re.match(pattern, value) for pattern in date_patterns)
+
+    def _looks_like_number(self, value: str) -> bool:
+        """Check if a value looks like a number."""
+        import re
+        # Remove common currency symbols and commas
+        cleaned = re.sub(r'[$,£€¥₹]', '', value)
+        return bool(re.match(r'^[\d,]+\.?\d*$', cleaned))
+
+    def _looks_like_name(self, value: str) -> bool:
+        """Check if a value looks like a name."""
+        import re
+        # Simple heuristic: contains letters and spaces, no numbers
+        return bool(re.match(r'^[A-Za-z\s]+$', value))
 
     def _convert_form_parser_table_to_standard_format(self, table: Any, page_num: int, table_index: int, document: Any = None) -> Dict[str, Any]:
         """
-        Convert a Document AI Form Parser table to standard format.
+        Convert a Document AI Form Parser table to standard format with enhanced header detection.
         
         Args:
             table: Document AI Form Parser table object
@@ -707,31 +1287,57 @@ class GoogleDocAIExtractor:
         try:
             headers = []
             rows = []
+            header_confidence_scores = []
             
-            # Extract header rows
+            # Enhanced header extraction with confidence scoring
             if hasattr(table, 'header_rows') and table.header_rows:
                 for header_row in table.header_rows:
                     row_cells = []
+                    row_confidence = []
                     for cell in header_row.cells:
-                        cell_text = self._extract_cell_text(cell, document) if document else ""
+                        cell_text, confidence = self._extract_cell_text_with_confidence(cell, document)
                         row_cells.append(cell_text)
+                        row_confidence.append(confidence)
                     if row_cells:
                         headers.extend(row_cells)
+                        header_confidence_scores.extend(row_confidence)
+                        print(f"🔍 Header row extracted: {row_cells} with confidence: {row_confidence}")
             
-            # Extract body rows
+            # Extract body rows with confidence tracking
             if hasattr(table, 'body_rows') and table.body_rows:
                 for body_row in table.body_rows:
                     row_cells = []
                     for cell in body_row.cells:
-                        cell_text = self._extract_cell_text(cell, document) if document else ""
-                        row_cells.append(cell_text)
+                        cell_text, confidence = self._extract_cell_text_with_confidence(cell, document)
+                        # Only include cells with sufficient confidence
+                        if confidence >= CELL_CONFIDENCE_THRESHOLD:
+                            row_cells.append(cell_text)
+                        else:
+                            # Try alternative text extraction for low-confidence cells
+                            alt_text = self._extract_alternative_text(cell, document)
+                            row_cells.append(alt_text if alt_text else cell_text)
                     if row_cells:
                         rows.append(row_cells)
             
-            # If no headers were extracted, try to use first row as headers
+            # Enhanced header detection with fallback mechanisms
             if not headers and rows:
+                print("⚠️ No headers detected, using first row as headers")
                 headers = rows[0]
                 rows = rows[1:]
+                header_confidence_scores = [0.5] * len(headers)  # Default confidence for inferred headers
+            
+            # Filter low-confidence headers and generate alternatives
+            if headers and header_confidence_scores:
+                filtered_headers = []
+                for i, (header, confidence) in enumerate(zip(headers, header_confidence_scores)):
+                    if confidence >= HEADER_CONFIDENCE_THRESHOLD:
+                        filtered_headers.append(header)
+                    else:
+                        # Generate alternative header for low-confidence cells
+                        alt_header = self._generate_header_from_data(rows, i) if rows else f"Column_{i+1}"
+                        filtered_headers.append(alt_header)
+                        print(f"🔄 Low confidence header '{header}' (confidence: {confidence:.2f}) replaced with '{alt_header}'")
+                headers = filtered_headers
             
             # Ensure all rows have the same number of columns as headers
             if headers:
@@ -747,6 +1353,7 @@ class GoogleDocAIExtractor:
             if not headers and rows:
                 max_cols = max(len(row) for row in rows) if rows else 0
                 headers = [f"Column_{i+1}" for i in range(max_cols)]
+                print(f"📋 Generated default headers: {headers}")
             
             # Extract metadata
             confidence = getattr(table, 'confidence', 0.0)
@@ -1063,31 +1670,72 @@ class GoogleDocAIExtractor:
         return cleaned.strip()
     
     def _remove_empty_cells(self, headers: List[str], rows: List[List[str]]) -> Tuple[List[str], List[List[str]]]:
-        """Remove empty rows and columns."""
+        """
+        Data-preserving empty cell removal with enhanced logic.
+        
+        Args:
+            headers: Table headers
+            rows: Table data rows
+            
+        Returns:
+            Tuple of (cleaned_headers, cleaned_rows) with preserved data
+        """
         try:
-            # Remove empty columns
+            print(f"📊 Data preservation: Starting with {len(headers)} headers and {len(rows)} rows")
+            
+            # Only remove columns that are completely empty across ALL rows AND headers
             non_empty_cols = []
-            for col_idx in range(max(len(headers), max(len(row) for row in rows) if rows else 0)):
-                col_values = [headers[col_idx] if col_idx < len(headers) else ""]
-                col_values.extend([row[col_idx] if col_idx < len(row) else "" for row in rows])
+            max_cols = max(len(headers), max(len(row) for row in rows) if rows else 0)
+            
+            for col_idx in range(max_cols):
+                # Check header
+                header_value = headers[col_idx] if col_idx < len(headers) else ""
                 
+                # Check all rows in this column
+                col_values = [header_value]
+                for row in rows:
+                    cell_value = row[col_idx] if col_idx < len(row) else ""
+                    col_values.append(cell_value)
+                
+                # Only remove column if ALL values are empty (including header)
                 if any(value.strip() for value in col_values):
                     non_empty_cols.append(col_idx)
+                else:
+                    print(f"🗑️ Removing completely empty column {col_idx}")
             
             # Rebuild headers and rows with only non-empty columns
-            new_headers = [headers[col_idx] if col_idx < len(headers) else "" for col_idx in non_empty_cols]
+            new_headers = []
+            for col_idx in non_empty_cols:
+                if col_idx < len(headers):
+                    new_headers.append(headers[col_idx])
+                else:
+                    new_headers.append(f"Column_{col_idx+1}")
+            
             new_rows = []
-            for row in rows:
-                new_row = [row[col_idx] if col_idx < len(row) else "" for col_idx in non_empty_cols]
+            for row_idx, row in enumerate(rows):
+                new_row = []
+                for col_idx in non_empty_cols:
+                    if col_idx < len(row):
+                        new_row.append(row[col_idx])
+                    else:
+                        new_row.append("")  # Pad with empty string
                 new_rows.append(new_row)
             
-            # Remove completely empty rows
-            new_rows = [row for row in new_rows if any(cell.strip() for cell in row)]
+            # Only remove rows that are completely empty (all cells empty)
+            filtered_rows = []
+            for row_idx, row in enumerate(new_rows):
+                if any(cell.strip() for cell in row):
+                    filtered_rows.append(row)
+                else:
+                    print(f"🗑️ Removing completely empty row {row_idx}")
             
-            return new_headers, new_rows
+            print(f"📊 Data preservation: Final result - {len(new_headers)} headers and {len(filtered_rows)} rows")
+            print(f"📊 Data preservation: Kept {len(filtered_rows)}/{len(rows)} rows ({len(filtered_rows)/len(rows)*100:.1f}% preserved)")
+            
+            return new_headers, filtered_rows
             
         except Exception as e:
-            print(f"Error removing empty cells: {e}")
+            print(f"Error in data-preserving empty cell removal: {e}")
             return headers, rows
     
     def get_extraction_info(self) -> Dict[str, Any]:

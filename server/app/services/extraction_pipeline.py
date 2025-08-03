@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 import logging
 from typing import Dict, List, Any, Optional
@@ -38,21 +39,21 @@ class TableExtractionPipeline:
         """
         print("🚀 Initializing Table Extraction Pipeline...")
         
-        # Docling (best for complex tables with multi-row headers, merged cells)
-        docling_extractor = DoclingExtractor()
-        if docling_extractor.is_available():
-            self.extractors.append(docling_extractor)
-            print(f"✅ Docling extractor loaded")
-        else:
-            print(f"❌ Docling extractor not available")
-        
-        # Google Document AI (best for scanned PDFs with borderless tables)
+        # Google Document AI (primary extractor for all PDF types)
         google_docai_extractor = GoogleDocAIExtractor()
         if google_docai_extractor.is_available():
             self.extractors.append(google_docai_extractor)
             print(f"✅ Google Document AI extractor loaded")
         else:
             print(f"❌ Google Document AI extractor not available")
+        
+        # Docling (alternative extractor for complex tables)
+        docling_extractor = DoclingExtractor()
+        if docling_extractor.is_available():
+            self.extractors.append(docling_extractor)
+            print(f"✅ Docling extractor loaded")
+        else:
+            print(f"❌ Docling extractor not available")
         
         print(f"🎯 Pipeline initialized with {len(self.extractors)} extractors: {[e.name for e in self.extractors]}")
     
@@ -76,10 +77,13 @@ class TableExtractionPipeline:
         
         try:
             print(f"\n🔍 Starting extraction for: {pdf_path}")
+            import sys
+            sys.stdout.flush()  # Force flush the output
             
             # Detect PDF type
             pdf_type = detect_pdf_type(pdf_path)
             print(f"📄 Detected PDF type: {pdf_type}")
+            sys.stdout.flush()  # Force flush the output
             
             # Determine extractor order based on force_extractor or optimal order
             if force_extractor:
@@ -104,6 +108,7 @@ class TableExtractionPipeline:
             for extractor in extractor_order:
                 try:
                     print(f"\n🔧 Trying {extractor.name} extractor...")
+                    sys.stdout.flush()
                     
                     # Record extraction attempt
                     extraction_attempt = {
@@ -115,7 +120,11 @@ class TableExtractionPipeline:
                     
                     # Extract tables without aggressive timeout
                     # Let the extractor take as long as needed for accurate results
+                    print(f"🔧 {extractor.name}: Starting table extraction...")
+                    sys.stdout.flush()
                     tables = extractor.extract_tables(pdf_path)
+                    print(f"🔧 {extractor.name}: Table extraction completed")
+                    sys.stdout.flush()
                     
                     if tables:
                         print(f"✅ {extractor.name}: Successfully extracted {len(tables)} tables")
@@ -192,7 +201,12 @@ class TableExtractionPipeline:
                 return self._create_error_response(error_msg)
             
             # Post-process extracted tables
-            processed_tables = self._post_process_tables(all_tables)
+            print(f"🔧 Pipeline: Starting post-processing of {len(all_tables)} tables...")
+            sys.stdout.flush()
+            filename = os.path.basename(pdf_path)
+            processed_tables = self._post_process_tables(all_tables, filename)
+            print(f"✅ Pipeline: Post-processing completed - {len(processed_tables)} final tables")
+            sys.stdout.flush()
             
             # Create comprehensive response
             response = self._create_success_response(
@@ -207,6 +221,7 @@ class TableExtractionPipeline:
             response["extraction_log"] = self.extraction_log
             
             print(f"\n🎯 Extraction completed: {len(processed_tables)} tables from {len(successful_extractors)} extractors")
+            sys.stdout.flush()
             return response
             
         except Exception as e:
@@ -224,14 +239,9 @@ class TableExtractionPipeline:
         Returns:
             List of extractors in optimal order
         """
-        # For production environments, use only one extractor to save resources
-        # This prevents the 502 timeout issues
-        if pdf_type == "scanned":
-            # For scanned PDFs, use Google Document AI for better OCR
-            return self._sort_extractors_by_preference(["google_docai"])
-        else:
-            # For digital PDFs, use Docling for better structure understanding
-            return self._sort_extractors_by_preference(["docling"])
+        # Use Google Document AI as primary extractor for all PDF types
+        # This provides better accuracy and consistency across different document types
+        return self._sort_extractors_by_preference(["google_docai"])
     
     def _sort_extractors_by_preference(self, preferred_order: List[str]) -> List:
         """
@@ -258,12 +268,13 @@ class TableExtractionPipeline:
         
         return sorted_extractors
     
-    def _post_process_tables(self, tables: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _post_process_tables(self, tables: List[Dict[str, Any]], filename: str = "unknown") -> List[Dict[str, Any]]:
         """
         Post-process extracted tables: stitching, validation, normalization.
         
         Args:
             tables: List of raw extracted tables
+            filename: Original PDF filename for logging
             
         Returns:
             List of processed and validated tables
@@ -273,6 +284,7 @@ class TableExtractionPipeline:
         
         try:
             print(f"🔧 Post-processing {len(tables)} tables...")
+            sys.stdout.flush()
             
             # 1. Stitch multipage tables
             print(f"🔍 Before stitching: {len(tables)} tables")
@@ -283,6 +295,7 @@ class TableExtractionPipeline:
             
             stitched_tables = stitch_multipage_tables(tables)
             print(f"📎 After stitching: {len(stitched_tables)} tables")
+            sys.stdout.flush()
             for i, table in enumerate(stitched_tables):
                 headers = table.get("headers", [])
                 rows = table.get("rows", [])
@@ -290,6 +303,8 @@ class TableExtractionPipeline:
                 print(f"   Stitched table {i}: {len(headers)} headers, {len(rows)} rows, metadata: {metadata}")
             
             # 2. Validate each table
+            print(f"🔍 Validating {len(stitched_tables)} tables...")
+            sys.stdout.flush()
             validated_tables = []
             for i, table in enumerate(stitched_tables):
                 try:
@@ -304,6 +319,9 @@ class TableExtractionPipeline:
                 except Exception as e:
                     print(f"❌ Error validating table {i}: {e}")
                     validated_tables.append(table)  # Keep original table
+            
+            print(f"✅ Validation completed: {len(validated_tables)} tables")
+            sys.stdout.flush()
             
             # 3. Add global metadata
             for i, table in enumerate(validated_tables):
@@ -320,6 +338,11 @@ class TableExtractionPipeline:
                 })
             
             print(f"✅ Post-processing completed: {len(validated_tables)} tables")
+            
+            # Log comprehensive performance statistics
+            from .extraction_utils import log_pipeline_performance
+            log_pipeline_performance(validated_tables, tables, filename)
+            
             return validated_tables
             
         except Exception as e:

@@ -413,3 +413,15 @@ async def delete_edited_tables(db: AsyncSession, upload_id: str):
     await db.commit()
     return len(tables)
 
+
+async def get_upload_by_id(db: AsyncSession, upload_id: str):
+    """
+    Retrieve upload information by upload ID.
+    """
+    from .models import StatementUpload as StatementUploadModel
+    
+    result = await db.execute(
+        select(StatementUploadModel).where(StatementUploadModel.id == upload_id)
+    )
+    return result.scalar_one_or_none()
+

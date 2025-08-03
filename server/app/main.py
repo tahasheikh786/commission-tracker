@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
-from app.api import company, mapping, extract, review, statements, advanced_extract, database_fields, table_editor
+from app.api import company, mapping, extract, review, statements, advanced_extract, database_fields, table_editor, improve_extraction
 from fastapi.middleware.cors import CORSMiddleware
 import os
 
@@ -33,3 +33,4 @@ app.include_router(review.router)
 app.include_router(statements.router)
 app.include_router(database_fields.router)
 app.include_router(table_editor.router)
+app.include_router(improve_extraction.router)

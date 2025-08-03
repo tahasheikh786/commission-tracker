@@ -32,8 +32,16 @@ class DoclingExtractor:
         """
         try:
             # Set environment variables to use cached models
-            os.environ.setdefault('EASYOCR_MODULE_PATH', '/app/model_cache/easyocr')
-            os.environ.setdefault('DOCLING_CACHE_DIR', '/app/model_cache/docling')
+            # Use a persistent cache directory that won't be recreated
+            cache_dir = os.path.join(os.getcwd(), 'model_cache')
+            os.makedirs(cache_dir, exist_ok=True)
+            
+            # Set docling to use the cache directory
+            os.environ.setdefault('DOCLING_CACHE_DIR', cache_dir)
+            os.environ.setdefault('HF_HOME', cache_dir)  # HuggingFace cache
+            os.environ.setdefault('TRANSFORMERS_CACHE', os.path.join(cache_dir, 'transformers'))
+            
+            print(f"✅ {self.name}: Using cache directory {cache_dir}")
             
             # Initialize the document converter with PDF support
             # This should use pre-downloaded models from Docker build

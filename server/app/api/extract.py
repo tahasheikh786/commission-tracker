@@ -70,11 +70,14 @@ async def extract_tables(
         s3_url = get_s3_file_url(s3_key)
 
         # Extract tables with new pipeline (simple backend-like flow)
-        logger.info("Starting advanced table extraction with Docling...")
+        logger.info("Starting advanced table extraction...")
+        print(f"🚀 API: Starting extraction for {file.filename}")
         
         # Extract tables without timeout - let it take as long as needed
         # The single extractor approach should still provide good performance
+        print(f"🔧 API: Calling extraction pipeline...")
         extraction_result = await asyncio.to_thread(extraction_pipeline.extract_tables, file_path)
+        print(f"✅ API: Extraction pipeline completed")
         
         if not extraction_result.get("success"):
             raise HTTPException(

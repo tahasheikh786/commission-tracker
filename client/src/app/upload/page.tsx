@@ -46,6 +46,9 @@ export default function UploadPage() {
   // Track if another extraction method has been used
   const [hasUsedAnotherExtraction, setHasUsedAnotherExtraction] = useState(false)
 
+  // GPT-4o Vision improvement functionality
+  const [isImprovingExtraction, setIsImprovingExtraction] = useState(false)
+
   const fetchMappingRef = useRef(false)
   const router = useRouter()
   
@@ -183,62 +186,113 @@ export default function UploadPage() {
   }
 
   async function handleUseAnotherExtraction() {
-    if (!company || !originalFile) {
-      toast.error('No file available for re-extraction')
+    if (!uploaded?.upload_id || !company?.id) {
+      toast.error('No upload or company selected')
       return
     }
-    
+
     try {
-      // Set loading state for the entire screen
       setIsUsingAnotherExtraction(true)
       
-      // Don't close table editor - we want to stay there
-      setEditedTables([])
-      
-      // Show loading state
-      toast.loading('Re-extracting with DOCAI...', { id: 're-extracting' })
-      
-      // Call the DOCAI extraction endpoint with the original file
-      const formData = new FormData()
-      formData.append('file', originalFile)
-      formData.append('company_id', company.id)
-      
-      const extractResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/extract-tables-docai/`, {
-        method: 'POST',
-        body: formData,
-      })
-      
-      toast.dismiss('re-extracting')
-      
-      if (!extractResponse.ok) {
-        const errorData = await extractResponse.json().catch(() => ({}))
-        throw new Error(errorData.detail || 'DOCAI extraction failed')
+      // Save current extraction to history before trying another method
+      if (uploaded.tables && uploaded.tables.length > 0) {
+        setExtractionHistory(prev => [...prev, uploaded.tables])
+        setCurrentExtractionIndex(prev => prev + 1)
       }
-      
-      const result = await extractResponse.json()
-      
-      // Handle the extraction result - this will update the tables and stay in table editor
-      handleUploadResult({
-        tables: result.tables || [],
-        upload_id: result.upload_id,
-        file_name: result.s3_key || originalFile.name,
-        file: originalFile,
-        quality_summary: result.quality_summary,
-        extraction_config: result.extraction_config
+
+      const formData = new FormData()
+      formData.append('file', originalFile!)
+      formData.append('company_id', company.id)
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/extract-tables-docling/`, {
+        method: 'POST',
+        body: formData
       })
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
+      const result = await response.json()
       
-      // Mark that another extraction method has been used
-      setHasUsedAnotherExtraction(true)
-      
-      toast.success('DOCAI extraction completed successfully!')
-      
+      if (result.success) {
+        setUploaded({
+          ...uploaded,
+          tables: result.tables,
+          extraction_method: 'docling'
+        })
+        setHasUsedAnotherExtraction(true)
+        toast.success('Successfully extracted with Docling!')
+      } else {
+        throw new Error(result.error || 'Extraction failed')
+      }
     } catch (error) {
-      toast.dismiss('re-extracting')
-      console.error('Error during DOCAI re-extraction:', error)
-      toast.error(`DOCAI extraction failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      console.error('Error using another extraction method:', error)
+      toast.error('Failed to extract with alternative method')
     } finally {
-      // Clear loading state
       setIsUsingAnotherExtraction(false)
+    }
+  }
+
+  async function handleImproveExtraction() {
+    if (!uploaded?.upload_id || !company?.id) {
+      toast.error('No upload or company selected')
+      return
+    }
+
+    try {
+      setIsImprovingExtraction(true)
+      toast.loading('Improving extraction with GPT-4o Vision...', { id: 'improve-extraction' })
+
+      const formData = new FormData()
+      formData.append('upload_id', uploaded.upload_id)
+      formData.append('company_id', company.id)
+      formData.append('max_pages', '5')
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/improve-extraction/improve-current-extraction/`, {
+        method: 'POST',
+        body: formData
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || `HTTP error! status: ${response.status}`)
+      }
+
+      const result = await response.json()
+      
+      if (result.success) {
+        // Update the uploaded tables with the improved results
+        setUploaded({
+          ...uploaded,
+          tables: result.improved_tables || uploaded.tables,
+          enhancement_metadata: {
+            method: 'gpt4o_vision',
+            timestamp: result.enhancement_timestamp,
+            diagnostic_info: result.diagnostic_info,
+            overall_notes: result.overall_notes,
+            processing_time: result.processing_time_seconds
+          }
+        })
+        
+        toast.success(`Extraction improved! ${result.improved_tables_count} tables enhanced.`, { id: 'improve-extraction' })
+        
+        // Show diagnostic information if available
+        if (result.diagnostic_info?.warnings?.length > 0) {
+          toast(`Found ${result.diagnostic_info.warnings.length} structural issues. Check the table for details.`, { 
+            id: 'improve-extraction-warnings',
+            duration: 5000 
+          })
+        }
+      } else {
+        throw new Error(result.error || 'Improvement failed')
+      }
+    } catch (error) {
+      console.error('Error improving extraction:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      toast.error(`Failed to improve extraction: ${errorMessage}`, { id: 'improve-extraction' })
+    } finally {
+      setIsImprovingExtraction(false)
     }
   }
 
@@ -477,6 +531,8 @@ export default function UploadPage() {
         currentExtractionIndex={currentExtractionIndex}
         isUsingAnotherExtraction={isUsingAnotherExtraction}
         hasUsedAnotherExtraction={hasUsedAnotherExtraction}
+        onImproveExtraction={handleImproveExtraction}
+        isImprovingExtraction={isImprovingExtraction}
       />
     )
   }
