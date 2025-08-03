@@ -54,16 +54,8 @@ COPY server/ .
 # Make the startup script executable
 RUN chmod +x start.sh
 
-# Create a non-root user for security
-RUN useradd --create-home --shell /bin/bash app && \
-    chown -R app:app /app
-
-# Give app user permission to read secrets directory
-# Render mounts secrets with specific permissions, so we need to ensure our user can read them
-RUN mkdir -p /etc/secrets && \
-    chmod 755 /etc/secrets
-
-# Don't switch to app user yet - we need root to copy the secrets file
+# Run as root to access Render secrets directory
+# Render mounts secrets with root-only permissions
 
 # Expose port 8000
 EXPOSE 8000
@@ -72,5 +64,5 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-# Command to run the startup script which handles credentials and starts the app
+# Command to run the startup script which checks credentials and starts the app
 CMD ["./start.sh"] 

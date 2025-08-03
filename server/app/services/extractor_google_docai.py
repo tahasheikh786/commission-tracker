@@ -203,10 +203,10 @@ class GoogleDocAIExtractor:
             if not os.getenv("GOOGLE_APPLICATION_CREDENTIALS"):
                 # Look for the credentials file in multiple possible locations
                 possible_paths = [
-                    # Docker container path (production - copied by startup script from /etc/secrets/)
-                    "/app/pdf-tables-extractor-465009-d9172fd0045d.json",
-                    # Render secrets directory (production - fallback)
+                    # Render secrets directory (production - root access)
                     "/etc/secrets/pdf-tables-extractor-465009-d9172fd0045d.json",
+                    # Docker container path (production - fallback)
+                    "/app/pdf-tables-extractor-465009-d9172fd0045d.json",
                     # Local development path (your server directory)
                     os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "pdf-tables-extractor-465009-d9172fd0045d.json"),
                     # Current working directory
