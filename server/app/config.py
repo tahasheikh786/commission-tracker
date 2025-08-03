@@ -12,8 +12,6 @@ engine = create_async_engine(
     connect_args={
         "statement_cache_size": 0,
         # Supabase timeout settings for long-running operations
-        "command_timeout": 600,  # 10 minutes for commands
-        "connect_timeout": 60,   # 1 minute for connection
         "server_settings": {
             "statement_timeout": "600000",  # 10 minutes in milliseconds
             "idle_in_transaction_session_timeout": "600000",  # 10 minutes
