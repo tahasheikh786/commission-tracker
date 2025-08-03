@@ -37,16 +37,16 @@ async def extract_tables(
     if not file.filename.lower().endswith('.pdf'):
         raise HTTPException(status_code=400, detail="Only PDF files are supported")
     
-    # Check file size (limit to 50MB for performance)
+    # Check file size (limit to 100MB for larger documents)
     file_size = 0
     file_content = b""
     while chunk := await file.read(8192):
         file_content += chunk
         file_size += len(chunk)
-        if file_size > 50 * 1024 * 1024:  # 50MB limit
+        if file_size > 100 * 1024 * 1024:  # 100MB limit
             raise HTTPException(
                 status_code=413, 
-                detail="File too large. Maximum size is 50MB. Please compress your PDF or split it into smaller files."
+                detail="File too large. Maximum size is 100MB. Please compress your PDF or split it into smaller files."
             )
     
     file_path = os.path.join(UPLOAD_DIR, file.filename)
@@ -72,17 +72,9 @@ async def extract_tables(
         # Extract tables with new pipeline (simple backend-like flow)
         logger.info("Starting advanced table extraction with Docling...")
         
-        # Add timeout protection for extraction (90 seconds)
-        try:
-            extraction_result = await asyncio.wait_for(
-                asyncio.to_thread(extraction_pipeline.extract_tables, file_path),
-                timeout=90.0
-            )
-        except asyncio.TimeoutError:
-            raise HTTPException(
-                status_code=408,
-                detail="Extraction timed out after 90 seconds. Please try with a smaller PDF or contact support."
-            )
+        # Extract tables without timeout - let it take as long as needed
+        # The single extractor approach should still provide good performance
+        extraction_result = await asyncio.to_thread(extraction_pipeline.extract_tables, file_path)
         
         if not extraction_result.get("success"):
             raise HTTPException(

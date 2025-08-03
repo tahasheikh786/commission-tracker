@@ -113,22 +113,9 @@ class TableExtractionPipeline:
                         "status": "attempting"
                     }
                     
-                    # Add timeout protection for extractors
-                    import signal
-                    
-                    def timeout_handler(signum, frame):
-                        raise TimeoutError(f"{extractor.name} extraction timed out after 60 seconds")
-                    
-                    # Set timeout for extraction (60 seconds)
-                    signal.signal(signal.SIGALRM, timeout_handler)
-                    signal.alarm(60)
-                    
-                    try:
-                        tables = extractor.extract_tables(pdf_path)
-                        signal.alarm(0)  # Cancel timeout
-                    except TimeoutError:
-                        signal.alarm(0)  # Cancel timeout
-                        raise
+                    # Extract tables without aggressive timeout
+                    # Let the extractor take as long as needed for accurate results
+                    tables = extractor.extract_tables(pdf_path)
                     
                     if tables:
                         print(f"✅ {extractor.name}: Successfully extracted {len(tables)} tables")

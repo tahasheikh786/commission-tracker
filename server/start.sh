@@ -8,4 +8,5 @@ else
 fi
 
 # Start the FastAPI application as root (to access secrets)
-exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1 
+# Increased timeout for long-running extractions (30 minutes)
+exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1 --timeout-keep-alive 1800 
