@@ -10,6 +10,7 @@ from datetime import datetime
 from uuid import uuid4
 from app.services.s3_utils import upload_file_to_s3, get_s3_file_url
 import logging
+import asyncio
 
 router = APIRouter(tags=["extract"])
 logger = logging.getLogger(__name__)
@@ -36,12 +37,24 @@ async def extract_tables(
     if not file.filename.lower().endswith('.pdf'):
         raise HTTPException(status_code=400, detail="Only PDF files are supported")
     
+    # Check file size (limit to 50MB for performance)
+    file_size = 0
+    file_content = b""
+    while chunk := await file.read(8192):
+        file_content += chunk
+        file_size += len(chunk)
+        if file_size > 50 * 1024 * 1024:  # 50MB limit
+            raise HTTPException(
+                status_code=413, 
+                detail="File too large. Maximum size is 50MB. Please compress your PDF or split it into smaller files."
+            )
+    
     file_path = os.path.join(UPLOAD_DIR, file.filename)
     
     try:
         # Save uploaded file
         with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+            buffer.write(file_content)
 
         # Get company info
         company = await crud.get_company_by_id(db, company_id)
@@ -58,7 +71,18 @@ async def extract_tables(
 
         # Extract tables with new pipeline (simple backend-like flow)
         logger.info("Starting advanced table extraction with Docling...")
-        extraction_result = extraction_pipeline.extract_tables(file_path)
+        
+        # Add timeout protection for extraction (90 seconds)
+        try:
+            extraction_result = await asyncio.wait_for(
+                asyncio.to_thread(extraction_pipeline.extract_tables, file_path),
+                timeout=90.0
+            )
+        except asyncio.TimeoutError:
+            raise HTTPException(
+                status_code=408,
+                detail="Extraction timed out after 90 seconds. Please try with a smaller PDF or contact support."
+            )
         
         if not extraction_result.get("success"):
             raise HTTPException(

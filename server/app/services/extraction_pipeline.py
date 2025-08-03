@@ -100,7 +100,7 @@ class TableExtractionPipeline:
             extraction_errors = []
             successful_extractors = []
             
-            # Try extractors in optimal order
+            # Try extractors in optimal order with timeout protection
             for extractor in extractor_order:
                 try:
                     print(f"\n🔧 Trying {extractor.name} extractor...")
@@ -113,7 +113,22 @@ class TableExtractionPipeline:
                         "status": "attempting"
                     }
                     
-                    tables = extractor.extract_tables(pdf_path)
+                    # Add timeout protection for extractors
+                    import signal
+                    
+                    def timeout_handler(signum, frame):
+                        raise TimeoutError(f"{extractor.name} extraction timed out after 60 seconds")
+                    
+                    # Set timeout for extraction (60 seconds)
+                    signal.signal(signal.SIGALRM, timeout_handler)
+                    signal.alarm(60)
+                    
+                    try:
+                        tables = extractor.extract_tables(pdf_path)
+                        signal.alarm(0)  # Cancel timeout
+                    except TimeoutError:
+                        signal.alarm(0)  # Cancel timeout
+                        raise
                     
                     if tables:
                         print(f"✅ {extractor.name}: Successfully extracted {len(tables)} tables")
@@ -127,10 +142,9 @@ class TableExtractionPipeline:
                             "tables": [{"index": t.get("table_index", i), "rows": len(t.get("rows", [])), "cols": len(t.get("headers", []))} for i, t in enumerate(tables)]
                         })
                         
-                        # For docling, we can stop after successful extraction
-                        if extractor.name == "docling" and len(tables) > 0:
-                            print(f"🎯 {extractor.name}: Successfully extracted tables, stopping extraction")
-                            break
+                        # Stop after first successful extraction to save resources
+                        print(f"🎯 {extractor.name}: Successfully extracted tables, stopping extraction")
+                        break
                     else:
                         print(f"⚠️ {extractor.name}: No tables found")
                         extraction_attempt.update({
@@ -223,12 +237,14 @@ class TableExtractionPipeline:
         Returns:
             List of extractors in optimal order
         """
+        # For production environments, use only one extractor to save resources
+        # This prevents the 502 timeout issues
         if pdf_type == "scanned":
-            # For scanned PDFs, prioritize Google Document AI for better OCR and borderless table detection
-            return self._sort_extractors_by_preference(["google_docai", "docling"])
+            # For scanned PDFs, use Google Document AI for better OCR
+            return self._sort_extractors_by_preference(["google_docai"])
         else:
-            # For digital PDFs, prioritize Docling for better structure understanding
-            return self._sort_extractors_by_preference(["docling", "google_docai"])
+            # For digital PDFs, use Docling for better structure understanding
+            return self._sort_extractors_by_preference(["docling"])
     
     def _sort_extractors_by_preference(self, preferred_order: List[str]) -> List:
         """
