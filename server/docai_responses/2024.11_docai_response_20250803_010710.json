@@ -1,0 +1,1075 @@
+{
+  "document": {
+    "mime_type": "application/pdf",
+    "text": "BenefitMall\nA CRC GROUP COMPANY\n12404 Park Central Drive,\nInnovative Benefits partners and solutions\nDallas, TX, USA, 75252\ngabe.edery@innovativebps.com\n(469) 961-9388\nSuite 400S Dallas, Texas 75251\nFrom\nTo\n11/01/2024 | 12/01/2024\nAgent/Agency\nPremium Check\nCommission BenefitMall\nClient Account\nPolicy# LOC\nCarrier\nDate Paid\nPremium\nname\nMonth\nNumber\nAmount Division\nBlue Leaf Logistics\nInnovative Benefits\n2652556 Medical AmeriHealth October\npartners and solutions\n11/15/24\n$0.00\n$100.00\nGA\nInnovative Benefits\nDND Delivery LLC\n015057 Medical AmeriHealth October\n11/15/24\n$0.00\n$400.00\nGA\npartners and solutions\nBlue Leaf Logistics\nInnovative Benefits\n2652556 Medical AmeriHealth October\npartners and solutions\n11/15/24\n$0.00\n$50.00\nGA\nGrand Total\n$550.00\nNote: For questions related to your commissions with BenefitMall, please submit a case for customer support in Agency Workspace.\nPage 1 of 1\n",
+    "pages": [
+      {
+        "page_number": 1,
+        "tables": [
+          {
+            "header_rows": 1,
+            "body_rows": 4,
+            "confidence": 0.0
+          },
+          {
+            "header_rows": 1,
+            "body_rows": 1,
+            "confidence": 0.0
+          }
+        ],
+        "form_fields": [
+          {
+            "field_name": "",
+            "field_value": "",
+            "confidence": 0.0
+          },
+          {
+            "field_name": "",
+            "field_value": "",
+            "confidence": 0.0
+          }
+        ],
+        "text_blocks": [
+          {
+            "text": "BenefitMall",
+            "confidence": 0.946013867855072,
+            "bounding_box": {
+              "vertices": [
+                {
+                  "x": 1722,
+                  "y": 151
+                },
+                {
+                  "x": 2235,
+                  "y": 153
+                },
+                {
+                  "x": 2235,
+                  "y": 200
+                },
+                {
+                  "x": 1722,
+                  "y": 198
+                }
+              ]
+            }
+          },
+          {
+            "text": "A CRC GROUP COMPANY",
+            "confidence": 0.9409456253051758,
+            "bounding_box": {
+              "vertices": [
+                {
+                  "x": 1723,
+                  "y": 215
+                },
+                {
+                  "x": 2238,
+                  "y": 216
+                },
+                {
+                  "x": 2238,
+                  "y": 233
+                },
+                {
+                  "x": 1723,
+                  "y": 232
+                }
+              ]
+            }
+          },
+          {
+            "text": "12404 Park Central Drive,",
+            "confidence": 0.9815544486045837,
+            "bounding_box": {
+              "vertices": [
+                {
+                  "x": 1905,
+                  "y": 279
+                },
+                {
+                  "x": 2244,
+                  "y": 279
+                },
+                {
+                  "x": 2244,
+                  "y": 302
+                },
+                {
+                  "x": 1905,
+                  "y": 302
+                }
+              ]
+            }
+          },
+          {
+            "text": "Innovative Benefits partners and solutions\nDallas, TX, USA, 75252\ngabe.edery@innovativebps.com\n(469) 961-9388",
+            "confidence": 0.9822713136672974,
+            "bounding_box": {
+              "vertices": [
+                {
+                  "x": 124,
+                  "y": 258
+                },
+                {
+                  "x": 675,
+                  "y": 255
+                },
+                {
+                  "x": 676,
+                  "y": 406
+                },
+                {
+                  "x": 125,
+                  "y": 409
+                }
+              ]
+            }
+          },
+          {
+            "text": "Suite 400S Dallas, Texas 75251",
+            "confidence": 0.9799248576164246,
+            "bounding_box": {
+              "vertices": [
+                {
+                  "x": 1820,
+                  "y": 319
+                },
+                {
+                  "x": 2240,
+                  "y": 319
+                },
+                {
+                  "x": 2240,
+                  "y": 344
+                },
+                {
+                  "x": 1820,
+                  "y": 344
+                }
+              ]
+            }
+          },
+          {
+            "text": "From",
+            "confidence": 0.9512354135513306,
+            "bounding_box": {
+              "vertices": [
+                {
+                  "x": 1923,
+                  "y": 446
+                },
+                {
+                  "x": 1990,
+                  "y": 445
+                },
+                {
+                  "x": 1990,
+                  "y": 468
+                },
+                {
+                  "x": 1923,
+                  "y": 469
+                }
+              ]
+            }
+          },
+          {
+            "text": "To",
+            "confidence": 0.8023338317871094,
+            "bounding_box": {
+              "vertices": [
+                {
+                  "x": 2092,
+                  "y": 447
+                },
+                {
+                  "x": 2129,
+                  "y": 447
+                },
+                {
+                  "x": 2129,
+                  "y": 469
+                },
+                {
+                  "x": 2092,
+                  "y": 469
+                }
+              ]
+            }
+          },
+          {
+            "text": "11/01/2024 | 12/01/2024",
+            "confidence": 0.9575093388557434,
+            "bounding_box": {
+              "vertices": [
+                {
+                  "x": 1924,
+                  "y": 512
+                },
+                {
+                  "x": 2238,
+                  "y": 512
+                },
+                {
+                  "x": 2238,
+                  "y": 533
+                },
+                {
+                  "x": 1924,
+                  "y": 533
+                }
+              ]
+            }
+          },
+          {
+            "text": "Agent/Agency",
+            "confidence": 0.9826220273971558,
+            "bounding_box": {
+              "vertices": [
+                {
+                  "x": 395,
+                  "y": 610
+                },
+                {
+                  "x": 620,
+                  "y": 612
+                },
+                {
+                  "x": 620,
+                  "y": 644
+                },
+                {
+                  "x": 395,
+                  "y": 642
+                }
+              ]
+            }
+          },
+          {
+            "text": "Premium Check",
+            "confidence": 0.9794358611106873,
+            "bounding_box": {
+              "vertices": [
+                {
+                  "x": 1142,
+                  "y": 611
+                },
+                {
+                  "x": 1393,
+                  "y": 611
+                },
+                {
+                  "x": 1393,
+                  "y": 639
+                },
+                {
+                  "x": 1142,
+                  "y": 639
+                }
+              ]
+            }
+          },
+          {
+            "text": "Commission BenefitMall",
+            "confidence": 0.9863251447677612,
+            "bounding_box": {
+              "vertices": [
+                {
+                  "x": 1858,
+                  "y": 611
+                },
+                {
+                  "x": 2238,
+                  "y": 611
+                },
+                {
+                  "x": 2238,
+                  "y": 639
+                },
+                {
+                  "x": 1858,
+                  "y": 639
+                }
+              ]
+            }
+          },
+          {
+            "text": "Client Account",
+            "confidence": 0.9902771711349487,
+            "bounding_box": {
+              "vertices": [
+                {
+                  "x": 106,
+                  "y": 637
+                },
+                {
+                  "x": 341,
+                  "y": 637
+                },
+                {
+                  "x": 341,
+                  "y": 663
+                },
+                {
+                  "x": 106,
+                  "y": 663
+                }
+              ]
+            }
+          },
+          {
+            "text": "Policy# LOC",
+            "confidence": 0.9621994495391846,
+            "bounding_box": {
+              "vertices": [
+                {
+                  "x": 698,
+                  "y": 636
+                },
+                {
+                  "x": 892,
+                  "y": 634
+                },
+                {
+                  "x": 892,
+                  "y": 665
+                },
+                {
+                  "x": 698,
+                  "y": 667
+                }
+              ]
+            }
+          },
+          {
+            "text": "Carrier",
+            "confidence": 0.9658986330032349,
+            "bounding_box": {
+              "vertices": [
+                {
+                  "x": 949,
+                  "y": 637
+                },
+                {
+                  "x": 1060,
+                  "y": 637
+                },
+                {
+                  "x": 1060,
+                  "y": 662
+                },
+                {
+                  "x": 949,
+                  "y": 662
+                }
+              ]
+            }
+          },
+          {
+            "text": "Date Paid",
+            "confidence": 0.948609471321106,
+            "bounding_box": {
+              "vertices": [
+                {
+                  "x": 1480,
+                  "y": 638
+                },
+                {
+                  "x": 1632,
+                  "y": 638
+                },
+                {
+                  "x": 1632,
+                  "y": 662
+                },
+                {
+                  "x": 1480,
+                  "y": 662
+                }
+              ]
+            }
+          },
+          {
+            "text": "Premium",
+            "confidence": 0.9866659641265869,
+            "bounding_box": {
+              "vertices": [
+                {
+                  "x": 1690,
+                  "y": 638
+                },
+                {
+                  "x": 1830,
+                  "y": 638
+                },
+                {
+                  "x": 1830,
+                  "y": 664
+                },
+                {
+                  "x": 1690,
+                  "y": 664
+                }
+              ]
+            }
+          },
+          {
+            "text": "name",
+            "confidence": 0.987284243106842,
+            "bounding_box": {
+              "vertices": [
+                {
+                  "x": 396,
+                  "y": 668
+                },
+                {
+                  "x": 483,
+                  "y": 664
+                },
+                {
+                  "x": 484,
+                  "y": 688
+                },
+                {
+                  "x": 397,
+                  "y": 692
+                }
+              ]
+            }
+          },
+          {
+            "text": "Month",
+            "confidence": 0.9848890900611877,
+            "bounding_box": {
+              "vertices": [
+                {
+                  "x": 1142,
+                  "y": 664
+                },
+                {
+                  "x": 1238,
+                  "y": 664
+                },
+                {
+                  "x": 1238,
+                  "y": 689
+                },
+                {
+                  "x": 1142,
+                  "y": 689
+                }
+              ]
+            }
+          },
+          {
+            "text": "Number",
+            "confidence": 0.987356960773468,
+            "bounding_box": {
+              "vertices": [
+                {
+                  "x": 1290,
+                  "y": 663
+                },
+                {
+                  "x": 1419,
+                  "y": 663
+                },
+                {
+                  "x": 1419,
+                  "y": 689
+                },
+                {
+                  "x": 1290,
+                  "y": 689
+                }
+              ]
+            }
+          },
+          {
+            "text": "Amount Division",
+            "confidence": 0.98859041929245,
+            "bounding_box": {
+              "vertices": [
+                {
+                  "x": 1893,
+                  "y": 663
+                },
+                {
+                  "x": 2185,
+                  "y": 663
+                },
+                {
+                  "x": 2185,
+                  "y": 690
+                },
+                {
+                  "x": 1893,
+                  "y": 690
+                }
+              ]
+            }
+          },
+          {
+            "text": "Blue Leaf Logistics",
+            "confidence": 0.9910763502120972,
+            "bounding_box": {
+              "vertices": [
+                {
+                  "x": 108,
+                  "y": 732
+                },
+                {
+                  "x": 355,
+                  "y": 736
+                },
+                {
+                  "x": 355,
+                  "y": 764
+                },
+                {
+                  "x": 108,
+                  "y": 760
+                }
+              ]
+            }
+          },
+          {
+            "text": "Innovative Benefits\n2652556 Medical AmeriHealth October\npartners and solutions",
+            "confidence": 0.9898591637611389,
+            "bounding_box": {
+              "vertices": [
+                {
+                  "x": 397,
+                  "y": 715
+                },
+                {
+                  "x": 1248,
+                  "y": 711
+                },
+                {
+                  "x": 1248,
+                  "y": 778
+                },
+                {
+                  "x": 397,
+                  "y": 782
+                }
+              ]
+            }
+          },
+          {
+            "text": "11/15/24",
+            "confidence": 0.9895792603492737,
+            "bounding_box": {
+              "vertices": [
+                {
+                  "x": 1481,
+                  "y": 735
+                },
+                {
+                  "x": 1592,
+                  "y": 736
+                },
+                {
+                  "x": 1592,
+                  "y": 758
+                },
+                {
+                  "x": 1481,
+                  "y": 757
+                }
+              ]
+            }
+          },
+          {
+            "text": "$0.00",
+            "confidence": 0.9912607073783875,
+            "bounding_box": {
+              "vertices": [
+                {
+                  "x": 1724,
+                  "y": 736
+                },
+                {
+                  "x": 1798,
+                  "y": 737
+                },
+                {
+                  "x": 1798,
+                  "y": 761
+                },
+                {
+                  "x": 1724,
+                  "y": 760
+                }
+              ]
+            }
+          },
+          {
+            "text": "$100.00",
+            "confidence": 0.9929972290992737,
+            "bounding_box": {
+              "vertices": [
+                {
+                  "x": 1903,
+                  "y": 737
+                },
+                {
+                  "x": 2011,
+                  "y": 737
+                },
+                {
+                  "x": 2011,
+                  "y": 760
+                },
+                {
+                  "x": 1903,
+                  "y": 760
+                }
+              ]
+            }
+          },
+          {
+            "text": "GA",
+            "confidence": 0.9873501658439636,
+            "bounding_box": {
+              "vertices": [
+                {
+                  "x": 2061,
+                  "y": 737
+                },
+                {
+                  "x": 2103,
+                  "y": 738
+                },
+                {
+                  "x": 2103,
+                  "y": 760
+                },
+                {
+                  "x": 2061,
+                  "y": 759
+                }
+              ]
+            }
+          },
+          {
+            "text": "Innovative Benefits",
+            "confidence": 0.9912664294242859,
+            "bounding_box": {
+              "vertices": [
+                {
+                  "x": 397,
+                  "y": 803
+                },
+                {
+                  "x": 646,
+                  "y": 802
+                },
+                {
+                  "x": 646,
+                  "y": 825
+                },
+                {
+                  "x": 397,
+                  "y": 826
+                }
+              ]
+            }
+          },
+          {
+            "text": "DND Delivery LLC",
+            "confidence": 0.9752596616744995,
+            "bounding_box": {
+              "vertices": [
+                {
+                  "x": 107,
+                  "y": 825
+                },
+                {
+                  "x": 347,
+                  "y": 825
+                },
+                {
+                  "x": 347,
+                  "y": 851
+                },
+                {
+                  "x": 107,
+                  "y": 851
+                }
+              ]
+            }
+          },
+          {
+            "text": "015057 Medical AmeriHealth October",
+            "confidence": 0.9877769351005554,
+            "bounding_box": {
+              "vertices": [
+                {
+                  "x": 706,
+                  "y": 824
+                },
+                {
+                  "x": 1247,
+                  "y": 824
+                },
+                {
+                  "x": 1247,
+                  "y": 849
+                },
+                {
+                  "x": 706,
+                  "y": 849
+                }
+              ]
+            }
+          },
+          {
+            "text": "11/15/24",
+            "confidence": 0.9900458455085754,
+            "bounding_box": {
+              "vertices": [
+                {
+                  "x": 1481,
+                  "y": 825
+                },
+                {
+                  "x": 1593,
+                  "y": 825
+                },
+                {
+                  "x": 1593,
+                  "y": 848
+                },
+                {
+                  "x": 1481,
+                  "y": 848
+                }
+              ]
+            }
+          },
+          {
+            "text": "$0.00",
+            "confidence": 0.9944323301315308,
+            "bounding_box": {
+              "vertices": [
+                {
+                  "x": 1724,
+                  "y": 825
+                },
+                {
+                  "x": 1797,
+                  "y": 825
+                },
+                {
+                  "x": 1797,
+                  "y": 848
+                },
+                {
+                  "x": 1724,
+                  "y": 848
+                }
+              ]
+            }
+          },
+          {
+            "text": "$400.00",
+            "confidence": 0.9935137629508972,
+            "bounding_box": {
+              "vertices": [
+                {
+                  "x": 1904,
+                  "y": 825
+                },
+                {
+                  "x": 2010,
+                  "y": 825
+                },
+                {
+                  "x": 2010,
+                  "y": 847
+                },
+                {
+                  "x": 1904,
+                  "y": 847
+                }
+              ]
+            }
+          },
+          {
+            "text": "GA",
+            "confidence": 0.9861196279525757,
+            "bounding_box": {
+              "vertices": [
+                {
+                  "x": 2061,
+                  "y": 825
+                },
+                {
+                  "x": 2102,
+                  "y": 825
+                },
+                {
+                  "x": 2102,
+                  "y": 847
+                },
+                {
+                  "x": 2061,
+                  "y": 847
+                }
+              ]
+            }
+          },
+          {
+            "text": "partners and solutions",
+            "confidence": 0.9903016686439514,
+            "bounding_box": {
+              "vertices": [
+                {
+                  "x": 398,
+                  "y": 846
+                },
+                {
+                  "x": 686,
+                  "y": 842
+                },
+                {
+                  "x": 686,
+                  "y": 868
+                },
+                {
+                  "x": 398,
+                  "y": 872
+                }
+              ]
+            }
+          },
+          {
+            "text": "Blue Leaf Logistics",
+            "confidence": 0.9919700026512146,
+            "bounding_box": {
+              "vertices": [
+                {
+                  "x": 108,
+                  "y": 908
+                },
+                {
+                  "x": 355,
+                  "y": 913
+                },
+                {
+                  "x": 354,
+                  "y": 940
+                },
+                {
+                  "x": 107,
+                  "y": 935
+                }
+              ]
+            }
+          },
+          {
+            "text": "Innovative Benefits\n2652556 Medical AmeriHealth October\npartners and solutions",
+            "confidence": 0.9905834794044495,
+            "bounding_box": {
+              "vertices": [
+                {
+                  "x": 398,
+                  "y": 891
+                },
+                {
+                  "x": 1247,
+                  "y": 889
+                },
+                {
+                  "x": 1247,
+                  "y": 957
+                },
+                {
+                  "x": 398,
+                  "y": 959
+                }
+              ]
+            }
+          },
+          {
+            "text": "11/15/24",
+            "confidence": 0.990960955619812,
+            "bounding_box": {
+              "vertices": [
+                {
+                  "x": 1480,
+                  "y": 912
+                },
+                {
+                  "x": 1591,
+                  "y": 913
+                },
+                {
+                  "x": 1591,
+                  "y": 935
+                },
+                {
+                  "x": 1480,
+                  "y": 934
+                }
+              ]
+            }
+          },
+          {
+            "text": "$0.00",
+            "confidence": 0.9930320978164673,
+            "bounding_box": {
+              "vertices": [
+                {
+                  "x": 1724,
+                  "y": 912
+                },
+                {
+                  "x": 1797,
+                  "y": 913
+                },
+                {
+                  "x": 1797,
+                  "y": 936
+                },
+                {
+                  "x": 1724,
+                  "y": 935
+                }
+              ]
+            }
+          },
+          {
+            "text": "$50.00",
+            "confidence": 0.9930998086929321,
+            "bounding_box": {
+              "vertices": [
+                {
+                  "x": 1912,
+                  "y": 912
+                },
+                {
+                  "x": 2001,
+                  "y": 912
+                },
+                {
+                  "x": 2001,
+                  "y": 935
+                },
+                {
+                  "x": 1912,
+                  "y": 935
+                }
+              ]
+            }
+          },
+          {
+            "text": "GA",
+            "confidence": 0.9875916242599487,
+            "bounding_box": {
+              "vertices": [
+                {
+                  "x": 2061,
+                  "y": 913
+                },
+                {
+                  "x": 2102,
+                  "y": 913
+                },
+                {
+                  "x": 2102,
+                  "y": 934
+                },
+                {
+                  "x": 2061,
+                  "y": 934
+                }
+              ]
+            }
+          },
+          {
+            "text": "Grand Total",
+            "confidence": 0.9836521744728088,
+            "bounding_box": {
+              "vertices": [
+                {
+                  "x": 107,
+                  "y": 981
+                },
+                {
+                  "x": 284,
+                  "y": 981
+                },
+                {
+                  "x": 284,
+                  "y": 1005
+                },
+                {
+                  "x": 107,
+                  "y": 1005
+                }
+              ]
+            }
+          },
+          {
+            "text": "$550.00",
+            "confidence": 0.9909684658050537,
+            "bounding_box": {
+              "vertices": [
+                {
+                  "x": 1879,
+                  "y": 982
+                },
+                {
+                  "x": 1986,
+                  "y": 983
+                },
+                {
+                  "x": 1986,
+                  "y": 1007
+                },
+                {
+                  "x": 1879,
+                  "y": 1006
+                }
+              ]
+            }
+          },
+          {
+            "text": "Note: For questions related to your commissions with BenefitMall, please submit a case for customer support in Agency Workspace.\nPage 1 of 1",
+            "confidence": 0.9847867488861084,
+            "bounding_box": {
+              "vertices": [
+                {
+                  "x": 101,
+                  "y": 1598
+                },
+                {
+                  "x": 1830,
+                  "y": 1575
+                },
+                {
+                  "x": 1831,
+                  "y": 1656
+                },
+                {
+                  "x": 102,
+                  "y": 1679
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "metadata": {
+    "processor_id": "521303e404fb7809",
+    "project_id": "pdf-tables-extractor-465009",
+    "timestamp": "2025-08-03T01:07:10.888089",
+    "original_pdf": "pdfs/2024.11.pdf"
+  }
+}

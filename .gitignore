@@ -18,7 +18,8 @@ server/docling_models/model_artifacts/tableformer/fast/tableformer_fast.safetens
 
 # Google Cloud credentials (sensitive)
 server/pdf-tables-extractor-*.json
-*.json
+# Don't exclude all JSON files, only credentials
+# *.json
 
 # General
 *.log

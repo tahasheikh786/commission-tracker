@@ -51,12 +51,6 @@ RUN python -c "import easyocr; easyocr.Reader(['en'], gpu=False, download_enable
 # Copy the entire server directory
 COPY server/ .
 
-# Ensure credentials file is accessible and set proper permissions
-RUN if [ -f "pdf-tables-extractor-465009-d9172fd0045d.json" ]; then \
-        echo "✅ Credentials file found and copied"; \
-    else \
-        echo "⚠️ Credentials file not found in server directory"; \
-    fi
 
 # Create a non-root user for security
 RUN useradd --create-home --shell /bin/bash app && \
