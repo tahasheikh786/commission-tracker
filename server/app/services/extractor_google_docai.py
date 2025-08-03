@@ -201,14 +201,27 @@ class GoogleDocAIExtractor:
         try:
             # Set up environment variables if not already set
             if not os.getenv("GOOGLE_APPLICATION_CREDENTIALS"):
-                # Look for the credentials file in the server directory
-                server_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-                creds_file = os.path.join(server_dir, "pdf-tables-extractor-465009-d9172fd0045d.json")
-                if os.path.exists(creds_file):
+                # Look for the credentials file in multiple possible locations
+                possible_paths = [
+                    # Docker container path (when server/ is copied to /app)
+                    "/app/pdf-tables-extractor-465009-d9172fd0045d.json",
+                    # Local development path (server directory)
+                    os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "pdf-tables-extractor-465009-d9172fd0045d.json"),
+                    # Current working directory
+                    os.path.join(os.getcwd(), "pdf-tables-extractor-465009-d9172fd0045d.json"),
+                ]
+                
+                creds_file = None
+                for path in possible_paths:
+                    if os.path.exists(path):
+                        creds_file = path
+                        break
+                
+                if creds_file:
                     os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = creds_file
                     print(f"✅ Set GOOGLE_APPLICATION_CREDENTIALS to: {creds_file}")
                 else:
-                    print(f"❌ Credentials file not found at: {creds_file}")
+                    print(f"❌ Credentials file not found. Tried paths: {possible_paths}")
                     return
             
             # Set project ID if not already set
