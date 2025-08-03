@@ -11,7 +11,10 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     # Model cache directories
     EASYOCR_MODULE_PATH=/app/model_cache/easyocr \
-    DOCLING_CACHE_DIR=/app/model_cache/docling
+    DOCLING_CACHE_DIR=/app/model_cache/docling \
+    # OpenAI configuration
+    OPENAI_API_KEY="" \
+    OPENAI_API_BASE="https://api.openai.com/v1"
 
 # Install system dependencies required for OpenCV, EasyOCR, and other packages
 RUN apt-get update && apt-get install -y \
