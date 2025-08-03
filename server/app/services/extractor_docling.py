@@ -31,7 +31,12 @@ class DoclingExtractor:
         Initialize Docling DocumentConverter for table extraction.
         """
         try:
+            # Set environment variables to use cached models
+            os.environ.setdefault('EASYOCR_MODULE_PATH', '/app/model_cache/easyocr')
+            os.environ.setdefault('DOCLING_CACHE_DIR', '/app/model_cache/docling')
+            
             # Initialize the document converter with PDF support
+            # This should use pre-downloaded models from Docker build
             self.converter = document_converter.DocumentConverter()
             print(f"✅ {self.name}: DocumentConverter initialized successfully")
             
