@@ -1390,14 +1390,32 @@ class GoogleDocAIExtractor:
         if not text:
             return ""
         
-        # Remove extra whitespace
-        cleaned = " ".join(text.split())
+        # Remove excessive underscores (common in form fields and OCR artifacts)
+        # Replace multiple consecutive underscores with a single space
+        import re
+        cleaned = re.sub(r'_+', ' ', text)
+        
+        # Remove excessive dashes (common in form fields)
+        cleaned = re.sub(r'-+', ' ', cleaned)
+        
+        # Remove excessive dots/periods
+        cleaned = re.sub(r'\.+', '.', cleaned)
+        
+        # Remove excessive spaces
+        cleaned = re.sub(r'\s+', ' ', cleaned)
         
         # Remove common OCR artifacts
         cleaned = cleaned.replace("|", "I")  # Common OCR mistake
         cleaned = cleaned.replace("0", "O")  # Common OCR mistake in certain contexts
         
-        return cleaned.strip()
+        # Remove leading/trailing whitespace
+        cleaned = cleaned.strip()
+        
+        # If the result is just whitespace or empty, return empty string
+        if not cleaned or cleaned.isspace():
+            return ""
+        
+        return cleaned
     
     def _remove_empty_cells(self, headers: List[str], rows: List[List[str]]) -> Tuple[List[str], List[List[str]]]:
         """

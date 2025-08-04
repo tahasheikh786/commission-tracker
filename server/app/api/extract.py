@@ -241,6 +241,107 @@ async def extract_tables_docai(
             os.remove(file_path)
         raise HTTPException(status_code=500, detail=f"DOCAI extraction failed: {str(e)}")
 
+@router.post("/extract-tables-docling/")
+async def extract_tables_docling(
+    file: UploadFile = File(...),
+    company_id: str = Form(...),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Force Docling extraction for when user wants to try a different extraction method
+    """
+    start_time = datetime.now()
+    logger.info(f"Starting Docling extraction for {file.filename}")
+    
+    # Validate file type
+    if not file.filename.lower().endswith('.pdf'):
+        raise HTTPException(status_code=400, detail="Only PDF files are supported")
+    
+    file_path = os.path.join(UPLOAD_DIR, file.filename)
+    
+    try:
+        # Save uploaded file
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
+        # Get company info
+        company = await crud.get_company_by_id(db, company_id)
+        if not company:
+            os.remove(file_path)
+            raise HTTPException(status_code=404, detail="Company not found")
+
+        # Upload to S3
+        s3_key = f"statements/{company_id}/{file.filename}"
+        uploaded = upload_file_to_s3(file_path, s3_key)
+        if not uploaded:
+            raise HTTPException(status_code=500, detail="Failed to upload file to S3.")
+        s3_url = get_s3_file_url(s3_key)
+
+        # Force Docling extraction
+        logger.info("Starting Docling table extraction...")
+        extraction_result = extraction_pipeline.extract_tables(file_path, force_extractor="docling")
+        
+        if not extraction_result.get("success"):
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Docling extraction failed: {extraction_result.get('error', 'Unknown error')}"
+            )
+        
+        # Transform response to client format
+        client_response = transform_pipeline_response_to_client_format(extraction_result, file.filename)
+        
+        # Add extraction timing and metadata
+        extraction_time = (datetime.now() - start_time).total_seconds()
+        client_response["extraction_time_seconds"] = extraction_time
+        
+        # Add detailed extraction log if available
+        if "extraction_log" in extraction_result:
+            client_response["extraction_log"] = extraction_result["extraction_log"]
+        
+        # Add pipeline metadata
+        if "metadata" in extraction_result:
+            client_response["pipeline_metadata"] = extraction_result["metadata"]
+        
+        # Create statement upload record for database
+        upload_id = uuid4()
+        db_upload = schemas.StatementUpload(
+            id=upload_id,
+            company_id=company_id,
+            file_name=s3_key,  # Use S3 key as file_name
+            uploaded_at=datetime.utcnow(),
+            status="extracted",  # Initial status
+            raw_data=extraction_result.get("tables", []),  # Store tables as raw_data
+            mapping_used=None
+        )
+        
+        await crud.save_statement_upload(db, db_upload)
+        
+        # Clean up local file
+        os.remove(file_path)
+        
+        # Add server-specific fields to response
+        client_response.update({
+            "success": True,
+            "extraction_id": str(upload_id),
+            "upload_id": str(upload_id),  # Frontend expects upload_id
+            "s3_url": s3_url,
+            "s3_key": s3_key  # Add S3 key for PDF URL construction
+        })
+        
+        return client_response
+        
+    except HTTPException:
+        # Clean up file on error
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        raise
+    except Exception as e:
+        logger.error(f"Docling extraction error: {str(e)}")
+        # Clean up file on error
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        raise HTTPException(status_code=500, detail=f"Docling extraction failed: {str(e)}")
+
 @router.get("/extractors/status")
 async def get_extractor_status():
     """

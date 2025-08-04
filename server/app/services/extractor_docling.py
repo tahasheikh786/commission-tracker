@@ -220,35 +220,35 @@ class DoclingExtractor:
             # Try different header extraction methods in order of preference
             if hasattr(table, 'headers') and table.headers:
                 # Single row headers
-                headers = [str(h).strip() for h in table.headers if h]
+                headers = [self._clean_text(str(h).strip()) for h in table.headers if h]
             elif hasattr(table, 'header_rows') and table.header_rows:
                 # Multi-row headers - flatten them
                 headers = self._process_multi_row_headers(table.header_rows)
             elif hasattr(table, 'columns') and table.columns:
                 # Extract from column definitions
-                headers = [str(col.get('header', f'Column_{i+1}')).strip() 
+                headers = [self._clean_text(str(col.get('header', f'Column_{i+1}')).strip()) 
                           for i, col in enumerate(table.columns)]
             elif hasattr(table, 'data') and table.data:
                 # Try to get headers from data structure
                 try:
                     if hasattr(table.data, 'columns'):
-                        headers = [str(col).strip() for col in table.data.columns]
+                        headers = [self._clean_text(str(col).strip()) for col in table.data.columns]
                     elif hasattr(table.data, 'headers'):
-                        headers = [str(h).strip() for h in table.data.headers]
+                        headers = [self._clean_text(str(h).strip()) for h in table.data.headers]
                 except Exception as e:
                     print(f"⚠️ {self.name}: Error accessing data headers: {e}")
             else:
                 # Fallback: try to extract from first row
                 if hasattr(table, 'rows') and table.rows:
                     first_row = table.rows[0]
-                    headers = [str(cell).strip() for cell in first_row if cell]
+                    headers = [self._clean_text(str(cell).strip()) for cell in first_row if cell]
             
             # Try to export to dataframe and get column names
             if not headers and hasattr(table, 'export_to_dataframe'):
                 try:
                     df = table.export_to_dataframe()
                     if df is not None and not df.empty:
-                        headers = [str(col).strip() for col in df.columns]
+                        headers = [self._clean_text(str(col).strip()) for col in df.columns]
                 except Exception as e:
                     print(f"⚠️ {self.name}: Error getting headers from dataframe: {e}")
             
@@ -288,7 +288,9 @@ class DoclingExtractor:
             columns = list(zip_longest(*processed, fillvalue=""))
             
             # Join each column's header parts with space, filtering out empty elements
-            return [" ".join(filter(None, col)).strip() for col in columns]
+            headers = [" ".join(filter(None, col)).strip() for col in columns]
+            # Clean each header
+            return [self._clean_text(header) for header in headers]
             
         except Exception as e:
             print(f"❌ {self.name}: Error processing multi-row headers: {e}")
@@ -454,6 +456,33 @@ class DoclingExtractor:
             print(f"⚠️ {self.name}: Error parsing raw table text: {e}")
             return []
     
+    def _clean_text(self, text: str) -> str:
+        """Clean and normalize text by removing excessive formatting."""
+        if not text:
+            return ""
+        
+        # Remove excessive underscores (common in form fields and OCR artifacts)
+        import re
+        cleaned = re.sub(r'_+', ' ', text)
+        
+        # Remove excessive dashes (common in form fields)
+        cleaned = re.sub(r'-+', ' ', cleaned)
+        
+        # Remove excessive dots/periods
+        cleaned = re.sub(r'\.+', '.', cleaned)
+        
+        # Remove excessive spaces
+        cleaned = re.sub(r'\s+', ' ', cleaned)
+        
+        # Remove leading/trailing whitespace
+        cleaned = cleaned.strip()
+        
+        # If the result is just whitespace or empty, return empty string
+        if not cleaned or cleaned.isspace():
+            return ""
+        
+        return cleaned
+
     def _flatten_row_data(self, row) -> List[str]:
         """
         Flatten row data to ensure all cells are strings.
@@ -474,11 +503,15 @@ class DoclingExtractor:
                         cell_str = " ".join(str(item).strip() for item in cell if item)
                     else:
                         cell_str = str(cell).strip() if cell else ""
+                    # Clean the cell text
+                    cell_str = self._clean_text(cell_str)
                     flattened_cells.append(cell_str)
                 return flattened_cells
             else:
                 # Single value row
-                return [str(row).strip() if row else ""]
+                cell_str = str(row).strip() if row else ""
+                cell_str = self._clean_text(cell_str)
+                return [cell_str]
                 
         except Exception as e:
             print(f"❌ {self.name}: Error flattening row data: {e}")

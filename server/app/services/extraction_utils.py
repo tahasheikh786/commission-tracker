@@ -531,7 +531,8 @@ def validate_table_structure(table: Dict[str, Any]) -> Dict[str, Any]:
         normalized_headers = []
         for i, header in enumerate(headers):
             if header and str(header).strip():
-                normalized_headers.append(str(header).strip())
+                cleaned_header = _clean_text(str(header).strip())
+                normalized_headers.append(cleaned_header)
             else:
                 # Generate meaningful header based on data
                 meaningful_header = _generate_header_from_data(rows, i) if rows else f"Column_{i+1}"
@@ -546,12 +547,12 @@ def validate_table_structure(table: Dict[str, Any]) -> Dict[str, Any]:
         normalized_rows = []
         for i, row in enumerate(rows):
             if isinstance(row, (list, tuple)):
-                # Preserve all cells, normalize to strings
-                normalized_row = [str(cell).strip() if cell else "" for cell in row]
+                # Preserve all cells, normalize to strings and clean them
+                normalized_row = [_clean_text(str(cell).strip()) if cell else "" for cell in row]
                 normalized_rows.append(normalized_row)
             else:
                 # Single value row - preserve as single column
-                normalized_rows.append([str(row).strip() if row else ""])
+                normalized_rows.append([_clean_text(str(row).strip()) if row else ""])
                 validation_result["warnings"].append(f"Row {i} converted to single column")
         
         table["rows"] = normalized_rows
@@ -621,6 +622,41 @@ def validate_table_structure(table: Dict[str, Any]) -> Dict[str, Any]:
     # Update validation result
     table["validation"] = validation_result
     return table
+
+def _clean_text(text: str) -> str:
+    """
+    Clean and normalize text by removing excessive formatting and artifacts.
+    
+    Args:
+        text: Raw text to clean
+        
+    Returns:
+        Cleaned text
+    """
+    if not text:
+        return ""
+    
+    # Remove excessive underscores (common in form fields and OCR artifacts)
+    import re
+    cleaned = re.sub(r'_+', ' ', text)
+    
+    # Remove excessive dashes (common in form fields)
+    cleaned = re.sub(r'-+', ' ', cleaned)
+    
+    # Remove excessive dots/periods
+    cleaned = re.sub(r'\.+', '.', cleaned)
+    
+    # Remove excessive spaces
+    cleaned = re.sub(r'\s+', ' ', cleaned)
+    
+    # Remove leading/trailing whitespace
+    cleaned = cleaned.strip()
+    
+    # If the result is just whitespace or empty, return empty string
+    if not cleaned or cleaned.isspace():
+        return ""
+    
+    return cleaned
 
 def _generate_header_from_data(rows: List[List[str]], column_index: int) -> str:
     """

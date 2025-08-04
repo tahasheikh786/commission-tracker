@@ -568,6 +568,13 @@ Be precise and only report what you can clearly see in the images."""
         """
         improved_rows = []
         
+        # Create a mapping from header names to column analysis
+        column_mapping = {}
+        for col_analysis in column_analysis:
+            header_text = col_analysis.get("header_text", "")
+            if header_text in new_headers:
+                column_mapping[header_text] = col_analysis
+        
         for row in original_rows:
             if not row or len(row) == 0:
                 continue
@@ -575,16 +582,21 @@ Be precise and only report what you can clearly see in the images."""
             # If we have a single cell with combined data, parse it intelligently
             if len(row) == 1 and isinstance(row[0], str):
                 combined_data = row[0]
-                parsed_row = self._parse_combined_data_intelligently(combined_data, new_headers, column_analysis)
+                parsed_row = self._parse_combined_data_with_gpt_analysis(combined_data, new_headers, column_mapping)
                 if parsed_row:
                     improved_rows.append(parsed_row)
                 else:
                     # Fallback: create row with empty values
                     improved_rows.append([""] * len(new_headers))
             else:
-                # Multiple cells - try to align with new headers
-                aligned_row = self._align_row_with_headers(row, new_headers)
-                improved_rows.append(aligned_row)
+                # Multiple cells - need to parse each cell that might contain combined data
+                parsed_row = self._parse_multi_cell_row_with_gpt_analysis(row, new_headers, column_mapping)
+                if parsed_row:
+                    improved_rows.append(parsed_row)
+                else:
+                    # Fallback: try to align with new headers
+                    aligned_row = self._align_row_with_headers(row, new_headers)
+                    improved_rows.append(aligned_row)
         
         return improved_rows
     
@@ -610,44 +622,18 @@ Be precise and only report what you can clearly see in the images."""
             # Split the combined data by spaces
             parts = combined_data.split()
             
-            # Create a mapping of header types to indices
-            header_mapping = {}
-            for i, header in enumerate(headers):
-                header_lower = header.lower()
-                
-                # Account number patterns
-                if any(word in header_lower for word in ['account', 'number']):
-                    header_mapping['account_number'] = i
-                
-                # Policy/Company name patterns
-                if any(word in header_lower for word in ['policy', 'name', 'explanation', 'company']):
-                    header_mapping['policy_name'] = i
-                
-                # Product patterns
-                if any(word in header_lower for word in ['product', 'type']):
-                    header_mapping['product'] = i
-                
-                # Date patterns
-                if any(word in header_lower for word in ['date', 'due']):
-                    header_mapping['date'] = i
-                
-                # Amount/Rate patterns
-                if any(word in header_lower for word in ['amount', 'rate', 'premium', 'compensation']):
-                    header_mapping['amount'] = i
-                
-                # Premium patterns
-                if 'premium' in header_lower:
-                    header_mapping['premium'] = i
+            # Create a mapping of header indices
+            header_indices = {header: i for i, header in enumerate(headers)}
             
-            # Parse parts based on patterns
+            # Parse based on GPT's column analysis
             current_part = 0
             
             # Look for account number pattern (e.g., "1130414-10001")
             if current_part < len(parts):
                 part = parts[current_part]
                 if re.match(r'\d{7}-\d{5}', part):  # Account number pattern
-                    if 'account_number' in header_mapping:
-                        result[header_mapping['account_number']] = part
+                    if 'account_number' in header_indices:
+                        result[header_indices['account_number']] = part
                     current_part += 1
             
             # Look for company name (multiple words, all caps)
@@ -660,15 +646,15 @@ Be precise and only report what you can clearly see in the images."""
                 else:
                     break
             
-            if company_words and 'policy_name' in header_mapping:
-                result[header_mapping['policy_name']] = ' '.join(company_words)
+            if company_words and 'policy_name' in header_indices:
+                result[header_indices['policy_name']] = ' '.join(company_words)
             
             # Look for product code (e.g., "ONAPG")
             if current_part < len(parts):
                 part = parts[current_part]
                 if part.isupper() and len(part) >= 4 and len(part) <= 6:
-                    if 'product' in header_mapping:
-                        result[header_mapping['product']] = part
+                    if 'product' in header_indices:
+                        result[header_indices['product']] = part
                     current_part += 1
             
             # Look for date pattern (e.g., "O7 O1 2O25")
@@ -681,34 +667,309 @@ Be precise and only report what you can clearly see in the images."""
                 else:
                     break
             
-            if date_words and 'date' in header_mapping:
-                result[header_mapping['date']] = ' '.join(date_words)
+            if date_words and 'date' in header_indices:
+                result[header_indices['date']] = ' '.join(date_words)
             
             # Look for product type (e.g., "VISION", "DENTAL")
             if current_part < len(parts):
                 part = parts[current_part]
                 if part.isupper() and len(part) >= 4 and len(part) <= 8:
-                    if 'product' in header_mapping:
+                    if 'product' in header_indices:
                         # Append to existing product if any
-                        existing_product = result[header_mapping['product']]
+                        existing_product = result[header_indices['product']]
                         if existing_product:
-                            result[header_mapping['product']] = f"{existing_product} {part}"
+                            result[header_indices['product']] = f"{existing_product} {part}"
                         else:
-                            result[header_mapping['product']] = part
+                            result[header_indices['product']] = part
                     current_part += 1
             
             # Look for amount/rate (decimal number)
             if current_part < len(parts):
                 part = parts[current_part]
                 if re.match(r'\d+\.\d+', part):  # Decimal number
-                    if 'amount' in header_mapping:
-                        result[header_mapping['amount']] = part
+                    if 'amount' in header_indices:
+                        result[header_indices['amount']] = part
                     current_part += 1
             
             return result
             
         except Exception as e:
             logger.error(f"Error parsing combined data '{combined_data}': {e}")
+            return None
+    
+    def _parse_combined_data_with_gpt_analysis(self, 
+                                             combined_data: str, 
+                                             headers: List[str],
+                                             column_mapping: Dict[str, Dict[str, Any]]) -> Optional[List[str]]:
+        """
+        Parse combined data using GPT's column analysis to properly assign values to correct columns.
+        
+        Args:
+            combined_data: String like "Med 12/O1/2O24 $3,742.71 $3,742.71 4 V MI POP 4.17% 1OO% Fee Comm $156.O7 $156.O7"
+            headers: List of column headers
+            column_mapping: Mapping of header names to GPT column analysis
+            
+        Returns:
+            Parsed row with values assigned to correct columns, or None if parsing fails
+        """
+        try:
+            # Initialize result array with empty strings
+            result = [""] * len(headers)
+            
+            # Split the combined data by spaces
+            parts = combined_data.split()
+            
+            # Create a mapping of header indices
+            header_indices = {header: i for i, header in enumerate(headers)}
+            
+            # Parse based on GPT's column analysis
+            current_part = 0
+            
+            # Process each part and assign to the appropriate column based on GPT analysis
+            while current_part < len(parts):
+                part = parts[current_part]
+                
+                # Try to match this part to the most appropriate column based on GPT analysis
+                best_match = None
+                best_score = 0
+                
+                for header, col_analysis in column_mapping.items():
+                    if header not in header_indices:
+                        continue
+                    
+                    data_type = col_analysis.get("data_type", "")
+                    sample_values = col_analysis.get("sample_values", [])
+                    
+                    # Score based on data type and sample values
+                    score = 0
+                    
+                    # Check if part matches the data type
+                    if data_type == "text" and part.isalpha():
+                        score += 10
+                    elif data_type == "date" and re.match(r'\d{1,2}[/-]\d{1,2}[/-]\d{2,4}', part):
+                        score += 20
+                    elif data_type == "currency" and (part.startswith('$') or part.startswith('(')):
+                        score += 20
+                    elif data_type == "percentage" and part.endswith('%'):
+                        score += 20
+                    elif data_type == "number" and re.match(r'^-?\d+\.?\d*$', part):
+                        score += 15
+                    
+                    # Check if part matches any sample values (case-insensitive)
+                    for sample in sample_values:
+                        if part.lower() in sample.lower() or sample.lower() in part.lower():
+                            score += 30
+                            break
+                    
+                    # Special handling for specific headers
+                    if header.lower() == "cov type" and part in ["Med", "Den", "Vis"]:
+                        score += 50
+                    elif header.lower() == "bill eff date" and re.match(r'\d{1,2}[/-]\d{1,2}[/-]\d{2,4}', part):
+                        score += 50
+                    elif header.lower() == "billed premium" and part.startswith('$'):
+                        score += 50
+                    elif header.lower() == "rate" and part.endswith('%'):
+                        score += 50
+                    elif header.lower() == "split %" and part.endswith('%'):
+                        score += 50
+                    elif header.lower() == "bus typ" and part in ["Fee", "Comm"]:
+                        score += 50
+                    elif header.lower() == "comp type" and part == "Comm":
+                        score += 50
+                    
+                    if score > best_score:
+                        best_score = score
+                        best_match = header
+                
+                # Assign the part to the best matching column
+                if best_match and best_score > 0:
+                    col_index = header_indices[best_match]
+                    result[col_index] = part
+                else:
+                    # If no good match, assign to the next available empty column
+                    for i, val in enumerate(result):
+                        if not val:
+                            result[i] = part
+                            break
+                
+                current_part += 1
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error parsing combined data with GPT analysis '{combined_data}': {e}")
+            return None
+    
+    def _parse_multi_cell_row_with_gpt_analysis(self, 
+                                              row: List[str], 
+                                              headers: List[str],
+                                              column_mapping: Dict[str, Dict[str, Any]]) -> Optional[List[str]]:
+        """
+        Parse a multi-cell row that might contain combined data in individual cells.
+        
+        Args:
+            row: List of cell values like ["Med 12/01/2024", "$3,742.71", "$3,742.71 4 V MI", ...]
+            headers: List of column headers
+            column_mapping: Mapping of header names to GPT column analysis
+            
+        Returns:
+            Parsed row with values properly assigned to columns, or None if parsing fails
+        """
+        try:
+            # Initialize result array with empty strings
+            result = [""] * len(headers)
+            
+            # Create a mapping of header indices
+            header_indices = {header: i for i, header in enumerate(headers)}
+            
+            # Process each cell in the row
+            for cell_idx, cell_value in enumerate(row):
+                if not cell_value or cell_value.strip() == "":
+                    continue
+                
+                # Check if this cell contains combined data that needs to be split
+                cell_parts = cell_value.split()
+                
+                # If cell has multiple parts, try to assign each part to the appropriate column
+                if len(cell_parts) > 1:
+                    for part in cell_parts:
+                        # Try to match this part to the most appropriate column based on GPT analysis
+                        best_match = None
+                        best_score = 0
+                        
+                        for header, col_analysis in column_mapping.items():
+                            if header not in header_indices:
+                                continue
+                            
+                            data_type = col_analysis.get("data_type", "")
+                            sample_values = col_analysis.get("sample_values", [])
+                            
+                            # Score based on data type and sample values
+                            score = 0
+                            
+                            # Check if part matches the data type
+                            if data_type == "text" and part.isalpha():
+                                score += 10
+                            elif data_type == "date" and re.match(r'\d{1,2}[/-]\d{1,2}[/-]\d{2,4}', part):
+                                score += 20
+                            elif data_type == "currency" and (part.startswith('$') or part.startswith('(')):
+                                score += 20
+                            elif data_type == "percentage" and part.endswith('%'):
+                                score += 20
+                            elif data_type == "number" and re.match(r'^-?\d+\.?\d*$', part):
+                                score += 15
+                            
+                            # Check if part matches any sample values (case-insensitive)
+                            for sample in sample_values:
+                                if part.lower() in sample.lower() or sample.lower() in part.lower():
+                                    score += 30
+                                    break
+                            
+                            # Special handling for specific headers
+                            if header.lower() == "cov type" and part in ["Med", "Den", "Vis"]:
+                                score += 50
+                            elif header.lower() == "bill eff date" and re.match(r'\d{1,2}[/-]\d{1,2}[/-]\d{2,4}', part):
+                                score += 50
+                            elif header.lower() == "billed premium" and part.startswith('$'):
+                                score += 50
+                            elif header.lower() == "rate" and part.endswith('%'):
+                                score += 50
+                            elif header.lower() == "split %" and part.endswith('%'):
+                                score += 50
+                            elif header.lower() == "bus typ" and part in ["Fee", "Comm"]:
+                                score += 50
+                            elif header.lower() == "comp type" and part == "Comm":
+                                score += 50
+                            
+                            if score > best_score:
+                                best_score = score
+                                best_match = header
+                        
+                        # Assign the part to the best matching column
+                        if best_match and best_score > 0:
+                            col_index = header_indices[best_match]
+                            # If the column is already filled, append to it
+                            if result[col_index]:
+                                result[col_index] += " " + part
+                            else:
+                                result[col_index] = part
+                        else:
+                            # If no good match, assign to the next available empty column
+                            for i, val in enumerate(result):
+                                if not val:
+                                    result[i] = part
+                                    break
+                else:
+                    # Single part - assign to the appropriate column based on position and analysis
+                    part = cell_parts[0]
+                    
+                    # Try to match this part to the most appropriate column
+                    best_match = None
+                    best_score = 0
+                    
+                    for header, col_analysis in column_mapping.items():
+                        if header not in header_indices:
+                            continue
+                        
+                        data_type = col_analysis.get("data_type", "")
+                        sample_values = col_analysis.get("sample_values", [])
+                        
+                        # Score based on data type and sample values
+                        score = 0
+                        
+                        # Check if part matches the data type
+                        if data_type == "text" and part.isalpha():
+                            score += 10
+                        elif data_type == "date" and re.match(r'\d{1,2}[/-]\d{1,2}[/-]\d{2,4}', part):
+                            score += 20
+                        elif data_type == "currency" and (part.startswith('$') or part.startswith('(')):
+                            score += 20
+                        elif data_type == "percentage" and part.endswith('%'):
+                            score += 20
+                        elif data_type == "number" and re.match(r'^-?\d+\.?\d*$', part):
+                            score += 15
+                        
+                        # Check if part matches any sample values (case-insensitive)
+                        for sample in sample_values:
+                            if part.lower() in sample.lower() or sample.lower() in part.lower():
+                                score += 30
+                                break
+                        
+                        # Special handling for specific headers
+                        if header.lower() == "cov type" and part in ["Med", "Den", "Vis"]:
+                            score += 50
+                        elif header.lower() == "bill eff date" and re.match(r'\d{1,2}[/-]\d{1,2}[/-]\d{2,4}', part):
+                            score += 50
+                        elif header.lower() == "billed premium" and part.startswith('$'):
+                            score += 50
+                        elif header.lower() == "rate" and part.endswith('%'):
+                            score += 50
+                        elif header.lower() == "split %" and part.endswith('%'):
+                            score += 50
+                        elif header.lower() == "bus typ" and part in ["Fee", "Comm"]:
+                            score += 50
+                        elif header.lower() == "comp type" and part == "Comm":
+                            score += 50
+                        
+                        if score > best_score:
+                            best_score = score
+                            best_match = header
+                    
+                    # Assign the part to the best matching column
+                    if best_match and best_score > 0:
+                        col_index = header_indices[best_match]
+                        result[col_index] = part
+                    else:
+                        # If no good match, assign to the next available empty column
+                        for i, val in enumerate(result):
+                            if not val:
+                                result[i] = part
+                                break
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error parsing multi-cell row with GPT analysis: {e}")
             return None
     
     def _align_row_with_headers(self, row: List[str], headers: List[str]) -> List[str]:
