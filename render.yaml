@@ -11,6 +11,8 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
+      - key: RENDER_DB_KEY
+        sync: false
       - key: SUPABASE_DB_KEY
         sync: false
       - key: AWS_ACCESS_KEY_ID

@@ -14,7 +14,10 @@ ENV PYTHONUNBUFFERED=1 \
     DOCLING_CACHE_DIR=/app/model_cache/docling \
     # OpenAI configuration
     OPENAI_API_KEY="" \
-    OPENAI_API_BASE="https://api.openai.com/v1"
+    OPENAI_API_BASE="https://api.openai.com/v1" \
+    # Database configuration
+    RENDER_DB_KEY="" \
+    SUPABASE_DB_KEY=""
 
 # Install system dependencies required for OpenCV, EasyOCR, and other packages
 RUN apt-get update && apt-get install -y \
