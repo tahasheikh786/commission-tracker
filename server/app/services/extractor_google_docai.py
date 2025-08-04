@@ -7,7 +7,7 @@ import random
 from typing import Dict, List, Any, Optional, Tuple, TYPE_CHECKING
 from datetime import datetime
 import io
-from PIL import Image, ImageEnhance, ImageFilter, ImageDraw, ImageFont
+from PIL import Image, ImageEnhance, ImageFilter
 import cv2
 import numpy as np
 
@@ -330,12 +330,6 @@ class GoogleDocAIExtractor:
             print("✅ Google Document AI: Document processing completed")
             sys.stdout.flush()
             
-            # Save JSON response for debugging
-            self._save_json_response(document, pdf_path)
-            
-            # Create Document AI detection overlays
-            self._create_docai_detection_overlays(document, pdf_path)
-            
             # Extract tables from the processed document
             print("🔍 Google Document AI: Extracting tables from processed document...")
             sys.stdout.flush()
@@ -353,9 +347,6 @@ class GoogleDocAIExtractor:
                 print(f"✅ Google Document AI: Extracted {len(tables)} tables using spatial clustering")
             sys.stdout.flush()
             
-            # Create processing summary
-            self._create_processing_summary(document, pdf_path, tables)
-            
             return tables
             
         except Exception as e:
@@ -368,7 +359,7 @@ class GoogleDocAIExtractor:
         
         Args:
             pdf_content: Original PDF content
-            pdf_filename: Original PDF filename for saving enhanced images
+            pdf_filename: Original PDF filename (not used for saving anymore)
             
         Returns:
             Preprocessed PDF content
@@ -379,13 +370,6 @@ class GoogleDocAIExtractor:
             # Convert PDF to images
             images = self._pdf_to_images(pdf_content)
             
-            # Create output directory for enhanced images
-            if pdf_filename:
-                base_name = os.path.splitext(os.path.basename(pdf_filename))[0]
-                output_dir = os.path.join(os.getcwd(), 'enhanced_images', base_name)
-                os.makedirs(output_dir, exist_ok=True)
-                print(f"📁 Saving enhanced images to: {output_dir}")
-            
             # Enhance each image
             enhanced_images = []
             for i, image in enumerate(images):
@@ -394,12 +378,6 @@ class GoogleDocAIExtractor:
                 # Convert to RGB if needed
                 if image.mode != 'RGB':
                     image = image.convert('RGB')
-                
-                # Save original image
-                if pdf_filename:
-                    original_path = os.path.join(output_dir, f"original_page_{i+1:02d}.png")
-                    image.save(original_path, 'PNG')
-                    print(f"💾 Saved original image: {original_path}")
                 
                 # Apply contrast enhancement
                 enhancer = ImageEnhance.Contrast(image)
@@ -413,12 +391,6 @@ class GoogleDocAIExtractor:
                 image = image.filter(ImageFilter.GaussianBlur(0.5))
                 enhancer = ImageEnhance.Sharpness(image)
                 image = enhancer.enhance(1.2)
-                
-                # Save enhanced image
-                if pdf_filename:
-                    enhanced_path = os.path.join(output_dir, f"enhanced_page_{i+1:02d}.png")
-                    image.save(enhanced_path, 'PNG')
-                    print(f"💾 Saved enhanced image: {enhanced_path}")
                 
                 enhanced_images.append(image)
             
@@ -473,254 +445,11 @@ class GoogleDocAIExtractor:
         
         raise Exception("All retry attempts failed")
     
-    def _save_json_response(self, document: Any, pdf_path: str):
-        """
-        Save the Google Document AI response as JSON for debugging.
-        
-        Args:
-            document: Document AI response document
-            pdf_path: Original PDF file path
-        """
-        try:
-            import json
-            from datetime import datetime
-            
-            # Create output directory if it doesn't exist
-            output_dir = "docai_responses"
-            os.makedirs(output_dir, exist_ok=True)
-            
-            # Generate filename based on original PDF name and timestamp
-            pdf_name = os.path.splitext(os.path.basename(pdf_path))[0]
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            json_filename = f"{pdf_name}_docai_response_{timestamp}.json"
-            json_path = os.path.join(output_dir, json_filename)
-            
-            # Convert document to dictionary
-            doc_dict = {
-                "document": {
-                    "mime_type": document.mime_type,
-                    "text": document.text,
-                    "pages": []
-                },
-                "metadata": {
-                    "processor_id": self.processor_id,
-                    "project_id": self.project_id,
-                    "timestamp": datetime.now().isoformat(),
-                    "original_pdf": pdf_path
-                }
-            }
-            
-            # Add pages
-            for page_num, page in enumerate(document.pages):
-                page_dict = {
-                    "page_number": page_num + 1,
-                    "tables": [],
-                    "form_fields": [],
-                    "text_blocks": []
-                }
-                
-                # Add tables if present
-                if hasattr(page, 'tables') and page.tables:
-                    for table in page.tables:
-                        table_dict = {
-                            "header_rows": len(table.header_rows) if hasattr(table, 'header_rows') else 0,
-                            "body_rows": len(table.body_rows) if hasattr(table, 'body_rows') else 0,
-                            "confidence": getattr(table, 'confidence', 0.0)
-                        }
-                        page_dict["tables"].append(table_dict)
-                
-                # Add form fields if present
-                if hasattr(page, 'form_fields') and page.form_fields:
-                    for field in page.form_fields:
-                        field_dict = {
-                            "field_name": self._extract_text_from_text_anchor(field.field_name, document) if hasattr(field, 'field_name') and field.field_name else "",
-                            "field_value": self._extract_text_from_text_anchor(field.field_value, document) if hasattr(field, 'field_value') and field.field_value else "",
-                            "confidence": getattr(field, 'confidence', 0.0)
-                        }
-                        page_dict["form_fields"].append(field_dict)
-                
-                # Add text blocks
-                if hasattr(page, 'blocks') and page.blocks:
-                    for block in page.blocks:
-                        block_text = self._extract_text_from_text_anchor(block.layout.text_anchor, document) if hasattr(block, 'layout') and hasattr(block.layout, 'text_anchor') else ""
-                        block_dict = {
-                            "text": block_text,
-                            "confidence": getattr(block.layout, 'confidence', 0.0) if hasattr(block, 'layout') else 0.0,
-                            "bounding_box": {
-                                "vertices": [
-                                    {"x": vertex.x, "y": vertex.y} 
-                                    for vertex in block.layout.bounding_poly.vertices
-                                ] if hasattr(block, 'layout') and hasattr(block.layout, 'bounding_poly') and hasattr(block.layout.bounding_poly, 'vertices') else []
-                            }
-                        }
-                        page_dict["text_blocks"].append(block_dict)
-                
-                doc_dict["document"]["pages"].append(page_dict)
-            
-            # Save to JSON file
-            with open(json_path, 'w', encoding='utf-8') as f:
-                json.dump(doc_dict, f, indent=2, ensure_ascii=False)
-            
-            print(f"📄 Google Document AI response saved to: {json_path}")
-            
-        except Exception as e:
-            print(f"⚠️ Failed to save JSON response: {e}")
+    # Removed _save_json_response method to prevent timeouts
     
-    def _create_docai_detection_overlays(self, document: Any, pdf_path: str):
-        """
-        Create visual overlays showing Document AI detections on the enhanced images.
-        
-        Args:
-            document: Document AI response document
-            pdf_path: Original PDF file path
-        """
-        try:
-            base_name = os.path.splitext(os.path.basename(pdf_path))[0]
-            enhanced_dir = os.path.join(os.getcwd(), 'enhanced_images', base_name)
-            
-            if not os.path.exists(enhanced_dir):
-                print(f"⚠️ Enhanced images directory not found: {enhanced_dir}")
-                return
-            
-            # Create overlays directory
-            overlays_dir = os.path.join(enhanced_dir, 'docai_overlays')
-            os.makedirs(overlays_dir, exist_ok=True)
-            print(f"📁 Creating Document AI detection overlays in: {overlays_dir}")
-            
-            # Process each page
-            for page_num, page in enumerate(document.pages):
-                # Load the enhanced image for this page
-                enhanced_image_path = os.path.join(enhanced_dir, f"enhanced_page_{page_num + 1:02d}.png")
-                
-                if not os.path.exists(enhanced_image_path):
-                    print(f"⚠️ Enhanced image not found: {enhanced_image_path}")
-                    continue
-                
-                # Load the image
-                image = Image.open(enhanced_image_path)
-                draw = ImageDraw.Draw(image)
-                
-                # Draw table detections
-                if hasattr(page, 'tables') and page.tables:
-                    for table_idx, table in enumerate(page.tables):
-                        if hasattr(table, 'layout') and hasattr(table.layout, 'bounding_poly'):
-                            vertices = table.layout.bounding_poly.vertices
-                            if len(vertices) >= 4:
-                                # Draw table bounding box (red)
-                                points = [(vertex.x, vertex.y) for vertex in vertices]
-                                draw.polygon(points, outline='red', width=3)
-                                
-                                # Add table label
-                                draw.text((points[0][0], points[0][1] - 20), 
-                                        f"Table {table_idx + 1}", fill='red', font=ImageFont.load_default())
-                
-                # Draw form field detections
-                if hasattr(page, 'form_fields') and page.form_fields:
-                    for field_idx, field in enumerate(page.form_fields):
-                        if hasattr(field, 'layout') and hasattr(field.layout, 'bounding_poly'):
-                            vertices = field.layout.bounding_poly.vertices
-                            if len(vertices) >= 4:
-                                # Draw form field bounding box (blue)
-                                points = [(vertex.x, vertex.y) for vertex in vertices]
-                                draw.polygon(points, outline='blue', width=2)
-                                
-                                # Add field label
-                                field_text = self._extract_text_from_text_anchor(field.field_name, document) if hasattr(field, 'field_name') and field.field_name else f"Field {field_idx + 1}"
-                                draw.text((points[0][0], points[0][1] - 15), 
-                                        field_text[:20], fill='blue', font=ImageFont.load_default())
-                
-                # Draw text block detections
-                if hasattr(page, 'blocks') and page.blocks:
-                    for block_idx, block in enumerate(page.blocks):
-                        if hasattr(block, 'layout') and hasattr(block.layout, 'bounding_poly'):
-                            vertices = block.layout.bounding_poly.vertices
-                            if len(vertices) >= 4:
-                                # Draw text block bounding box (green)
-                                points = [(vertex.x, vertex.y) for vertex in vertices]
-                                draw.polygon(points, outline='green', width=1)
-                
-                # Save the overlay image
-                overlay_path = os.path.join(overlays_dir, f"page_{page_num + 1:02d}_overlay.png")
-                image.save(overlay_path, 'PNG')
-                print(f"💾 Saved Document AI overlay: {overlay_path}")
-            
-            print(f"✅ Created Document AI detection overlays for {len(document.pages)} pages")
-            
-        except Exception as e:
-            print(f"⚠️ Failed to create Document AI overlays: {e}")
+    # Removed _create_docai_detection_overlays method to prevent timeouts
     
-    def _create_processing_summary(self, document: Any, pdf_path: str, tables: List[Dict[str, Any]]):
-        """
-        Create a summary report of the processing results.
-        
-        Args:
-            document: Document AI response document
-            pdf_path: Original PDF file path
-            tables: Extracted tables
-        """
-        try:
-            base_name = os.path.splitext(os.path.basename(pdf_path))[0]
-            enhanced_dir = os.path.join(os.getcwd(), 'enhanced_images', base_name)
-            
-            if not os.path.exists(enhanced_dir):
-                return
-            
-            # Create summary file
-            summary_path = os.path.join(enhanced_dir, 'processing_summary.txt')
-            
-            with open(summary_path, 'w', encoding='utf-8') as f:
-                f.write(f"Document AI Processing Summary\n")
-                f.write(f"============================\n\n")
-                f.write(f"Original PDF: {pdf_path}\n")
-                f.write(f"Processing Date: {datetime.now().isoformat()}\n")
-                f.write(f"Total Pages: {len(document.pages)}\n\n")
-                
-                # Document AI statistics
-                total_tables = 0
-                total_form_fields = 0
-                total_text_blocks = 0
-                
-                for page_num, page in enumerate(document.pages):
-                    f.write(f"Page {page_num + 1}:\n")
-                    
-                    # Tables
-                    page_tables = len(page.tables) if hasattr(page, 'tables') and page.tables else 0
-                    total_tables += page_tables
-                    f.write(f"  - Tables detected: {page_tables}\n")
-                    
-                    # Form fields
-                    page_fields = len(page.form_fields) if hasattr(page, 'form_fields') and page.form_fields else 0
-                    total_form_fields += page_fields
-                    f.write(f"  - Form fields detected: {page_fields}\n")
-                    
-                    # Text blocks
-                    page_blocks = len(page.blocks) if hasattr(page, 'blocks') and page.blocks else 0
-                    total_text_blocks += page_blocks
-                    f.write(f"  - Text blocks detected: {page_blocks}\n")
-                    
-                    f.write("\n")
-                
-                f.write(f"Total Statistics:\n")
-                f.write(f"  - Total tables detected: {total_tables}\n")
-                f.write(f"  - Total form fields detected: {total_form_fields}\n")
-                f.write(f"  - Total text blocks detected: {total_text_blocks}\n")
-                f.write(f"  - Tables successfully extracted: {len(tables)}\n\n")
-                
-                # Table details
-                if tables:
-                    f.write(f"Extracted Tables:\n")
-                    for i, table in enumerate(tables):
-                        f.write(f"  Table {i + 1}:\n")
-                        f.write(f"    - Headers: {len(table.get('headers', []))}\n")
-                        f.write(f"    - Rows: {len(table.get('rows', []))}\n")
-                        f.write(f"    - Confidence: {table.get('confidence', 0.0):.3f}\n")
-                        f.write(f"    - Extraction method: {table.get('metadata', {}).get('extraction_method', 'unknown')}\n")
-                        f.write("\n")
-            
-            print(f"📄 Processing summary saved to: {summary_path}")
-            
-        except Exception as e:
-            print(f"⚠️ Failed to create processing summary: {e}")
+    # Removed _create_processing_summary method to prevent timeouts
     
     def _preprocess_pdf_for_ocr(self, pdf_content: bytes) -> bytes:
         """
