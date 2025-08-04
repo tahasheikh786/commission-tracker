@@ -265,17 +265,17 @@ export default function UploadPage() {
         // Update the uploaded tables with the improved results
         setUploaded({
           ...uploaded,
-          tables: result.improved_tables || uploaded.tables,
+          tables: result.tables || uploaded.tables,
           enhancement_metadata: {
             method: 'gpt4o_vision',
             timestamp: result.enhancement_timestamp,
             diagnostic_info: result.diagnostic_info,
             overall_notes: result.overall_notes,
-            processing_time: result.processing_time_seconds
+            processing_time: result.extraction_time_seconds
           }
         })
         
-        toast.success(`Extraction improved! ${result.improved_tables_count} tables enhanced.`, { id: 'improve-extraction' })
+        toast.success(`Extraction improved! ${result.tables?.length || 0} tables enhanced.`, { id: 'improve-extraction' })
         
         // Show diagnostic information if available
         if (result.diagnostic_info?.warnings?.length > 0) {

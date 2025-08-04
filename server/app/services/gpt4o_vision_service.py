@@ -274,6 +274,10 @@ CRITICAL REQUIREMENTS:
 7. Infer column data types from visible values
 8. Note any merged cells, split columns, or structural ambiguity
 9. Never create headers or data that are not exactly visible in the images
+10. SMART HEADER PROCESSING: Handle patterns intelligently:
+    - "RATE | (%)" should become "RATE (%)" (not separate columns)
+    - "ACCOUNT | POLICY NAME" + "NUMBER | EXPLANATION" should become "ACCOUNT NUMBER", "POLICY NAME OR EXPLANATION"
+    - Percentage symbols should be attached to their related headers, not standalone
 
 OUTPUT FORMAT:
 Return a structured JSON with this exact format:
@@ -312,22 +316,30 @@ Current extraction has {len(current_extraction)} tables with the following struc
         context += """
 
 Please analyze the provided page images and provide the structured JSON response as specified in the system prompt. Focus on:
-1. Exact header transcription
+1. Exact header transcription with smart pattern recognition
 2. Intelligent data parsing and assignment to correct columns
-3. Sample data values for each column
+3. Sample data values for each column showing how combined data should be parsed
 4. Column data types (text, number, date, currency, percentage)
 5. Structural issues or ambiguity
 6. Header repetition patterns across pages
 
-IMPORTANT: When you see combined data like "1130414-10001 GRT LOGISTICS LL ONAPG O7 O1 2O25 VISION 3.61", parse it intelligently:
-- "1130414-10001" → Account Number
-- "GRT LOGISTICS LL" → Policy Name/Company
-- "ONAPG" → Product Name
-- "O7 O1 2O25" → Due Date (if date column exists)
-- "VISION" → Product Type
-- "3.61" → Amount/Rate (based on column type)
+CRITICAL DATA PARSING EXAMPLES:
+When you see combined data like "1130414-10001 GRT LOGISTICS LL ONAPG O7 O1 2O25 VISION 3.61", parse it intelligently:
+- "1130414-10001" → Account Number column
+- "GRT LOGISTICS LL" → Policy Name/Company column  
+- "ONAPG" → Product Name column
+- "O7 O1 2O25" → Due Date column (if exists)
+- "VISION" → Product Type column
+- "3.61" → Amount/Rate column (based on column type)
 
-CRITICAL: For each column in the headers, provide sample values that show how the combined data should be parsed and assigned to the correct columns.
+SMART HEADER PROCESSING:
+- "ACCOUNT | POLICY NAME | NUMBER | EXPLANATION" should be processed as:
+  * "ACCOUNT NUMBER" (combined)
+  * "POLICY NAME OR EXPLANATION" (combined)
+- "RATE | (%)" should become "RATE (%)" (not separate columns)
+- Percentage symbols should be attached to their related headers
+
+CRITICAL: For each column in the headers, provide sample values that show how the combined data should be parsed and assigned to the correct columns. The sample values should demonstrate the intelligent parsing logic.
 
 Be precise and only report what you can clearly see in the images."""
         
@@ -370,18 +382,8 @@ Be precise and only report what you can clearly see in the images."""
                 columns = page.get("columns", [])
                 structure_notes = page.get("structure_notes", "")
                 
-                # Process headers - if they're still pipe-separated, split them
-                processed_headers = []
-                for header in headers:
-                    if "|" in header:
-                        # Split by pipe and clean up
-                        split_headers = [h.strip() for h in header.split("|") if h.strip()]
-                        processed_headers.extend(split_headers)
-                    else:
-                        processed_headers.append(header)
-                
-                # Remove duplicates and empty headers
-                processed_headers = [h for h in processed_headers if h and h not in ['|', '']]
+                # Process headers using smart column name processing
+                processed_headers = self._process_headers_intelligently(headers)
                 
                 # Create improved table structure
                 improved_table = {
@@ -399,30 +401,16 @@ Be precise and only report what you can clearly see in the images."""
                     }
                 }
                 
-                # Try to align current data with vision-detected headers
+                # Process current data rows with the new headers
                 if current_tables and len(current_tables) > 0:
                     # Use the first table as reference for now
                     current_table = current_tables[0]
                     original_rows = current_table.get("rows", [])
                     
                     # Parse and restructure rows based on GPT-4o analysis
-                    improved_rows = []
-                    for row in original_rows:
-                        if not row or len(row) == 0:
-                            continue
-                            
-                        # If we have a single cell with combined data, try to parse it
-                        if len(row) == 1 and isinstance(row[0], str):
-                            combined_data = row[0]
-                            parsed_row = self._parse_combined_data(combined_data, processed_headers)
-                            if parsed_row:
-                                improved_rows.append(parsed_row)
-                            else:
-                                # Fallback: keep original row
-                                improved_rows.append(row)
-                        else:
-                            # Multiple cells - keep as is for now
-                            improved_rows.append(row)
+                    improved_rows = self._process_rows_with_new_headers(
+                        original_rows, processed_headers, columns
+                    )
                     
                     improved_table["rows"] = improved_rows
                 
@@ -458,13 +446,159 @@ Be precise and only report what you can clearly see in the images."""
                 "error": f"Failed to process improvement result: {str(e)}"
             }
     
-    def _parse_combined_data(self, combined_data: str, headers: List[str]) -> Optional[List[str]]:
+    def _process_headers_intelligently(self, headers: List[str]) -> List[str]:
         """
-        Intelligently parse combined data and assign to correct columns based on headers.
+        Intelligently process headers to handle patterns like pipe-separated headers and percentage symbols.
+        
+        Args:
+            headers: List of raw headers from GPT-4o analysis
+            
+        Returns:
+            Processed headers with smart pattern recognition
+        """
+        processed_headers = []
+        
+        for header in headers:
+            if not header or header.strip() == "":
+                continue
+                
+            # Handle pipe-separated headers
+            if "|" in header:
+                parts = [part.strip() for part in header.split("|") if part.strip()]
+                
+                # Smart pattern recognition for common combinations
+                if len(parts) == 2:
+                    # Handle patterns like "RATE | (%)" - attach percentage to rate
+                    if parts[1].strip() in ["(%)", "%", "(%)"] and "rate" in parts[0].lower():
+                        processed_headers.append(f"{parts[0].strip()} (%)")
+                        continue
+                    
+                    # Handle patterns like "ACCOUNT | POLICY NAME" + "NUMBER | EXPLANATION"
+                    # This will be handled by the multi-line header combination logic
+                    processed_headers.extend(parts)
+                else:
+                    # Multiple parts - add them all
+                    processed_headers.extend(parts)
+            else:
+                # Single header - clean it up
+                cleaned_header = header.strip()
+                if cleaned_header:
+                    processed_headers.append(cleaned_header)
+        
+        # Post-process to handle multi-line header combinations
+        processed_headers = self._combine_multi_line_headers(processed_headers)
+        
+        # Remove duplicates while preserving order
+        seen = set()
+        final_headers = []
+        for header in processed_headers:
+            if header not in seen:
+                seen.add(header)
+                final_headers.append(header)
+        
+        return final_headers
+    
+    def _combine_multi_line_headers(self, headers: List[str]) -> List[str]:
+        """
+        Combine multi-line headers intelligently based on patterns.
+        
+        Args:
+            headers: List of processed headers
+            
+        Returns:
+            Combined headers
+        """
+        if len(headers) < 2:
+            return headers
+        
+        combined_headers = []
+        i = 0
+        
+        while i < len(headers):
+            current_header = headers[i].lower()
+            
+            # Look for patterns that should be combined
+            if i + 1 < len(headers):
+                next_header = headers[i + 1].lower()
+                
+                # Pattern: "ACCOUNT" + "NUMBER" = "ACCOUNT NUMBER"
+                if current_header == "account" and next_header == "number":
+                    combined_headers.append("ACCOUNT NUMBER")
+                    i += 2
+                    continue
+                
+                # Pattern: "POLICY NAME" + "OR EXPLANATION" = "POLICY NAME OR EXPLANATION"
+                elif current_header == "policy name" and next_header == "or explanation":
+                    combined_headers.append("POLICY NAME OR EXPLANATION")
+                    i += 2
+                    continue
+                
+                # Pattern: "PRODUCT NAME" + "DUE DATE" = "PRODUCT NAME", "DUE DATE" (keep separate)
+                elif current_header == "product name" and next_header == "due date":
+                    combined_headers.extend([headers[i], headers[i + 1]])
+                    i += 2
+                    continue
+                
+                # Pattern: "PREMIUM" + "PREMIUMS" = "PREMIUM", "PREMIUMS" (keep separate)
+                elif current_header == "premium" and next_header == "premiums":
+                    combined_headers.extend([headers[i], headers[i + 1]])
+                    i += 2
+                    continue
+            
+            # No pattern match, keep current header
+            combined_headers.append(headers[i])
+            i += 1
+        
+        return combined_headers
+    
+    def _process_rows_with_new_headers(self, 
+                                     original_rows: List[List[str]], 
+                                     new_headers: List[str],
+                                     column_analysis: List[Dict[str, Any]]) -> List[List[str]]:
+        """
+        Process original rows with new headers to properly parse combined data.
+        
+        Args:
+            original_rows: Original table rows
+            new_headers: New processed headers
+            column_analysis: GPT-4o column analysis
+            
+        Returns:
+            Processed rows with data properly assigned to columns
+        """
+        improved_rows = []
+        
+        for row in original_rows:
+            if not row or len(row) == 0:
+                continue
+            
+            # If we have a single cell with combined data, parse it intelligently
+            if len(row) == 1 and isinstance(row[0], str):
+                combined_data = row[0]
+                parsed_row = self._parse_combined_data_intelligently(combined_data, new_headers, column_analysis)
+                if parsed_row:
+                    improved_rows.append(parsed_row)
+                else:
+                    # Fallback: create row with empty values
+                    improved_rows.append([""] * len(new_headers))
+            else:
+                # Multiple cells - try to align with new headers
+                aligned_row = self._align_row_with_headers(row, new_headers)
+                improved_rows.append(aligned_row)
+        
+        return improved_rows
+    
+    def _parse_combined_data_intelligently(self, 
+                                         combined_data: str, 
+                                         headers: List[str],
+                                         column_analysis: List[Dict[str, Any]]) -> Optional[List[str]]:
+        """
+        Intelligently parse combined data and assign to correct columns based on headers and analysis.
         
         Args:
             combined_data: String like "GRT LOGISTICS LL ONAPG O7 O1 2O25 VISION 3.61"
-            headers: List of column headers like ["ACCOUNT NUMBER", "POLICY NAME OR EXPLANATION", ...]
+            headers: List of column headers
+            column_analysis: GPT-4o column analysis with sample values
             
         Returns:
             Parsed row with values assigned to correct columns, or None if parsing fails
@@ -476,30 +610,124 @@ Be precise and only report what you can clearly see in the images."""
             # Split the combined data by spaces
             parts = combined_data.split()
             
-            # Define patterns for different data types
-            date_pattern = r'\b\d{1,2}\s+\d{1,2}\s+\d{4}\b'  # MM DD YYYY
-            amount_pattern = r'\b\d+\.\d+\b'  # Decimal numbers
-            product_pattern = r'\b[A-Z]{2,}\b'  # Uppercase product codes
-            company_pattern = r'\b[A-Z][A-Z\s]+\b'  # Company names
-            account_pattern = r'\b\d{7}-\d{5}\b'  # Account number pattern like 1130414-10001
-            
-            # Find header indices for different types
-            date_header_indices = [i for i, h in enumerate(headers) if 'date' in h.lower()]
-            amount_header_indices = [i for i, h in enumerate(headers) if any(word in h.lower() for word in ['amount', 'rate', 'premium', 'compensation'])]
-            product_header_indices = [i for i, h in enumerate(headers) if 'product' in h.lower()]
-            company_header_indices = [i for i, h in enumerate(headers) if any(word in h.lower() for word in ['policy', 'name', 'explanation'])]
-            account_header_indices = [i for i, h in enumerate(headers) if 'account' in h.lower()]
-            
-            # For now, let's use a simpler approach - let GPT-4o handle the parsing
-            # This is a fallback that just assigns parts to available columns
-            current_part = 0
+            # Create a mapping of header types to indices
+            header_mapping = {}
             for i, header in enumerate(headers):
-                if current_part < len(parts):
-                    result[i] = parts[current_part]
+                header_lower = header.lower()
+                
+                # Account number patterns
+                if any(word in header_lower for word in ['account', 'number']):
+                    header_mapping['account_number'] = i
+                
+                # Policy/Company name patterns
+                if any(word in header_lower for word in ['policy', 'name', 'explanation', 'company']):
+                    header_mapping['policy_name'] = i
+                
+                # Product patterns
+                if any(word in header_lower for word in ['product', 'type']):
+                    header_mapping['product'] = i
+                
+                # Date patterns
+                if any(word in header_lower for word in ['date', 'due']):
+                    header_mapping['date'] = i
+                
+                # Amount/Rate patterns
+                if any(word in header_lower for word in ['amount', 'rate', 'premium', 'compensation']):
+                    header_mapping['amount'] = i
+                
+                # Premium patterns
+                if 'premium' in header_lower:
+                    header_mapping['premium'] = i
+            
+            # Parse parts based on patterns
+            current_part = 0
+            
+            # Look for account number pattern (e.g., "1130414-10001")
+            if current_part < len(parts):
+                part = parts[current_part]
+                if re.match(r'\d{7}-\d{5}', part):  # Account number pattern
+                    if 'account_number' in header_mapping:
+                        result[header_mapping['account_number']] = part
+                    current_part += 1
+            
+            # Look for company name (multiple words, all caps)
+            company_words = []
+            while current_part < len(parts):
+                part = parts[current_part]
+                if part.isupper() and len(part) > 2 and not re.match(r'\d+', part):
+                    company_words.append(part)
+                    current_part += 1
+                else:
+                    break
+            
+            if company_words and 'policy_name' in header_mapping:
+                result[header_mapping['policy_name']] = ' '.join(company_words)
+            
+            # Look for product code (e.g., "ONAPG")
+            if current_part < len(parts):
+                part = parts[current_part]
+                if part.isupper() and len(part) >= 4 and len(part) <= 6:
+                    if 'product' in header_mapping:
+                        result[header_mapping['product']] = part
+                    current_part += 1
+            
+            # Look for date pattern (e.g., "O7 O1 2O25")
+            date_words = []
+            while current_part < len(parts):
+                part = parts[current_part]
+                if re.match(r'[O0-9]{1,2}', part):  # Date-like pattern
+                    date_words.append(part)
+                    current_part += 1
+                else:
+                    break
+            
+            if date_words and 'date' in header_mapping:
+                result[header_mapping['date']] = ' '.join(date_words)
+            
+            # Look for product type (e.g., "VISION", "DENTAL")
+            if current_part < len(parts):
+                part = parts[current_part]
+                if part.isupper() and len(part) >= 4 and len(part) <= 8:
+                    if 'product' in header_mapping:
+                        # Append to existing product if any
+                        existing_product = result[header_mapping['product']]
+                        if existing_product:
+                            result[header_mapping['product']] = f"{existing_product} {part}"
+                        else:
+                            result[header_mapping['product']] = part
+                    current_part += 1
+            
+            # Look for amount/rate (decimal number)
+            if current_part < len(parts):
+                part = parts[current_part]
+                if re.match(r'\d+\.\d+', part):  # Decimal number
+                    if 'amount' in header_mapping:
+                        result[header_mapping['amount']] = part
                     current_part += 1
             
             return result
             
         except Exception as e:
             logger.error(f"Error parsing combined data '{combined_data}': {e}")
-            return None 
+            return None
+    
+    def _align_row_with_headers(self, row: List[str], headers: List[str]) -> List[str]:
+        """
+        Align a row with new headers, padding or truncating as needed.
+        
+        Args:
+            row: Original row data
+            headers: New headers
+            
+        Returns:
+            Aligned row
+        """
+        aligned_row = []
+        
+        for i in range(len(headers)):
+            if i < len(row):
+                aligned_row.append(str(row[i]))
+            else:
+                aligned_row.append("")
+        
+        return aligned_row 
