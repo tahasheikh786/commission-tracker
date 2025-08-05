@@ -8,9 +8,6 @@ import time
 from typing import Dict, List, Any, Optional, Tuple, TYPE_CHECKING
 from datetime import datetime
 import io
-from PIL import Image, ImageEnhance, ImageFilter
-import cv2
-import numpy as np
 
 # Google Document AI imports
 try:
@@ -30,9 +27,6 @@ HEADER_SIMILARITY_THRESHOLD = 0.8
 
 # Processing parameters
 MAX_RETRIES = 3
-DPI_SETTING = 600
-CONTRAST_ENHANCEMENT = 1.2
-SHARPNESS_ENHANCEMENT = 1.1
 
 
 def extract_rows_from_tableblock(tableblock: Dict[str, Any]) -> Tuple[List[str], List[List[str]]]:
@@ -184,14 +178,13 @@ def adapt_tableblock_to_standard_format(tableblock: Dict[str, Any], page_num: in
 
 class GoogleDocAIExtractor:
     """
-    Google Document AI extractor for scanned PDF documents.
+    Google Document AI extractor for PDF documents.
     
     Features:
-    - OCR with 600 DPI, language hints, auto-rotate, deskew
+    - Direct PDF processing without image conversion
     - Form Parser with table detection and form field extraction
     - Table detection and extraction from forms and documents
     - Whitespace analysis and spatial clustering (fallback)
-    - Contrast enhancement and denoising preprocessing
     - Multiple output formats (JSON, HTML, CSV)
     - Confidence scoring and annotation
     - Automatic format detection and adaptation
@@ -290,7 +283,7 @@ class GoogleDocAIExtractor:
     
     def extract_tables(self, pdf_path: str) -> List[Dict[str, Any]]:
         """
-        Extract tables from scanned PDF using Google Document AI with enhanced preprocessing and retry logic.
+        Extract tables from PDF using Google Document AI directly without image conversion.
         
         Args:
             pdf_path: Path to the PDF file
@@ -306,18 +299,15 @@ class GoogleDocAIExtractor:
             import sys
             sys.stdout.flush()  # Force flush the output
             
-            # Read the PDF file
+            # Read the PDF file directly
             with open(pdf_path, "rb") as pdf_file:
                 pdf_content = pdf_file.read()
             
-            # Enhanced preprocessing with PIL-based image enhancement
-            preprocessed_content = self._enhanced_preprocess_pdf(pdf_content, pdf_path)
-            
-            # Configure processing request with optimized field mask
+            # Send PDF directly to Google Doc AI without image conversion
             request = documentai.ProcessRequest(
                 name=self.processor_name,
                 raw_document=documentai.RawDocument(
-                    content=preprocessed_content,
+                    content=pdf_content,
                     mime_type="application/pdf"
                 ),
                 # Simplified field mask for table extraction
@@ -354,57 +344,7 @@ class GoogleDocAIExtractor:
             print(f"❌ Google Document AI extraction failed: {e}")
             raise
 
-    def _enhanced_preprocess_pdf(self, pdf_content: bytes, pdf_filename: str = None) -> bytes:
-        """
-        Enhanced PDF preprocessing with PIL-based image enhancement.
-        
-        Args:
-            pdf_content: Original PDF content
-            pdf_filename: Original PDF filename (not used for saving anymore)
-            
-        Returns:
-            Preprocessed PDF content
-        """
-        try:
-            print("🔧 Enhanced preprocessing: Converting PDF to images...")
-            
-            # Convert PDF to images
-            images = self._pdf_to_images(pdf_content)
-            
-            # Enhance each image
-            enhanced_images = []
-            for i, image in enumerate(images):
-                print(f"🔧 Enhanced preprocessing: Processing image {i+1}/{len(images)}")
-                
-                # Convert to RGB if needed
-                if image.mode != 'RGB':
-                    image = image.convert('RGB')
-                
-                # Apply contrast enhancement
-                enhancer = ImageEnhance.Contrast(image)
-                image = enhancer.enhance(CONTRAST_ENHANCEMENT)
-                
-                # Apply sharpness enhancement
-                enhancer = ImageEnhance.Sharpness(image)
-                image = enhancer.enhance(SHARPNESS_ENHANCEMENT)
-                
-                # Apply noise reduction (slight blur then sharpen)
-                image = image.filter(ImageFilter.GaussianBlur(0.5))
-                enhancer = ImageEnhance.Sharpness(image)
-                image = enhancer.enhance(1.2)
-                
-                enhanced_images.append(image)
-            
-            # Convert enhanced images back to PDF
-            print("🔧 Enhanced preprocessing: Converting enhanced images back to PDF...")
-            enhanced_pdf_content = self._images_to_pdf(enhanced_images)
-            
-            print(f"🔧 Enhanced preprocessing: Completed - {len(enhanced_images)} images processed")
-            return enhanced_pdf_content
-            
-        except Exception as e:
-            print(f"⚠️ Enhanced preprocessing failed, using original content: {e}")
-            return pdf_content
+
 
     def _process_document_with_retry(self, request: documentai.ProcessRequest) -> Any:
         """
@@ -452,107 +392,7 @@ class GoogleDocAIExtractor:
     
     # Removed _create_processing_summary method to prevent timeouts
     
-    def _preprocess_pdf_for_ocr(self, pdf_content: bytes) -> bytes:
-        """
-        Preprocess PDF for better OCR results with contrast enhancement and denoising.
-        
-        Args:
-            pdf_content: Raw PDF content
-            
-        Returns:
-            Preprocessed PDF content
-        """
-        try:
-            # Convert PDF to images for preprocessing
-            images = self._pdf_to_images(pdf_content)
-            processed_images = []
-            
-            for img in images:
-                # Convert to OpenCV format
-                cv_img = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
-                
-                # 1. Contrast enhancement using CLAHE
-                lab = cv2.cvtColor(cv_img, cv2.COLOR_BGR2LAB)
-                clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-                lab[:, :, 0] = clahe.apply(lab[:, :, 0])
-                enhanced = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
-                
-                # 2. Denoising
-                denoised = cv2.fastNlMeansDenoisingColored(enhanced, None, 10, 10, 7, 21)
-                
-                # 3. Sharpening
-                kernel = np.array([[-1, -1, -1], [-1, 9, -1], [-1, -1, -1]])
-                sharpened = cv2.filter2D(denoised, -1, kernel)
-                
-                # Convert back to PIL
-                processed_img = Image.fromarray(cv2.cvtColor(sharpened, cv2.COLOR_BGR2RGB))
-                processed_images.append(processed_img)
-            
-            # Convert processed images back to PDF
-            return self._images_to_pdf(processed_images)
-            
-        except Exception as e:
-            print(f"⚠️ Preprocessing failed, using original content: {e}")
-            return pdf_content
-    
-    def _pdf_to_images(self, pdf_content: bytes) -> List[Image.Image]:
-        """Convert PDF content to list of PIL Images."""
-        try:
-            import fitz  # PyMuPDF
-            
-            # Load PDF from bytes
-            pdf_document = fitz.open(stream=pdf_content, filetype="pdf")
-            images = []
-            
-            for page_num in range(len(pdf_document)):
-                page = pdf_document.load_page(page_num)
-                
-                # Render at 600 DPI for high quality
-                mat = fitz.Matrix(600/72, 600/72)  # 600 DPI
-                pix = page.get_pixmap(matrix=mat)
-                
-                # Convert to PIL Image
-                img_data = pix.tobytes("png")
-                img = Image.open(io.BytesIO(img_data))
-                images.append(img)
-            
-            pdf_document.close()
-            return images
-            
-        except Exception as e:
-            print(f"Error converting PDF to images: {e}")
-            return []
-    
-    def _images_to_pdf(self, images: List[Image.Image]) -> bytes:
-        """Convert list of PIL Images back to PDF bytes."""
-        try:
-            # Save first image as PDF
-            if not images:
-                return b""
-            
-            # Convert all images to RGB mode
-            rgb_images = []
-            for img in images:
-                if img.mode != 'RGB':
-                    rgb_images.append(img.convert('RGB'))
-                else:
-                    rgb_images.append(img)
-            
-            # Create PDF from images
-            pdf_bytes = io.BytesIO()
-            rgb_images[0].save(
-                pdf_bytes,
-                format='PDF',
-                save_all=True,
-                append_images=rgb_images[1:],
-                resolution=600.0
-            )
-            
-            return pdf_bytes.getvalue()
-            
-        except Exception as e:
-            print(f"Error converting images to PDF: {e}")
-            return b""
+
     
     def _extract_tables_from_document(self, document: Any) -> List[Dict[str, Any]]:
         """

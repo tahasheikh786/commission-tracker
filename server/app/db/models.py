@@ -28,13 +28,31 @@ class StatementUpload(Base):
     company_id = Column(UUID(as_uuid=True), ForeignKey('companies.id'), nullable=False)
     file_name = Column(Text)
     uploaded_at = Column(TIMESTAMP)
-    status = Column(String)
-    raw_data = Column(JSON)
+    
+    # Status Management
+    status = Column(String, default='pending')  # pending, approved, rejected, processing
+    current_step = Column(String, default='upload')  # upload, table_editor, field_mapper, dashboard, completed
+    
+    # Progress Data Storage
+    progress_data = Column(JSON)  # Store intermediate data for each step
+    raw_data = Column(JSON)  # Extracted table data
+    edited_tables = Column(JSON)  # Tables after editing in TableEditor
+    field_mapping = Column(JSON)  # Field mapping configuration
+    final_data = Column(JSON)  # Final processed data
+    
+    # Metadata
     mapping_used = Column(JSON)
-    final_data = Column(JSON)  # <--- Add this if missing!
-    field_config = Column(JSON) # <--- (Optional, if you want field_config too)
-    rejection_reason = Column(Text)  # <--- Add this if missing!
+    field_config = Column(JSON)
+    rejection_reason = Column(Text)
     plan_types = Column(JSON)  # Store list of plan types (Medical, Dental, etc)
+    
+    # Timestamps
+    last_updated = Column(DateTime, server_default=text('now()'), onupdate=text('now()'), nullable=False)
+    completed_at = Column(DateTime)  # When status changed to approved/rejected
+    
+    # User session tracking (optional)
+    session_id = Column(String)  # Track user session for auto-save
+    auto_save_enabled = Column(Integer, default=1)  # 1 for enabled, 0 for disabled
 
 class Extraction(Base):
     __tablename__ = 'extractions'

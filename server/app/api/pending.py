@@ -1,0 +1,317 @@
+import os
+import json
+import logging
+from typing import Dict, List, Any, Optional
+from datetime import datetime
+from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi.responses import JSONResponse
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.db import crud
+from app.config import get_db
+from app.db.schemas import PendingFile, StatementUploadUpdate
+from uuid import UUID
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Create router
+router = APIRouter(prefix="/pending", tags=["pending"])
+
+@router.get("/files/{company_id}")
+async def get_pending_files(
+    company_id: UUID,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get all pending files for a specific company.
+    """
+    try:
+        pending_files = await crud.get_pending_files_for_company(db, company_id)
+        
+        return JSONResponse({
+            "success": True,
+            "pending_files": [file.dict() for file in pending_files],
+            "count": len(pending_files),
+            "timestamp": datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting pending files for company {company_id}: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get pending files: {str(e)}"
+        )
+
+@router.get("/files/single/{upload_id}")
+async def get_pending_file(
+    upload_id: UUID,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get a single pending file by upload ID.
+    """
+    try:
+        upload = await crud.get_statement_upload_by_id(db, upload_id)
+        
+        if not upload:
+            raise HTTPException(
+                status_code=404,
+                detail="Upload not found"
+            )
+        
+        return JSONResponse({
+            "success": True,
+            "upload": upload.dict(),
+            "timestamp": datetime.now().isoformat()
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting pending file {upload_id}: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get pending file: {str(e)}"
+        )
+
+@router.get("/resume/{upload_id}")
+async def resume_upload_session(
+    upload_id: UUID,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Resume an upload session with all saved progress data.
+    """
+    try:
+        session_data = await crud.resume_upload_session(db, upload_id)
+        
+        if not session_data:
+            raise HTTPException(
+                status_code=404,
+                detail="Upload session not found or not in pending status"
+            )
+        
+        return JSONResponse({
+            "success": True,
+            "session_data": session_data,
+            "timestamp": datetime.now().isoformat()
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error resuming upload session {upload_id}: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to resume upload session: {str(e)}"
+        )
+
+@router.post("/save-progress/{upload_id}")
+async def save_progress(
+    upload_id: UUID,
+    step: str = Query(..., description="Current step in the process"),
+    data: Dict[str, Any] = None,
+    session_id: Optional[str] = Query(None, description="User session ID"),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Save progress data for a specific step.
+    """
+    try:
+        success = await crud.save_progress_data(db, upload_id, step, data or {}, session_id)
+        
+        if not success:
+            raise HTTPException(
+                status_code=404,
+                detail="Upload not found"
+            )
+        
+        return JSONResponse({
+            "success": True,
+            "message": f"Progress saved for step: {step}",
+            "timestamp": datetime.now().isoformat()
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error saving progress for upload {upload_id}: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to save progress: {str(e)}"
+        )
+
+@router.get("/progress/{upload_id}/{step}")
+async def get_progress(
+    upload_id: UUID,
+    step: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get progress data for a specific step.
+    """
+    try:
+        progress_data = await crud.get_progress_data(db, upload_id, step)
+        
+        return JSONResponse({
+            "success": True,
+            "progress_data": progress_data,
+            "step": step,
+            "timestamp": datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting progress for upload {upload_id}, step {step}: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get progress: {str(e)}"
+        )
+
+@router.put("/update/{upload_id}")
+async def update_upload(
+    upload_id: UUID,
+    update_data: StatementUploadUpdate,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Update upload with new data and status changes.
+    """
+    try:
+        updated_upload = await crud.update_statement_upload(db, upload_id, update_data)
+        
+        if not updated_upload:
+            raise HTTPException(
+                status_code=404,
+                detail="Upload not found"
+            )
+        
+        return JSONResponse({
+            "success": True,
+            "message": "Upload updated successfully",
+            "upload_id": str(upload_id),
+            "timestamp": datetime.now().isoformat()
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating upload {upload_id}: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to update upload: {str(e)}"
+        )
+
+@router.delete("/delete/{upload_id}")
+async def delete_pending_upload(
+    upload_id: UUID,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Delete a pending upload.
+    """
+    try:
+        success = await crud.delete_pending_upload(db, upload_id)
+        
+        if not success:
+            raise HTTPException(
+                status_code=404,
+                detail="Pending upload not found"
+            )
+        
+        return JSONResponse({
+            "success": True,
+            "message": "Pending upload deleted successfully",
+            "upload_id": str(upload_id),
+            "timestamp": datetime.now().isoformat()
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting pending upload {upload_id}: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to delete pending upload: {str(e)}"
+        )
+
+@router.get("/status/{upload_id}")
+async def get_upload_status(
+    upload_id: UUID,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get the current status and progress of an upload.
+    """
+    try:
+        upload = await crud.get_statement_upload_by_id(db, upload_id)
+        
+        if not upload:
+            raise HTTPException(
+                status_code=404,
+                detail="Upload not found"
+            )
+        
+        # Generate progress summary
+        progress_summary = crud.get_progress_summary(upload.current_step, upload.progress_data)
+        
+        return JSONResponse({
+            "success": True,
+            "status": {
+                "id": str(upload.id),
+                "company_id": str(upload.company_id),
+                "file_name": upload.file_name,
+                "status": upload.status,
+                "current_step": upload.current_step,
+                "progress_summary": progress_summary,
+                "uploaded_at": upload.uploaded_at.isoformat() if upload.uploaded_at else None,
+                "last_updated": upload.last_updated.isoformat() if upload.last_updated else None,
+                "completed_at": upload.completed_at.isoformat() if upload.completed_at else None
+            },
+            "timestamp": datetime.now().isoformat()
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting status for upload {upload_id}: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get upload status: {str(e)}"
+        )
+
+@router.post("/auto-save/{upload_id}")
+async def auto_save_progress(
+    upload_id: UUID,
+    step: str = Query(..., description="Current step in the process"),
+    data: Dict[str, Any] = None,
+    session_id: Optional[str] = Query(None, description="User session ID"),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Auto-save progress data (same as save-progress but with auto-save semantics).
+    """
+    try:
+        success = await crud.save_progress_data(db, upload_id, step, data or {}, session_id)
+        
+        if not success:
+            raise HTTPException(
+                status_code=404,
+                detail="Upload not found"
+            )
+        
+        return JSONResponse({
+            "success": True,
+            "message": f"Auto-save completed for step: {step}",
+            "auto_saved": True,
+            "timestamp": datetime.now().isoformat()
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error auto-saving progress for upload {upload_id}: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to auto-save progress: {str(e)}"
+        ) 

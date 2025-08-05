@@ -3,7 +3,8 @@ import { useState } from "react";
 import DashboardTab from "./components/dashboardTab/DashboardTab";
 import CarrierTab from "./components/carrierTab/CarrierTab";
 import UploadPage from "./upload/page";
-import { User, UploadCloud, Database } from "lucide-react";
+
+import { User, UploadCloud, Database, Clock } from "lucide-react";
 
 export default function HomePage() {
   const [tab, setTab] = useState<"dashboard" | "carriers" | "upload">("dashboard");
@@ -44,6 +45,7 @@ export default function HomePage() {
             <UploadCloud size={18} />
             Statement File Upload
           </button>
+
         </div>
       </div>
 

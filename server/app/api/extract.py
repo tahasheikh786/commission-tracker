@@ -108,6 +108,7 @@ async def extract_tables(
             file_name=s3_key,  # Use S3 key as file_name
             uploaded_at=datetime.utcnow(),
             status="extracted",  # Initial status
+            current_step="extracted",  # Current step
             raw_data=extraction_result.get("tables", []),  # Store tables as raw_data
             mapping_used=None
         )
@@ -310,6 +311,7 @@ async def extract_tables_docling(
             file_name=s3_key,  # Use S3 key as file_name
             uploaded_at=datetime.utcnow(),
             status="extracted",  # Initial status
+            current_step="extracted",  # Current step
             raw_data=extraction_result.get("tables", []),  # Store tables as raw_data
             mapping_used=None
         )

@@ -1,13 +1,15 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Pencil } from 'lucide-react'
+import { Pencil, Clock } from 'lucide-react'
 import CompanySelect from './components/CompanySelect'
 import AdvancedUploadZone from './components/AdvancedUploadZone'
 import ExtractedTables from './components/ExtractedTable'
 import TableEditor from './components/TableEditor'
 import DashboardTable from './components/DashboardTable'
 import FieldMapper from './components/FieldMapper'
+import PendingFiles from '../components/PendingFiles'
+import { useProgressTracking } from '../hooks/useProgressTracking'
 
 import { toast } from 'react-hot-toast'
 import Modal from '@/app/components/Modal'
@@ -49,6 +51,22 @@ export default function UploadPage() {
   // GPT-4o Vision improvement functionality
   const [isImprovingExtraction, setIsImprovingExtraction] = useState(false)
 
+  // Pending functionality
+  const [showPendingFiles, setShowPendingFiles] = useState(false)
+  const [currentStep, setCurrentStep] = useState('upload')
+
+  // Progress tracking hook
+  const { saveProgress, loadProgress, resumeSession, markUnsaved, clearAutoSave } = useProgressTracking({
+    uploadId: uploaded?.upload_id,
+    currentStep,
+    onProgressSaved: (step, data) => {
+      console.log(`Progress saved for step: ${step}`, data)
+    },
+    onProgressLoad: (step, data) => {
+      console.log(`Progress loaded for step: ${step}`, data)
+    }
+  })
+
   const fetchMappingRef = useRef(false)
   const router = useRouter()
   
@@ -56,6 +74,34 @@ export default function UploadPage() {
   useEffect(() => {
     fetchMappingRef.current = false
   }, [uploaded?.upload_id])
+
+  // Handle URL parameters for resuming files and check for active sessions
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search)
+    const resumeFileId = urlParams.get('resume')
+    
+    if (resumeFileId && !uploaded) {
+      handleResumeFile(resumeFileId)
+    } else if (!uploaded && company) {
+      // Check if there's an active session for this company
+      checkForActiveSession()
+    }
+  }, [company])
+
+  // Check for active session
+  const checkForActiveSession = async () => {
+    if (!company) return
+    
+    try {
+      const sessionData = await resumeSession()
+      if (sessionData && sessionData.upload_id) {
+        // There's an active session, resume it
+        handleResumeFile(sessionData.upload_id)
+      }
+    } catch (error) {
+      console.log('No active session found')
+    }
+  }
 
   // Fetch database fields from backend
   useEffect(() => {
@@ -98,6 +144,9 @@ export default function UploadPage() {
     setCompany(null)
     setUploaded(null)
     setMapping(null)
+    setShowPendingFiles(false)
+    setCurrentStep('upload')
+    clearAutoSave()
     setFinalTables([])
     setFieldConfig(databaseFields)
     fetchMappingRef.current = false
@@ -116,6 +165,86 @@ export default function UploadPage() {
     setHasUsedAnotherExtraction(false)
   }
 
+  // Pending files handlers
+  const handleResumeFile = async (fileId: string) => {
+    try {
+      // First, get the upload details from the backend
+      const uploadResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/pending/files/single/${fileId}`)
+      if (!uploadResponse.ok) {
+        throw new Error('Failed to fetch upload details')
+      }
+      
+      const uploadData = await uploadResponse.json()
+      if (!uploadData.success || !uploadData.upload) {
+        throw new Error('Upload not found')
+      }
+      
+      const upload = uploadData.upload
+      
+      // Set the upload data
+      setUploaded({
+        upload_id: fileId,
+        file_name: upload.file_name,
+        tables: upload.raw_data || upload.edited_tables || [],
+        file: { url: upload.file_url } // If you have file URL stored
+      })
+      
+      // Set the current step
+      const currentStep = upload.current_step || 'upload'
+      setCurrentStep(currentStep)
+      
+      // Load progress data for the current step
+      const stepData = await loadProgress(currentStep)
+      
+      // Restore state based on the current step
+      if (currentStep === 'table_editor') {
+        setEditedTables(upload.edited_tables || upload.raw_data || [])
+        setShowTableEditor(true)
+        setShowFieldMapper(false)
+        setSkipped(false)
+      } else if (currentStep === 'field_mapper') {
+        setMapping(upload.field_mapping || {})
+        setFieldConfig(upload.field_config || databaseFields)
+        setPlanTypes(upload.plan_types || [])
+        setShowFieldMapper(true)
+        setShowTableEditor(false)
+        setSkipped(false)
+      } else if (currentStep === 'dashboard') {
+        // For dashboard step, we need to restore the final processed data
+        setFinalTables(upload.final_data || upload.edited_tables || upload.raw_data || [])
+        setFieldConfig(upload.field_config || databaseFields)
+        setPlanTypes(upload.plan_types || [])
+        setMapping(upload.field_mapping || null)
+        setSkipped(upload.status === 'skipped')
+        setShowFieldMapper(false)
+        setShowTableEditor(false)
+      } else {
+        // Default to upload step
+        setShowTableEditor(true)
+        setShowFieldMapper(false)
+        setSkipped(false)
+      }
+      
+      // Set company if available
+      if (upload.company_id && !company) {
+        // You might need to fetch company details here
+        // For now, we'll assume it's already set
+      }
+      
+      toast.success(`Resumed from ${currentStep} step`)
+    } catch (error) {
+      console.error('Error resuming file:', error)
+      toast.error('Failed to resume file')
+    }
+  }
+
+  const handleDeletePendingFile = (fileId: string) => {
+    // The PendingFiles component handles the deletion
+    // This is just a callback for any additional cleanup
+    console.log('Pending file deleted:', fileId)
+  }
+
+  // Handle upload result with quality assessment
   // Handle upload result with quality assessment
   function handleUploadResult({ tables, upload_id, file_name, file, plan_types, field_config, quality_summary, extraction_config }: any) {
     // Store original file for re-extraction
@@ -146,7 +275,17 @@ export default function UploadPage() {
     setRejectReason('')
     if (plan_types) setPlanTypes(plan_types)
     
-
+    // Save progress for upload step
+    if (upload_id) {
+      saveProgress('upload', {
+        tables,
+        file_name,
+        plan_types,
+        field_config,
+        quality_summary,
+        extraction_config
+      })
+    }
   }
 
   // NEW: Handle table name changes from ExtractedTables
@@ -171,6 +310,13 @@ export default function UploadPage() {
       
       if (response.ok) {
         setEditedTables(tables)
+        
+        // Save progress for table editor step
+        saveProgress('table_editor', {
+          tables,
+          company_id: company.id
+        })
+        
         toast.success('Tables saved successfully!')
         return true
       } else {
@@ -299,6 +445,14 @@ export default function UploadPage() {
   function handleGoToFieldMapping() {
     setShowTableEditor(false)
     setShowFieldMapper(true)
+    setCurrentStep('field_mapper')
+    
+    // Save progress for field mapper step
+    if (uploaded?.upload_id) {
+      saveProgress('field_mapper', {
+        current_step: 'field_mapper'
+      })
+    }
   }
 
   function handleGoToPreviousExtraction() {
@@ -366,6 +520,15 @@ export default function UploadPage() {
     
     console.log('Final mapped rows:', mappedRows)
     setFinalTables(mappedRows)
+    
+    // Save progress for dashboard step
+    if (uploaded?.upload_id) {
+      saveProgress('dashboard', {
+        final_data: mappedRows,
+        field_config: fieldConfigOverride,
+        mapping: mapping
+      })
+    }
   }
 
   async function handleApprove() {
@@ -385,6 +548,14 @@ export default function UploadPage() {
       })
       
       if (response.ok) {
+        // Save progress for completed step
+        saveProgress('completed', {
+          status: 'approved',
+          final_data: finalTables,
+          field_config: fieldConfig,
+          plan_types: planTypes
+        })
+        
         toast.success('Statement approved successfully!')
         router.push('/review')
       } else {
@@ -421,6 +592,15 @@ export default function UploadPage() {
       })
       
       if (response.ok) {
+        // Save progress for completed step
+        saveProgress('completed', {
+          status: 'rejected',
+          rejection_reason: rejectReason,
+          final_data: finalTables,
+          field_config: fieldConfig,
+          plan_types: planTypes
+        })
+        
         toast.success('Statement rejected successfully!')
         router.push('/review')
       } else {
@@ -447,6 +627,30 @@ export default function UploadPage() {
             </span>
           </h1>
           
+          {/* Pending Files Toggle */}
+          {company && (
+            <div className="mb-6 flex justify-center">
+              <button
+                onClick={() => setShowPendingFiles(!showPendingFiles)}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition-colors"
+              >
+                <Clock className="w-4 h-4" />
+                {showPendingFiles ? 'Hide' : 'Show'} Pending Files
+              </button>
+            </div>
+          )}
+
+          {/* Pending Files Section */}
+          {showPendingFiles && company && (
+            <div className="mb-8">
+              <PendingFiles
+                companyId={company.id}
+                onResumeFile={handleResumeFile}
+                onDeleteFile={handleDeletePendingFile}
+              />
+            </div>
+          )}
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
             {/* Left Column - Carrier Selection */}
             <div className="space-y-6">
@@ -643,6 +847,16 @@ export default function UploadPage() {
                     applyMapping(editedTables.length > 0 ? editedTables : uploaded.tables, map, fieldConf)
                     setShowFieldMapper(false)
                     setSkipped(false)
+                    
+                    // Save progress for field mapper step
+                    if (uploaded?.upload_id) {
+                      saveProgress('field_mapper', {
+                        mapping: map,
+                        field_config: fieldConf,
+                        plan_types: selectedPlanTypes,
+                        table_names: config.table_names
+                      })
+                    }
                   }}
                   onSkip={() => {
                     // Set fieldConfig to match extracted table headers
@@ -665,6 +879,24 @@ export default function UploadPage() {
                     setMapping(null);
                     setSkipped(true);
                     setPlanTypes(planTypes); // preserve selected plan types
+                    
+                    // Save progress for skipped field mapper step
+                    if (uploaded?.upload_id) {
+                      saveProgress('field_mapper', {
+                        skipped: true,
+                        field_config: extractedFieldConfig[0],
+                        plan_types: planTypes,
+                        table_names: tableNames,
+                        final_data: processedTables
+                      })
+                      
+                      // Also save progress for dashboard step since we're going there
+                      saveProgress('dashboard', {
+                        final_data: processedTables,
+                        field_config: extractedFieldConfig[0],
+                        skipped: true
+                      })
+                    }
                   }}
                   initialFields={fieldConfig}
                   initialMapping={mapping}

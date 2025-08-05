@@ -4,35 +4,25 @@ import {
   Pencil, 
   Trash2, 
   Plus, 
-  Save, 
   RotateCcw, 
   Download, 
-  Upload,
-  Eye,
-  EyeOff,
   ArrowUp,
   ArrowDown,
   Copy,
-  Scissors,
   FileText,
   Settings,
-  Check,
-  X,
   ChevronLeft,
   ChevronRight,
-  Filter,
   Search,
   MoreVertical,
   Edit3,
-  UserPlus,
-  UserMinus,
   ZoomIn,
   ZoomOut,
-  ExternalLink,
   Merge,
   Undo2,
   Sparkles,
-  Brain
+  MoreHorizontal,
+
 } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 
@@ -113,7 +103,6 @@ export default function TableEditor({
   onUseAnotherExtraction,
   onGoToFieldMapping,
   onGoToPreviousExtraction,
-  onClose,
   uploaded,
   loading = false,
   extractionHistory = [],
@@ -135,10 +124,10 @@ export default function TableEditor({
   const [showColumnMenu, setShowColumnMenu] = useState<{ tableIdx: number, colIdx: number } | null>(null)
   const [mergeSelection, setMergeSelection] = useState<{ tableIdx: number, colIdx: number } | null>(null)
   const [mergeHistory, setMergeHistory] = useState<MergeHistory[]>([])
+  const [showHeaderActions, setShowHeaderActions] = useState<number | null>(null)
+  const [showRowActions, setShowRowActions] = useState<{ tableIdx: number, rowIdx: number } | null>(null)
   
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const embedRef = useRef<HTMLDivElement>(null)
-  const rowMenuRef = useRef<HTMLDivElement>(null)
 
   const pdfDisplayUrl = getPdfUrl(uploaded)
 
@@ -284,7 +273,7 @@ export default function TableEditor({
     newTables[tableIdx].rows.splice(rowIdx, 0, newRow)
     onTablesChange(newTables)
     toast.success('Row added above')
-    setShowRowMenu(null)
+    setShowRowActions(null)
   }
 
   const addRowBelow = (tableIdx: number, rowIdx: number) => {
@@ -294,7 +283,7 @@ export default function TableEditor({
     newTables[tableIdx].rows.splice(rowIdx + 1, 0, newRow)
     onTablesChange(newTables)
     toast.success('Row added below')
-    setShowRowMenu(null)
+    setShowRowActions(null)
   }
 
   const deleteRow = (tableIdx: number, rowIdx: number) => {
@@ -303,7 +292,7 @@ export default function TableEditor({
     newTables[tableIdx].rows.splice(rowIdx, 1)
     onTablesChange(newTables)
     toast.success('Row deleted')
-    setShowRowMenu(null)
+    setShowRowActions(null)
   }
 
   const duplicateRow = (tableIdx: number, rowIdx: number) => {
@@ -313,7 +302,7 @@ export default function TableEditor({
     newTables[tableIdx].rows.splice(rowIdx + 1, 0, rowToDuplicate)
     onTablesChange(newTables)
     toast.success('Row duplicated')
-    setShowRowMenu(null)
+    setShowRowActions(null)
   }
 
   // Column operations
@@ -347,7 +336,7 @@ export default function TableEditor({
     
     onTablesChange(newTables)
     toast.success('Column deleted')
-    setShowColumnMenu(null)
+    setShowHeaderActions(null)
   }
 
   const renameColumn = (tableIdx: number, colIdx: number, newName: string) => {
@@ -356,13 +345,13 @@ export default function TableEditor({
     newTables[tableIdx].header[colIdx] = newName
     onTablesChange(newTables)
     toast.success('Column renamed')
-    setShowColumnMenu(null)
+    setShowHeaderActions(null)
   }
 
   // Merge columns functionality
   const startMergeSelection = (tableIdx: number, colIdx: number) => {
     setMergeSelection({ tableIdx, colIdx })
-    setShowColumnMenu(null)
+    setShowHeaderActions(null)
     toast.success('Click on another column to merge with')
   }
 
@@ -472,7 +461,7 @@ export default function TableEditor({
       rowIdx,
       values: [...row]
     })
-    setShowRowMenu(null)
+    setShowRowActions(null)
   }
 
   const saveRowEdit = () => {
@@ -594,6 +583,146 @@ export default function TableEditor({
       a.click();
     }
   };
+
+  // Header Action Menu Component
+  const HeaderActionMenu = ({ tableIdx, colIdx }: { tableIdx: number, colIdx: number }) => {
+    const [newName, setNewName] = useState(currentTable?.header[colIdx] || '')
+    const [isRenaming, setIsRenaming] = useState(false)
+
+    const handleRename = () => {
+      if (newName.trim()) {
+        renameColumn(tableIdx, colIdx, newName.trim())
+        setIsRenaming(false)
+      }
+    }
+
+    return (
+      <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 min-w-[200px]">
+        <div className="p-2 border-b border-gray-100">
+          <div className="text-xs font-medium text-gray-700 mb-2">Column Actions</div>
+        </div>
+        
+        {isRenaming ? (
+          <div className="p-3">
+            <input
+              type="text"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleRename()}
+              className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+              placeholder="New column name"
+              autoFocus
+            />
+            <div className="flex gap-1 mt-2">
+              <button
+                onClick={handleRename}
+                className="px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
+              >
+                Save
+              </button>
+              <button
+                onClick={() => setIsRenaming(false)}
+                className="px-2 py-1 bg-gray-300 text-gray-700 rounded text-xs hover:bg-gray-400"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="p-2 space-y-1">
+            <button
+              onClick={() => setIsRenaming(true)}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded transition-colors"
+            >
+              <Pencil className="w-4 h-4" />
+              Rename Column
+            </button>
+            
+            <button
+              onClick={() => addColumn(tableIdx, colIdx + 1)}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              Add Column After
+            </button>
+            
+            <button
+              onClick={() => startMergeSelection(tableIdx, colIdx)}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded transition-colors"
+            >
+              <Merge className="w-4 h-4" />
+              Merge with Another Column
+            </button>
+            
+            <div className="border-t border-gray-100 my-1"></div>
+            
+            <button
+              onClick={() => deleteColumn(tableIdx, colIdx)}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded transition-colors"
+            >
+              <Trash2 className="w-4 h-4" />
+              Delete Column
+            </button>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // Row Action Menu Component
+  const RowActionMenu = ({ tableIdx, rowIdx }: { tableIdx: number, rowIdx: number }) => {
+    return (
+      <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 min-w-[200px]">
+        <div className="p-2 border-b border-gray-100">
+          <div className="text-xs font-medium text-gray-700 mb-2">Row Actions</div>
+        </div>
+        
+        <div className="p-2 space-y-1">
+          <button
+            onClick={() => addRowAbove(tableIdx, rowIdx)}
+            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded transition-colors"
+          >
+            <ArrowUp className="w-4 h-4" />
+            Add Row Above
+          </button>
+          
+          <button
+            onClick={() => addRowBelow(tableIdx, rowIdx)}
+            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded transition-colors"
+          >
+            <ArrowDown className="w-4 h-4" />
+            Add Row Below
+          </button>
+          
+          <button
+            onClick={() => duplicateRow(tableIdx, rowIdx)}
+            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded transition-colors"
+          >
+            <Copy className="w-4 h-4" />
+            Duplicate Row
+          </button>
+          
+          <button
+            onClick={() => startRowEdit(tableIdx, rowIdx)}
+            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded transition-colors"
+          >
+            <Edit3 className="w-4 h-4" />
+            Edit Row
+          </button>
+          
+          <div className="border-t border-gray-100 my-1"></div>
+          
+          <button
+            onClick={() => deleteRow(tableIdx, rowIdx)}
+            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded transition-colors"
+          >
+            <Trash2 className="w-4 h-4" />
+            Delete Row
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="fixed inset-0 bg-gradient-to-br from-gray-50 to-blue-50 z-50">
@@ -821,39 +950,36 @@ export default function TableEditor({
                             {currentTable.header.map((header, colIdx) => (
                               <th
                                 key={colIdx}
-                                className="px-3 py-2 text-left text-xs font-medium text-gray-900 border-b border-gray-200 whitespace-nowrap"
+                                className="px-3 py-3 text-left text-xs font-medium text-gray-900 border-b border-gray-200 whitespace-nowrap relative"
                               >
-                                <div className="flex items-center gap-1">
-                                  <span className="truncate">{header}</span>
-                                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <button
-                                      onClick={() => startCellEdit(currentTableIdx, -1, colIdx)}
-                                      className="p-0.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
-                                    >
-                                      <Pencil size={10} />
-                                    </button>
-                                    <button
-                                      onClick={() => deleteColumn(currentTableIdx, colIdx)}
-                                      className="p-0.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                                    >
-                                      <Trash2 size={10} />
-                                    </button>
-                                  </div>
+                                <div className="flex items-center justify-between">
+                                  <span className="truncate flex-1">{header}</span>
+                                  <button
+                                    onClick={() => setShowHeaderActions(showHeaderActions === colIdx ? null : colIdx)}
+                                    className="ml-2 p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                                  >
+                                    <MoreHorizontal size={12} />
+                                  </button>
                                 </div>
+                                
+                                {/* Header Action Menu */}
+                                {showHeaderActions === colIdx && (
+                                  <HeaderActionMenu tableIdx={currentTableIdx} colIdx={colIdx} />
+                                )}
                               </th>
                             ))}
-                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-900 border-b border-gray-200 w-20 whitespace-nowrap">
+                            <th className="px-3 py-3 text-left text-xs font-medium text-gray-900 border-b border-gray-200 w-24 whitespace-nowrap">
                               Actions
                             </th>
                           </tr>
                         </thead>
                         <tbody>
                           {currentTable.rows.map((row, rowIdx) => (
-                            <tr key={rowIdx} className="hover:bg-gray-50 group">
+                            <tr key={rowIdx} className="hover:bg-gray-50 group relative">
                               {row.map((cell, colIdx) => (
                                 <td
                                   key={colIdx}
-                                  className="px-3 py-2 text-xs text-gray-900 border-b border-gray-100 whitespace-nowrap"
+                                  className="px-3 py-3 text-xs text-gray-900 border-b border-gray-100 whitespace-nowrap"
                                 >
                                   {editingCell && editingCell.tableIdx === currentTableIdx && editingCell.rowIdx === rowIdx && editingCell.colIdx === colIdx ? (
                                     <input
@@ -876,37 +1002,18 @@ export default function TableEditor({
                                   )}
                                 </td>
                               ))}
-                              <td className="px-3 py-2 text-xs text-gray-900 border-b border-gray-100 whitespace-nowrap">
-                                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <button
-                                    onClick={() => addRowAbove(currentTableIdx, rowIdx)}
-                                    className="p-0.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
-                                    title="Add row above"
-                                  >
-                                    <ArrowUp size={10} />
-                                  </button>
-                                  <button
-                                    onClick={() => addRowBelow(currentTableIdx, rowIdx)}
-                                    className="p-0.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
-                                    title="Add row below"
-                                  >
-                                    <ArrowDown size={10} />
-                                  </button>
-                                  <button
-                                    onClick={() => duplicateRow(currentTableIdx, rowIdx)}
-                                    className="p-0.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
-                                    title="Duplicate row"
-                                  >
-                                    <Copy size={10} />
-                                  </button>
-                                  <button
-                                    onClick={() => deleteRow(currentTableIdx, rowIdx)}
-                                    className="p-0.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                                    title="Delete row"
-                                  >
-                                    <Trash2 size={10} />
-                                  </button>
-                                </div>
+                              <td className="px-3 py-3 text-xs text-gray-900 border-b border-gray-100 whitespace-nowrap relative">
+                                <button
+                                  onClick={() => setShowRowActions(showRowActions?.tableIdx === currentTableIdx && showRowActions?.rowIdx === rowIdx ? null : { tableIdx: currentTableIdx, rowIdx })}
+                                  className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                                >
+                                  <MoreVertical size={12} />
+                                </button>
+                                
+                                {/* Row Action Menu */}
+                                {showRowActions?.tableIdx === currentTableIdx && showRowActions?.rowIdx === rowIdx && (
+                                  <RowActionMenu tableIdx={currentTableIdx} rowIdx={rowIdx} />
+                                )}
                               </td>
                             </tr>
                           ))}

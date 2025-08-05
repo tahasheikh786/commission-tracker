@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Eye, LayoutList } from "lucide-react";
+import { useRouter } from 'next/navigation';
 
 type Statement = {
   id: string;
@@ -20,6 +21,7 @@ type Props = {
 export default function CarrierStatementsTable({ statements, setStatements, onPreview, onCompare, onDelete }: Props) {
   const [selectedStatements, setSelectedStatements] = useState<Set<string>>(new Set());
   const [selectAll, setSelectAll] = useState(false);
+  const router = useRouter();
 
   const handleCheckboxChange = (id: string) => {
     const newSelectedStatements = new Set(selectedStatements);
@@ -96,13 +98,13 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
               <td className="p-2">{new Date(statement.uploaded_at).toLocaleDateString()}</td>
               <td className="p-2">
                 <span className={
-                  statement.status === "Approved"
+                  statement.status === "Approved" || statement.status === "completed"
                     ? "bg-green-100 text-green-700 px-2 py-1 rounded-md"
-                    : statement.status === "Rejected"
+                    : statement.status === "Rejected" || statement.status === "rejected"
                       ? "bg-red-100 text-red-700 px-2 py-1 rounded-md"
                       : "bg-yellow-100 text-yellow-700 px-2 py-1 rounded-md"
                 }>
-                  {statement.status}
+                  {statement.status === "extracted" || statement.status === "success" || statement.status === "pending" ? "Pending" : statement.status}
                 </span>
               </td>
               <td className="p-2">{statement.rejection_reason || "-"}</td>
@@ -123,6 +125,15 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
                 >
                   <LayoutList size={18} />
                 </button>
+                {(statement.status === "Pending" || statement.status === "pending" || statement.status === "extracted" || statement.status === "success") && (
+                  <button
+                    onClick={() => router.push(`/upload?resume=${statement.id}`)}
+                    className="px-3 py-1 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors"
+                    title="Complete Review"
+                  >
+                    Complete Review
+                  </button>
+                )}
               </td>
             </tr>
           ))}

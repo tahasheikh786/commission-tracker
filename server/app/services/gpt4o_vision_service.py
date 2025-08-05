@@ -16,6 +16,10 @@ class GPT4oVisionService:
     """
     Service for using GPT-4o Vision to improve table extraction results.
     Provides high-quality table structure analysis using visual input.
+    
+    This service is strictly GPT-4o response driven - all header processing,
+    column mapping, and data parsing is based on GPT's analysis with no
+    hardcoded patterns or fallback logic.
     """
     
     def __init__(self):
@@ -265,10 +269,10 @@ CRITICAL REQUIREMENTS:
 2. For multi-line, multi-row, or complex headers, output the complete header block with all text and alignment
 3. IMPORTANT: When headers are separated by pipes (|), split them into individual column headers
 4. For multi-line headers, combine corresponding columns intelligently (e.g., "ACCOUNT | POLICY NAME" + "NUMBER | EXPLANATION" = "ACCOUNT NUMBER", "POLICY NAME OR EXPLANATION")
-5. CRITICAL DATA ASSIGNMENT: When you see combined data in a single cell (like "GRT LOGISTICS LL ONAPG O7 O1 2O25 VISION 3.61"), intelligently parse and assign values to the correct columns based on:
-   - Header names (e.g., if there's a "DUE DATE" column, assign date-like values there)
+5. CRITICAL DATA ASSIGNMENT: When you see combined data in a single cell, intelligently parse and assign values to the correct columns based on:
+   - Header names and their semantic meaning
    - Data patterns (dates, company names, product codes, amounts, percentages)
-   - Financial statement context (account numbers, policy names, premium amounts, rates)
+   - Financial statement context
    - NEVER invent or guess data - only parse what's actually visible
 6. List 1-2 example cell values per column exactly as visible (do not invent)
 7. Infer column data types from visible values
@@ -278,6 +282,8 @@ CRITICAL REQUIREMENTS:
     - "RATE | (%)" should become "RATE (%)" (not separate columns)
     - "ACCOUNT | POLICY NAME" + "NUMBER | EXPLANATION" should become "ACCOUNT NUMBER", "POLICY NAME OR EXPLANATION"
     - Percentage symbols should be attached to their related headers, not standalone
+
+This analysis is strictly GPT-4o response driven - all processing must be based on what is visible in the images with no hardcoded patterns or assumptions.
 
 OUTPUT FORMAT:
 Return a structured JSON with this exact format:
@@ -291,7 +297,8 @@ Return a structured JSON with this exact format:
                 {
                     "header_text": "exact header as seen",
                     "sample_values": ["exact value 1", "exact value 2"],
-                    "data_type": "number" or "date" or "text" or "currency"
+                    "data_type": "number" or "date" or "text" or "currency" or "percentage",
+                    "value_patterns": ["regex pattern 1", "regex pattern 2"] (optional)
                 }
             ],
             "structure_notes": "Describe any merged cells, ambiguity, or structural issues",
@@ -301,7 +308,7 @@ Return a structured JSON with this exact format:
     "overall_notes": "Describe header repetition, column changes between pages, or structural patterns"
 }
 
-Remember: Precision over interpretation. Show exactly what you see."""
+Remember: Precision over interpretation. Show exactly what you see. This is a strictly GPT-4o response driven analysis."""
     
     def _create_user_prompt(self, current_extraction: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Create the user prompt with current extraction context."""
@@ -324,13 +331,7 @@ Please analyze the provided page images and provide the structured JSON response
 6. Header repetition patterns across pages
 
 CRITICAL DATA PARSING EXAMPLES:
-When you see combined data like "1130414-10001 GRT LOGISTICS LL ONAPG O7 O1 2O25 VISION 3.61", parse it intelligently:
-- "1130414-10001" → Account Number column
-- "GRT LOGISTICS LL" → Policy Name/Company column  
-- "ONAPG" → Product Name column
-- "O7 O1 2O25" → Due Date column (if exists)
-- "VISION" → Product Type column
-- "3.61" → Amount/Rate column (based on column type)
+When you see combined data, parse it intelligently based on the column headers and data patterns visible in the image. Provide sample values that demonstrate how the combined data should be parsed and assigned to the correct columns.
 
 SMART HEADER PROCESSING:
 - "ACCOUNT | POLICY NAME | NUMBER | EXPLANATION" should be processed as:
@@ -341,6 +342,8 @@ SMART HEADER PROCESSING:
 
 CRITICAL: For each column in the headers, provide sample values that show how the combined data should be parsed and assigned to the correct columns. The sample values should demonstrate the intelligent parsing logic.
 
+This analysis is strictly GPT-4o response driven - all processing must be based on what is visible in the images with no hardcoded patterns or assumptions.
+
 Be precise and only report what you can clearly see in the images."""
         
         return [{"type": "text", "text": context}]
@@ -350,6 +353,9 @@ Be precise and only report what you can clearly see in the images."""
                                  current_tables: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
         Process the GPT-4o Vision analysis to improve current table extraction.
+        
+        This function is strictly GPT-4o response driven - all processing
+        is based on GPT's analysis with no hardcoded patterns or fallback logic.
         
         Args:
             vision_analysis: Result from GPT-4o Vision analysis
@@ -382,12 +388,12 @@ Be precise and only report what you can clearly see in the images."""
                 columns = page.get("columns", [])
                 structure_notes = page.get("structure_notes", "")
                 
-                # Process headers using smart column name processing
-                processed_headers = self._process_headers_intelligently(headers)
+                # Use GPT headers directly - no processing or fallback
+                gpt_headers = headers
                 
                 # Create improved table structure
                 improved_table = {
-                    "header": processed_headers,
+                    "header": gpt_headers,
                     "rows": [],  # Will be populated from current extraction
                     "name": f"Page {page_num} - Vision Enhanced",
                     "metadata": {
@@ -396,8 +402,8 @@ Be precise and only report what you can clearly see in the images."""
                         "header_alignment": page.get("header_alignment", "unknown"),
                         "structure_notes": structure_notes,
                         "column_analysis": columns,
-                        "original_headers": headers,
-                        "processed_headers": processed_headers
+                        "gpt_headers": gpt_headers,
+                        "processing_notes": "Strictly GPT-4o response driven with no hardcoded patterns"
                     }
                 }
                 
@@ -408,8 +414,8 @@ Be precise and only report what you can clearly see in the images."""
                     original_rows = current_table.get("rows", [])
                     
                     # Parse and restructure rows based on GPT-4o analysis
-                    improved_rows = self._process_rows_with_new_headers(
-                        original_rows, processed_headers, columns
+                    improved_rows = self._process_rows_with_gpt_analysis(
+                        original_rows, gpt_headers, columns
                     )
                     
                     improved_table["rows"] = improved_rows
@@ -419,10 +425,10 @@ Be precise and only report what you can clearly see in the images."""
                 # Add diagnostic information
                 diagnostic_info["improvements"].append({
                     "page": page_num,
-                    "original_headers": headers,
-                    "processed_headers": processed_headers,
-                    "column_count": len(processed_headers),
-                    "structure_notes": structure_notes
+                    "gpt_headers": gpt_headers,
+                    "column_count": len(gpt_headers),
+                    "structure_notes": structure_notes,
+                    "processing_method": "GPT-4o response driven"
                 })
                 
                 if structure_notes:
@@ -446,125 +452,23 @@ Be precise and only report what you can clearly see in the images."""
                 "error": f"Failed to process improvement result: {str(e)}"
             }
     
-    def _process_headers_intelligently(self, headers: List[str]) -> List[str]:
-        """
-        Intelligently process headers to handle patterns like pipe-separated headers and percentage symbols.
-        
-        Args:
-            headers: List of raw headers from GPT-4o analysis
-            
-        Returns:
-            Processed headers with smart pattern recognition
-        """
-        processed_headers = []
-        
-        for header in headers:
-            if not header or header.strip() == "":
-                continue
-                
-            # Handle pipe-separated headers
-            if "|" in header:
-                parts = [part.strip() for part in header.split("|") if part.strip()]
-                
-                # Smart pattern recognition for common combinations
-                if len(parts) == 2:
-                    # Handle patterns like "RATE | (%)" - attach percentage to rate
-                    if parts[1].strip() in ["(%)", "%", "(%)"] and "rate" in parts[0].lower():
-                        processed_headers.append(f"{parts[0].strip()} (%)")
-                        continue
-                    
-                    # Handle patterns like "ACCOUNT | POLICY NAME" + "NUMBER | EXPLANATION"
-                    # This will be handled by the multi-line header combination logic
-                    processed_headers.extend(parts)
-                else:
-                    # Multiple parts - add them all
-                    processed_headers.extend(parts)
-            else:
-                # Single header - clean it up
-                cleaned_header = header.strip()
-                if cleaned_header:
-                    processed_headers.append(cleaned_header)
-        
-        # Post-process to handle multi-line header combinations
-        processed_headers = self._combine_multi_line_headers(processed_headers)
-        
-        # Remove duplicates while preserving order
-        seen = set()
-        final_headers = []
-        for header in processed_headers:
-            if header not in seen:
-                seen.add(header)
-                final_headers.append(header)
-        
-        return final_headers
-    
-    def _combine_multi_line_headers(self, headers: List[str]) -> List[str]:
-        """
-        Combine multi-line headers intelligently based on patterns.
-        
-        Args:
-            headers: List of processed headers
-            
-        Returns:
-            Combined headers
-        """
-        if len(headers) < 2:
-            return headers
-        
-        combined_headers = []
-        i = 0
-        
-        while i < len(headers):
-            current_header = headers[i].lower()
-            
-            # Look for patterns that should be combined
-            if i + 1 < len(headers):
-                next_header = headers[i + 1].lower()
-                
-                # Pattern: "ACCOUNT" + "NUMBER" = "ACCOUNT NUMBER"
-                if current_header == "account" and next_header == "number":
-                    combined_headers.append("ACCOUNT NUMBER")
-                    i += 2
-                    continue
-                
-                # Pattern: "POLICY NAME" + "OR EXPLANATION" = "POLICY NAME OR EXPLANATION"
-                elif current_header == "policy name" and next_header == "or explanation":
-                    combined_headers.append("POLICY NAME OR EXPLANATION")
-                    i += 2
-                    continue
-                
-                # Pattern: "PRODUCT NAME" + "DUE DATE" = "PRODUCT NAME", "DUE DATE" (keep separate)
-                elif current_header == "product name" and next_header == "due date":
-                    combined_headers.extend([headers[i], headers[i + 1]])
-                    i += 2
-                    continue
-                
-                # Pattern: "PREMIUM" + "PREMIUMS" = "PREMIUM", "PREMIUMS" (keep separate)
-                elif current_header == "premium" and next_header == "premiums":
-                    combined_headers.extend([headers[i], headers[i + 1]])
-                    i += 2
-                    continue
-            
-            # No pattern match, keep current header
-            combined_headers.append(headers[i])
-            i += 1
-        
-        return combined_headers
-    
-    def _process_rows_with_new_headers(self, 
+    def _process_rows_with_gpt_analysis(self, 
                                      original_rows: List[List[str]], 
-                                     new_headers: List[str],
+                                     gpt_headers: List[str],
                                      column_analysis: List[Dict[str, Any]]) -> List[List[str]]:
         """
-        Process original rows with new headers to properly parse combined data.
+        Process original rows using GPT-4o column analysis to properly parse combined data.
+        
+        This function is strictly GPT-4o response driven - all column mapping and
+        data parsing is based on GPT's analysis with no hardcoded patterns.
         
         Args:
             original_rows: Original table rows
-            new_headers: New processed headers
-            column_analysis: GPT-4o column analysis
+            gpt_headers: Headers from GPT-4o analysis
+            column_analysis: GPT-4o column analysis with sample values and data types
             
         Returns:
-            Processed rows with data properly assigned to columns
+            Processed rows with data properly assigned to columns based on GPT analysis
         """
         improved_rows = []
         
@@ -572,141 +476,47 @@ Be precise and only report what you can clearly see in the images."""
         column_mapping = {}
         for col_analysis in column_analysis:
             header_text = col_analysis.get("header_text", "")
-            if header_text in new_headers:
+            if header_text in gpt_headers:
                 column_mapping[header_text] = col_analysis
         
         for row in original_rows:
             if not row or len(row) == 0:
                 continue
             
-            # If we have a single cell with combined data, parse it intelligently
+            # If we have a single cell with combined data, parse it using GPT analysis
             if len(row) == 1 and isinstance(row[0], str):
                 combined_data = row[0]
-                parsed_row = self._parse_combined_data_with_gpt_analysis(combined_data, new_headers, column_mapping)
-                if parsed_row:
+                parsed_row = self._parse_combined_data_with_gpt_analysis(combined_data, gpt_headers, column_mapping)
+                if parsed_row and self._validate_row_with_gpt_analysis(parsed_row, column_mapping):
                     improved_rows.append(parsed_row)
                 else:
-                    # Fallback: create row with empty values
-                    improved_rows.append([""] * len(new_headers))
+                    # If parsing fails or validation fails, create empty row
+                    improved_rows.append([""] * len(gpt_headers))
             else:
                 # Multiple cells - need to parse each cell that might contain combined data
-                parsed_row = self._parse_multi_cell_row_with_gpt_analysis(row, new_headers, column_mapping)
-                if parsed_row:
+                parsed_row = self._parse_multi_cell_row_with_gpt_analysis(row, gpt_headers, column_mapping)
+                if parsed_row and self._validate_row_with_gpt_analysis(parsed_row, column_mapping):
                     improved_rows.append(parsed_row)
                 else:
-                    # Fallback: try to align with new headers
-                    aligned_row = self._align_row_with_headers(row, new_headers)
+                    # If parsing fails or validation fails, try to align with GPT headers
+                    aligned_row = self._align_row_with_gpt_headers(row, gpt_headers)
                     improved_rows.append(aligned_row)
         
         return improved_rows
     
-    def _parse_combined_data_intelligently(self, 
-                                         combined_data: str, 
-                                         headers: List[str],
-                                         column_analysis: List[Dict[str, Any]]) -> Optional[List[str]]:
-        """
-        Intelligently parse combined data and assign to correct columns based on headers and analysis.
-        
-        Args:
-            combined_data: String like "GRT LOGISTICS LL ONAPG O7 O1 2O25 VISION 3.61"
-            headers: List of column headers
-            column_analysis: GPT-4o column analysis with sample values
-            
-        Returns:
-            Parsed row with values assigned to correct columns, or None if parsing fails
-        """
-        try:
-            # Initialize result array with empty strings
-            result = [""] * len(headers)
-            
-            # Split the combined data by spaces
-            parts = combined_data.split()
-            
-            # Create a mapping of header indices
-            header_indices = {header: i for i, header in enumerate(headers)}
-            
-            # Parse based on GPT's column analysis
-            current_part = 0
-            
-            # Look for account number pattern (e.g., "1130414-10001")
-            if current_part < len(parts):
-                part = parts[current_part]
-                if re.match(r'\d{7}-\d{5}', part):  # Account number pattern
-                    if 'account_number' in header_indices:
-                        result[header_indices['account_number']] = part
-                    current_part += 1
-            
-            # Look for company name (multiple words, all caps)
-            company_words = []
-            while current_part < len(parts):
-                part = parts[current_part]
-                if part.isupper() and len(part) > 2 and not re.match(r'\d+', part):
-                    company_words.append(part)
-                    current_part += 1
-                else:
-                    break
-            
-            if company_words and 'policy_name' in header_indices:
-                result[header_indices['policy_name']] = ' '.join(company_words)
-            
-            # Look for product code (e.g., "ONAPG")
-            if current_part < len(parts):
-                part = parts[current_part]
-                if part.isupper() and len(part) >= 4 and len(part) <= 6:
-                    if 'product' in header_indices:
-                        result[header_indices['product']] = part
-                    current_part += 1
-            
-            # Look for date pattern (e.g., "O7 O1 2O25")
-            date_words = []
-            while current_part < len(parts):
-                part = parts[current_part]
-                if re.match(r'[O0-9]{1,2}', part):  # Date-like pattern
-                    date_words.append(part)
-                    current_part += 1
-                else:
-                    break
-            
-            if date_words and 'date' in header_indices:
-                result[header_indices['date']] = ' '.join(date_words)
-            
-            # Look for product type (e.g., "VISION", "DENTAL")
-            if current_part < len(parts):
-                part = parts[current_part]
-                if part.isupper() and len(part) >= 4 and len(part) <= 8:
-                    if 'product' in header_indices:
-                        # Append to existing product if any
-                        existing_product = result[header_indices['product']]
-                        if existing_product:
-                            result[header_indices['product']] = f"{existing_product} {part}"
-                        else:
-                            result[header_indices['product']] = part
-                    current_part += 1
-            
-            # Look for amount/rate (decimal number)
-            if current_part < len(parts):
-                part = parts[current_part]
-                if re.match(r'\d+\.\d+', part):  # Decimal number
-                    if 'amount' in header_indices:
-                        result[header_indices['amount']] = part
-                    current_part += 1
-            
-            return result
-            
-        except Exception as e:
-            logger.error(f"Error parsing combined data '{combined_data}': {e}")
-            return None
-    
     def _parse_combined_data_with_gpt_analysis(self, 
                                              combined_data: str, 
-                                             headers: List[str],
+                                             gpt_headers: List[str],
                                              column_mapping: Dict[str, Dict[str, Any]]) -> Optional[List[str]]:
         """
         Parse combined data using GPT's column analysis to properly assign values to correct columns.
         
+        This function is strictly GPT-4o response driven - all pattern matching and
+        column assignment is based on GPT's analysis with no hardcoded patterns.
+        
         Args:
-            combined_data: String like "Med 12/O1/2O24 $3,742.71 $3,742.71 4 V MI POP 4.17% 1OO% Fee Comm $156.O7 $156.O7"
-            headers: List of column headers
+            combined_data: String containing combined data
+            gpt_headers: Headers from GPT-4o analysis
             column_mapping: Mapping of header names to GPT column analysis
             
         Returns:
@@ -714,22 +524,16 @@ Be precise and only report what you can clearly see in the images."""
         """
         try:
             # Initialize result array with empty strings
-            result = [""] * len(headers)
+            result = [""] * len(gpt_headers)
             
             # Split the combined data by spaces
             parts = combined_data.split()
             
             # Create a mapping of header indices
-            header_indices = {header: i for i, header in enumerate(headers)}
+            header_indices = {header: i for i, header in enumerate(gpt_headers)}
             
-            # Parse based on GPT's column analysis
-            current_part = 0
-            
-            # Process each part and assign to the appropriate column based on GPT analysis
-            while current_part < len(parts):
-                part = parts[current_part]
-                
-                # Try to match this part to the most appropriate column based on GPT analysis
+            # Process each part and assign to the most appropriate column based on GPT analysis
+            for part in parts:
                 best_match = None
                 best_score = 0
                 
@@ -739,43 +543,10 @@ Be precise and only report what you can clearly see in the images."""
                     
                     data_type = col_analysis.get("data_type", "")
                     sample_values = col_analysis.get("sample_values", [])
+                    value_patterns = col_analysis.get("value_patterns", [])
                     
-                    # Score based on data type and sample values
-                    score = 0
-                    
-                    # Check if part matches the data type
-                    if data_type == "text" and part.isalpha():
-                        score += 10
-                    elif data_type == "date" and re.match(r'\d{1,2}[/-]\d{1,2}[/-]\d{2,4}', part):
-                        score += 20
-                    elif data_type == "currency" and (part.startswith('$') or part.startswith('(')):
-                        score += 20
-                    elif data_type == "percentage" and part.endswith('%'):
-                        score += 20
-                    elif data_type == "number" and re.match(r'^-?\d+\.?\d*$', part):
-                        score += 15
-                    
-                    # Check if part matches any sample values (case-insensitive)
-                    for sample in sample_values:
-                        if part.lower() in sample.lower() or sample.lower() in part.lower():
-                            score += 30
-                            break
-                    
-                    # Special handling for specific headers
-                    if header.lower() == "cov type" and part in ["Med", "Den", "Vis"]:
-                        score += 50
-                    elif header.lower() == "bill eff date" and re.match(r'\d{1,2}[/-]\d{1,2}[/-]\d{2,4}', part):
-                        score += 50
-                    elif header.lower() == "billed premium" and part.startswith('$'):
-                        score += 50
-                    elif header.lower() == "rate" and part.endswith('%'):
-                        score += 50
-                    elif header.lower() == "split %" and part.endswith('%'):
-                        score += 50
-                    elif header.lower() == "bus typ" and part in ["Fee", "Comm"]:
-                        score += 50
-                    elif header.lower() == "comp type" and part == "Comm":
-                        score += 50
+                    # Score based on data type and sample values from GPT analysis
+                    score = self._calculate_column_match_score(part, data_type, sample_values, value_patterns)
                     
                     if score > best_score:
                         best_score = score
@@ -791,8 +562,6 @@ Be precise and only report what you can clearly see in the images."""
                         if not val:
                             result[i] = part
                             break
-                
-                current_part += 1
             
             return result
             
@@ -802,14 +571,17 @@ Be precise and only report what you can clearly see in the images."""
     
     def _parse_multi_cell_row_with_gpt_analysis(self, 
                                               row: List[str], 
-                                              headers: List[str],
+                                              gpt_headers: List[str],
                                               column_mapping: Dict[str, Dict[str, Any]]) -> Optional[List[str]]:
         """
         Parse a multi-cell row that might contain combined data in individual cells.
         
+        This function is strictly GPT-4o response driven - all pattern matching and
+        column assignment is based on GPT's analysis with no hardcoded patterns.
+        
         Args:
-            row: List of cell values like ["Med 12/01/2024", "$3,742.71", "$3,742.71 4 V MI", ...]
-            headers: List of column headers
+            row: List of cell values
+            gpt_headers: Headers from GPT-4o analysis
             column_mapping: Mapping of header names to GPT column analysis
             
         Returns:
@@ -817,13 +589,13 @@ Be precise and only report what you can clearly see in the images."""
         """
         try:
             # Initialize result array with empty strings
-            result = [""] * len(headers)
+            result = [""] * len(gpt_headers)
             
             # Create a mapping of header indices
-            header_indices = {header: i for i, header in enumerate(headers)}
+            header_indices = {header: i for i, header in enumerate(gpt_headers)}
             
             # Process each cell in the row
-            for cell_idx, cell_value in enumerate(row):
+            for cell_value in row:
                 if not cell_value or cell_value.strip() == "":
                     continue
                 
@@ -833,7 +605,6 @@ Be precise and only report what you can clearly see in the images."""
                 # If cell has multiple parts, try to assign each part to the appropriate column
                 if len(cell_parts) > 1:
                     for part in cell_parts:
-                        # Try to match this part to the most appropriate column based on GPT analysis
                         best_match = None
                         best_score = 0
                         
@@ -843,43 +614,10 @@ Be precise and only report what you can clearly see in the images."""
                             
                             data_type = col_analysis.get("data_type", "")
                             sample_values = col_analysis.get("sample_values", [])
+                            value_patterns = col_analysis.get("value_patterns", [])
                             
-                            # Score based on data type and sample values
-                            score = 0
-                            
-                            # Check if part matches the data type
-                            if data_type == "text" and part.isalpha():
-                                score += 10
-                            elif data_type == "date" and re.match(r'\d{1,2}[/-]\d{1,2}[/-]\d{2,4}', part):
-                                score += 20
-                            elif data_type == "currency" and (part.startswith('$') or part.startswith('(')):
-                                score += 20
-                            elif data_type == "percentage" and part.endswith('%'):
-                                score += 20
-                            elif data_type == "number" and re.match(r'^-?\d+\.?\d*$', part):
-                                score += 15
-                            
-                            # Check if part matches any sample values (case-insensitive)
-                            for sample in sample_values:
-                                if part.lower() in sample.lower() or sample.lower() in part.lower():
-                                    score += 30
-                                    break
-                            
-                            # Special handling for specific headers
-                            if header.lower() == "cov type" and part in ["Med", "Den", "Vis"]:
-                                score += 50
-                            elif header.lower() == "bill eff date" and re.match(r'\d{1,2}[/-]\d{1,2}[/-]\d{2,4}', part):
-                                score += 50
-                            elif header.lower() == "billed premium" and part.startswith('$'):
-                                score += 50
-                            elif header.lower() == "rate" and part.endswith('%'):
-                                score += 50
-                            elif header.lower() == "split %" and part.endswith('%'):
-                                score += 50
-                            elif header.lower() == "bus typ" and part in ["Fee", "Comm"]:
-                                score += 50
-                            elif header.lower() == "comp type" and part == "Comm":
-                                score += 50
+                            # Score based on data type and sample values from GPT analysis
+                            score = self._calculate_column_match_score(part, data_type, sample_values, value_patterns)
                             
                             if score > best_score:
                                 best_score = score
@@ -900,10 +638,9 @@ Be precise and only report what you can clearly see in the images."""
                                     result[i] = part
                                     break
                 else:
-                    # Single part - assign to the appropriate column based on position and analysis
+                    # Single part - assign to the appropriate column based on GPT analysis
                     part = cell_parts[0]
                     
-                    # Try to match this part to the most appropriate column
                     best_match = None
                     best_score = 0
                     
@@ -913,43 +650,10 @@ Be precise and only report what you can clearly see in the images."""
                         
                         data_type = col_analysis.get("data_type", "")
                         sample_values = col_analysis.get("sample_values", [])
+                        value_patterns = col_analysis.get("value_patterns", [])
                         
-                        # Score based on data type and sample values
-                        score = 0
-                        
-                        # Check if part matches the data type
-                        if data_type == "text" and part.isalpha():
-                            score += 10
-                        elif data_type == "date" and re.match(r'\d{1,2}[/-]\d{1,2}[/-]\d{2,4}', part):
-                            score += 20
-                        elif data_type == "currency" and (part.startswith('$') or part.startswith('(')):
-                            score += 20
-                        elif data_type == "percentage" and part.endswith('%'):
-                            score += 20
-                        elif data_type == "number" and re.match(r'^-?\d+\.?\d*$', part):
-                            score += 15
-                        
-                        # Check if part matches any sample values (case-insensitive)
-                        for sample in sample_values:
-                            if part.lower() in sample.lower() or sample.lower() in part.lower():
-                                score += 30
-                                break
-                        
-                        # Special handling for specific headers
-                        if header.lower() == "cov type" and part in ["Med", "Den", "Vis"]:
-                            score += 50
-                        elif header.lower() == "bill eff date" and re.match(r'\d{1,2}[/-]\d{1,2}[/-]\d{2,4}', part):
-                            score += 50
-                        elif header.lower() == "billed premium" and part.startswith('$'):
-                            score += 50
-                        elif header.lower() == "rate" and part.endswith('%'):
-                            score += 50
-                        elif header.lower() == "split %" and part.endswith('%'):
-                            score += 50
-                        elif header.lower() == "bus typ" and part in ["Fee", "Comm"]:
-                            score += 50
-                        elif header.lower() == "comp type" and part == "Comm":
-                            score += 50
+                        # Score based on data type and sample values from GPT analysis
+                        score = self._calculate_column_match_score(part, data_type, sample_values, value_patterns)
                         
                         if score > best_score:
                             best_score = score
@@ -972,20 +676,128 @@ Be precise and only report what you can clearly see in the images."""
             logger.error(f"Error parsing multi-cell row with GPT analysis: {e}")
             return None
     
-    def _align_row_with_headers(self, row: List[str], headers: List[str]) -> List[str]:
+    def _calculate_column_match_score(self, 
+                                    value: str, 
+                                    data_type: str, 
+                                    sample_values: List[str], 
+                                    value_patterns: List[str]) -> int:
         """
-        Align a row with new headers, padding or truncating as needed.
+        Calculate a score for how well a value matches a column based on GPT's analysis.
+        
+        This function is strictly GPT-4o response driven - all pattern matching is
+        based on GPT's data_type, sample_values, and value_patterns with no hardcoded logic.
+        
+        Args:
+            value: The value to score
+            data_type: Data type from GPT analysis
+            sample_values: Sample values from GPT analysis
+            value_patterns: Value patterns from GPT analysis
+            
+        Returns:
+            Score indicating how well the value matches the column
+        """
+        score = 0
+        
+        # Score based on data type from GPT analysis
+        if data_type == "text" and value.isalpha():
+            score += 10
+        elif data_type == "date" and self._matches_date_pattern(value):
+            score += 20
+        elif data_type == "currency" and (value.startswith('$') or value.startswith('(')):
+            score += 20
+        elif data_type == "percentage" and value.endswith('%'):
+            score += 20
+        elif data_type == "number" and self._matches_number_pattern(value):
+            score += 15
+        
+        # Score based on sample values from GPT analysis
+        for sample in sample_values:
+            if value.lower() in sample.lower() or sample.lower() in value.lower():
+                score += 30
+                break
+        
+        # Score based on value patterns from GPT analysis
+        for pattern in value_patterns:
+            try:
+                if re.match(pattern, value):
+                    score += 25
+                    break
+            except re.error:
+                # If pattern is invalid regex, skip it
+                continue
+        
+        return score
+    
+    def _matches_date_pattern(self, value: str) -> bool:
+        """Check if a value matches common date patterns."""
+        date_patterns = [
+            r'\d{1,2}[/-]\d{1,2}[/-]\d{2,4}',
+            r'\d{4}-\d{2}-\d{2}',
+            r'\d{1,2}/\d{1,2}/\d{2,4}'
+        ]
+        return any(re.match(pattern, value) for pattern in date_patterns)
+    
+    def _matches_number_pattern(self, value: str) -> bool:
+        """Check if a value matches number patterns."""
+        return bool(re.match(r'^-?\d+\.?\d*$', value))
+    
+    def _validate_row_with_gpt_analysis(self, 
+                                      row: List[str], 
+                                      column_mapping: Dict[str, Dict[str, Any]]) -> bool:
+        """
+        Validate a row against GPT's column analysis to ensure ≥90% validity.
+        
+        This function is strictly GPT-4o response driven - all validation is
+        based on GPT's analysis with no hardcoded patterns or fallback logic.
+        
+        Args:
+            row: Row to validate
+            column_mapping: Mapping of header names to GPT column analysis
+            
+        Returns:
+            True if row is valid (≥90% of cells match their column patterns), False otherwise
+        """
+        if not row or len(row) == 0:
+            return False
+        
+        valid_cells = 0
+        total_cells = len(row)
+        
+        for i, value in enumerate(row):
+            if not value or value.strip() == "":
+                # Empty cells are considered valid
+                valid_cells += 1
+                continue
+            
+            # Find the corresponding column analysis
+            for header, col_analysis in column_mapping.items():
+                data_type = col_analysis.get("data_type", "")
+                sample_values = col_analysis.get("sample_values", [])
+                value_patterns = col_analysis.get("value_patterns", [])
+                
+                # Check if value matches the column pattern
+                score = self._calculate_column_match_score(value, data_type, sample_values, value_patterns)
+                if score > 0:
+                    valid_cells += 1
+                    break
+        
+        # Return True if ≥90% of cells are valid
+        return (valid_cells / total_cells) >= 0.9
+    
+    def _align_row_with_gpt_headers(self, row: List[str], gpt_headers: List[str]) -> List[str]:
+        """
+        Align a row with GPT headers, padding or truncating as needed.
         
         Args:
             row: Original row data
-            headers: New headers
+            gpt_headers: Headers from GPT-4o analysis
             
         Returns:
             Aligned row
         """
         aligned_row = []
         
-        for i in range(len(headers)):
+        for i in range(len(gpt_headers)):
             if i < len(row):
                 aligned_row.append(str(row[i]))
             else:

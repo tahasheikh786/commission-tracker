@@ -1,10 +1,11 @@
-from .models import Company, CompanyFieldMapping, DatabaseField, Extraction, EditedTable
-from .schemas import CompanyCreate, CompanyFieldMappingCreate, StatementUpload, DatabaseFieldCreate, DatabaseFieldUpdate, ExtractionCreate
+from .models import Company, CompanyFieldMapping, DatabaseField, Extraction, EditedTable, StatementUpload as StatementUploadModel
+from .schemas import CompanyCreate, CompanyFieldMappingCreate, StatementUpload, DatabaseFieldCreate, DatabaseFieldUpdate, ExtractionCreate, StatementUploadCreate, StatementUploadUpdate, PendingFile
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from datetime import datetime
 from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
+from typing import List, Optional
 
 async def get_company_by_name(db, name: str):
     result = await db.execute(select(Company).where(Company.name == name))
@@ -53,15 +54,16 @@ async def get_company_mappings(db, company_id):
 # crud.py
 
 async def save_statement_upload(db, upload: StatementUpload):
-    from app.db.models import StatementUpload as StatementUploadModel
     db_upload = StatementUploadModel(
         id=upload.id,
         company_id=upload.company_id,
         file_name=upload.file_name,
         uploaded_at=upload.uploaded_at,
         status=upload.status,
+        current_step=upload.current_step,
         raw_data=upload.raw_data,
-        mapping_used=upload.mapping_used
+        mapping_used=upload.mapping_used,
+        last_updated=upload.last_updated or datetime.utcnow()
     )
     db.add(db_upload)
     await db.commit()
@@ -69,7 +71,6 @@ async def save_statement_upload(db, upload: StatementUpload):
     return db_upload
 
 async def get_company_by_id(db, company_id):
-    from app.db.models import Company
     result = await db.execute(select(Company).where(Company.id == company_id))
     return result.scalar_one_or_none()
 
@@ -96,132 +97,314 @@ async def create_extraction(db, extraction: ExtractionCreate):
     await db.refresh(db_extraction)
     return db_extraction
 
+# Pending Functionality CRUD Operations
+
+async def create_statement_upload(db: AsyncSession, upload: StatementUploadCreate) -> StatementUploadModel:
+    """
+    Create a new statement upload with pending status.
+    """
+    db_upload = StatementUploadModel(
+        company_id=upload.company_id,
+        file_name=upload.file_name,
+        status=upload.status,
+        current_step=upload.current_step,
+        progress_data=upload.progress_data,
+        uploaded_at=datetime.utcnow(),
+        last_updated=datetime.utcnow()
+    )
+    db.add(db_upload)
+    await db.commit()
+    await db.refresh(db_upload)
+    return db_upload
+
+async def update_statement_upload(db: AsyncSession, upload_id: UUID, update_data: StatementUploadUpdate) -> Optional[StatementUploadModel]:
+    """
+    Update statement upload with progress data and status changes.
+    """
+    result = await db.execute(select(StatementUploadModel).where(StatementUploadModel.id == upload_id))
+    db_upload = result.scalar_one_or_none()
+    
+    if not db_upload:
+        return None
+    
+    # Update fields if provided
+    update_dict = update_data.dict(exclude_unset=True)
+    for field, value in update_dict.items():
+        setattr(db_upload, field, value)
+    
+    # Update last_updated timestamp
+    db_upload.last_updated = datetime.utcnow()
+    
+    # Set completed_at if status is approved or rejected
+    if update_data.status in ['approved', 'rejected']:
+        db_upload.completed_at = datetime.utcnow()
+    
+    await db.commit()
+    await db.refresh(db_upload)
+    return db_upload
+
+async def get_pending_files_for_company(db: AsyncSession, company_id: UUID) -> List[PendingFile]:
+    """
+    Get all pending files for a specific company.
+    """
+    result = await db.execute(
+        select(StatementUploadModel).where(
+            StatementUploadModel.company_id == company_id,
+            StatementUploadModel.status == 'pending'
+        ).order_by(StatementUploadModel.last_updated.desc())
+    )
+    uploads = result.scalars().all()
+    
+    pending_files = []
+    for upload in uploads:
+        # Create human-readable progress summary
+        progress_summary = get_progress_summary(upload.current_step, upload.progress_data)
+        
+        pending_file = PendingFile(
+            id=upload.id,
+            company_id=upload.company_id,
+            file_name=upload.file_name,
+            uploaded_at=upload.uploaded_at,
+            current_step=upload.current_step,
+            last_updated=upload.last_updated,
+            progress_summary=progress_summary
+        )
+        pending_files.append(pending_file)
+    
+    return pending_files
+
+async def get_statement_upload_by_id(db: AsyncSession, upload_id: UUID) -> Optional[StatementUploadModel]:
+    """
+    Get statement upload by ID with all progress data.
+    """
+    result = await db.execute(select(StatementUploadModel).where(StatementUploadModel.id == upload_id))
+    return result.scalar_one_or_none()
+
+async def save_progress_data(db: AsyncSession, upload_id: UUID, step: str, data: dict, session_id: Optional[str] = None) -> bool:
+    """
+    Save progress data for a specific step.
+    """
+    result = await db.execute(select(StatementUploadModel).where(StatementUploadModel.id == upload_id))
+    db_upload = result.scalar_one_or_none()
+    
+    if not db_upload:
+        return False
+    
+    # Update progress data
+    if not db_upload.progress_data:
+        db_upload.progress_data = {}
+    
+    db_upload.progress_data[step] = data
+    db_upload.current_step = step
+    db_upload.last_updated = datetime.utcnow()
+    
+    if session_id:
+        db_upload.session_id = session_id
+    
+    await db.commit()
+    return True
+
+async def get_progress_data(db: AsyncSession, upload_id: UUID, step: str) -> Optional[dict]:
+    """
+    Get progress data for a specific step.
+    """
+    result = await db.execute(select(StatementUploadModel).where(StatementUploadModel.id == upload_id))
+    db_upload = result.scalar_one_or_none()
+    
+    if not db_upload or not db_upload.progress_data:
+        return None
+    
+    return db_upload.progress_data.get(step)
+
+async def resume_upload_session(db: AsyncSession, upload_id: UUID) -> Optional[dict]:
+    """
+    Resume an upload session with all saved progress data.
+    """
+    result = await db.execute(select(StatementUploadModel).where(StatementUploadModel.id == upload_id))
+    db_upload = result.scalar_one_or_none()
+    
+    if not db_upload or db_upload.status != 'pending':
+        return None
+    
+    return {
+        'id': db_upload.id,
+        'company_id': db_upload.company_id,
+        'file_name': db_upload.file_name,
+        'current_step': db_upload.current_step,
+        'progress_data': db_upload.progress_data,
+        'raw_data': db_upload.raw_data,
+        'edited_tables': db_upload.edited_tables,
+        'field_mapping': db_upload.field_mapping,
+        'field_config': db_upload.field_config,
+        'last_updated': db_upload.last_updated
+    }
+
+async def delete_pending_upload(db: AsyncSession, upload_id: UUID) -> bool:
+    """
+    Delete a pending upload.
+    """
+    result = await db.execute(select(StatementUploadModel).where(StatementUploadModel.id == upload_id))
+    db_upload = result.scalar_one_or_none()
+    
+    if not db_upload or db_upload.status != 'pending':
+        return False
+    
+    await db.delete(db_upload)
+    await db.commit()
+    return True
+
+def get_progress_summary(current_step: str, progress_data: Optional[dict]) -> str:
+    """
+    Generate a human-readable summary of the current progress.
+    """
+    step_descriptions = {
+        'upload': 'File uploaded, ready for processing',
+        'table_editor': 'Tables extracted, ready for editing',
+        'field_mapper': 'Tables edited, ready for field mapping',
+        'dashboard': 'Field mapping completed, ready for review',
+        'completed': 'Processing completed'
+    }
+    
+    base_description = step_descriptions.get(current_step, f'At step: {current_step}')
+    
+    if progress_data:
+        if current_step == 'table_editor' and 'tables' in progress_data:
+            table_count = len(progress_data['tables'])
+            return f'{base_description} ({table_count} tables)'
+        elif current_step == 'field_mapper' and 'mapping' in progress_data:
+            mapped_fields = len(progress_data['mapping'])
+            return f'{base_description} ({mapped_fields} fields mapped)'
+    
+    return base_description
+
 async def save_statement_review(
     db, *,
-    upload_id: UUID,
+    upload_id,
     final_data,
     status: str,
     field_config,
     rejection_reason: str = None,
     plan_types: list = None
 ):
-    from app.db.models import StatementUpload
-    upload = await db.get(StatementUpload, upload_id)
-    if not upload:
-        raise Exception(f"StatementUpload with ID {upload_id} not found. Please ensure the upload was created successfully.")
-
-    upload.final_data = final_data
-    upload.status = status
-    upload.rejection_reason = rejection_reason
-    upload.mapping_used = field_config  # optional
-    if plan_types is not None:
-        upload.plan_types = plan_types
+    """
+    Save statement review with updated status tracking.
+    """
+    result = await db.execute(select(StatementUploadModel).where(StatementUploadModel.id == upload_id))
+    db_upload = result.scalar_one_or_none()
+    
+    if not db_upload:
+        return None
+    
+    # Update the upload with final data
+    db_upload.final_data = final_data
+    db_upload.status = status
+    db_upload.current_step = 'completed'
+    db_upload.field_config = field_config
+    db_upload.rejection_reason = rejection_reason
+    db_upload.plan_types = plan_types
+    db_upload.completed_at = datetime.utcnow()
+    db_upload.last_updated = datetime.utcnow()
+    
     await db.commit()
-    await db.refresh(upload)
-    return upload
+    await db.refresh(db_upload)
+    return db_upload
 
 async def get_all_statement_reviews(db):
-    from app.db.models import StatementUpload, Company
-    stmt = (
-        select(StatementUpload, Company.name)
-        .join(Company, StatementUpload.company_id == Company.id)
-        .where(StatementUpload.status.in_(["Approved", "Rejected"]))
-    )
-    result = await db.execute(stmt)
-    return [
-        {
-            **row[0].__dict__,
-            "company_name": row[1]
-        }
-        for row in result.all()
-    ]
-
-async def get_statements_for_company(db, company_id):
-    """Returns all uploads/statements for a given company (carrier)"""
-    from app.db.models import StatementUpload
+    """
+    Get all statement reviews with pending files included.
+    """
     result = await db.execute(
-        select(StatementUpload)
-        .where(StatementUpload.company_id == company_id)
-        .order_by(StatementUpload.uploaded_at.desc())
+        select(StatementUploadModel).order_by(StatementUploadModel.last_updated.desc())
     )
     return result.scalars().all()
 
+async def get_statements_for_company(db, company_id):
+    """
+    Get all statements for a company including pending files.
+    """
+    result = await db.execute(
+        select(StatementUploadModel).where(StatementUploadModel.company_id == company_id)
+        .order_by(StatementUploadModel.last_updated.desc())
+    )
+    return result.scalars().all()
 
 async def delete_company(db: AsyncSession, company_id: str):
     # Fetch the company to ensure it exists
-    company = await db.execute(select(Company).where(Company.id == company_id))
-    company = company.scalar_one_or_none()
+    company = await get_company_by_id(db, company_id)
+    if not company:
+        raise ValueError(f"Company with ID {company_id} not found")
     
-    if company:
-        # Delete the company if found
-        await db.delete(company)
-        await db.commit()
-    else:
-        raise Exception(f"Company with ID {company_id} not found.")
+    # Delete the company
+    await db.delete(company)
+    await db.commit()
+    return True
 
-# Add missing get_statement_by_id function
 async def get_statement_by_id(db: AsyncSession, statement_id: str):
-    from app.db.models import StatementUpload
-    result = await db.execute(select(StatementUpload).where(StatementUpload.id == statement_id))
+    result = await db.execute(select(StatementUploadModel).where(StatementUploadModel.id == statement_id))
     return result.scalar_one_or_none()
 
-# Add missing delete_statement function
 async def delete_statement(db: AsyncSession, statement_id: str):
-    from app.db.models import StatementUpload
     statement = await get_statement_by_id(db, statement_id)
     if not statement:
-        raise Exception(f"Statement with ID {statement_id} not found")
+        raise ValueError(f"Statement with ID {statement_id} not found")
     
     await db.delete(statement)
     await db.commit()
+    return True
 
 async def update_company_name(db, company_id: str, new_name: str):
-    from .models import Company
-    result = await db.execute(select(Company).where(Company.id == company_id))
-    company = result.scalar_one_or_none()
+    company = await get_company_by_id(db, company_id)
     if not company:
-        raise Exception(f"Company with ID {company_id} not found.")
+        raise ValueError(f"Company with ID {company_id} not found")
+    
     company.name = new_name
     await db.commit()
     await db.refresh(company)
     return company
 
 async def get_latest_statement_upload_for_company(db, company_id):
-    from app.db.models import StatementUpload
     result = await db.execute(
-        select(StatementUpload)
-        .where(StatementUpload.company_id == company_id)
-        .order_by(StatementUpload.uploaded_at.desc())
+        select(StatementUploadModel)
+        .where(StatementUploadModel.company_id == company_id)
+        .order_by(StatementUploadModel.uploaded_at.desc())
         .limit(1)
     )
     return result.scalar_one_or_none()
 
 async def save_company_mapping_config(db, company_id, plan_types, table_names, field_config):
-    from app.db.models import StatementUpload
-    # Get the latest upload for this company
-    result = await db.execute(
-        select(StatementUpload)
-        .where(StatementUpload.company_id == company_id)
-        .order_by(StatementUpload.uploaded_at.desc())
-        .limit(1)
-    )
-    upload = result.scalar_one_or_none()
-    if upload:
-        upload.plan_types = plan_types
-        # Save table names into raw_data if possible
-        if upload.raw_data and table_names:
-            for i, t in enumerate(upload.raw_data):
-                if i < len(table_names):
-                    if isinstance(t, dict):
-                        t['name'] = table_names[i]
-        upload.field_config = field_config
+    """
+    Save company mapping configuration with progress tracking.
+    """
+    # Find the latest upload for this company
+    latest_upload = await get_latest_statement_upload_for_company(db, company_id)
+    
+    if latest_upload:
+        # Update the upload with mapping configuration
+        latest_upload.field_config = field_config
+        latest_upload.plan_types = plan_types
+        latest_upload.current_step = 'field_mapper'
+        latest_upload.last_updated = datetime.utcnow()
+        
+        # Save mapping data in progress_data
+        if not latest_upload.progress_data:
+            latest_upload.progress_data = {}
+        
+        latest_upload.progress_data['field_mapper'] = {
+            'plan_types': plan_types,
+            'table_names': table_names,
+            'field_config': field_config
+        }
+        
         await db.commit()
-        await db.refresh(upload)
-    return upload
+        await db.refresh(latest_upload)
+        return latest_upload
+    
+    return None
 
-# Database Field CRUD Operations
 async def create_database_field(db: AsyncSession, field: DatabaseFieldCreate):
-    """Create a new database field"""
+    """
+    Create a new database field.
+    """
     db_field = DatabaseField(
         field_key=field.field_key,
         display_name=field.display_name,
@@ -234,7 +417,9 @@ async def create_database_field(db: AsyncSession, field: DatabaseFieldCreate):
     return db_field
 
 async def get_all_database_fields(db: AsyncSession, active_only: bool = True):
-    """Get all database fields, optionally filtered by active status"""
+    """
+    Get all database fields, optionally filtered by active status.
+    """
     query = select(DatabaseField)
     if active_only:
         query = query.where(DatabaseField.is_active == 1)
@@ -242,186 +427,173 @@ async def get_all_database_fields(db: AsyncSession, active_only: bool = True):
     return result.scalars().all()
 
 async def get_database_field_by_id(db: AsyncSession, field_id: UUID):
-    """Get a database field by ID"""
+    """
+    Get database field by ID.
+    """
     result = await db.execute(select(DatabaseField).where(DatabaseField.id == field_id))
     return result.scalar_one_or_none()
 
 async def get_database_field_by_key(db: AsyncSession, field_key: str):
-    """Get a database field by field_key"""
+    """
+    Get database field by key.
+    """
     result = await db.execute(select(DatabaseField).where(DatabaseField.field_key == field_key))
     return result.scalar_one_or_none()
 
 async def update_database_field(db: AsyncSession, field_id: UUID, field_update: DatabaseFieldUpdate):
-    """Update a database field"""
-    field = await get_database_field_by_id(db, field_id)
-    if not field:
-        raise Exception(f"Database field with ID {field_id} not found")
+    """
+    Update database field.
+    """
+    db_field = await get_database_field_by_id(db, field_id)
+    if not db_field:
+        return None
     
     update_data = field_update.dict(exclude_unset=True)
-    if 'is_active' in update_data:
-        update_data['is_active'] = 1 if update_data['is_active'] else 0
+    for field, value in update_data.items():
+        setattr(db_field, field, value)
     
-    for key, value in update_data.items():
-        setattr(field, key, value)
-    
+    db_field.updated_at = datetime.utcnow()
     await db.commit()
-    await db.refresh(field)
-    return field
+    await db.refresh(db_field)
+    return db_field
 
 async def delete_database_field(db: AsyncSession, field_id: UUID):
-    """Delete a database field (soft delete by setting is_active to 0)"""
-    field = await get_database_field_by_id(db, field_id)
-    if not field:
-        raise Exception(f"Database field with ID {field_id} not found")
+    """
+    Delete database field (soft delete by setting is_active to 0).
+    """
+    db_field = await get_database_field_by_id(db, field_id)
+    if not db_field:
+        return False
     
-    field.is_active = 0
+    db_field.is_active = 0
+    db_field.updated_at = datetime.utcnow()
     await db.commit()
-    await db.refresh(field)
-    return field
+    return True
 
 async def initialize_default_database_fields(db: AsyncSession):
-    """Initialize default database fields if none exist"""
+    """
+    Initialize default database fields if none exist.
+    """
     existing_fields = await get_all_database_fields(db, active_only=False)
     if existing_fields:
         return existing_fields
     
     default_fields = [
+        {"field_key": "company_name", "display_name": "Company Name", "description": "Name of the company"},
         {"field_key": "group_id", "display_name": "Group Id", "description": "Unique identifier for the group"},
-        {"field_key": "group_state", "display_name": "Group State", "description": "State where the group is located"},
         {"field_key": "policy_number", "display_name": "Policy Number", "description": "Policy identification number"},
-        {"field_key": "client_name", "display_name": "Client Name", "description": "Name of the client or group"},
         {"field_key": "commission_earned", "display_name": "Commission Earned", "description": "Commission amount earned"},
-        {"field_key": "premium_total", "display_name": "Premium Total", "description": "Total premium amount"},
-        {"field_key": "premium_current_month", "display_name": "Premium Current Month", "description": "Premium for current month"},
-        {"field_key": "total_subscribers", "display_name": "Total Subscribers", "description": "Total number of subscribers"},
-        {"field_key": "plan_type", "display_name": "Plan Type", "description": "Type of insurance plan"},
-        {"field_key": "plan_effective_date", "display_name": "Plan Effective Date", "description": "Date when plan becomes effective"},
-        {"field_key": "coverage_period_start", "display_name": "Coverage Period Start", "description": "Start date of coverage period"},
-        {"field_key": "coverage_period_end", "display_name": "Coverage Period End", "description": "End date of coverage period"},
-        {"field_key": "carrier_name", "display_name": "Carrier Name", "description": "Name of the insurance carrier"},
-        {"field_key": "payment_date", "display_name": "Payment Date", "description": "Date of payment"},
-        {"field_key": "invoice_total", "display_name": "Invoice Total", "description": "Total invoice amount"},
-        {"field_key": "stoploss_total", "display_name": "Stoploss Total", "description": "Total stoploss amount"},
         {"field_key": "commission_rate", "display_name": "Commission Rate", "description": "Commission rate percentage"},
         {"field_key": "total_commission_paid", "display_name": "Total Commission Paid", "description": "Total commission amount paid"},
-        {"field_key": "adjustment_amount", "display_name": "Adjustment Amount", "description": "Adjustment amount"},
-        {"field_key": "adjustment_type", "display_name": "Adjustment Type", "description": "Type of adjustment"},
-        {"field_key": "adjustment_period_start", "display_name": "Adjustment Period Start", "description": "Start date of adjustment period"},
-        {"field_key": "adjustment_period_end", "display_name": "Adjustment Period End", "description": "End date of adjustment period"},
-        {"field_key": "statement_total_amount", "display_name": "Statement Total Amount", "description": "Total amount on statement"},
         {"field_key": "individual_commission", "display_name": "Individual Commission", "description": "Individual commission amount"}
     ]
     
     created_fields = []
     for field_data in default_fields:
-        field = DatabaseField(
-            field_key=field_data["field_key"],
-            display_name=field_data["display_name"],
-            description=field_data["description"],
-            is_active=1
-        )
-        db.add(field)
-        created_fields.append(field)
-    
-    await db.commit()
-    for field in created_fields:
-        await db.refresh(field)
+        field = DatabaseFieldCreate(**field_data)
+        created_field = await create_database_field(db, field)
+        created_fields.append(created_field)
     
     return created_fields
 
-
-# Edited Table CRUD functions
 async def save_edited_tables(db: AsyncSession, tables_data: list):
     """
-    Save edited tables to the database.
+    Save edited tables with progress tracking.
     """
-    saved_tables = []
+    if not tables_data:
+        return None
     
-    for table_data in tables_data:
-        db_table = EditedTable(
-            upload_id=table_data["upload_id"],
-            company_id=table_data["company_id"],
-            name=table_data["name"],
-            header=table_data["header"],
-            rows=table_data["rows"]
-        )
-        db.add(db_table)
-        saved_tables.append(db_table)
+    # Get the upload_id from the first table
+    upload_id = tables_data[0].get('upload_id')
+    if not upload_id:
+        return None
+    
+    # Update the upload with edited tables
+    result = await db.execute(select(StatementUploadModel).where(StatementUploadModel.id == upload_id))
+    db_upload = result.scalar_one_or_none()
+    
+    if not db_upload:
+        return None
+    
+    db_upload.edited_tables = tables_data
+    db_upload.current_step = 'table_editor'
+    db_upload.last_updated = datetime.utcnow()
+    
+    # Save in progress_data
+    if not db_upload.progress_data:
+        db_upload.progress_data = {}
+    
+    db_upload.progress_data['table_editor'] = {
+        'tables': tables_data,
+        'table_count': len(tables_data)
+    }
     
     await db.commit()
-    
-    # Refresh all saved tables to get their IDs
-    for table in saved_tables:
-        await db.refresh(table)
-    
-    return saved_tables
-
+    await db.refresh(db_upload)
+    return db_upload
 
 async def get_edited_tables(db: AsyncSession, upload_id: str):
     """
-    Retrieve edited tables for a specific upload.
+    Get edited tables for an upload.
     """
-    result = await db.execute(
-        select(EditedTable).where(EditedTable.upload_id == upload_id)
-    )
-    return result.scalars().all()
-
+    result = await db.execute(select(StatementUploadModel).where(StatementUploadModel.id == upload_id))
+    db_upload = result.scalar_one_or_none()
+    
+    if not db_upload:
+        return None
+    
+    return db_upload.edited_tables
 
 async def update_upload_tables(db: AsyncSession, upload_id: str, tables_data: list):
     """
-    Update the original upload with the edited tables.
+    Update upload tables with progress tracking.
     """
-    from .models import StatementUpload as StatementUploadModel
+    result = await db.execute(select(StatementUploadModel).where(StatementUploadModel.id == upload_id))
+    db_upload = result.scalar_one_or_none()
     
-    # Convert tables data to the format expected by the upload
-    tables_for_upload = []
-    for table_data in tables_data:
-        table_for_upload = {
-            "name": table_data["name"],
-            "header": table_data["header"],
-            "rows": table_data["rows"]
-        }
-        tables_for_upload.append(table_for_upload)
+    if not db_upload:
+        return None
     
-    # Update the upload record
-    result = await db.execute(
-        select(StatementUploadModel).where(StatementUploadModel.id == upload_id)
-    )
-    upload = result.scalar_one_or_none()
+    db_upload.raw_data = tables_data
+    db_upload.current_step = 'table_editor'
+    db_upload.last_updated = datetime.utcnow()
     
-    if upload:
-        upload.raw_data = tables_for_upload
-        upload.updated_at = datetime.utcnow()
-        await db.commit()
-        await db.refresh(upload)
+    # Save in progress_data
+    if not db_upload.progress_data:
+        db_upload.progress_data = {}
     
-    return upload
-
+    db_upload.progress_data['extraction'] = {
+        'tables': tables_data,
+        'table_count': len(tables_data)
+    }
+    
+    await db.commit()
+    await db.refresh(db_upload)
+    return db_upload
 
 async def delete_edited_tables(db: AsyncSession, upload_id: str):
     """
-    Delete all edited tables for a specific upload.
+    Delete edited tables for an upload.
     """
-    result = await db.execute(
-        select(EditedTable).where(EditedTable.upload_id == upload_id)
-    )
-    tables = result.scalars().all()
+    result = await db.execute(select(StatementUploadModel).where(StatementUploadModel.id == upload_id))
+    db_upload = result.scalar_one_or_none()
     
-    for table in tables:
-        await db.delete(table)
+    if not db_upload:
+        return False
+    
+    db_upload.edited_tables = None
+    
+    # Remove from progress_data
+    if db_upload.progress_data and 'table_editor' in db_upload.progress_data:
+        del db_upload.progress_data['table_editor']
     
     await db.commit()
-    return len(tables)
-
+    return True
 
 async def get_upload_by_id(db: AsyncSession, upload_id: str):
     """
-    Retrieve upload information by upload ID.
+    Get upload by ID with all progress data.
     """
-    from .models import StatementUpload as StatementUploadModel
-    
-    result = await db.execute(
-        select(StatementUploadModel).where(StatementUploadModel.id == upload_id)
-    )
+    result = await db.execute(select(StatementUploadModel).where(StatementUploadModel.id == upload_id))
     return result.scalar_one_or_none()
 

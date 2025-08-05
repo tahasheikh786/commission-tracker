@@ -36,13 +36,55 @@ class StatementUpload(BaseModel):
     company_id: UUID
     file_name: str
     uploaded_at: datetime
-    status: str
-    raw_data: List[Dict[str, Any]]  # <--- Accepts a list of table dicts!
-    mapping_used: Optional[dict] = None
+    
+    # Status Management
+    status: str  # pending, approved, rejected, processing
+    current_step: str  # upload, table_editor, field_mapper, dashboard, completed
+    
+    # Progress Data Storage
+    progress_data: Optional[Dict[str, Any]] = None
+    raw_data: Optional[List[Dict[str, Any]]] = None
+    edited_tables: Optional[List[Dict[str, Any]]] = None
+    field_mapping: Optional[Dict[str, Any]] = None
+    final_data: Optional[List[Dict[str, Any]]] = None
+    
+    # Metadata
+    mapping_used: Optional[Dict[str, Any]] = None
+    field_config: Optional[Any] = None  # Can be list or dict to handle both old and new formats
+    rejection_reason: Optional[str] = None
     plan_types: Optional[List[str]] = None
+    
+    # Timestamps
+    last_updated: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    
+    # User session tracking
+    session_id: Optional[str] = None
+    auto_save_enabled: bool = True
 
     class Config:
         orm_mode = True
+
+class StatementUploadCreate(BaseModel):
+    company_id: UUID
+    file_name: str
+    status: str = "pending"
+    current_step: str = "upload"
+    progress_data: Optional[Dict[str, Any]] = None
+
+class StatementUploadUpdate(BaseModel):
+    status: Optional[str] = None
+    current_step: Optional[str] = None
+    progress_data: Optional[Dict[str, Any]] = None
+    raw_data: Optional[List[Dict[str, Any]]] = None
+    edited_tables: Optional[List[Dict[str, Any]]] = None
+    field_mapping: Optional[Dict[str, Any]] = None
+    final_data: Optional[List[Dict[str, Any]]] = None
+    field_config: Optional[Any] = None  # Can be list or dict to handle both old and new formats
+    rejection_reason: Optional[str] = None
+    plan_types: Optional[List[str]] = None
+    session_id: Optional[str] = None
+    auto_save_enabled: Optional[bool] = None
 
 class ExtractionCreate(BaseModel):
     company_id: str
@@ -69,16 +111,29 @@ class StatementReview(BaseModel):
     company_id: UUID
     file_name: str
     uploaded_at: datetime
-    status: str  # "Approved" | "Rejected"
+    status: str  # "Approved" | "Rejected" | "Pending"
+    current_step: str  # Current step in the process
     final_data: Optional[List[Dict[str, Any]]] = None
-    field_config: Optional[List[Dict[str, str]]] = None
+    field_config: Optional[Any] = None  # Can be list or dict to handle both old and new formats
     rejection_reason: Optional[str] = None
     plan_types: Optional[List[str]] = None
-    raw_data: Optional[List[Dict[str, Any]]] = None  # <-- Add this line
+    raw_data: Optional[List[Dict[str, Any]]] = None
+    last_updated: datetime
 
     class Config:
         from_attributes = True  # For Pydantic v2
 
+class PendingFile(BaseModel):
+    id: UUID
+    company_id: UUID
+    file_name: str
+    uploaded_at: datetime
+    current_step: str
+    last_updated: datetime
+    progress_summary: Optional[str] = None  # Human-readable summary of progress
+
+    class Config:
+        orm_mode = True
 
 class MappingConfig(BaseModel):
     mapping: Dict[str, str]
