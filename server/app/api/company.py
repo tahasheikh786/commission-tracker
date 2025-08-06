@@ -35,12 +35,34 @@ async def delete_company(company_id: str, db: AsyncSession = Depends(get_db)):
 @router.delete("/companies/")
 async def delete_multiple_companies(request: CompanyIds, db: AsyncSession = Depends(get_db)):
     company_ids = request.company_ids
-    for company_id in company_ids:
-        try:
-            await crud.delete_company(db, company_id)
-        except Exception as e:
-            return {"error": f"Failed to delete company with ID {company_id}: {str(e)}"}
-    return {"message": "Selected companies deleted successfully"}
+    deleted_count = 0
+    errors = []
+    
+    try:
+        for company_id in company_ids:
+            try:
+                await crud.delete_company(db, company_id)
+                deleted_count += 1
+            except Exception as e:
+                errors.append(f"Failed to delete company with ID {company_id}: {str(e)}")
+        
+        if errors:
+            # Return error response with 400 status code
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Some deletions failed. Deleted: {deleted_count}, Errors: {errors}"
+            )
+        
+        return {"message": f"Successfully deleted {deleted_count} companies"}
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
+    except Exception as e:
+        # Return error response with 500 status code for unexpected errors
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Transaction failed: {str(e)}"
+        )
 
 @router.patch("/companies/{company_id}", response_model=schemas.Company)
 async def update_company(company_id: str, update: CompanyUpdate, db: AsyncSession = Depends(get_db)):

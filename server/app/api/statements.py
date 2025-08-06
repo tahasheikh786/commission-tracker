@@ -58,11 +58,21 @@ async def get_pdf(file_path: str):
 
 @router.delete("/companies/{company_id}/statements/{statement_id}")
 async def delete_statement(statement_id: str, db: AsyncSession = Depends(get_db)):
-    statement = await crud.get_statement_by_id(db, statement_id)
-    if not statement:
-        raise HTTPException(status_code=404, detail="Statement not found")
-    await crud.delete_statement(db, statement_id)
-    return {"message": "Statement deleted successfully"}
+    try:
+        statement = await crud.get_statement_by_id(db, statement_id)
+        if not statement:
+            raise HTTPException(status_code=404, detail="Statement not found")
+        await crud.delete_statement(db, statement_id)
+        return {"message": "Statement deleted successfully"}
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
+    except Exception as e:
+        # Return error response with 500 status code for unexpected errors
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Failed to delete statement: {str(e)}"
+        )
 
 @router.delete("/companies/{company_id}/statements/")
 async def delete_multiple_statements(
@@ -71,12 +81,38 @@ async def delete_multiple_statements(
     db: AsyncSession = Depends(get_db)
 ):
     statement_ids = request.statement_ids
-    for statement_id in statement_ids:
-        statement = await crud.get_statement_by_id(db, str(statement_id))
-        if not statement:
-            continue
-        await crud.delete_statement(db, str(statement_id))
-    return {"message": "Selected statements deleted successfully"}
+    deleted_count = 0
+    errors = []
+    
+    try:
+        for statement_id in statement_ids:
+            try:
+                statement = await crud.get_statement_by_id(db, str(statement_id))
+                if not statement:
+                    errors.append(f"Statement with ID {statement_id} not found")
+                    continue
+                await crud.delete_statement(db, str(statement_id))
+                deleted_count += 1
+            except Exception as e:
+                errors.append(f"Failed to delete statement with ID {statement_id}: {str(e)}")
+        
+        if errors:
+            # Return error response with 400 status code
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Some deletions failed. Deleted: {deleted_count}, Errors: {errors}"
+            )
+        
+        return {"message": f"Successfully deleted {deleted_count} statements"}
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
+    except Exception as e:
+        # Return error response with 500 status code for unexpected errors
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Transaction failed: {str(e)}"
+        )
 
 @router.get("/statements/presigned-url/")
 def get_presigned_pdf_url(s3_key: str):

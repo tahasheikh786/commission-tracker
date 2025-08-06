@@ -22,7 +22,13 @@ export default function CompanySelect({
     setLoading(true)
     fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/`)
       .then(r => r.json())
-      .then(setCompanies)
+      .then((data) => {
+        // Sort companies alphabetically by name
+        const sortedCompanies = data.sort((a: Company, b: Company) => 
+          a.name.localeCompare(b.name)
+        );
+        setCompanies(sortedCompanies);
+      })
       .catch(() => toast.error("Failed to load companies"))
       .finally(() => setLoading(false))
   }, [])

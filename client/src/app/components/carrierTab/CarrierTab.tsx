@@ -6,6 +6,7 @@ import EditMappingModal from "./EditMappingModal";
 import CompareModal from "./CompareModal";
 import StatementPreviewModal from "./StatementPreviewModal";
 import DatabaseFieldsManager from "./DatabaseFieldsManager";
+import PlanTypesManager from "./PlanTypesManager";
 import toast from 'react-hot-toast';
 import Loader from "@/app/upload/components/Loader";
 
@@ -30,14 +31,21 @@ export default function CarrierTab() {
   const [showCompareIdx, setShowCompareIdx] = useState<number | null>(null);
   const [loadingCarriers, setLoadingCarriers] = useState(true);
   const [loadingStatements, setLoadingStatements] = useState(false);
-  const [activeTab, setActiveTab] = useState<'carriers' | 'database-fields'>('carriers');
+  const [deletingCarriers, setDeletingCarriers] = useState(false);
+  const [activeTab, setActiveTab] = useState<'carriers' | 'database-fields' | 'plan-types'>('carriers');
 
   // Fetch carriers on mount
   useEffect(() => {
     setLoadingCarriers(true);
     fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/`)
       .then(r => r.json())
-      .then(setCarriers)
+      .then((data) => {
+        // Sort carriers alphabetically by name
+        const sortedCarriers = data.sort((a: Carrier, b: Carrier) => 
+          a.name.localeCompare(b.name)
+        );
+        setCarriers(sortedCarriers);
+      })
       .finally(() => setLoadingCarriers(false));
   }, []);
 
@@ -57,7 +65,7 @@ export default function CarrierTab() {
   // Handle deletion of selected statements
   const handleDelete = (ids: string[]) => {
     if (!selected) return;
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${selected.id}/statements`, {
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${selected.id}/statements/`, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
@@ -70,25 +78,35 @@ export default function CarrierTab() {
         toast.success('Statements deleted successfully!');
       })
       .catch((error) => {
+        console.error('Delete statements error:', error);
         toast.error('Error deleting statements.');
       });
   };
 
   const handleCarrierDelete = (ids: string[]) => {
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies`, {
+    setDeletingCarriers(true);
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/`, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ company_ids: ids }),
     })
-      .then(res => {
-        if (!res.ok) throw new Error('Failed to delete carriers');
+      .then(async res => {
+        if (!res.ok) {
+          const errorData = await res.json();
+          throw new Error(errorData.detail || 'Failed to delete carriers');
+        }
+        const result = await res.json();
         setCarriers(carriers.filter(carrier => !ids.includes(carrier.id)));
-        toast.success('Carriers deleted successfully!');
+        toast.success(result.message || 'Carriers deleted successfully!');
       })
       .catch((error) => {
-        toast.error('Error deleting carriers.');
+        console.error('Delete error:', error);
+        toast.error(error.message || 'Error deleting carriers.');
+      })
+      .finally(() => {
+        setDeletingCarriers(false);
       });
   };
   
@@ -118,6 +136,16 @@ export default function CarrierTab() {
         >
           Database Fields
         </button>
+        <button
+          onClick={() => setActiveTab('plan-types')}
+          className={`px-4 py-2 rounded-md font-medium transition ${
+            activeTab === 'plan-types'
+              ? 'bg-white text-blue-600 shadow-sm'
+              : 'text-gray-600 hover:text-gray-900'
+          }`}
+        >
+          Add Plan Types
+        </button>
       </div>
 
       {activeTab === 'carriers' ? (
@@ -131,7 +159,8 @@ export default function CarrierTab() {
               setCarriers(prev => prev.map(car => car.id === c.id ? { ...car, name: c.name } : car));
             }}
             loading={loadingCarriers}
-            onDelete={handleCarrierDelete} 
+            onDelete={handleCarrierDelete}
+            deleting={deletingCarriers}
           />
           <div className="flex-1 bg-white/80 rounded-2xl shadow p-6 min-h-[320px]">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-3 gap-3">
@@ -160,8 +189,10 @@ export default function CarrierTab() {
             )}
           </div>
         </div>
-      ) : (
+      ) : activeTab === 'database-fields' ? (
         <DatabaseFieldsManager />
+      ) : (
+        <PlanTypesManager />
       )}
       {/* Modals */}
       {showEditMapping && selected && (

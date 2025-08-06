@@ -42,10 +42,10 @@ async def create_database_field(
 ):
     """Create a new database field"""
     try:
-        # Check if field_key already exists
-        existing_field = await crud.get_database_field_by_key(db, field.field_key)
+        # Check if display_name already exists
+        existing_field = await crud.get_database_field_by_display_name(db, field.display_name)
         if existing_field:
-            raise HTTPException(status_code=400, detail="Field key already exists")
+            raise HTTPException(status_code=400, detail=f"Field with display name '{field.display_name}' already exists")
         
         created_field = await crud.create_database_field(db, field)
         return created_field
@@ -62,11 +62,11 @@ async def update_database_field(
 ):
     """Update a database field"""
     try:
-        # Check if field_key is being updated and if it already exists
-        if field_update.field_key:
-            existing_field = await crud.get_database_field_by_key(db, field_update.field_key)
+        # If display_name is being updated, check if it already exists
+        if field_update.display_name:
+            existing_field = await crud.get_database_field_by_display_name(db, field_update.display_name)
             if existing_field and existing_field.id != field_id:
-                raise HTTPException(status_code=400, detail="Field key already exists")
+                raise HTTPException(status_code=400, detail=f"Field with display name '{field_update.display_name}' already exists")
         
         updated_field = await crud.update_database_field(db, field_id, field_update)
         return updated_field

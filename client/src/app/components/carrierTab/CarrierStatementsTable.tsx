@@ -109,14 +109,17 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
               </td>
               <td className="p-2">{statement.rejection_reason || "-"}</td>
               <td className="p-2 flex gap-2 justify-center">
-                <button
-                  title="View mapped table"
-                  className="text-blue-600 hover:bg-blue-100 p-1 rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
-                  onClick={() => onPreview(idx)}
-                  aria-label={`View mapped table for ${statement.file_name}`}
-                >
-                  <Eye size={18} />
-                </button>
+                {/* Show eye icon only for approved/rejected statements */}
+                {(statement.status === "Approved" || statement.status === "completed" || statement.status === "Rejected" || statement.status === "rejected") && (
+                  <button
+                    title="View mapped table"
+                    className="text-blue-600 hover:bg-blue-100 p-1 rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    onClick={() => onPreview(idx)}
+                    aria-label={`View mapped table for ${statement.file_name}`}
+                  >
+                    <Eye size={18} />
+                  </button>
+                )}
                 <button
                   title="Compare mapped & extracted"
                   className="text-purple-600 hover:bg-purple-100 p-1 rounded focus:outline-none focus:ring-2 focus:ring-purple-400"

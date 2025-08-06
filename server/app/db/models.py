@@ -71,8 +71,16 @@ class Extraction(Base):
 class DatabaseField(Base):
     __tablename__ = 'database_fields'
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    field_key = Column(String, unique=True, nullable=False)
-    display_name = Column(String, nullable=False)
+    display_name = Column(String, unique=True, nullable=False)
+    description = Column(Text)
+    is_active = Column(Integer, default=1)  # 1 for active, 0 for inactive
+    created_at = Column(DateTime, server_default=text('now()'), nullable=False)
+    updated_at = Column(DateTime, server_default=text('now()'), onupdate=text('now()'), nullable=False)
+
+class PlanType(Base):
+    __tablename__ = 'plan_types'
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    display_name = Column(String, unique=True, nullable=False)
     description = Column(Text)
     is_active = Column(Integer, default=1)  # 1 for active, 0 for inactive
     created_at = Column(DateTime, server_default=text('now()'), nullable=False)

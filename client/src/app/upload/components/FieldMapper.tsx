@@ -66,14 +66,12 @@ function DraggableRow({
 }
 
 
-const PLAN_TYPES = [
-  { value: 'medical', label: 'Medical' },
-  { value: 'dental', label: 'Dental' },
-  { value: 'vision', label: 'Vision' },
-  { value: 'life', label: 'Life' },
-  { value: 'disability', label: 'Disability' },
-  { value: 'other', label: 'Other' },
-]
+// Plan types will be fetched from backend
+type PlanType = {
+  plan_key: string
+  display_name: string
+  description?: string
+}
 
 // Remove mergeStandardAndCustomFields and just use initialFields as-is
 export default function FieldMapper({
@@ -104,6 +102,8 @@ export default function FieldMapper({
   const [newFieldName, setNewFieldName] = useState('')
   const [newFieldKey, setNewFieldKey] = useState('')
   const [planTypes, setPlanTypes] = useState<string[]>(initialPlanTypes)
+  const [availablePlanTypes, setAvailablePlanTypes] = useState<PlanType[]>([])
+  const [loadingPlanTypes, setLoadingPlanTypes] = useState(true)
 
 
   console.log(initialFields, fields, "FIELDS")
@@ -127,7 +127,7 @@ export default function FieldMapper({
         if (response.ok) {
           const data = await response.json()
           const fieldsFromBackend = data.map((field: any) => ({
-            field: field.field_key,
+            field: field.display_name,
             label: field.display_name
           }))
           setDatabaseFields(fieldsFromBackend)
@@ -151,6 +151,30 @@ export default function FieldMapper({
 
     fetchDatabaseFields()
   }, [initialFields])
+
+  // Fetch plan types from backend
+  useEffect(() => {
+    async function fetchPlanTypes() {
+      try {
+        setLoadingPlanTypes(true)
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/plan-types/?active_only=true`)
+        if (response.ok) {
+          const data = await response.json()
+          setAvailablePlanTypes(data)
+        } else {
+          console.error('Failed to fetch plan types')
+          toast.error('Failed to load plan types')
+        }
+      } catch (error) {
+        console.error('Error fetching plan types:', error)
+        toast.error('Failed to load plan types')
+      } finally {
+        setLoadingPlanTypes(false)
+      }
+    }
+
+    fetchPlanTypes()
+  }, [])
 
   // Sync mapping and fields if props change
   useEffect(() => {
@@ -280,22 +304,31 @@ export default function FieldMapper({
       {/* Plan Type Selection */}
       <div className="mb-6 bg-white rounded-lg border border-gray-200 p-6">
         <label className="block text-lg font-semibold text-gray-800 mb-3">Plan Types</label>
-        <div className="flex flex-wrap gap-3">
-          {PLAN_TYPES.map(pt => (
-            <label key={pt.value} className={
-              `inline-flex items-center px-4 py-2 rounded-lg border border-gray-300 bg-white shadow-sm cursor-pointer transition-all hover:shadow-md ${planTypes.includes(pt.value) ? 'ring-2 ring-blue-400 bg-blue-50' : ''}`
-            }>
-              <input
-                type="checkbox"
-                className="form-checkbox accent-blue-600 mr-2 h-4 w-4"
-                checked={planTypes.includes(pt.value)}
-                onChange={() => handlePlanTypeChange(pt.value)}
-              />
-              <span className="text-sm font-medium text-gray-800">{pt.label}</span>
-            </label>
-          ))}
-        </div>
-        <div className="text-sm text-gray-500 mt-2">Select all plan types included in this statement. You can select multiple.</div>
+        {loadingPlanTypes ? (
+          <div className="flex items-center justify-center py-4">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+            <span className="ml-2 text-gray-600">Loading plan types...</span>
+          </div>
+        ) : (
+          <>
+            <div className="flex flex-wrap gap-3">
+              {availablePlanTypes.map((pt: PlanType) => (
+                <label key={pt.plan_key} className={
+                  `inline-flex items-center px-4 py-2 rounded-lg border border-gray-300 bg-white shadow-sm cursor-pointer transition-all hover:shadow-md ${planTypes.includes(pt.plan_key) ? 'ring-2 ring-blue-400 bg-blue-50' : ''}`
+                }>
+                  <input
+                    type="checkbox"
+                    className="form-checkbox accent-blue-600 mr-2 h-4 w-4"
+                    checked={planTypes.includes(pt.plan_key)}
+                    onChange={() => handlePlanTypeChange(pt.plan_key)}
+                  />
+                  <span className="text-sm font-medium text-gray-800">{pt.display_name}</span>
+                </label>
+              ))}
+            </div>
+            <div className="text-sm text-gray-500 mt-2">Select all plan types included in this statement. You can select multiple.</div>
+          </>
+        )}
       </div>
 
       {/* Field Mapping Table */}

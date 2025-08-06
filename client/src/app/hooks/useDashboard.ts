@@ -20,7 +20,7 @@ interface Statement {
   id: string;
   file_name: string;
   company_name: string;
-  status: 'extracted' | 'success' | 'completed' | 'Approved' | 'rejected';
+  status: 'extracted' | 'success' | 'completed' | 'Approved' | 'rejected' | 'pending';
   uploaded_at: string;
   last_updated: string;
   completed_at?: string;
@@ -71,7 +71,11 @@ export function useCarriers() {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/dashboard/carriers`);
       if (!response.ok) throw new Error('Failed to fetch carriers');
       const data = await response.json();
-      setCarriers(data);
+      // Sort carriers alphabetically by name
+      const sortedCarriers = data.sort((a: Carrier, b: Carrier) => 
+        a.name.localeCompare(b.name)
+      );
+      setCarriers(sortedCarriers);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
       console.error('Error fetching carriers:', err);

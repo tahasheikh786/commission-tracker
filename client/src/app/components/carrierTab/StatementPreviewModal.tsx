@@ -9,22 +9,27 @@ type Props = {
 export default function StatementPreviewModal({ statement, onClose }: Props) {
     return (
         <Modal onClose={onClose}>
-            <div className="w-full lg:max-w-7xl max-h-[80vh] overflow-auto mx-auto">
-                <div className="mb-2 font-semibold">Mapped Table Preview</div>
-                {statement.final_data && statement.final_data.length > 0 ? (
-                    <DashboardTable
-                        tables={statement.final_data}
-                        fieldConfig={statement.field_config || []}
-                        onEditMapping={() => { }}
-                        readOnly
-                    />
-                ) : (
-                    <div className="text-gray-500 py-8 text-center">
-                        No mapped data available for this statement.
-                    </div>
-                )}
+            <div className="w-full h-full flex flex-col">
+                <div className="p-6 pb-2">
+                    <div className="font-semibold text-lg">Mapped Table Preview</div>
+                </div>
+                <div className="flex-1 overflow-hidden px-6 pb-6">
+                    {statement.final_data && statement.final_data.length > 0 ? (
+                        <div className="h-full overflow-auto">
+                            <DashboardTable
+                                tables={statement.final_data}
+                                fieldConfig={statement.field_config || []}
+                                onEditMapping={() => { }}
+                                readOnly
+                            />
+                        </div>
+                    ) : (
+                        <div className="text-gray-500 py-8 text-center">
+                            No mapped data available for this statement.
+                        </div>
+                    )}
+                </div>
             </div>
-
         </Modal>
     );
 }

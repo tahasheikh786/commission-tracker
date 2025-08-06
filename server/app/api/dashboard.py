@@ -163,4 +163,109 @@ async def get_carriers_with_statement_counts(db: AsyncSession = Depends(get_db))
         
         return formatted_carriers
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching carriers: {str(e)}") 
+        raise HTTPException(status_code=500, detail=f"Error fetching carriers: {str(e)}")
+
+@router.get("/dashboard/carriers/{carrier_id}/statements")
+async def get_statements_by_carrier(carrier_id: UUID, db: AsyncSession = Depends(get_db)):
+    """Get all statements for a specific carrier"""
+    try:
+        # Get carrier name
+        carrier_result = await db.execute(
+            select(Company.name).where(Company.id == carrier_id)
+        )
+        carrier_name = carrier_result.scalar()
+        
+        if not carrier_name:
+            raise HTTPException(status_code=404, detail="Carrier not found")
+        
+        # Get statements for this carrier
+        result = await db.execute(
+            select(StatementUpload)
+            .join(Company, StatementUpload.company_id == Company.id)
+            .where(Company.id == carrier_id)
+            .order_by(StatementUpload.uploaded_at.desc())
+        )
+        statements = result.scalars().all()
+        
+        formatted_statements = []
+        for statement in statements:
+            formatted_statements.append({
+                "id": str(statement.id),
+                "file_name": statement.file_name,
+                "company_name": carrier_name,
+                "status": statement.status,
+                "uploaded_at": statement.uploaded_at.isoformat() if statement.uploaded_at else None,
+                "last_updated": statement.last_updated.isoformat() if statement.last_updated else None,
+                "completed_at": statement.completed_at.isoformat() if statement.completed_at else None,
+                "rejection_reason": statement.rejection_reason,
+                "plan_types": statement.plan_types,
+                "raw_data": statement.raw_data,
+                "edited_tables": statement.edited_tables,
+                "final_data": statement.final_data
+            })
+        
+        return formatted_statements
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching carrier statements: {str(e)}")
+
+@router.get("/dashboard/carriers/{carrier_id}/statements/{status}")
+async def get_statements_by_carrier_and_status(
+    carrier_id: UUID, 
+    status: str, 
+    db: AsyncSession = Depends(get_db)
+):
+    """Get statements for a specific carrier filtered by status"""
+    try:
+        if status not in ['pending', 'approved', 'rejected']:
+            raise HTTPException(status_code=400, detail="Invalid status. Must be pending, approved, or rejected")
+        
+        # Get carrier name
+        carrier_result = await db.execute(
+            select(Company.name).where(Company.id == carrier_id)
+        )
+        carrier_name = carrier_result.scalar()
+        
+        if not carrier_name:
+            raise HTTPException(status_code=404, detail="Carrier not found")
+        
+        # Map frontend status to database statuses
+        status_mapping = {
+            'pending': ['extracted', 'success', 'pending'],
+            'approved': ['completed', 'Approved'],
+            'rejected': ['rejected']
+        }
+        
+        db_statuses = status_mapping.get(status, [])
+        
+        # Get statements for this carrier with status filter
+        result = await db.execute(
+            select(StatementUpload)
+            .join(Company, StatementUpload.company_id == Company.id)
+            .where(Company.id == carrier_id)
+            .where(StatementUpload.status.in_(db_statuses))
+            .order_by(StatementUpload.uploaded_at.desc())
+        )
+        statements = result.scalars().all()
+        
+        formatted_statements = []
+        for statement in statements:
+            formatted_statements.append({
+                "id": str(statement.id),
+                "file_name": statement.file_name,
+                "company_name": carrier_name,
+                "status": statement.status,
+                "uploaded_at": statement.uploaded_at.isoformat() if statement.uploaded_at else None,
+                "last_updated": statement.last_updated.isoformat() if statement.last_updated else None,
+                "completed_at": statement.completed_at.isoformat() if statement.completed_at else None,
+                "rejection_reason": statement.rejection_reason,
+                "plan_types": statement.plan_types,
+                "raw_data": statement.raw_data,
+                "edited_tables": statement.edited_tables,
+                "final_data": statement.final_data
+            })
+        
+        return formatted_statements
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching carrier statements: {str(e)}")
+
+ 

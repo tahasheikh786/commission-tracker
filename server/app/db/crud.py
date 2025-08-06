@@ -1,9 +1,10 @@
-from .models import Company, CompanyFieldMapping, DatabaseField, Extraction, EditedTable, StatementUpload as StatementUploadModel
-from .schemas import CompanyCreate, CompanyFieldMappingCreate, StatementUpload, DatabaseFieldCreate, DatabaseFieldUpdate, ExtractionCreate, StatementUploadCreate, StatementUploadUpdate, PendingFile
+from .models import Company, CompanyFieldMapping, DatabaseField, PlanType, Extraction, EditedTable, StatementUpload as StatementUploadModel
+from .schemas import CompanyCreate, CompanyFieldMappingCreate, StatementUpload, DatabaseFieldCreate, DatabaseFieldUpdate, PlanTypeCreate, PlanTypeUpdate, ExtractionCreate, StatementUploadCreate, StatementUploadUpdate, PendingFile
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from datetime import datetime
 from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import text
 from uuid import UUID
 from typing import List, Optional
 
@@ -334,10 +335,54 @@ async def delete_company(db: AsyncSession, company_id: str):
     if not company:
         raise ValueError(f"Company with ID {company_id} not found")
     
-    # Delete the company
-    await db.delete(company)
-    await db.commit()
-    return True
+    try:
+        # Check which tables exist before trying to delete from them
+        result = await db.execute(text("""
+            SELECT table_name 
+            FROM information_schema.tables 
+            WHERE table_schema = 'public' 
+            AND table_name IN ('company_field_mappings', 'edited_tables', 'statement_uploads', 'extractions')
+        """))
+        existing_tables = {row[0] for row in result.fetchall()}
+        
+        # Delete related data first (cascade delete)
+        # Delete company field mappings
+        if 'company_field_mappings' in existing_tables:
+            await db.execute(
+                text("DELETE FROM company_field_mappings WHERE company_id = :company_id"),
+                {"company_id": company_id}
+            )
+        
+        # Delete edited tables (only if table exists)
+        if 'edited_tables' in existing_tables:
+            await db.execute(
+                text("DELETE FROM edited_tables WHERE company_id = :company_id"),
+                {"company_id": company_id}
+            )
+        
+        # Delete statement uploads
+        if 'statement_uploads' in existing_tables:
+            await db.execute(
+                text("DELETE FROM statement_uploads WHERE company_id = :company_id"),
+                {"company_id": company_id}
+            )
+        
+        # Delete extractions
+        if 'extractions' in existing_tables:
+            await db.execute(
+                text("DELETE FROM extractions WHERE company_id = :company_id"),
+                {"company_id": company_id}
+            )
+        
+        # Finally delete the company
+        await db.delete(company)
+        
+        # Commit the transaction
+        await db.commit()
+        return True
+    except Exception as e:
+        await db.rollback()
+        raise ValueError(f"Failed to delete company: {str(e)}")
 
 async def get_statement_by_id(db: AsyncSession, statement_id: str):
     result = await db.execute(select(StatementUploadModel).where(StatementUploadModel.id == statement_id))
@@ -348,9 +393,30 @@ async def delete_statement(db: AsyncSession, statement_id: str):
     if not statement:
         raise ValueError(f"Statement with ID {statement_id} not found")
     
-    await db.delete(statement)
-    await db.commit()
-    return True
+    try:
+        # Check if edited_tables table exists before trying to delete from it
+        result = await db.execute(text("""
+            SELECT table_name 
+            FROM information_schema.tables 
+            WHERE table_schema = 'public' 
+            AND table_name = 'edited_tables'
+        """))
+        edited_tables_exists = result.fetchone() is not None
+        
+        # Delete related edited tables first (only if table exists)
+        if edited_tables_exists:
+            await db.execute(
+                text("DELETE FROM edited_tables WHERE upload_id = :upload_id"),
+                {"upload_id": statement_id}
+            )
+        
+        # Delete the statement
+        await db.delete(statement)
+        await db.commit()
+        return True
+    except Exception as e:
+        await db.rollback()
+        raise ValueError(f"Failed to delete statement: {str(e)}")
 
 async def update_company_name(db, company_id: str, new_name: str):
     company = await get_company_by_id(db, company_id)
@@ -406,7 +472,6 @@ async def create_database_field(db: AsyncSession, field: DatabaseFieldCreate):
     Create a new database field.
     """
     db_field = DatabaseField(
-        field_key=field.field_key,
         display_name=field.display_name,
         description=field.description,
         is_active=field.is_active
@@ -433,11 +498,11 @@ async def get_database_field_by_id(db: AsyncSession, field_id: UUID):
     result = await db.execute(select(DatabaseField).where(DatabaseField.id == field_id))
     return result.scalar_one_or_none()
 
-async def get_database_field_by_key(db: AsyncSession, field_key: str):
+async def get_database_field_by_display_name(db: AsyncSession, display_name: str):
     """
-    Get database field by key.
+    Get database field by display name.
     """
-    result = await db.execute(select(DatabaseField).where(DatabaseField.field_key == field_key))
+    result = await db.execute(select(DatabaseField).where(DatabaseField.display_name == display_name))
     return result.scalar_one_or_none()
 
 async def update_database_field(db: AsyncSession, field_id: UUID, field_update: DatabaseFieldUpdate):
@@ -448,7 +513,14 @@ async def update_database_field(db: AsyncSession, field_id: UUID, field_update: 
     if not db_field:
         return None
     
-    update_data = field_update.dict(exclude_unset=True)
+    update_data = {}
+    if field_update.display_name is not None:
+        update_data["display_name"] = field_update.display_name
+    if field_update.description is not None:
+        update_data["description"] = field_update.description
+    if field_update.is_active is not None:
+        update_data["is_active"] = field_update.is_active
+    
     for field, value in update_data.items():
         setattr(db_field, field, value)
     
@@ -479,13 +551,13 @@ async def initialize_default_database_fields(db: AsyncSession):
         return existing_fields
     
     default_fields = [
-        {"field_key": "company_name", "display_name": "Company Name", "description": "Name of the company"},
-        {"field_key": "group_id", "display_name": "Group Id", "description": "Unique identifier for the group"},
-        {"field_key": "policy_number", "display_name": "Policy Number", "description": "Policy identification number"},
-        {"field_key": "commission_earned", "display_name": "Commission Earned", "description": "Commission amount earned"},
-        {"field_key": "commission_rate", "display_name": "Commission Rate", "description": "Commission rate percentage"},
-        {"field_key": "total_commission_paid", "display_name": "Total Commission Paid", "description": "Total commission amount paid"},
-        {"field_key": "individual_commission", "display_name": "Individual Commission", "description": "Individual commission amount"}
+        {"display_name": "Company Name", "description": "Name of the company"},
+        {"display_name": "Group Id", "description": "Unique identifier for the group"},
+        {"display_name": "Policy Number", "description": "Policy identification number"},
+        {"display_name": "Commission Earned", "description": "Commission amount earned"},
+        {"display_name": "Commission Rate", "description": "Commission rate percentage"},
+        {"display_name": "Total Commission Paid", "description": "Total commission amount paid"},
+        {"display_name": "Individual Commission", "description": "Individual commission amount"}
     ]
     
     created_fields = []
@@ -596,4 +668,119 @@ async def get_upload_by_id(db: AsyncSession, upload_id: str):
     """
     result = await db.execute(select(StatementUploadModel).where(StatementUploadModel.id == upload_id))
     return result.scalar_one_or_none()
+
+
+
+# Plan Types CRUD operations
+async def create_plan_type(db: AsyncSession, plan_type: PlanTypeCreate):
+    db_plan_type = PlanType(
+        display_name=plan_type.display_name,
+        description=plan_type.description,
+        is_active=1 if plan_type.is_active else 0
+    )
+    db.add(db_plan_type)
+    await db.commit()
+    await db.refresh(db_plan_type)
+    return db_plan_type
+
+async def get_all_plan_types(db: AsyncSession, active_only: bool = True):
+    query = select(PlanType)
+    if active_only:
+        query = query.where(PlanType.is_active == 1)
+    result = await db.execute(query)
+    plan_types = result.scalars().all()
+    return [
+        {
+            "id": str(pt.id),
+            "display_name": pt.display_name,
+            "description": pt.description,
+            "is_active": bool(pt.is_active),
+            "created_at": pt.created_at,
+            "updated_at": pt.updated_at
+        }
+        for pt in plan_types
+    ]
+
+async def get_plan_type_by_id(db: AsyncSession, plan_type_id: UUID):
+    result = await db.execute(select(PlanType).where(PlanType.id == plan_type_id))
+    pt = result.scalar_one_or_none()
+    if pt:
+        return {
+            "id": str(pt.id),
+            "display_name": pt.display_name,
+            "description": pt.description,
+            "is_active": bool(pt.is_active),
+            "created_at": pt.created_at,
+            "updated_at": pt.updated_at
+        }
+    return None
+
+async def get_plan_type_by_display_name(db: AsyncSession, display_name: str):
+    result = await db.execute(select(PlanType).where(PlanType.display_name == display_name))
+    return result.scalar_one_or_none()
+
+async def update_plan_type(db: AsyncSession, plan_type_id: UUID, plan_type_update: PlanTypeUpdate):
+    result = await db.execute(select(PlanType).where(PlanType.id == plan_type_id))
+    db_plan_type = result.scalar_one_or_none()
+    
+    if not db_plan_type:
+        return None
+    
+    update_data = {}
+    if plan_type_update.display_name is not None:
+        update_data["display_name"] = plan_type_update.display_name
+    if plan_type_update.description is not None:
+        update_data["description"] = plan_type_update.description
+    if plan_type_update.is_active is not None:
+        update_data["is_active"] = 1 if plan_type_update.is_active else 0
+    
+    for key, value in update_data.items():
+        setattr(db_plan_type, key, value)
+    
+    db_plan_type.updated_at = datetime.utcnow()
+    await db.commit()
+    await db.refresh(db_plan_type)
+    
+    return {
+        "id": str(db_plan_type.id),
+        "display_name": db_plan_type.display_name,
+        "description": db_plan_type.description,
+        "is_active": bool(db_plan_type.is_active),
+        "created_at": db_plan_type.created_at,
+        "updated_at": db_plan_type.updated_at
+    }
+
+async def delete_plan_type(db: AsyncSession, plan_type_id: UUID):
+    result = await db.execute(select(PlanType).where(PlanType.id == plan_type_id))
+    db_plan_type = result.scalar_one_or_none()
+    
+    if not db_plan_type:
+        return False
+    
+    # Soft delete by setting is_active to 0
+    db_plan_type.is_active = 0
+    db_plan_type.updated_at = datetime.utcnow()
+    await db.commit()
+    return True
+
+async def initialize_default_plan_types(db: AsyncSession):
+    default_plan_types = [
+        {"display_name": "Medical", "description": "Medical insurance plans"},
+        {"display_name": "Dental", "description": "Dental insurance plans"},
+        {"display_name": "Vision", "description": "Vision insurance plans"},
+        {"display_name": "Life", "description": "Life insurance plans"},
+        {"display_name": "Disability", "description": "Disability insurance plans"},
+        {"display_name": "Other", "description": "Other insurance plans"}
+    ]
+    
+    created_plan_types = []
+    for plan_type_data in default_plan_types:
+        # Check if plan type already exists
+        existing = await get_plan_type_by_display_name(db, plan_type_data["display_name"])
+        if not existing:
+            plan_type = PlanTypeCreate(**plan_type_data)
+            created_plan_type = await create_plan_type(db, plan_type)
+            created_plan_types.append(created_plan_type)
+    
+    return created_plan_types
 

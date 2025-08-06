@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { Plus, Edit, Trash2, Save, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 
-type DatabaseField = {
+type PlanType = {
   id: string
   display_name: string
   description?: string
@@ -12,41 +12,41 @@ type DatabaseField = {
   updated_at: string
 }
 
-type DatabaseFieldCreate = {
+type PlanTypeCreate = {
   display_name: string
   description?: string
   is_active: boolean
 }
 
-type DatabaseFieldUpdate = {
-  field_key?: string
+type PlanTypeUpdate = {
+  plan_key?: string
   display_name?: string
   description?: string
   is_active?: boolean
 }
 
-export default function DatabaseFieldsManager() {
-  const [fields, setFields] = useState<DatabaseField[]>([])
+export default function PlanTypesManager() {
+  const [planTypes, setPlanTypes] = useState<PlanType[]>([])
   const [loading, setLoading] = useState(true)
-  const [editingField, setEditingField] = useState<string | null>(null)
-  const [editForm, setEditForm] = useState<DatabaseFieldUpdate>({})
+  const [editingPlanType, setEditingPlanType] = useState<string | null>(null)
+  const [editForm, setEditForm] = useState<PlanTypeUpdate>({})
   const [showCreateForm, setShowCreateForm] = useState(false)
-  const [createForm, setCreateForm] = useState<DatabaseFieldCreate>({
+  const [createForm, setCreateForm] = useState<PlanTypeCreate>({
     display_name: '',
     description: '',
     is_active: true
   })
 
-  // Fetch database fields
-  const fetchFields = useCallback(async () => {
+  // Fetch plan types
+  const fetchPlanTypes = useCallback(async () => {
     try {
       setLoading(true)
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/database-fields/?active_only=true`)
-      if (!response.ok) throw new Error('Failed to fetch fields')
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/plan-types/?active_only=true`)
+      if (!response.ok) throw new Error('Failed to fetch plan types')
       const data = await response.json()
-      setFields(data)
+      setPlanTypes(data)
     } catch (error) {
-      toast.error('Failed to load database fields')
+      toast.error('Failed to load plan types')
       console.error(error)
     } finally {
       setLoading(false)
@@ -54,79 +54,79 @@ export default function DatabaseFieldsManager() {
   }, [])
 
   useEffect(() => {
-    fetchFields()
-  }, [fetchFields])
+    fetchPlanTypes()
+  }, [fetchPlanTypes])
 
 
 
-  // Create field
-  const createField = async () => {
+  // Create plan type
+  const createPlanType = async () => {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/database-fields/`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/plan-types/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(createForm)
       })
-      if (!response.ok) throw new Error('Failed to create field')
-      toast.success('Field created successfully!')
+      if (!response.ok) throw new Error('Failed to create plan type')
+      toast.success('Plan type created successfully!')
       setShowCreateForm(false)
       setCreateForm({ display_name: '', description: '', is_active: true })
-      fetchFields()
+      fetchPlanTypes()
     } catch (error) {
-      toast.error('Failed to create field')
+      toast.error('Failed to create plan type')
       console.error(error)
     }
   }
 
-  // Update field
-  const updateField = async (fieldId: string) => {
+  // Update plan type
+  const updatePlanType = async (planTypeId: string) => {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/database-fields/${fieldId}`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/plan-types/${planTypeId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(editForm)
       })
-      if (!response.ok) throw new Error('Failed to update field')
-      toast.success('Field updated successfully!')
-      setEditingField(null)
+      if (!response.ok) throw new Error('Failed to update plan type')
+      toast.success('Plan type updated successfully!')
+      setEditingPlanType(null)
       setEditForm({})
-      fetchFields()
+      fetchPlanTypes()
     } catch (error) {
-      toast.error('Failed to update field')
+      toast.error('Failed to update plan type')
       console.error(error)
     }
   }
 
-  // Delete field
-  const deleteField = async (fieldId: string) => {
-    if (!confirm('Are you sure you want to delete this field?')) return
+  // Delete plan type
+  const deletePlanType = async (planTypeId: string) => {
+    if (!confirm('Are you sure you want to delete this plan type?')) return
     
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/database-fields/${fieldId}`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/plan-types/${planTypeId}`, {
         method: 'DELETE'
       })
-      if (!response.ok) throw new Error('Failed to delete field')
-      toast.success('Field deleted successfully!')
-      fetchFields()
+      if (!response.ok) throw new Error('Failed to delete plan type')
+      toast.success('Plan type deleted successfully!')
+      fetchPlanTypes()
     } catch (error) {
-      toast.error('Failed to delete field')
+      toast.error('Failed to delete plan type')
       console.error(error)
     }
   }
 
   // Start editing
-  const startEdit = (field: DatabaseField) => {
-    setEditingField(field.id)
+  const startEdit = (planType: PlanType) => {
+    setEditingPlanType(planType.id)
     setEditForm({
-      display_name: field.display_name,
-      description: field.description,
-      is_active: field.is_active
+      display_name: planType.display_name,
+      description: planType.description,
+      is_active: planType.is_active
     })
   }
 
   // Cancel editing
   const cancelEdit = () => {
-    setEditingField(null)
+    setEditingPlanType(null)
     setEditForm({})
   }
 
@@ -143,8 +143,8 @@ export default function DatabaseFieldsManager() {
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Database Fields</h1>
-          <p className="text-gray-600 mt-2">Manage the database fields used for field mapping</p>
+          <h1 className="text-3xl font-bold text-gray-900">Plan Types</h1>
+          <p className="text-gray-600 mt-2">Manage the plan types used for insurance categorization</p>
         </div>
         <div className="flex gap-3">
           <button
@@ -152,7 +152,7 @@ export default function DatabaseFieldsManager() {
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
           >
             <Plus size={16} />
-            Add Field
+            Add Plan Type
           </button>
         </div>
       </div>
@@ -161,7 +161,7 @@ export default function DatabaseFieldsManager() {
       {showCreateForm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 w-full max-w-md">
-            <h2 className="text-xl font-bold mb-4">Create New Field</h2>
+            <h2 className="text-xl font-bold mb-4">Create New Plan Type</h2>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Display Name</label>
@@ -170,7 +170,7 @@ export default function DatabaseFieldsManager() {
                   value={createForm.display_name}
                   onChange={(e) => setCreateForm({ ...createForm, display_name: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="e.g., Group Id"
+                  placeholder="e.g., Medical"
                 />
               </div>
               <div>
@@ -196,7 +196,7 @@ export default function DatabaseFieldsManager() {
             </div>
             <div className="flex gap-3 mt-6">
               <button
-                onClick={createField}
+                onClick={createPlanType}
                 className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
               >
                 Create
@@ -212,7 +212,7 @@ export default function DatabaseFieldsManager() {
         </div>
       )}
 
-      {/* Fields Table */}
+      {/* Plan Types Table */}
       <div className="bg-white rounded-xl shadow-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -225,10 +225,10 @@ export default function DatabaseFieldsManager() {
                     </tr>
                   </thead>
             <tbody className="divide-y divide-gray-200">
-              {fields.map((field) => (
-                <tr key={field.id} className="hover:bg-gray-50">
+              {planTypes.map((planType) => (
+                <tr key={planType.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4">
-                    {editingField === field.id ? (
+                    {editingPlanType === planType.id ? (
                       <input
                         type="text"
                         value={editForm.display_name || ''}
@@ -236,11 +236,11 @@ export default function DatabaseFieldsManager() {
                         className="w-full px-2 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
                       />
                     ) : (
-                      <span className="font-medium">{field.display_name}</span>
+                      <span className="font-medium">{planType.display_name}</span>
                     )}
                   </td>
                   <td className="px-6 py-4">
-                    {editingField === field.id ? (
+                    {editingPlanType === planType.id ? (
                       <textarea
                         value={editForm.description || ''}
                         onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
@@ -248,15 +248,15 @@ export default function DatabaseFieldsManager() {
                         rows={2}
                       />
                     ) : (
-                      <span className="text-gray-600 text-sm">{field.description || '-'}</span>
+                      <span className="text-gray-600 text-sm">{planType.description || '-'}</span>
                     )}
                   </td>
                   <td className="px-6 py-4">
-                    {editingField === field.id ? (
+                    {editingPlanType === planType.id ? (
                       <div className="flex items-center">
                         <input
                           type="checkbox"
-                          checked={editForm.is_active ?? field.is_active}
+                          checked={editForm.is_active ?? planType.is_active}
                           onChange={(e) => setEditForm({ ...editForm, is_active: e.target.checked })}
                           className="mr-2"
                         />
@@ -264,19 +264,19 @@ export default function DatabaseFieldsManager() {
                       </div>
                     ) : (
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        field.is_active 
+                        planType.is_active 
                           ? 'bg-green-100 text-green-800' 
                           : 'bg-red-100 text-red-800'
                       }`}>
-                        {field.is_active ? 'Active' : 'Inactive'}
+                        {planType.is_active ? 'Active' : 'Inactive'}
                       </span>
                     )}
                   </td>
                   <td className="px-6 py-4">
-                    {editingField === field.id ? (
+                    {editingPlanType === planType.id ? (
                       <div className="flex gap-2">
                         <button
-                          onClick={() => updateField(field.id)}
+                          onClick={() => updatePlanType(planType.id)}
                           className="p-1 text-green-600 hover:bg-green-100 rounded"
                           title="Save"
                         >
@@ -293,14 +293,14 @@ export default function DatabaseFieldsManager() {
                     ) : (
                       <div className="flex gap-2">
                         <button
-                          onClick={() => startEdit(field)}
+                          onClick={() => startEdit(planType)}
                           className="p-1 text-blue-600 hover:bg-blue-100 rounded"
                           title="Edit"
                         >
                           <Edit size={16} />
                         </button>
                         <button
-                          onClick={() => deleteField(field.id)}
+                          onClick={() => deletePlanType(planType.id)}
                           className="p-1 text-red-600 hover:bg-red-100 rounded"
                           title="Delete"
                         >
@@ -315,14 +315,14 @@ export default function DatabaseFieldsManager() {
           </table>
         </div>
         
-        {fields.length === 0 && (
+        {planTypes.length === 0 && (
           <div className="text-center py-12">
-            <p className="text-gray-500">No database fields found.</p>
+            <p className="text-gray-500">No plan types found.</p>
             <button
               onClick={() => setShowCreateForm(true)}
               className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
             >
-              Add Your First Field
+              Add Your First Plan Type
             </button>
           </div>
         )}

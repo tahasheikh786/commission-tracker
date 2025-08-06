@@ -10,9 +10,10 @@ type Props = {
   onSelect: (c: Carrier) => void;
   loading?: boolean;
   onDelete: (ids: string[]) => void;
+  deleting?: boolean;
 };
 
-export default function CarrierList({ carriers, selected, onSelect, loading, onDelete }: Props) {
+export default function CarrierList({ carriers, selected, onSelect, loading, onDelete, deleting }: Props) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCarriers, setSelectedCarriers] = useState<Set<string>>(new Set());
   const [currentPage, setCurrentPage] = useState(1);
@@ -118,9 +119,10 @@ export default function CarrierList({ carriers, selected, onSelect, loading, onD
         {selectedCarriers.size > 0 && (
           <button
             onClick={handleDelete}
-            className="px-4 py-2 bg-red-600 text-white rounded font-semibold hover:bg-red-700 transition"
+            disabled={deleting}
+            className="px-4 py-2 bg-red-600 text-white rounded font-semibold hover:bg-red-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Delete Selected
+            {deleting ? 'Deleting...' : 'Delete Selected'}
           </button>
         )}
       </div>
