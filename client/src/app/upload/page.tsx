@@ -56,7 +56,7 @@ export default function UploadPage() {
   const [currentStep, setCurrentStep] = useState('upload')
 
   // Progress tracking hook
-  const { saveProgress, loadProgress, resumeSession, markUnsaved, clearAutoSave } = useProgressTracking({
+  const { saveProgress, loadProgress, resumeSession, markUnsaved, clearAutoSave, autoSaveProgress } = useProgressTracking({
     uploadId: uploaded?.upload_id,
     currentStep,
     onProgressSaved: (step, data) => {
@@ -76,7 +76,7 @@ export default function UploadPage() {
   }, [uploaded?.upload_id])
 
   // Handle URL parameters for resuming files and check for active sessions
-  const handleResumeFile = useCallback(async (fileId: string) => {
+  const handleResumeFile = useCallback(async (fileId: string, stepParam?: string | null) => {
     try {
       // First, get the upload details from the backend
       const uploadResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/pending/files/single/${fileId}`)
@@ -100,7 +100,7 @@ export default function UploadPage() {
       })
       
       // Set the current step
-      const currentStep = upload.current_step || 'upload'
+      const currentStep = stepParam || upload.current_step || 'upload'
       setCurrentStep(currentStep)
       
       // Load progress data for the current step
@@ -160,7 +160,7 @@ export default function UploadPage() {
       const sessionData = await resumeSession()
       if (sessionData && sessionData.upload_id) {
         // There's an active session, resume it
-        handleResumeFile(sessionData.upload_id)
+        handleResumeFile(sessionData.upload_id, null)
       }
     } catch (error) {
       console.log('No active session found')
@@ -171,14 +171,44 @@ export default function UploadPage() {
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search)
     const resumeFileId = urlParams.get('resume')
+    const stepParam = urlParams.get('step')
     
     if (resumeFileId && !uploaded) {
-      handleResumeFile(resumeFileId)
+      handleResumeFile(resumeFileId, stepParam)
     } else if (!uploaded && company) {
       // Check if there's an active session for this company
       checkForActiveSession()
     }
   }, [company, uploaded, handleResumeFile, checkForActiveSession])
+
+  // Auto-save progress when user navigates away or closes browser
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (uploaded?.upload_id && currentStep !== 'upload') {
+        // Save current progress before leaving
+        const progressData = {
+          current_step: currentStep,
+          final_data: finalTables,
+          field_config: fieldConfig,
+          mapping: mapping,
+          plan_types: planTypes,
+          skipped: skipped,
+          edited_tables: editedTables
+        }
+        
+        // Use auto-save to avoid blocking the page unload
+        autoSaveProgress(currentStep, progressData)
+      }
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      // Also save when component unmounts
+      handleBeforeUnload()
+    }
+  }, [uploaded?.upload_id, currentStep, finalTables, fieldConfig, mapping, planTypes, skipped, editedTables, autoSaveProgress])
 
   // Fetch database fields from backend
   useEffect(() => {
@@ -249,7 +279,6 @@ export default function UploadPage() {
     console.log('Pending file deleted:', fileId)
   }
 
-  // Handle upload result with quality assessment
   // Handle upload result with quality assessment
   function handleUploadResult({ tables, upload_id, file_name, file, plan_types, field_config, quality_summary, extraction_config }: any) {
     // Store original file for re-extraction
@@ -562,7 +591,12 @@ export default function UploadPage() {
         })
         
         toast.success('Statement approved successfully!')
-        router.push('/review')
+        // Navigate to homepage with dashboard tab after a short delay
+        setTimeout(() => {
+          console.log('Navigating to dashboard...')
+          // Use window.location.href for more reliable navigation
+          window.location.href = '/?tab=dashboard'
+        }, 1000)
       } else {
         const error = await response.json()
         toast.error(error.detail || 'Failed to approve statement')
@@ -607,7 +641,12 @@ export default function UploadPage() {
         })
         
         toast.success('Statement rejected successfully!')
-        router.push('/review')
+        // Navigate to homepage with dashboard tab after a short delay
+        setTimeout(() => {
+          console.log('Navigating to dashboard...')
+          // Use window.location.href for more reliable navigation
+          window.location.href = '/?tab=dashboard'
+        }, 1000)
       } else {
         const error = await response.json()
         toast.error(error.detail || 'Failed to reject statement')
@@ -618,6 +657,50 @@ export default function UploadPage() {
     } finally {
       setSubmitting(false)
       setShowRejectModal(false)
+    }
+  }
+
+  // Handle sending file to pending
+  async function handleSendToPending() {
+    if (!company || !uploaded?.upload_id) return
+    
+    setSubmitting(true)
+    try {
+      // Save current progress to pending
+      await saveProgress('dashboard', {
+        final_data: finalTables,
+        field_config: fieldConfig,
+        mapping: mapping,
+        plan_types: planTypes,
+        skipped: skipped
+      })
+      
+      // Update upload status to pending
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/pending/update/${uploaded.upload_id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: 'pending',
+          current_step: 'dashboard',
+          final_data: finalTables,
+          field_config: fieldConfig,
+          field_mapping: mapping,
+          plan_types: planTypes
+        }),
+      })
+      
+      if (response.ok) {
+        toast.success('File sent to pending successfully!')
+        router.push('/?tab=dashboard')
+      } else {
+        const error = await response.json()
+        toast.error(error.detail || 'Failed to send file to pending')
+      }
+    } catch (error) {
+      console.error('Error sending file to pending:', error)
+      toast.error('Failed to send file to pending')
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -961,10 +1044,33 @@ export default function UploadPage() {
           </div>
         )}
         
-
-        
         <main className="min-h-screen bg-gradient-to-br from-gray-100 to-blue-50 flex items-center justify-center px-4">
           <div className="w-full max-w-[1800px] md:w-[92vw] mx-auto shadow-2xl bg-white/90 rounded-3xl p-10 border">
+            {/* Progress Indicator */}
+            <div className="mb-8">
+              <div className="flex items-center justify-center space-x-4 mb-4">
+                <div className="flex items-center">
+                  <div className="w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center text-sm font-bold">1</div>
+                  <span className="ml-2 text-sm text-gray-600">Upload</span>
+                </div>
+                <div className="w-8 h-1 bg-green-500"></div>
+                <div className="flex items-center">
+                  <div className="w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center text-sm font-bold">2</div>
+                  <span className="ml-2 text-sm text-gray-600">Table Editor</span>
+                </div>
+                <div className="w-8 h-1 bg-green-500"></div>
+                <div className="flex items-center">
+                  <div className="w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center text-sm font-bold">3</div>
+                  <span className="ml-2 text-sm text-gray-600">Field Mapper</span>
+                </div>
+                <div className="w-8 h-1 bg-green-500"></div>
+                <div className="flex items-center">
+                  <div className="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center text-sm font-bold">4</div>
+                  <span className="ml-2 text-sm font-semibold text-blue-600">Review & Approve</span>
+                </div>
+              </div>
+            </div>
+            
             <h1 className="text-4xl font-extrabold mb-8 text-gray-800 text-center tracking-tight">
               <span className="bg-gradient-to-r from-blue-600 to-indigo-500 text-transparent bg-clip-text">
                 Commission Statement Upload
@@ -994,6 +1100,8 @@ export default function UploadPage() {
               readOnly={false}
               onTableChange={setFinalTables}
               planTypes={planTypes}
+              onSendToPending={handleSendToPending}
+              uploadId={uploaded?.upload_id}
             />
 
             <div className="flex justify-center gap-6 mt-8">

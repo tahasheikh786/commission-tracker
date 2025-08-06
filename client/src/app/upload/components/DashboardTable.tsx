@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { Pencil, Trash2, X, Check } from 'lucide-react'
+import { Pencil, Trash2, X, Check, Clock } from 'lucide-react'
 import clsx from 'clsx'
 
 type TableData = {
@@ -20,7 +20,9 @@ type DashboardTableProps = {
   fileUrl?: string | null,
   readOnly?: boolean,
   onTableChange?: (tables: TableData[]) => void,
-  planTypes?: string[]
+  planTypes?: string[],
+  onSendToPending?: () => void,
+  uploadId?: string
 }
 
 function fixPercent(val: string): string {
@@ -70,6 +72,8 @@ export default function DashboardTable({
   readOnly = false,
   onTableChange,
   planTypes = [],
+  onSendToPending,
+  uploadId,
 }: DashboardTableProps) {
   console.log('DashboardTable received tables:', tables)
   console.log('DashboardTable received fieldConfig:', fieldConfig)
@@ -282,14 +286,21 @@ export default function DashboardTable({
               <Trash2 size={16} className="mr-1" />
               Delete selected
             </button>
-            {!readOnly && (
-          <button
-            onClick={onEditMapping}
-            className="ml-auto px-4 py-2 rounded bg-gradient-to-br from-blue-600 to-indigo-500 text-white font-semibold shadow hover:scale-105 transition"
-          >
-            Edit Field Mapping
-          </button>
-        )}
+            <button
+              onClick={onEditMapping}
+              className="px-4 py-2 rounded bg-gradient-to-br from-blue-600 to-indigo-500 text-white font-semibold shadow hover:scale-105 transition"
+            >
+              Edit Field Mapping
+            </button>
+            {onSendToPending && (
+              <button
+                onClick={onSendToPending}
+                className="px-4 py-2 rounded bg-gradient-to-br from-orange-500 to-red-500 text-white font-semibold shadow hover:scale-105 transition flex items-center gap-2"
+              >
+                <Clock size={16} />
+                Send to Pending
+              </button>
+            )}
           </>
         )}
        

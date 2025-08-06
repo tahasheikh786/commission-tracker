@@ -2,7 +2,7 @@ import os
 import json
 import logging
 from typing import Dict, List, Any, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Depends, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,9 +31,17 @@ async def get_pending_files(
         
         return JSONResponse({
             "success": True,
-            "pending_files": [file.dict() for file in pending_files],
+            "pending_files": [{
+                "id": str(file.id),
+                "company_id": str(file.company_id),
+                "file_name": file.file_name,
+                "uploaded_at": file.uploaded_at.isoformat() if file.uploaded_at else None,
+                "current_step": file.current_step,
+                "last_updated": file.last_updated.isoformat() if file.last_updated else None,
+                "progress_summary": file.progress_summary
+            } for file in pending_files],
             "count": len(pending_files),
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         })
         
     except Exception as e:
@@ -62,7 +70,27 @@ async def get_pending_file(
         
         return JSONResponse({
             "success": True,
-            "upload": upload.dict(),
+            "upload": {
+                "id": str(upload.id),
+                "company_id": str(upload.company_id),
+                "file_name": upload.file_name,
+                "uploaded_at": upload.uploaded_at.isoformat() if upload.uploaded_at else None,
+                "status": upload.status,
+                "current_step": upload.current_step,
+                "progress_data": upload.progress_data,
+                "raw_data": upload.raw_data,
+                "edited_tables": upload.edited_tables,
+                "field_mapping": upload.field_mapping,
+                "final_data": upload.final_data,
+                "mapping_used": upload.mapping_used,
+                "field_config": upload.field_config,
+                "rejection_reason": upload.rejection_reason,
+                "plan_types": upload.plan_types,
+                "last_updated": upload.last_updated.isoformat() if upload.last_updated else None,
+                "completed_at": upload.completed_at.isoformat() if upload.completed_at else None,
+                "session_id": upload.session_id,
+                "auto_save_enabled": upload.auto_save_enabled
+            },
             "timestamp": datetime.now().isoformat()
         })
         

@@ -68,6 +68,12 @@ function mergeTablesByHeader(tables: TableData[]): TableData[] {
   tables.forEach((table, index) => {
     if (processed.has(index)) return;
     
+    // Check if table and header exist
+    if (!table || !table.header || !Array.isArray(table.header)) {
+      console.warn('Skipping table with invalid header:', table);
+      return;
+    }
+    
     // Normalize header by removing empty strings
     const normalizedHeader = table.header.filter(cell => cell.trim());
     
@@ -77,6 +83,11 @@ function mergeTablesByHeader(tables: TableData[]): TableData[] {
     
     for (let j = index + 1; j < tables.length; j++) {
       if (processed.has(j)) continue;
+      
+      // Check if other table and header exist
+      if (!tables[j] || !tables[j].header || !Array.isArray(tables[j].header)) {
+        continue;
+      }
       
       const otherHeader = tables[j].header.filter(cell => cell.trim());
       
@@ -143,18 +154,21 @@ function Pagination({
 export default function ExtractedTables({ tables: backendTables, onTablesChange, highlightedRow, onRowHover }: ExtractedTablesProps) {
   // All hooks organized at the top - must be called before any early returns
   const [tab, setTab] = useState(0)
-  const [tables, setTables] = useState(() => mergeTablesByHeader(backendTables).map(table => ({
-    ...table,
-    rows: [...table.rows],
-    name: table.name || ''
-  })))
+  const [tables, setTables] = useState(() => {
+    const mergedTables = mergeTablesByHeader(backendTables);
+    return mergedTables.map(table => ({
+      ...table,
+      rows: Array.isArray(table.rows) ? [...table.rows] : [],
+      name: table.name || ''
+    }));
+  })
   const [editRow, setEditRow] = useState<{ t: number, r: number } | null>(null)
   const [editValues, setEditValues] = useState<string[]>([])
   const [pages, setPages] = useState(Array(tables.length).fill(1))
   const [rowsPerPages, setRowsPerPages] = useState(Array(tables.length).fill(ROWS_OPTIONS[0]))
   const [selectedRows, setSelectedRows] = useState<Array<Set<number>>>(tables.map(() => new Set<number>()))
   const [sort, setSort] = useState<{ col: number, dir: 'asc' | 'desc' } | null>(null)
-  const [colWidths, setColWidths] = useState<Array<number[]>>(tables.map(t => t.header.map(() => 160)))
+  const [colWidths, setColWidths] = useState<Array<number[]>>(tables.map(t => (t.header && Array.isArray(t.header) ? t.header.map(() => 160) : [])))
   
   // Refs
   const lastCallbackRef = useRef<string>('')
@@ -164,7 +178,7 @@ export default function ExtractedTables({ tables: backendTables, onTablesChange,
   useEffect(() => {
     const mergedTables = mergeTablesByHeader(backendTables).map(table => ({
       ...table,
-      rows: [...table.rows],
+      rows: Array.isArray(table.rows) ? [...table.rows] : [],
       name: table.name || ''
     }));
     setTables(mergedTables);
@@ -178,7 +192,7 @@ export default function ExtractedTables({ tables: backendTables, onTablesChange,
     });
     setColWidths(widths => {
       if (tables.length === widths.length) return widths;
-      return tables.map(t => t.header.map(() => 160));
+      return tables.map(t => (t.header && Array.isArray(t.header) ? t.header.map(() => 160) : []));
     });
     setTab(t => t >= tables.length ? 0 : t);
   }, [tables.length, tables]);
@@ -197,13 +211,16 @@ export default function ExtractedTables({ tables: backendTables, onTablesChange,
   }, [tables, onTablesChange]);
 
   // Guard: If no tables or invalid tab, render nothing - AFTER all hooks
-  if (!tables.length || !tables[tab]) return null;
+  if (!tables.length || !tables[tab] || !tables[tab].header || !Array.isArray(tables[tab].header)) return null;
 
   // Computed values
   const sortedRows = (() => {
-    if (!sort) return tables[tab].rows;
+    const currentTable = tables[tab];
+    const rows = Array.isArray(currentTable.rows) ? currentTable.rows : [];
+    
+    if (!sort) return rows;
     const { col, dir } = sort;
-    return [...tables[tab].rows].sort((a, b) => {
+    return [...rows].sort((a, b) => {
       const va = a[col] || '';
       const vb = b[col] || '';
       if (!isNaN(Number(va)) && !isNaN(Number(vb))) {

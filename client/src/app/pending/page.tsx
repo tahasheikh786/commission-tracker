@@ -80,6 +80,16 @@ export default function PendingFilesPage() {
     }
   }
 
+  const handleReviewFile = async (fileId: string) => {
+    try {
+      // Navigate to upload page with the file ID for review
+      router.push(`/upload?resume=${fileId}&step=dashboard`)
+    } catch (error) {
+      console.error('Error reviewing file:', error)
+      toast.error('Failed to review file')
+    }
+  }
+
   const handleDeleteFile = async (fileId: string) => {
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/pending/delete/${fileId}`, {
@@ -106,18 +116,21 @@ export default function PendingFilesPage() {
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
+    // Convert to local timezone for display
     return date.toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
+      timeZone: 'Asia/Karachi' // Use Pakistan timezone
     })
   }
 
   const getTimeAgo = (dateString: string) => {
     const date = new Date(dateString)
     const now = new Date()
+    // Both dates are in UTC, so the difference calculation is correct
     const diffInMs = now.getTime() - date.getTime()
     const diffInHours = Math.floor(diffInMs / (1000 * 60 * 60))
     const diffInDays = Math.floor(diffInHours / 24)
@@ -248,13 +261,23 @@ export default function PendingFilesPage() {
                     </div>
                     
                     <div className="flex items-center space-x-2 ml-4">
-                      <button
-                        onClick={() => handleResumeFile(file.id)}
-                        className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
-                      >
-                        <Play className="w-4 h-4 mr-1" />
-                        Resume
-                      </button>
+                      {file.current_step === 'dashboard' ? (
+                        <button
+                          onClick={() => handleReviewFile(file.id)}
+                          className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors"
+                        >
+                          <CheckCircle className="w-4 h-4 mr-1" />
+                          Review
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleResumeFile(file.id)}
+                          className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                        >
+                          <Play className="w-4 h-4 mr-1" />
+                          Resume
+                        </button>
+                      )}
                       
                       <button
                         onClick={() => handleDeleteFile(file.id)}

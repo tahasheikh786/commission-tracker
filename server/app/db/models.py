@@ -1,5 +1,5 @@
 from sqlalchemy import (
-    Column, String, Integer, Text, TIMESTAMP, JSON, ForeignKey, DateTime, text
+    Column, String, Integer, Text, TIMESTAMP, JSON, ForeignKey, DateTime, text, UniqueConstraint
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.declarative import declarative_base
@@ -17,10 +17,15 @@ class CompanyFieldMapping(Base):
     __tablename__ = 'company_field_mappings'
     id = Column(Integer, primary_key=True, autoincrement=True)
     company_id = Column(UUID(as_uuid=True), ForeignKey('companies.id'), nullable=False)
-    field_key = Column(String, nullable=False)
+    display_name = Column(String, nullable=False)  # Changed from field_key to display_name
     column_name = Column(String, nullable=False)
     created_at = Column(TIMESTAMP)
     updated_at = Column(TIMESTAMP)
+    
+    # Add unique constraint for upsert operations
+    __table_args__ = (
+        UniqueConstraint('company_id', 'display_name', name='uq_company_field_mapping'),
+    )
 
 class StatementUpload(Base):
     __tablename__ = 'statement_uploads'

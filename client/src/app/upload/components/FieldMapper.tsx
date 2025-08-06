@@ -21,7 +21,10 @@ import { CSS } from '@dnd-kit/utilities'
 
 // NOTE: initialFields and initialMapping must be preprocessed as in EditMappingModal.
 // initialMapping should be { field: column }, and initialFields should be [{ field, label }], with pretty labels from STANDARD_FIELDS if available.
-function fuzzyMatch(a: string, b: string) {
+function fuzzyMatch(a: string | undefined, b: string | undefined) {
+  // Handle undefined or null values
+  if (!a || !b) return false;
+  
   return (
     a.toLowerCase().replace(/[^a-z]/g, '') === b.toLowerCase().replace(/[^a-z]/g, '') ||
     a.toLowerCase().includes(b.toLowerCase()) ||
@@ -100,13 +103,19 @@ export default function FieldMapper({
   const [mapping, setMapping] = useState<Record<string, string>>(initialMapping || {})
   const [saving, setSaving] = useState(false)
   const [newFieldName, setNewFieldName] = useState('')
-  const [newFieldKey, setNewFieldKey] = useState('')
   const [planTypes, setPlanTypes] = useState<string[]>(initialPlanTypes)
   const [availablePlanTypes, setAvailablePlanTypes] = useState<PlanType[]>([])
   const [loadingPlanTypes, setLoadingPlanTypes] = useState(true)
 
 
-  console.log(initialFields, fields, "FIELDS")
+  console.log('FieldMapper Debug:', {
+    initialFields,
+    fields,
+    databaseFields,
+    columns,
+    loadingFields,
+    apiUrl: process.env.NEXT_PUBLIC_API_URL
+  })
 
   // DnD-kit sensors
   const sensors = useSensors(
@@ -123,19 +132,33 @@ export default function FieldMapper({
     async function fetchDatabaseFields() {
       try {
         setLoadingFields(true)
+        console.log('Fetching database fields from:', `${process.env.NEXT_PUBLIC_API_URL}/database-fields/?active_only=true`)
+        
         const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/database-fields/?active_only=true`)
+        console.log('Database fields response status:', response.status)
+        
         if (response.ok) {
           const data = await response.json()
-          const fieldsFromBackend = data.map((field: any) => ({
-            field: field.display_name,
-            label: field.display_name
-          }))
+          console.log('Raw database fields data:', data)
+          
+          const fieldsFromBackend = data
+            .filter((field: any) => field.display_name) // Filter out malformed fields
+            .map((field: any) => ({
+              field: field.display_name,
+              label: field.display_name
+            }))
+          
+          console.log('Processed fields from backend:', fieldsFromBackend)
           setDatabaseFields(fieldsFromBackend)
-          setFields(fieldsFromBackend)
-
-          // Use backend fields if no initial fields provided
+          
+          // Always set fields to backend fields if no initial fields provided
+          // or if initial fields are empty
           if (!initialFields || initialFields.length === 0) {
+            console.log('Setting fields to backend fields:', fieldsFromBackend)
             setFields(fieldsFromBackend)
+          } else {
+            // If we have initial fields, still set database fields for reference
+            console.log('Keeping initial fields, but database fields available:', fieldsFromBackend)
           }
         } else {
           console.error('Failed to fetch database fields')
@@ -150,7 +173,7 @@ export default function FieldMapper({
     }
 
     fetchDatabaseFields()
-  }, [initialFields])
+  }, []) // Remove initialFields dependency to prevent re-fetching
 
   // Fetch plan types from backend
   useEffect(() => {
@@ -178,10 +201,27 @@ export default function FieldMapper({
 
   // Sync mapping and fields if props change
   useEffect(() => {
+    console.log('Sync effect triggered:', { initialFields, databaseFields })
+    
     if (initialFields && initialFields.length > 0) {
-      setFields(initialFields)
+      // Filter out any malformed field objects
+      const validFields = initialFields.filter(field => field && field.field && field.label)
+      console.log('Setting fields from initialFields:', validFields)
+      setFields(validFields)
+    } else if (databaseFields.length > 0) {
+      // If no initial fields but we have database fields, use those
+      console.log('Setting fields from databaseFields:', databaseFields)
+      setFields(databaseFields)
     }
-  }, [initialFields])
+  }, [initialFields, databaseFields])
+
+  // Ensure fields are always populated from database fields if available
+  useEffect(() => {
+    if (databaseFields.length > 0 && fields.length === 0) {
+      console.log('Force setting fields from database fields:', databaseFields)
+      setFields(databaseFields)
+    }
+  }, [databaseFields, fields.length])
 
   useEffect(() => {
     if (initialMapping) {
@@ -190,9 +230,12 @@ export default function FieldMapper({
       // Fuzzy match: try to auto-map by label or field name
       const map: Record<string, string> = {}
       for (const f of fields) {
-        let found = columns.find(col => fuzzyMatch(col, f.label))
+        // Skip if field is missing required properties
+        if (!f.field || !f.label) continue;
+        
+        let found = columns.find(col => col && fuzzyMatch(col, f.label))
         if (!found) {
-          found = columns.find(col => fuzzyMatch(col, f.field))
+          found = columns.find(col => col && fuzzyMatch(col, f.field))
         }
         if (found) map[f.field] = found
       }
@@ -205,8 +248,8 @@ export default function FieldMapper({
   }
 
   async function handleAddDatabaseField() {
-    if (!newFieldName.trim() || !newFieldKey.trim()) {
-      toast.error('Please enter both field key and display name')
+    if (!newFieldName.trim()) {
+      toast.error('Please enter a display name')
       return
     }
 
@@ -215,7 +258,6 @@ export default function FieldMapper({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          field_key: newFieldKey.trim(),
           display_name: newFieldName.trim(),
           description: '',
           is_active: true
@@ -225,7 +267,7 @@ export default function FieldMapper({
       if (response.ok) {
         const newField = await response.json()
         const fieldConf = {
-          field: newField.field_key,
+          field: newField.display_name,
           label: newField.display_name
         }
 
@@ -234,7 +276,6 @@ export default function FieldMapper({
         setFields(prev => [...prev, fieldConf])
 
         setNewFieldName('')
-        setNewFieldKey('')
         toast.success('Database field added successfully!')
       } else {
         const error = await response.json()
@@ -338,6 +379,17 @@ export default function FieldMapper({
           <p className="text-gray-600 text-sm mt-1">Drag to reorder and map extracted columns to database fields</p>
         </div>
 
+        {loadingFields ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <span className="ml-3 text-gray-600">Loading database fields...</span>
+          </div>
+        ) : fields.length === 0 ? (
+          <div className="flex items-center justify-center py-12">
+            <span className="text-gray-600">No database fields available</span>
+          </div>
+        ) : (
+
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
@@ -402,23 +454,15 @@ export default function FieldMapper({
             </div>
           </SortableContext>
         </DndContext>
+        )}
       </div>
 
       {/* Add Database Field */}
       <div className="mb-6 bg-white rounded-lg border border-gray-200 p-6">
         <h3 className="text-lg font-semibold text-gray-800 mb-3">Add Database Field</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+        <div className="mb-3">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Field Key</label>
-            <input
-              className="border border-gray-300 rounded-md px-3 py-2 w-full text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="e.g., group_id"
-              value={newFieldKey}
-              onChange={e => setNewFieldKey(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Display Name</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Field Name</label>
             <input
               className="border border-gray-300 rounded-md px-3 py-2 w-full text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               placeholder="e.g., Group Id"

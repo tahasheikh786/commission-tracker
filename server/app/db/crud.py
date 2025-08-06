@@ -31,12 +31,12 @@ async def save_company_mapping(db, mapping):
     now = datetime.utcnow()
     stmt = pg_insert(CompanyFieldMapping).values(
         company_id=mapping.company_id,
-        field_key=mapping.field_key,
+        display_name=mapping.display_name,
         column_name=mapping.column_name,
         created_at=now,
         updated_at=now,
     ).on_conflict_do_update(
-        index_elements=['company_id', 'field_key'],
+        index_elements=['company_id', 'display_name'],
         set_={
             "column_name": mapping.column_name,
             "updated_at": now

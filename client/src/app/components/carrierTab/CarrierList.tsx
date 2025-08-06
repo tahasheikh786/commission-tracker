@@ -95,7 +95,15 @@ export default function CarrierList({ carriers, selected, onSelect, loading, onD
   };
 
   return (
-    <div className="md:w-1/4 w-full bg-white/80 rounded-2xl shadow p-5">
+    <div className="md:w-1/4 w-full bg-white/80 rounded-2xl shadow p-5 relative">
+      {deleting && (
+        <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-10 rounded-2xl">
+          <div className="flex items-center space-x-2">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-red-600"></div>
+            <span className="text-gray-700 font-medium">Deleting carriers...</span>
+          </div>
+        </div>
+      )}
       <div className="flex justify-between items-center mb-3">
         <div className="relative w-full">
           <input
@@ -136,7 +144,8 @@ export default function CarrierList({ carriers, selected, onSelect, loading, onD
                 type="checkbox"
                 checked={selectedCarriers.has(carrier.id)}
                 onChange={() => handleCheckboxChange(carrier.id)}
-                className="mr-2"
+                disabled={deleting}
+                className="mr-2 disabled:opacity-50"
               />
               {editingCarrierId === carrier.id ? (
                 <>

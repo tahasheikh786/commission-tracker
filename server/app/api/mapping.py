@@ -19,7 +19,7 @@ class MappingConfig(BaseModel):
 async def get_company_mapping(company_id: str, db: AsyncSession = Depends(get_db)):
     # Fetch mapping, plan_types, table_names, and field_config for the company
     mapping_rows = await crud.get_company_mappings(db, company_id)
-    mapping = {row.field_key: row.column_name for row in mapping_rows}
+    mapping = {row.display_name: row.column_name for row in mapping_rows}
     
     # For now, fetch the latest StatementUpload for this company to get plan_types, table_names, field_config
     latest_upload = await crud.get_latest_statement_upload_for_company(db, company_id)
@@ -32,7 +32,7 @@ async def get_company_mapping(company_id: str, db: AsyncSession = Depends(get_db
     
     # Get field_config from database fields instead of upload
     database_fields = await crud.get_all_database_fields(db, active_only=True)
-    field_config = [{"field": field.field_key, "label": field.display_name} for field in database_fields]
+    field_config = [{"field": field.display_name, "label": field.display_name} for field in database_fields]
     
     return MappingConfig(
         mapping=mapping,
@@ -44,10 +44,10 @@ async def get_company_mapping(company_id: str, db: AsyncSession = Depends(get_db
 @router.post("/companies/{company_id}/mapping/")
 async def update_company_mapping(company_id: str, config: MappingConfig, db: AsyncSession = Depends(get_db)):
     # Save mapping
-    for field_key, column_name in config.mapping.items():
+    for display_name, column_name in config.mapping.items():
         mapping_obj = schemas.CompanyFieldMappingCreate(
             company_id=company_id,
-            field_key=field_key,
+            display_name=display_name,
             column_name=column_name,
         )
         await crud.save_company_mapping(db, mapping_obj)

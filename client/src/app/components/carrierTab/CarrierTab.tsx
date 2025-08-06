@@ -32,6 +32,7 @@ export default function CarrierTab() {
   const [loadingCarriers, setLoadingCarriers] = useState(true);
   const [loadingStatements, setLoadingStatements] = useState(false);
   const [deletingCarriers, setDeletingCarriers] = useState(false);
+  const [deletingStatements, setDeletingStatements] = useState(false);
   const [activeTab, setActiveTab] = useState<'carriers' | 'database-fields' | 'plan-types'>('carriers');
 
   // Fetch carriers on mount
@@ -65,6 +66,7 @@ export default function CarrierTab() {
   // Handle deletion of selected statements
   const handleDelete = (ids: string[]) => {
     if (!selected) return;
+    setDeletingStatements(true);
     fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${selected.id}/statements/`, {
       method: 'DELETE',
       headers: {
@@ -80,6 +82,9 @@ export default function CarrierTab() {
       .catch((error) => {
         console.error('Delete statements error:', error);
         toast.error('Error deleting statements.');
+      })
+      .finally(() => {
+        setDeletingStatements(false);
       });
   };
 
@@ -184,7 +189,8 @@ export default function CarrierTab() {
                 setStatements={setStatements}
                 onPreview={setShowPreviewIdx}
                 onCompare={setShowCompareIdx}
-                onDelete={handleDelete}  // Pass delete handler here
+                onDelete={handleDelete}
+                deleting={deletingStatements}
               />
             )}
           </div>

@@ -17,7 +17,7 @@ class Company(CompanyBase):
         orm_mode = True
 
 class CompanyFieldMappingBase(BaseModel):
-    field_key: str
+    display_name: str
     column_name: str
 
 class CompanyFieldMappingCreate(CompanyFieldMappingBase):

@@ -16,9 +16,10 @@ type Props = {
   onPreview: (idx: number) => void;
   onCompare: (idx: number) => void;
   onDelete: (ids: string[]) => void;
+  deleting?: boolean;
 };
 
-export default function CarrierStatementsTable({ statements, setStatements, onPreview, onCompare, onDelete }: Props) {
+export default function CarrierStatementsTable({ statements, setStatements, onPreview, onCompare, onDelete, deleting }: Props) {
   const [selectedStatements, setSelectedStatements] = useState<Set<string>>(new Set());
   const [selectAll, setSelectAll] = useState(false);
   const router = useRouter();
@@ -51,30 +52,40 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
   };
 
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto relative">
+      {deleting && (
+        <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-10">
+          <div className="flex items-center space-x-2">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-red-600"></div>
+            <span className="text-gray-700 font-medium">Deleting statements...</span>
+          </div>
+        </div>
+      )}
       <div className="flex justify-between items-center mb-3">
         {selectedStatements.size > 0 && (
           <button
             onClick={handleDelete}
-            className="px-4 py-2 bg-red-600 text-white rounded font-semibold hover:bg-red-700 transition focus:outline-none focus:ring-2 focus:ring-red-400"
+            disabled={deleting}
+            className="px-4 py-2 bg-red-600 text-white rounded font-semibold hover:bg-red-700 transition focus:outline-none focus:ring-2 focus:ring-red-400 disabled:opacity-50 disabled:cursor-not-allowed"
             aria-label="Delete selected statements"
           >
-            Delete Selected
+            {deleting ? 'Deleting...' : 'Delete Selected'}
           </button>
         )}
       </div>
       <table className="w-full text-left rounded-lg overflow-hidden shadow border bg-white" role="table" aria-label="Carrier statements">
         <thead>
           <tr className="text-gray-600 font-semibold bg-blue-50">
-            <th className="p-2">
-              <input
-                type="checkbox"
-                checked={selectAll}
-                onChange={handleSelectAllChange}
-                className="mr-2 accent-blue-600 w-4 h-4"
-                aria-label="Select all statements"
-              />
-            </th>
+                          <th className="p-2">
+                <input
+                  type="checkbox"
+                  checked={selectAll}
+                  onChange={handleSelectAllChange}
+                  disabled={deleting}
+                  className="mr-2 accent-blue-600 w-4 h-4 disabled:opacity-50"
+                  aria-label="Select all statements"
+                />
+              </th>
             <th className="p-2">Statement</th>
             <th className="p-2">Uploaded On</th>
             <th className="p-2">Status</th>
@@ -90,7 +101,8 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
                   type="checkbox"
                   checked={selectedStatements.has(statement.id)}
                   onChange={() => handleCheckboxChange(statement.id)}
-                  className="mr-2 accent-blue-600 w-4 h-4"
+                  disabled={deleting}
+                  className="mr-2 accent-blue-600 w-4 h-4 disabled:opacity-50"
                   aria-label={`Select statement ${statement.file_name}`}
                 />
               </td>

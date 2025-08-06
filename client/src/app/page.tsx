@@ -1,13 +1,28 @@
 'use client'
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import DashboardTab from "./components/dashboardTab/DashboardTab";
 import CarrierTab from "./components/carrierTab/CarrierTab";
 import UploadPage from "./upload/page";
 
-import { User, UploadCloud, Database, Clock } from "lucide-react";
+import { User, UploadCloud, Database, Clock, FileText } from "lucide-react";
 
 export default function HomePage() {
   const [tab, setTab] = useState<"dashboard" | "carriers" | "upload">("dashboard");
+
+  // Handle URL parameters for tab selection
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search)
+    const tabParam = urlParams.get('tab')
+    console.log('URL tab parameter:', tabParam)
+    if (tabParam && ['dashboard', 'carriers', 'upload'].includes(tabParam)) {
+      console.log('Setting tab to:', tabParam)
+      setTab(tabParam as "dashboard" | "carriers" | "upload")
+    } else {
+      // Default to dashboard if no tab parameter or invalid tab
+      console.log('Setting tab to dashboard (default)')
+      setTab("dashboard")
+    }
+  }, [])
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-100 to-indigo-100 flex flex-col">
