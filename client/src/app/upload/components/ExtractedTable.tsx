@@ -170,16 +170,8 @@ export default function ExtractedTables({ tables: backendTables, onTablesChange,
     setTables(mergedTables);
   }, [backendTables]);
 
-  // Synchronize state arrays when tables change length
+  // Initialize state when tables change
   useEffect(() => {
-    setPages(pgs => {
-      if (tables.length === pgs.length) return pgs;
-      return Array(tables.length).fill(1);
-    });
-    setRowsPerPages(rpp => {
-      if (tables.length === rpp.length) return rpp;
-      return Array(tables.length).fill(ROWS_OPTIONS[0]);
-    });
     setSelectedRows(selRows => {
       if (tables.length === selRows.length) return selRows;
       return tables.map(() => new Set<number>());
@@ -189,7 +181,7 @@ export default function ExtractedTables({ tables: backendTables, onTablesChange,
       return tables.map(t => t.header.map(() => 160));
     });
     setTab(t => t >= tables.length ? 0 : t);
-  }, [tables.length]);
+  }, [tables.length, tables]);
 
   // Call onTablesChange only when tables changes, but avoid infinite loops
   useEffect(() => {

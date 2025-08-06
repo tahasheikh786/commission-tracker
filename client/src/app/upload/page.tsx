@@ -1,5 +1,5 @@
 'use client'
-import { useState, useRef, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { Pencil, Clock } from 'lucide-react'
 import CompanySelect from './components/CompanySelect'
@@ -76,97 +76,7 @@ export default function UploadPage() {
   }, [uploaded?.upload_id])
 
   // Handle URL parameters for resuming files and check for active sessions
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search)
-    const resumeFileId = urlParams.get('resume')
-    
-    if (resumeFileId && !uploaded) {
-      handleResumeFile(resumeFileId)
-    } else if (!uploaded && company) {
-      // Check if there's an active session for this company
-      checkForActiveSession()
-    }
-  }, [company])
-
-  // Check for active session
-  const checkForActiveSession = async () => {
-    if (!company) return
-    
-    try {
-      const sessionData = await resumeSession()
-      if (sessionData && sessionData.upload_id) {
-        // There's an active session, resume it
-        handleResumeFile(sessionData.upload_id)
-      }
-    } catch (error) {
-      console.log('No active session found')
-    }
-  }
-
-  // Fetch database fields from backend
-  useEffect(() => {
-    async function fetchDatabaseFields() {
-      try {
-        setLoadingFields(true)
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/database-fields/?active_only=true`)
-        if (response.ok) {
-          const data = await response.json()
-          const fieldsFromBackend = data.map((field: any) => ({
-            field: field.field_key,
-            label: field.display_name
-          }))
-          setDatabaseFields(fieldsFromBackend)
-          
-          // Set as default fieldConfig if not already set
-          if (fieldConfig.length === 0) {
-            setFieldConfig(fieldsFromBackend)
-          }
-        } else {
-          console.error('Failed to fetch database fields')
-          toast.error('Failed to load database fields')
-        }
-      } catch (error) {
-        console.error('Error fetching database fields:', error)
-        toast.error('Failed to load database fields')
-      } finally {
-        setLoadingFields(false)
-      }
-    }
-
-    fetchDatabaseFields()
-  }, [])
-  
-  function getLabelFromDatabaseFields(fieldKey: string) {
-    return (databaseFields.find(f => f.field === fieldKey)?.label) || fieldKey;
-  }
-
-  function handleReset() {
-    setCompany(null)
-    setUploaded(null)
-    setMapping(null)
-    setShowPendingFiles(false)
-    setCurrentStep('upload')
-    clearAutoSave()
-    setFinalTables([])
-    setFieldConfig(databaseFields)
-    fetchMappingRef.current = false
-    setShowFieldMapper(false)
-    setShowTableEditor(false)
-    setSkipped(false)
-    setShowRejectModal(false)
-    setRejectReason('')
-    setSubmitting(false)
-    setPlanTypes([])
-    setEditedTables([])
-    setOriginalFile(null)
-    setExtractionHistory([])
-    setCurrentExtractionIndex(0)
-    setIsUsingAnotherExtraction(false)
-    setHasUsedAnotherExtraction(false)
-  }
-
-  // Pending files handlers
-  const handleResumeFile = async (fileId: string) => {
+  const handleResumeFile = useCallback(async (fileId: string) => {
     try {
       // First, get the upload details from the backend
       const uploadResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/pending/files/single/${fileId}`)
@@ -228,16 +138,111 @@ export default function UploadPage() {
       // Set company if available
       if (upload.company_id && !company) {
         // You might need to fetch company details here
-        // For now, we'll assume it's already set
+        // For now, we'll just set a basic company object
+        setCompany({
+          id: upload.company_id,
+          name: upload.company_name || 'Unknown Company'
+        })
       }
       
-      toast.success(`Resumed from ${currentStep} step`)
+      toast.success('File resumed successfully')
     } catch (error) {
       console.error('Error resuming file:', error)
       toast.error('Failed to resume file')
     }
+  }, [company, databaseFields, loadProgress])
+
+  // Check for active session
+  const checkForActiveSession = useCallback(async () => {
+    if (!company) return
+    
+    try {
+      const sessionData = await resumeSession()
+      if (sessionData && sessionData.upload_id) {
+        // There's an active session, resume it
+        handleResumeFile(sessionData.upload_id)
+      }
+    } catch (error) {
+      console.log('No active session found')
+    }
+  }, [company, handleResumeFile, resumeSession])
+
+  // Check for resume parameter and active session
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search)
+    const resumeFileId = urlParams.get('resume')
+    
+    if (resumeFileId && !uploaded) {
+      handleResumeFile(resumeFileId)
+    } else if (!uploaded && company) {
+      // Check if there's an active session for this company
+      checkForActiveSession()
+    }
+  }, [company, uploaded, handleResumeFile, checkForActiveSession])
+
+  // Fetch database fields from backend
+  useEffect(() => {
+    async function fetchDatabaseFields() {
+      try {
+        setLoadingFields(true)
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/database-fields/?active_only=true`)
+        if (response.ok) {
+          const data = await response.json()
+          const fieldsFromBackend = data.map((field: any) => ({
+            field: field.field_key,
+            label: field.display_name
+          }))
+          setDatabaseFields(fieldsFromBackend)
+          
+          // Set as default fieldConfig if not already set
+          if (fieldConfig.length === 0) {
+            setFieldConfig(fieldsFromBackend)
+          }
+        } else {
+          console.error('Failed to fetch database fields')
+          toast.error('Failed to load database fields')
+        }
+      } catch (error) {
+        console.error('Error fetching database fields:', error)
+        toast.error('Failed to load database fields')
+      } finally {
+        setLoadingFields(false)
+      }
+    }
+
+    fetchDatabaseFields()
+  }, [fieldConfig.length])
+  
+  function getLabelFromDatabaseFields(fieldKey: string) {
+    return (databaseFields.find(f => f.field === fieldKey)?.label) || fieldKey;
   }
 
+  function handleReset() {
+    setCompany(null)
+    setUploaded(null)
+    setMapping(null)
+    setShowPendingFiles(false)
+    setCurrentStep('upload')
+    clearAutoSave()
+    setFinalTables([])
+    setFieldConfig(databaseFields)
+    fetchMappingRef.current = false
+    setShowFieldMapper(false)
+    setShowTableEditor(false)
+    setSkipped(false)
+    setShowRejectModal(false)
+    setRejectReason('')
+    setSubmitting(false)
+    setPlanTypes([])
+    setEditedTables([])
+    setOriginalFile(null)
+    setExtractionHistory([])
+    setCurrentExtractionIndex(0)
+    setIsUsingAnotherExtraction(false)
+    setHasUsedAnotherExtraction(false)
+  }
+
+  // Pending files handlers
   const handleDeletePendingFile = (fileId: string) => {
     // The PendingFiles component handles the deletion
     // This is just a callback for any additional cleanup

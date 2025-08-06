@@ -1,5 +1,5 @@
 'use client'
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { 
   Pencil, 
   Trash2, 
@@ -166,24 +166,36 @@ export default function TableEditor({
   }
 
   // Clean up column names and debug logging
+  const cleanColumnNames = useCallback((headers: string[]) => {
+    return headers.map(header => {
+      // Check if header contains a period and has repeating text
+      if (header.includes('.')) {
+        const parts = header.split('.')
+        if (parts.length === 2 && parts[0].trim() === parts[1].trim()) {
+          return parts[0].trim()
+        }
+      }
+      return header
+    })
+  }, [])
+
+  // Process tables and call onTablesChange when needed
   useEffect(() => {
-    // Clean up repeating column names
+    if (!tables.length) return
+
     const cleanedTables = tables.map(table => ({
       ...table,
       header: cleanColumnNames(table.header)
     }))
-    
-    // Only update if there are changes
-    const hasChanges = cleanedTables.some((table, idx) => 
-      JSON.stringify(table.header) !== JSON.stringify(tables[idx].header)
-    )
+
+    const hasChanges = JSON.stringify(cleanedTables) !== JSON.stringify(tables)
     
     if (hasChanges) {
       onTablesChange(cleanedTables)
     }
     
 
-  }, [tables, extractionHistory, currentExtractionIndex])
+  }, [tables, extractionHistory, currentExtractionIndex, onTablesChange, cleanColumnNames])
 
   const isGoogleDocAIExtraction = () => {
     const method = getCurrentExtractionMethod()
@@ -196,20 +208,6 @@ export default function TableEditor({
 
   const canGoToPreviousExtraction = () => {
     return hasExtractionHistory() && currentExtractionIndex > 0
-  }
-
-  // Clean up repeating column names (e.g., "Client Account.Client Account" -> "Client Account")
-  const cleanColumnNames = (headers: string[]) => {
-    return headers.map(header => {
-      // Check if header contains a period and has repeating text
-      if (header.includes('.')) {
-        const parts = header.split('.')
-        if (parts.length === 2 && parts[0].trim() === parts[1].trim()) {
-          return parts[0].trim()
-        }
-      }
-      return header
-    })
   }
 
   // Close menus when clicking outside

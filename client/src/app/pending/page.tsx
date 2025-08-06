@@ -207,7 +207,7 @@ export default function PendingFilesPage() {
             <div className="text-center py-12">
               <Clock className="w-12 h-12 text-gray-400 mx-auto mb-4" />
               <h3 className="text-xl font-semibold text-gray-600 mb-2">No Pending Files</h3>
-              <p className="text-gray-500">All your files have been processed or you haven't started any uploads yet.</p>
+              <p className="text-gray-500">All your files have been processed or you haven&apos;t started any uploads yet.</p>
             </div>
           ) : (
             <div className="divide-y divide-gray-200">
