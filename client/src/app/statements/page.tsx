@@ -39,7 +39,7 @@ export default function StatementsPage() {
   useEffect(() => {
     const fetchAllStatements = async () => {
       try {
-        const response = await fetch('/api/dashboard/statements');
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/dashboard/statements`);
         if (response.ok) {
           const data = await response.json();
           setAllStatements(data);

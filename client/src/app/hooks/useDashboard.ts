@@ -40,7 +40,7 @@ export function useDashboardStats() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch('/api/dashboard/stats');
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/dashboard/stats`);
       if (!response.ok) throw new Error('Failed to fetch dashboard stats');
       const data = await response.json();
       setStats(data);
@@ -68,7 +68,7 @@ export function useCarriers() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch('/api/dashboard/carriers');
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/dashboard/carriers`);
       if (!response.ok) throw new Error('Failed to fetch carriers');
       const data = await response.json();
       setCarriers(data);
@@ -93,8 +93,8 @@ export function useStatements() {
     setError(null);
     try {
       const endpoint = status 
-        ? `/api/dashboard/statements/${status}`
-        : '/api/dashboard/statements';
+        ? `${process.env.NEXT_PUBLIC_API_URL}/dashboard/statements/${status}`
+        : `${process.env.NEXT_PUBLIC_API_URL}/dashboard/statements`;
       
       const response = await fetch(endpoint);
       if (!response.ok) throw new Error('Failed to fetch statements');
