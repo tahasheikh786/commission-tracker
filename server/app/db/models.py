@@ -27,6 +27,50 @@ class CompanyFieldMapping(Base):
         UniqueConstraint('company_id', 'display_name', name='uq_company_field_mapping'),
     )
 
+class CompanyConfiguration(Base):
+    __tablename__ = 'company_configurations'
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    company_id = Column(UUID(as_uuid=True), ForeignKey('companies.id'), nullable=False, unique=True)
+    field_config = Column(JSON)  # Store field configuration for the company
+    plan_types = Column(JSON)  # Store plan types for the company
+    table_names = Column(JSON)  # Store table names for the company
+    created_at = Column(DateTime, server_default=text('now()'), nullable=False)
+    updated_at = Column(DateTime, server_default=text('now()'), onupdate=text('now()'), nullable=False)
+
+class CarrierFormatLearning(Base):
+    __tablename__ = 'carrier_format_learning'
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    company_id = Column(UUID(as_uuid=True), ForeignKey('companies.id'), nullable=False)
+    
+    # Format metadata
+    format_signature = Column(String, nullable=False)  # Hash of headers and structure
+    headers = Column(JSON, nullable=False)  # Array of column headers
+    header_patterns = Column(JSON)  # Learned patterns for header detection
+    
+    # Data type analysis
+    column_types = Column(JSON)  # Data types for each column (string, number, date, currency)
+    column_patterns = Column(JSON)  # Regex patterns for each column
+    sample_values = Column(JSON)  # Sample values for each column
+    
+    # Structure analysis
+    table_structure = Column(JSON)  # Table layout, number of columns, typical row count
+    data_quality_metrics = Column(JSON)  # Completeness, consistency metrics
+    
+    # Mapping information
+    field_mapping = Column(JSON)  # Learned field mapping for this format
+    confidence_score = Column(Integer, default=0)  # Confidence in this format (0-100)
+    
+    # Usage tracking
+    usage_count = Column(Integer, default=1)  # How many times this format was used
+    last_used = Column(DateTime, server_default=text('now()'), nullable=False)
+    created_at = Column(DateTime, server_default=text('now()'), nullable=False)
+    updated_at = Column(DateTime, server_default=text('now()'), onupdate=text('now()'), nullable=False)
+    
+    # Add unique constraint for company and format signature
+    __table_args__ = (
+        UniqueConstraint('company_id', 'format_signature', name='uq_carrier_format'),
+    )
+
 class StatementUpload(Base):
     __tablename__ = 'statement_uploads'
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)

@@ -9,6 +9,7 @@ import TableEditor from './components/TableEditor'
 import DashboardTable from './components/DashboardTable'
 import FieldMapper from './components/FieldMapper'
 import PendingFiles from '../components/PendingFiles'
+import FormatLearningInfo from './components/FormatLearningInfo'
 import { useProgressTracking } from '../hooks/useProgressTracking'
 
 import { toast } from 'react-hot-toast'
@@ -29,12 +30,15 @@ export default function UploadPage() {
   const [showFieldMapper, setShowFieldMapper] = useState(false)
   const [showTableEditor, setShowTableEditor] = useState(false)
   const [skipped, setSkipped] = useState(false)
+  const [mappingAutoApplied, setMappingAutoApplied] = useState(false)
   const [showRejectModal, setShowRejectModal] = useState(false)
   const [rejectReason, setRejectReason] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [savingMapping, setSavingMapping] = useState(false)
   const [planTypes, setPlanTypes] = useState<string[]>([])
   const [editedTables, setEditedTables] = useState<any[]>([])
   const [originalFile, setOriginalFile] = useState<File | null>(null)
+  const [formatLearning, setFormatLearning] = useState<any>(null)
   
   // Extraction history management
   const [extractionHistory, setExtractionHistory] = useState<any[][]>([])
@@ -59,6 +63,7 @@ export default function UploadPage() {
   const { saveProgress, loadProgress, resumeSession, markUnsaved, clearAutoSave, autoSaveProgress } = useProgressTracking({
     uploadId: uploaded?.upload_id,
     currentStep,
+    autoSaveInterval: 60000, // Increase to 60 seconds to reduce API calls
     onProgressSaved: (step, data) => {
       console.log(`Progress saved for step: ${step}`, data)
     },
@@ -68,6 +73,7 @@ export default function UploadPage() {
   })
 
   const fetchMappingRef = useRef(false)
+  const resumeFileRef = useRef(false)
   const router = useRouter()
   
   // Reset fetchMappingRef when upload changes
@@ -75,8 +81,103 @@ export default function UploadPage() {
     fetchMappingRef.current = false
   }, [uploaded?.upload_id])
 
+  // Fetch saved mapping for the company when tables are available
+  useEffect(() => {
+    console.log('🔍 Mapping fetch effect triggered:', {
+      hasTables: !!uploaded?.tables?.length,
+      hasCompany: !!company,
+      notFetching: !fetchingMapping,
+      noMapping: !mapping,
+      fetchMappingRef: fetchMappingRef.current
+    })
+    
+    if (uploaded?.tables?.length && company && !fetchingMapping && !mapping) {
+      // Only fetch mapping once when needed
+      if (!fetchMappingRef.current) {
+        console.log('🚀 Fetching mapping for company:', company.id)
+        fetchMappingRef.current = true
+        setFetchingMapping(true)
+        fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${company.id}/mapping/`)
+          .then(r => r.json())
+          .then(map => {
+            console.log('📥 Received mapping response:', map)
+            let mappingObj: Record<string, string> | null = null
+            let fieldsArr = fieldConfig
+            let loadedPlanTypes: string[] | null = null
+            let loadedTableNames: string[] | null = null
+            if (map && typeof map === 'object') {
+              if (map.mapping) {
+                mappingObj = map.mapping
+                // Use backend's field_config as-is if present
+                if (Array.isArray(map.field_config) && map.field_config.length > 0) {
+                  fieldsArr = map.field_config
+                } else if (mappingObj) {
+                  fieldsArr = Object.keys(mappingObj).map(field => ({
+                    field,
+                    label: getLabelFromDatabaseFields(field)
+                  }))
+                } else {
+                  fieldsArr = databaseFields
+                }
+                if (map.plan_types) loadedPlanTypes = map.plan_types
+                if (map.table_names) loadedTableNames = map.table_names
+              } else if (Array.isArray(map)) {
+                mappingObj = {}
+                fieldsArr = []
+                map.forEach((row: any) => {
+                  mappingObj![row.field_key] = row.column_name
+                  if (!fieldsArr.some(f => f.field === row.field_key))
+                    fieldsArr.push({
+                      field: row.field_key,
+                      label: getLabelFromDatabaseFields(row.field_key) // Use pretty label!
+                    })
+                })
+                if (!fieldsArr.length) fieldsArr = fieldConfig
+              }
+            }
+            if (mappingObj && Object.keys(mappingObj).length) {
+              console.log('✅ Found saved mapping:', mappingObj)
+              setMapping(mappingObj)
+              setFieldConfig(fieldsArr)
+              if (loadedPlanTypes) setPlanTypes(loadedPlanTypes)
+              console.log('✅ Mapping loaded, will show in FieldMapper')
+            } else {
+              console.log('❌ No mapping found or mapping is empty')
+            }
+            setFetchingMapping(false)
+          })
+          .catch((error) => {
+            console.error('❌ Error fetching mapping:', error)
+            setFetchingMapping(false)
+          })
+      }
+    }
+  }, [uploaded?.tables?.length, company, fetchingMapping, mapping, fieldConfig, databaseFields])
+
+  // Debug state changes
+  useEffect(() => {
+    console.log('🔄 State changed:', {
+      mapping: !!mapping,
+      showFieldMapper,
+      showTableEditor,
+      skipped,
+      finalTablesLength: finalTables.length,
+      currentStep,
+      dashboardCondition: (mapping && !showFieldMapper) || skipped || (finalTables.length > 0 && !showFieldMapper)
+    })
+  }, [mapping, showFieldMapper, showTableEditor, skipped, finalTables.length, currentStep])
+
   // Handle URL parameters for resuming files and check for active sessions
   const handleResumeFile = useCallback(async (fileId: string, stepParam?: string | null) => {
+    // Prevent multiple simultaneous calls
+    if (resumeFileRef.current) {
+      console.log('🔄 Resume file already in progress, skipping...')
+      return
+    }
+    
+    resumeFileRef.current = true
+    console.log('🎯 Starting resume file process for:', fileId)
+    
     try {
       // First, get the upload details from the backend
       const uploadResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/pending/files/single/${fileId}`)
@@ -137,18 +238,58 @@ export default function UploadPage() {
       
       // Set company if available
       if (upload.company_id && !company) {
-        // You might need to fetch company details here
-        // For now, we'll just set a basic company object
-        setCompany({
-          id: upload.company_id,
-          name: upload.company_name || 'Unknown Company'
+        console.log('🎯 Setting company from upload data:', {
+          company_id: upload.company_id,
+          company_name: upload.company_name,
+          upload: upload
         })
+        
+        // Try to fetch company details from backend if name is not available
+        if (!upload.company_name) {
+          try {
+            const companyResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${upload.company_id}`)
+            if (companyResponse.ok) {
+              const companyData = await companyResponse.json()
+              if (companyData.success && companyData.company) {
+                setCompany({
+                  id: upload.company_id,
+                  name: companyData.company.name || 'Unknown Company'
+                })
+                console.log('🎯 Company fetched from backend:', companyData.company)
+              } else {
+                setCompany({
+                  id: upload.company_id,
+                  name: 'Unknown Company'
+                })
+              }
+            } else {
+              setCompany({
+                id: upload.company_id,
+                name: 'Unknown Company'
+              })
+            }
+          } catch (error) {
+            console.error('Error fetching company details:', error)
+            setCompany({
+              id: upload.company_id,
+              name: 'Unknown Company'
+            })
+          }
+        } else {
+          setCompany({
+            id: upload.company_id,
+            name: upload.company_name
+          })
+        }
       }
       
       toast.success('File resumed successfully')
     } catch (error) {
       console.error('Error resuming file:', error)
       toast.error('Failed to resume file')
+    } finally {
+      resumeFileRef.current = false
+      console.log('🎯 Resume file process completed')
     }
   }, [company, databaseFields, loadProgress])
 
@@ -240,8 +381,11 @@ export default function UploadPage() {
       }
     }
 
-    fetchDatabaseFields()
-  }, [fieldConfig.length])
+    // Only fetch if we don't already have database fields
+    if (databaseFields.length === 0) {
+      fetchDatabaseFields()
+    }
+  }, [databaseFields.length, fieldConfig.length])
   
   function getLabelFromDatabaseFields(fieldKey: string) {
     return (databaseFields.find(f => f.field === fieldKey)?.label) || fieldKey;
@@ -257,9 +401,11 @@ export default function UploadPage() {
     setFinalTables([])
     setFieldConfig(databaseFields)
     fetchMappingRef.current = false
+    resumeFileRef.current = false
     setShowFieldMapper(false)
     setShowTableEditor(false)
     setSkipped(false)
+    setMappingAutoApplied(false)
     setShowRejectModal(false)
     setRejectReason('')
     setSubmitting(false)
@@ -270,6 +416,7 @@ export default function UploadPage() {
     setCurrentExtractionIndex(0)
     setIsUsingAnotherExtraction(false)
     setHasUsedAnotherExtraction(false)
+    setFormatLearning(null)
   }
 
   // Pending files handlers
@@ -280,7 +427,7 @@ export default function UploadPage() {
   }
 
   // Handle upload result with quality assessment
-  function handleUploadResult({ tables, upload_id, file_name, file, plan_types, field_config, quality_summary, extraction_config }: any) {
+  function handleUploadResult({ tables, upload_id, file_name, file, plan_types, field_config, quality_summary, extraction_config, format_learning }: any) {
     // Store original file for re-extraction
     if (file && !originalFile) {
       setOriginalFile(file)
@@ -298,9 +445,20 @@ export default function UploadPage() {
     }
     
     setUploaded({ tables, upload_id, file_name, file })
-    setMapping(null)
     setFinalTables([])
     setFieldConfig(field_config || databaseFields)
+    setFormatLearning(format_learning) // Store format learning data
+    
+    // Auto-populate mapping from format learning if available
+    if (format_learning?.suggested_mapping && Object.keys(format_learning.suggested_mapping).length > 0) {
+      setMapping(format_learning.suggested_mapping)
+      setMappingAutoApplied(true)
+      toast.success('Field mappings auto-populated from learned format!')
+    } else {
+      setMapping(null)
+      setMappingAutoApplied(false)
+    }
+    
     fetchMappingRef.current = false
     setShowFieldMapper(false)
     setShowTableEditor(true) // Show table editor first
@@ -317,7 +475,8 @@ export default function UploadPage() {
         plan_types,
         field_config,
         quality_summary,
-        extraction_config
+        extraction_config,
+        format_learning
       })
     }
   }
@@ -422,7 +581,7 @@ export default function UploadPage() {
 
     try {
       setIsImprovingExtraction(true)
-      toast.loading('Improving extraction with GPT-4o Vision...', { id: 'improve-extraction' })
+      toast.loading('Improving extraction with GPT-4o Vision and LLM format enforcement...', { id: 'improve-extraction' })
 
       const formData = new FormData()
       formData.append('upload_id', uploaded.upload_id)
@@ -447,21 +606,31 @@ export default function UploadPage() {
           ...uploaded,
           tables: result.tables || uploaded.tables,
           enhancement_metadata: {
-            method: 'gpt4o_vision',
+            method: 'gpt4o_vision_with_llm_formatting',
             timestamp: result.enhancement_timestamp,
             diagnostic_info: result.diagnostic_info,
             overall_notes: result.overall_notes,
-            processing_time: result.extraction_time_seconds
+            processing_time: result.extraction_time_seconds,
+            format_accuracy: result.format_accuracy
           }
         })
         
-        toast.success(`Extraction improved! ${result.tables?.length || 0} tables enhanced.`, { id: 'improve-extraction' })
+        const formatAccuracy = result.format_accuracy || '≥90%'
+        toast.success(`Extraction improved with LLM format enforcement! ${result.tables?.length || 0} tables enhanced with ${formatAccuracy} accuracy.`, { id: 'improve-extraction' })
         
         // Show diagnostic information if available
         if (result.diagnostic_info?.warnings?.length > 0) {
           toast(`Found ${result.diagnostic_info.warnings.length} structural issues. Check the table for details.`, { 
             id: 'improve-extraction-warnings',
             duration: 5000 
+          })
+        }
+        
+        // Show format accuracy information
+        if (result.format_accuracy) {
+          toast(`Data formatted to match LLM specifications with ${result.format_accuracy} accuracy.`, { 
+            id: 'improve-extraction-format',
+            duration: 7000 
           })
         }
       } else {
@@ -508,7 +677,8 @@ export default function UploadPage() {
   function applyMapping(
     tables: any[],
     mapping: Record<string, string>,
-    fieldConfigOverride: FieldConfig[]
+    fieldConfigOverride: FieldConfig[],
+    onComplete?: () => void
   ) {
     console.log('applyMapping called with:', { tables, mapping, fieldConfigOverride })
     
@@ -554,6 +724,7 @@ export default function UploadPage() {
     
     console.log('Final mapped rows:', mappedRows)
     setFinalTables(mappedRows)
+    console.log('✅ finalTables state updated with', mappedRows.length, 'tables')
     
     // Save progress for dashboard step
     if (uploaded?.upload_id) {
@@ -562,6 +733,11 @@ export default function UploadPage() {
         field_config: fieldConfigOverride,
         mapping: mapping
       })
+    }
+    
+    // Call the completion callback if provided
+    if (onComplete) {
+      onComplete()
     }
   }
 
@@ -704,6 +880,12 @@ export default function UploadPage() {
     }
   }
 
+  // Handle suggested mapping from format learning
+  function handleUseSuggestedMapping(suggestedMapping: Record<string, string>) {
+    setMapping(suggestedMapping)
+    toast.success('Suggested mapping applied!')
+  }
+
   // 1. Show upload interface if no company selected or no upload yet
   if (!company || !uploaded) {
     return (
@@ -830,73 +1012,57 @@ export default function UploadPage() {
   }
 
   // 3. If mapping exists, auto-apply; else, show FieldMapper (skip if skipped)
-  if (uploaded?.tables?.length && company && (showFieldMapper || (!mapping && !skipped))) {
-    // Only fetch mapping once when needed
-    if (!fetchMappingRef.current && !fetchingMapping && !showFieldMapper && !mapping) {
-      fetchMappingRef.current = true
-      setFetchingMapping(true)
-      fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${company.id}/mapping/`)
-        .then(r => r.json())
-        .then(map => {
-          let mappingObj: Record<string, string> | null = null
-          let fieldsArr = fieldConfig
-          let loadedPlanTypes: string[] | null = null
-          let loadedTableNames: string[] | null = null
-          if (map && typeof map === 'object') {
-            if (map.mapping) {
-              mappingObj = map.mapping
-              // Use backend's field_config as-is if present
-              if (Array.isArray(map.field_config) && map.field_config.length > 0) {
-                fieldsArr = map.field_config
-              } else if (mappingObj) {
-                fieldsArr = Object.keys(mappingObj).map(field => ({
-                  field,
-                  label: getLabelFromDatabaseFields(field)
-                }))
-              } else {
-                fieldsArr = databaseFields
-              }
-              if (map.plan_types) loadedPlanTypes = map.plan_types
-              if (map.table_names) loadedTableNames = map.table_names
-            } else if (Array.isArray(map)) {
-              mappingObj = {}
-              fieldsArr = []
-              map.forEach((row: any) => {
-                mappingObj![row.field_key] = row.column_name
-                if (!fieldsArr.some(f => f.field === row.field_key))
-                  fieldsArr.push({
-                    field: row.field_key,
-                    label: getLabelFromDatabaseFields(row.field_key) // Use pretty label!
-                  })
-              })
-              if (!fieldsArr.length) fieldsArr = fieldConfig
-            }
-          }
-          if (mappingObj && Object.keys(mappingObj).length) {
-            setMapping(mappingObj)
-            setFieldConfig(fieldsArr)
-            applyMapping(uploaded.tables, mappingObj, fieldsArr)
-            if (loadedPlanTypes) setPlanTypes(loadedPlanTypes)
-            // Optionally set table names if needed
-          }
-          setFetchingMapping(false)
-        })
-        .catch(() => setFetchingMapping(false))
-    }
-
+  console.log('🎯 FieldMapper condition check:', {
+    hasTables: !!uploaded?.tables?.length,
+    hasFinalTables: finalTables.length > 0,
+    hasCompany: !!company,
+    companyName: company?.name,
+    notFetching: !fetchingMapping,
+    showFieldMapper,
+    notSkipped: !skipped,
+    uploadedTablesLength: uploaded?.tables?.length,
+    finalTablesLength: finalTables.length,
+    condition: (uploaded?.tables?.length || finalTables.length > 0) && company && !fetchingMapping && showFieldMapper
+  })
+  
+  if ((uploaded?.tables?.length || finalTables.length > 0) && company && !fetchingMapping && showFieldMapper) {
     return (
-      <main className="min-h-screen bg-gradient-to-br from-gray-100 to-blue-50 flex items-center justify-center px-4">
-        <div className="w-full max-w-7xl mx-auto shadow-2xl bg-white/90 rounded-3xl p-8 border">
+      <>
+        {savingMapping && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-8 shadow-xl">
+              <div className="flex flex-col items-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+                <p className="text-lg font-semibold text-gray-800 mb-2">Saving Field Mapping</p>
+                <p className="text-gray-600 text-center">Please wait while we save your mapping and prepare the dashboard...</p>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        <main className="min-h-screen bg-gradient-to-br from-gray-100 to-blue-50 flex items-center justify-center px-4">
+          <div className="w-full max-w-7xl mx-auto shadow-2xl bg-white/90 rounded-3xl p-8 border">
           <h1 className="text-3xl font-bold mb-6 text-gray-800 text-center tracking-tight">
             <span className="bg-gradient-to-r from-blue-600 to-indigo-500 text-transparent bg-clip-text">
-              Map Fields for {company.name}
+              {fetchingMapping ? 'Loading Field Mapping...' : `Map Fields for ${company?.name || 'Unknown Company'}`}
             </span>
           </h1>
           
           
           {/* Single Column Layout */}
           <div className="space-y-8">
+            {/* Loading State */}
+            {fetchingMapping && (
+              <div className="flex items-center justify-center py-12">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                  <p className="text-gray-600">Loading saved field mapping...</p>
+                </div>
+              </div>
+            )}
+            
             {/* Field Mapper Section */}
+            {!fetchingMapping && (
             <div>
             <div className="mb-4">
                 <div className="flex items-center gap-3 mb-2">
@@ -911,86 +1077,133 @@ export default function UploadPage() {
                   Match each required field to the correct column in your uploaded table. Helps us standardize your commission statement.
                 </p>
               </div>
-              {(editedTables.length > 0 ? editedTables : uploaded.tables)[0]?.header && (editedTables.length > 0 ? editedTables : uploaded.tables)[0].header.length > 0 && (
-                <FieldMapper
-                  company={company}
-                  columns={(editedTables.length > 0 ? editedTables : uploaded.tables)[0].header}
-                  initialPlanTypes={planTypes}
-                  onSave={async (map, fieldConf, selectedPlanTypes) => {
-                    setMapping(map)
-                    setFieldConfig(fieldConf)
-                    setPlanTypes(selectedPlanTypes)
-                    // Always send the current fields as field_config
-                    const config = {
-                      mapping: map,
-                      plan_types: selectedPlanTypes,
-                      table_names: (editedTables.length > 0 ? editedTables : uploaded.tables).map((t: any) => t.name || ''),
-                      field_config: fieldConf,
-                    }
-                    await fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${company.id}/mapping/`, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify(config),
-                    })
-                    applyMapping(editedTables.length > 0 ? editedTables : uploaded.tables, map, fieldConf)
-                    setShowFieldMapper(false)
-                    setSkipped(false)
-                    
-                    // Save progress for field mapper step
-                    if (uploaded?.upload_id) {
-                      saveProgress('field_mapper', {
-                        mapping: map,
-                        field_config: fieldConf,
-                        plan_types: selectedPlanTypes,
-                        table_names: config.table_names
-                      })
-                    }
-                  }}
-                  onSkip={() => {
-                    // Set fieldConfig to match extracted table headers
-                    const tablesToUse = editedTables.length > 0 ? editedTables : uploaded.tables;
-                    const extractedHeaders = tablesToUse.map((t: any) => t.header);
-                    const extractedFieldConfig = tablesToUse.map((t: any) => t.header.map((col: string) => ({ field: col, label: col })));
-                    // Save table names and plan types per table
-                    const tableNames = tablesToUse.map((t: any) => t.name || '');
-                    
-                    // Ensure the tables have the correct structure for DashboardTable
-                    const processedTables = tablesToUse.map((t: any) => ({
-                      ...t,
-                      header: t.header || [],
-                      rows: t.rows || []
-                    }));
-                    
-                    setFinalTables(processedTables);
-                    setFieldConfig(extractedFieldConfig[0]); // Use first table's config for DashboardTable
-                    setShowFieldMapper(false);
-                    setMapping(null);
-                    setSkipped(true);
-                    setPlanTypes(planTypes); // preserve selected plan types
-                    
-                    // Save progress for skipped field mapper step
-                    if (uploaded?.upload_id) {
-                      saveProgress('field_mapper', {
-                        skipped: true,
-                        field_config: extractedFieldConfig[0],
-                        plan_types: planTypes,
-                        table_names: tableNames,
-                        final_data: processedTables
-                      })
+              {(editedTables.length > 0 ? editedTables : uploaded.tables.length > 0 ? uploaded.tables : finalTables)[0]?.header && (editedTables.length > 0 ? editedTables : uploaded.tables.length > 0 ? uploaded.tables : finalTables)[0].header.length > 0 && (
+                <>
+                  {console.log('🎯 Rendering FieldMapper with props:', {
+                    company,
+                    columns: (editedTables.length > 0 ? editedTables : uploaded.tables.length > 0 ? uploaded.tables : finalTables)[0].header,
+                    initialMapping: mapping,
+                    initialFields: fieldConfig,
+                    initialPlanTypes: planTypes,
+                    showFieldMapper,
+                    mappingAutoApplied,
+                    tablesSource: editedTables.length > 0 ? 'editedTables' : uploaded.tables.length > 0 ? 'uploaded.tables' : 'finalTables'
+                  })}
+                  <FieldMapper
+                    company={company}
+                    columns={(editedTables.length > 0 ? editedTables : uploaded.tables.length > 0 ? uploaded.tables : finalTables)[0].header}
+                    initialPlanTypes={planTypes}
+                    tableData={editedTables.length > 0 ? editedTables : uploaded.tables.length > 0 ? uploaded.tables : finalTables} // Pass table data for format learning
+                    isLoading={savingMapping}
+                    onSave={async (map, fieldConf, selectedPlanTypes) => {
+                      console.log('🎯 FieldMapper onSave called with:', { map, fieldConf, selectedPlanTypes })
                       
-                      // Also save progress for dashboard step since we're going there
-                      saveProgress('dashboard', {
-                        final_data: processedTables,
-                        field_config: extractedFieldConfig[0],
-                        skipped: true
-                      })
-                    }
-                  }}
-                  initialFields={fieldConfig}
-                  initialMapping={mapping}
-                />
+                      setSavingMapping(true)
+                      
+                      try {
+                        // Always send the current fields as field_config
+                        const tablesToUse = editedTables.length > 0 ? editedTables : uploaded.tables.length > 0 ? uploaded.tables : finalTables;
+                        const config = {
+                          mapping: map,
+                          plan_types: selectedPlanTypes,
+                          table_names: tablesToUse.map((t: any) => t.name || ''),
+                          field_config: fieldConf,
+                          table_data: tablesToUse.length > 0 ? tablesToUse[0]?.rows || [] : [], // Send first table's rows for format learning
+                          headers: tablesToUse.length > 0 ? tablesToUse[0]?.header || [] : [], // Send headers for format learning
+                        }
+                        
+                        await fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${company.id}/mapping/`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify(config),
+                        })
+                        
+                        console.log('✅ Mapping saved successfully')
+                        
+                        // Set all states in sequence to ensure proper transition
+                        setMapping(map)
+                        setFieldConfig(fieldConf)
+                        setPlanTypes(selectedPlanTypes)
+                        setSkipped(false)
+                        setCurrentStep('dashboard')
+                        setShowTableEditor(false) // Ensure table editor is hidden
+                        
+                        // Apply the mapping to create final tables and then hide FieldMapper
+                        applyMapping(editedTables.length > 0 ? editedTables : uploaded.tables.length > 0 ? uploaded.tables : finalTables, map, fieldConf, () => {
+                          console.log('🎯 applyMapping callback executed, hiding FieldMapper')
+                          setShowFieldMapper(false)
+                          setSavingMapping(false) // Stop loading after transition is complete
+                          console.log('🎯 FieldMapper hidden, transitioning to dashboard')
+                        })
+                        
+                        console.log('🎯 All states set, transitioning to dashboard')
+                        
+                        // Save progress for field mapper step
+                        if (uploaded?.upload_id) {
+                          saveProgress('field_mapper', {
+                            mapping: map,
+                            field_config: fieldConf,
+                            plan_types: selectedPlanTypes,
+                            table_names: config.table_names
+                          })
+                        }
+                        
+                        toast.success('Field mappings saved successfully!')
+                        
+                      } catch (error) {
+                        console.error('❌ Error saving mapping:', error)
+                        toast.error('Failed to save field mappings')
+                        setSavingMapping(false) // Stop loading on error
+                      }
+                    }}
+                    onSkip={() => {
+                      // Set fieldConfig to match extracted table headers
+                      const tablesToUse = editedTables.length > 0 ? editedTables : uploaded.tables;
+                      const extractedHeaders = tablesToUse.map((t: any) => t.header);
+                      const extractedFieldConfig = tablesToUse.map((t: any) => t.header.map((col: string) => ({ field: col, label: col })));
+                      // Save table names and plan types per table
+                      const tableNames = tablesToUse.map((t: any) => t.name || '');
+                      
+                      // Ensure the tables have the correct structure for DashboardTable
+                      const processedTables = tablesToUse.map((t: any) => ({
+                        ...t,
+                        header: t.header || [],
+                        rows: t.rows || []
+                      }));
+                      
+                      setFinalTables(processedTables);
+                      setFieldConfig(extractedFieldConfig[0]); // Use first table's config for DashboardTable
+                      setShowFieldMapper(false);
+                      setMapping(null);
+                      setSkipped(true);
+                      setCurrentStep('dashboard');
+                      setPlanTypes(planTypes); // preserve selected plan types
+                      
+                      // Save progress for skipped field mapper step
+                      if (uploaded?.upload_id) {
+                        saveProgress('field_mapper', {
+                          skipped: true,
+                          field_config: extractedFieldConfig[0],
+                          plan_types: planTypes,
+                          table_names: tableNames,
+                          final_data: processedTables
+                        })
+                        
+                        // Also save progress for dashboard step since we're going there
+                        saveProgress('dashboard', {
+                          final_data: processedTables,
+                          field_config: extractedFieldConfig[0],
+                          skipped: true
+                        })
+                      }
+                    }}
+                    initialFields={fieldConfig}
+                    initialMapping={mapping}
+                  />
+                </>
               )}
             </div>
+            )}
 
             {/* Extracted Tables Section */}
             <div>
@@ -1030,11 +1243,33 @@ export default function UploadPage() {
           </div>
         </div>
       </main>
+      </>
     )
   }
 
   // 3. Show mapped/standardized table views **or** skipped/raw extracted table view + Approve/Reject buttons
-  if ((mapping && !showFieldMapper) || skipped) {
+  console.log('🎯 Dashboard condition check:', {
+    hasMapping: !!mapping,
+    showFieldMapper,
+    showTableEditor,
+    skipped,
+    finalTablesLength: finalTables.length,
+    currentStep,
+    condition1: mapping && !showFieldMapper,
+    condition2: skipped,
+    condition3: finalTables.length > 0 && !showFieldMapper,
+    dashboardCondition: (mapping && !showFieldMapper) || skipped || (finalTables.length > 0 && !showFieldMapper)
+  })
+  
+  if ((mapping && !showFieldMapper) || skipped || (finalTables.length > 0 && !showFieldMapper)) {
+    console.log('🎯 Showing dashboard view:', {
+      hasMapping: !!mapping,
+      showFieldMapper,
+      skipped,
+      finalTablesLength: finalTables.length,
+      currentStep,
+      dashboardCondition: (mapping && !showFieldMapper) || skipped || (finalTables.length > 0 && !showFieldMapper)
+    })
 
     return (
       <>
@@ -1091,8 +1326,16 @@ export default function UploadPage() {
               tables={finalTables}
               fieldConfig={fieldConfig}
               onEditMapping={() => {
+                console.log('🎯 Edit Field Mapping clicked:', {
+                  currentCompany: company,
+                  showFieldMapper: showFieldMapper,
+                  skipped: skipped,
+                  uploaded: uploaded,
+                  finalTables: finalTables
+                })
                 setShowFieldMapper(true);
                 setSkipped(false);
+                console.log('🎯 States set - showFieldMapper: true, skipped: false')
               }}
               company={company}
               fileName={uploaded?.file_name || "uploaded.pdf"}

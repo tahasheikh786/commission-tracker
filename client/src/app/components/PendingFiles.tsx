@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { 
   Clock, 
   FileText, 
@@ -53,7 +53,7 @@ const stepLabels = {
   completed: 'Completed'
 }
 
-export default function PendingFiles({ 
+const PendingFiles = React.memo(function PendingFiles({ 
   companyId, 
   onResumeFile, 
   onDeleteFile,
@@ -62,6 +62,7 @@ export default function PendingFiles({
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [isResuming, setIsResuming] = useState(false)
 
   const fetchPendingFiles = useCallback(async () => {
     try {
@@ -91,8 +92,28 @@ export default function PendingFiles({
   }, [companyId])
 
   useEffect(() => {
-    fetchPendingFiles()
-  }, [fetchPendingFiles])
+    if (companyId) {
+      fetchPendingFiles()
+    }
+  }, [companyId, fetchPendingFiles])
+
+  const handleResumeFile = useCallback(async (fileId: string) => {
+    if (isResuming) {
+      console.log('🔄 Resume already in progress, skipping...')
+      return
+    }
+    
+    setIsResuming(true)
+    console.log('🎯 Resuming file:', fileId)
+    
+    try {
+      await onResumeFile(fileId)
+    } catch (error) {
+      console.error('Error in handleResumeFile:', error)
+    } finally {
+      setIsResuming(false)
+    }
+  }, [onResumeFile, isResuming])
 
   const handleDeleteFile = async (fileId: string) => {
     if (!onDeleteFile) return
@@ -239,11 +260,12 @@ export default function PendingFiles({
               
               <div className="flex items-center space-x-2 ml-4">
                 <button
-                  onClick={() => onResumeFile(file.id)}
-                  className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                  onClick={() => handleResumeFile(file.id)}
+                  disabled={isResuming}
+                  className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Play className="w-4 h-4 mr-1" />
-                  Resume
+                  {isResuming ? 'Resuming...' : 'Resume'}
                 </button>
                 
                 {onDeleteFile && (
@@ -265,8 +287,9 @@ export default function PendingFiles({
           <div className="flex items-center justify-between text-sm text-gray-600">
             <span>{pendingFiles.length} pending file{pendingFiles.length > 1 ? 's' : ''}</span>
             <button
-              onClick={() => onResumeFile(pendingFiles[0].id)}
-              className="inline-flex items-center text-blue-600 hover:text-blue-800 font-medium"
+              onClick={() => handleResumeFile(pendingFiles[0].id)}
+              disabled={isResuming}
+              className="inline-flex items-center text-blue-600 hover:text-blue-800 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Resume Latest
               <ArrowRight className="w-4 h-4 ml-1" />
@@ -276,4 +299,6 @@ export default function PendingFiles({
       )}
     </div>
   )
-} 
+})
+
+export default PendingFiles

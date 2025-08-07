@@ -31,6 +31,63 @@ class CompanyFieldMapping(CompanyFieldMappingBase):
     class Config:
         orm_mode = True
 
+class CompanyConfigurationBase(BaseModel):
+    field_config: Optional[List[Dict[str, str]]] = None
+    plan_types: Optional[List[str]] = None
+    table_names: Optional[List[str]] = None
+
+class CompanyConfigurationCreate(CompanyConfigurationBase):
+    company_id: UUID
+
+class CompanyConfigurationUpdate(CompanyConfigurationBase):
+    pass
+
+class CompanyConfiguration(CompanyConfigurationBase):
+    id: UUID
+    company_id: UUID
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        orm_mode = True
+
+class CarrierFormatLearningBase(BaseModel):
+    format_signature: str
+    headers: List[str]
+    header_patterns: Optional[Dict[str, Any]] = None
+    column_types: Optional[Dict[str, str]] = None
+    column_patterns: Optional[Dict[str, str]] = None
+    sample_values: Optional[Dict[str, List[str]]] = None
+    table_structure: Optional[Dict[str, Any]] = None
+    data_quality_metrics: Optional[Dict[str, Any]] = None
+    field_mapping: Optional[Dict[str, str]] = None
+    confidence_score: int = 0
+    usage_count: int = 1
+
+class CarrierFormatLearningCreate(CarrierFormatLearningBase):
+    company_id: UUID
+
+class CarrierFormatLearningUpdate(BaseModel):
+    header_patterns: Optional[Dict[str, Any]] = None
+    column_types: Optional[Dict[str, str]] = None
+    column_patterns: Optional[Dict[str, str]] = None
+    sample_values: Optional[Dict[str, List[str]]] = None
+    table_structure: Optional[Dict[str, Any]] = None
+    data_quality_metrics: Optional[Dict[str, Any]] = None
+    field_mapping: Optional[Dict[str, str]] = None
+    confidence_score: Optional[int] = None
+    usage_count: Optional[int] = None
+
+class CarrierFormatLearning(CarrierFormatLearningBase):
+    id: UUID
+    company_id: UUID
+    last_used: datetime
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        orm_mode = True
+
 class StatementUpload(BaseModel):
     id: UUID
     company_id: UUID

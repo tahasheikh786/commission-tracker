@@ -25,11 +25,20 @@ function fuzzyMatch(a: string | undefined, b: string | undefined) {
   // Handle undefined or null values
   if (!a || !b) return false;
   
-  return (
-    a.toLowerCase().replace(/[^a-z]/g, '') === b.toLowerCase().replace(/[^a-z]/g, '') ||
-    a.toLowerCase().includes(b.toLowerCase()) ||
-    b.toLowerCase().includes(a.toLowerCase())
-  )
+  const aClean = a.toLowerCase().replace(/[^a-z]/g, '')
+  const bClean = b.toLowerCase().replace(/[^a-z]/g, '')
+  
+  // Exact match (highest priority)
+  if (aClean === bClean) return true
+  
+  // Contains match (lower priority)
+  if (aClean.includes(bClean) || bClean.includes(aClean)) {
+    // Only allow contains match if the difference is small (to avoid false positives)
+    const lengthDiff = Math.abs(aClean.length - bClean.length)
+    return lengthDiff <= 3 // Only allow small differences
+  }
+  
+  return false
 }
 
 type FieldConf = { field: string, label: string }
@@ -86,6 +95,8 @@ export default function FieldMapper({
   initialMapping,
   initialPlanTypes = [],
   tableNames = [],
+  tableData = [], // Add table data for format learning
+  isLoading = false, // Add loading prop
 }: {
   company: { id: string, name: string }
   columns: string[]
@@ -95,21 +106,39 @@ export default function FieldMapper({
   initialMapping?: Record<string, string> | null
   initialPlanTypes?: string[]
   tableNames?: string[]
+  tableData?: any[] // Add table data prop
+  isLoading?: boolean // Add loading prop type
 }) {
   // State for database fields from backend
   const [databaseFields, setDatabaseFields] = useState<FieldConf[]>([])
   const [loadingFields, setLoadingFields] = useState(true)
   const [fields, setFields] = useState<FieldConf[]>(initialFields)
-  const [mapping, setMapping] = useState<Record<string, string>>(initialMapping || {})
+  const [mapping, setMapping] = useState<Record<string, string>>(initialMapping || {}) // Initialize with initialMapping
   const [saving, setSaving] = useState(false)
   const [newFieldName, setNewFieldName] = useState('')
   const [planTypes, setPlanTypes] = useState<string[]>(initialPlanTypes)
   const [availablePlanTypes, setAvailablePlanTypes] = useState<PlanType[]>([])
   const [loadingPlanTypes, setLoadingPlanTypes] = useState(true)
+  const [learnedMapping, setLearnedMapping] = useState<Record<string, string> | null>(null)
+  const [mappingSource, setMappingSource] = useState<'manual' | 'learned' | 'fuzzy'>('manual')
 
+  // Add effect to track mapping changes
+  useEffect(() => {
+    console.log('Mapping state changed:', mapping)
+  }, [mapping])
+
+  // Add effect to handle initialMapping changes
+  useEffect(() => {
+    if (initialMapping && Object.keys(initialMapping).length > 0) {
+      console.log('initialMapping changed, updating mapping state:', initialMapping)
+      setMapping(initialMapping)
+      setMappingSource('manual')
+    }
+  }, [initialMapping])
 
   console.log('FieldMapper Debug:', {
     initialFields,
+    initialMapping,
     fields,
     databaseFields,
     columns,
@@ -117,48 +146,43 @@ export default function FieldMapper({
     apiUrl: process.env.NEXT_PUBLIC_API_URL
   })
 
+  console.log('FieldMapper Render Debug:', {
+    initialMapping,
+    currentMapping: mapping,
+    mappingSource,
+    fieldsCount: fields.length,
+    columnsCount: columns.length
+  })
+
   // DnD-kit sensors
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   )
 
-  // For dropdowns: fallback to mapped carrier fields if columns empty
-  const allDropdownColumns = columns && columns.length > 0
-    ? columns
-    : Array.from(new Set(Object.values(mapping).filter(Boolean)))
+  // For dropdowns: always use the columns prop, never fallback to mapping values
+  const allDropdownColumns = columns || []
+  
+  console.log('Dropdown columns:', allDropdownColumns)
+  console.log('Current mapping:', mapping)
+  console.log('Fields being rendered:', fields.map(f => ({ field: f.field, label: f.label })))
 
   // Fetch database fields from backend
   useEffect(() => {
     async function fetchDatabaseFields() {
       try {
         setLoadingFields(true)
-        console.log('Fetching database fields from:', `${process.env.NEXT_PUBLIC_API_URL}/database-fields/?active_only=true`)
-        
         const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/database-fields/?active_only=true`)
-        console.log('Database fields response status:', response.status)
-        
         if (response.ok) {
           const data = await response.json()
-          console.log('Raw database fields data:', data)
-          
-          const fieldsFromBackend = data
-            .filter((field: any) => field.display_name) // Filter out malformed fields
-            .map((field: any) => ({
-              field: field.display_name,
-              label: field.display_name
-            }))
-          
-          console.log('Processed fields from backend:', fieldsFromBackend)
+          const fieldsFromBackend = data.map((field: any) => ({
+            field: field.display_name,
+            label: field.display_name
+          }))
           setDatabaseFields(fieldsFromBackend)
           
-          // Always set fields to backend fields if no initial fields provided
-          // or if initial fields are empty
-          if (!initialFields || initialFields.length === 0) {
-            console.log('Setting fields to backend fields:', fieldsFromBackend)
+          // Set as default fieldConfig if not already set
+          if (fields.length === 0) {
             setFields(fieldsFromBackend)
-          } else {
-            // If we have initial fields, still set database fields for reference
-            console.log('Keeping initial fields, but database fields available:', fieldsFromBackend)
           }
         } else {
           console.error('Failed to fetch database fields')
@@ -173,7 +197,7 @@ export default function FieldMapper({
     }
 
     fetchDatabaseFields()
-  }, []) // Remove initialFields dependency to prevent re-fetching
+  }, [fields.length])
 
   // Fetch plan types from backend
   useEffect(() => {
@@ -199,21 +223,49 @@ export default function FieldMapper({
     fetchPlanTypes()
   }, [])
 
-  // Sync mapping and fields if props change
+  // Fetch learned mappings for this company
   useEffect(() => {
-    console.log('Sync effect triggered:', { initialFields, databaseFields })
-    
-    if (initialFields && initialFields.length > 0) {
-      // Filter out any malformed field objects
-      const validFields = initialFields.filter(field => field && field.field && field.label)
-      console.log('Setting fields from initialFields:', validFields)
-      setFields(validFields)
-    } else if (databaseFields.length > 0) {
-      // If no initial fields but we have database fields, use those
-      console.log('Setting fields from databaseFields:', databaseFields)
-      setFields(databaseFields)
+    async function fetchLearnedMappings() {
+      if (!company?.id || !columns || columns.length === 0) return
+      
+      try {
+        // Analyze table structure for format matching
+        const tableStructure = {
+          column_count: columns.length,
+          typical_row_count: tableData.length > 0 ? tableData[0]?.rows?.length || 0 : 0,
+          has_header_row: true
+        }
+        
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${company.id}/find-format-match/`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            headers: columns,
+            table_structure: tableStructure
+          })
+        })
+        
+        if (response.ok) {
+          const result = await response.json()
+          if (result.found_match && result.learned_format?.field_mapping) {
+            setLearnedMapping(result.learned_format.field_mapping)
+            
+            // If no initial mapping is provided, use the learned mapping
+            if (!initialMapping || Object.keys(initialMapping).length === 0) {
+              setMapping(result.learned_format.field_mapping)
+              setMappingSource('learned')
+              toast.success('Field mappings auto-populated from learned format!')
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching learned mappings:', error)
+        // Don't show error toast as this is not critical
+      }
     }
-  }, [initialFields, databaseFields])
+
+    fetchLearnedMappings()
+  }, [company?.id, columns, tableData, initialMapping])
 
   // Ensure fields are always populated from database fields if available
   useEffect(() => {
@@ -224,27 +276,57 @@ export default function FieldMapper({
   }, [databaseFields, fields.length])
 
   useEffect(() => {
-    if (initialMapping) {
+    if (initialMapping && Object.keys(initialMapping).length > 0) {
+      console.log('Setting mapping from initialMapping:', initialMapping)
       setMapping(initialMapping)
+      setMappingSource('manual')
+    } else if (learnedMapping && Object.keys(learnedMapping).length > 0 && mappingSource === 'learned') {
+      // Keep the learned mapping if it was already set
+      console.log('Setting mapping from learnedMapping:', learnedMapping)
+      setMapping(learnedMapping)
     } else {
+      // Temporarily disable fuzzy matching to debug the issue
+      console.log('Skipping fuzzy matching for debugging')
+      /*
       // Fuzzy match: try to auto-map by label or field name
       const map: Record<string, string> = {}
+      const usedColumns = new Set<string>() // Track used columns to prevent duplicates
+      
+      console.log('Fuzzy matching with columns:', columns)
+      console.log('Fields to match:', fields)
+      
       for (const f of fields) {
         // Skip if field is missing required properties
         if (!f.field || !f.label) continue;
         
-        let found = columns.find(col => col && fuzzyMatch(col, f.label))
+        let found = columns.find(col => col && fuzzyMatch(col, f.label) && !usedColumns.has(col))
         if (!found) {
-          found = columns.find(col => col && fuzzyMatch(col, f.field))
+          found = columns.find(col => col && fuzzyMatch(col, f.field) && !usedColumns.has(col))
         }
-        if (found) map[f.field] = found
+        if (found) {
+          map[f.field] = found
+          usedColumns.add(found) // Mark this column as used
+          console.log(`Matched field "${f.field}" to column "${found}"`)
+        }
       }
-      setMapping(map)
+      
+      console.log('Final fuzzy mapping:', map)
+      if (Object.keys(map).length > 0) {
+        setMapping(map)
+        setMappingSource('fuzzy')
+      }
+      */
     }
-  }, [initialMapping, columns, fields])
+  }, [initialMapping, learnedMapping, mappingSource]) // Remove columns and fields from dependencies to avoid unnecessary re-runs
 
   function setFieldMap(field: string, col: string) {
-    setMapping(m => ({ ...m, [field]: col }))
+    console.log(`Setting field "${field}" to column "${col}"`)
+    console.log('Current mapping before update:', mapping)
+    setMapping(m => {
+      const newMapping = { ...m, [field]: col }
+      console.log('New mapping after update:', newMapping)
+      return newMapping
+    })
   }
 
   async function handleAddDatabaseField() {
@@ -294,22 +376,14 @@ export default function FieldMapper({
   }
 
   async function handleSave() {
+    console.log('🎯 FieldMapper handleSave called with:', { mapping, fields, planTypes, tableNames })
     setSaving(true)
-    // Compose MappingConfig object
-    const config = {
-      mapping,
-      plan_types: planTypes,
-      table_names: tableNames,
-      field_config: fields,
-    }
     try {
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${company.id}/mapping/`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(config),
-      })
-      toast.success("Mapping saved!")
-      onSave(mapping, fields, planTypes, tableNames)
+      // Call onSave directly without making a separate API call here
+      // The parent component (page.tsx) will handle the API call
+      console.log('🎯 Calling onSave with:', { mapping, fields, planTypes })
+      onSave(mapping, fields, planTypes)
+      toast.success("Mapping saved and format learned!")
     } catch (error) {
       toast.error("Failed to save mapping.")
       console.error(error)
@@ -338,9 +412,59 @@ export default function FieldMapper({
 
   return (
     <div className="relative">
-      {saving && <Loader message="Saving mapping..." />}
+      {(saving || isLoading) && <Loader message="Saving mapping and transitioning to dashboard..." />}
 
       {/* Header */}
+      <div className="mb-6 bg-white rounded-lg border border-gray-200 p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-xl font-semibold text-gray-800">Field Mapping</h2>
+            <p className="text-gray-600 text-sm mt-1">
+              Map your extracted columns to the correct database fields.
+            </p>
+          </div>
+          
+          {/* Mapping Source Indicator */}
+          {mappingSource !== 'manual' && (
+            <div className="flex items-center gap-2">
+              {mappingSource === 'learned' && (
+                <div className="flex items-center gap-2 px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm">
+                  <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                  Auto-mapped from learned format
+                </div>
+              )}
+              {mappingSource === 'fuzzy' && (
+                <div className="flex items-center gap-2 px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
+                  <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+                  Auto-mapped using fuzzy matching
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Apply Learned Mapping Button */}
+        {learnedMapping && Object.keys(learnedMapping).length > 0 && mappingSource !== 'learned' && (
+          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-blue-800">Learned format available</p>
+                <p className="text-xs text-blue-600">We found a previously saved format for this carrier</p>
+              </div>
+              <button
+                onClick={() => {
+                  setMapping(learnedMapping)
+                  setMappingSource('learned')
+                  toast.success('Applied learned field mappings!')
+                }}
+                className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition"
+              >
+                Apply Learned
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Plan Type Selection */}
       <div className="mb-6 bg-white rounded-lg border border-gray-200 p-6">
@@ -433,6 +557,7 @@ export default function FieldMapper({
                             </td>
                             <td className="w-2/3 py-3 px-4 align-middle">
                               <select
+                                key={`select-${f.field}`}
                                 className="border border-gray-300 rounded-md px-3 py-2 w-full min-w-[140px] text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                 value={mapping[f.field] || ""}
                                 onChange={e => setFieldMap(f.field, e.target.value)}
@@ -483,17 +608,21 @@ export default function FieldMapper({
       {/* Action Buttons */}
       <div className="flex gap-3">
         <button
-          onClick={handleSave}
-          disabled={saving}
-          className="px-6 py-2 rounded-md bg-blue-600 text-white font-semibold shadow hover:bg-blue-700 transition"
+          onClick={() => {
+            console.log('🎯 Save button clicked!')
+            handleSave()
+          }}
+          disabled={saving || isLoading}
+          className="px-6 py-2 rounded-md bg-blue-600 text-white font-semibold shadow hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {saving ? "Saving..." : "Save Mapping"}
+          {(saving || isLoading) ? "Saving..." : "Save Mapping"}
         </button>
         {onSkip && (
           <button
             type="button"
             onClick={onSkip}
-            className="px-6 py-2 rounded-md bg-gray-300 text-gray-700 font-semibold shadow hover:bg-gray-400 transition"
+            disabled={saving || isLoading}
+            className="px-6 py-2 rounded-md bg-gray-300 text-gray-700 font-semibold shadow hover:bg-gray-400 transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Skip and Use Extracted Table
           </button>

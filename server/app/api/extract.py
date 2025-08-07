@@ -2,8 +2,10 @@ from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import crud, schemas
 from app.services.extraction_pipeline import TableExtractionPipeline
+from app.services.enhanced_extraction_pipeline import EnhancedExtractionPipeline
 from app.services.extraction_utils import transform_pipeline_response_to_client_format
 from app.config import get_db
+from app.utils.db_retry import with_db_retry
 import os
 import shutil
 from datetime import datetime
@@ -18,8 +20,8 @@ logger = logging.getLogger(__name__)
 UPLOAD_DIR = "pdfs"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-# Use new extraction pipeline
-extraction_pipeline = TableExtractionPipeline()
+# Use enhanced extraction pipeline with format learning
+extraction_pipeline = EnhancedExtractionPipeline()
 
 @router.post("/extract-tables/")
 async def extract_tables(
@@ -28,10 +30,10 @@ async def extract_tables(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Default table extraction using advanced AI-powered system with Docling
+    Default table extraction using advanced AI-powered system with format learning
     """
     start_time = datetime.now()
-    logger.info(f"Starting advanced extraction for {file.filename}")
+    logger.info(f"Starting enhanced extraction for {file.filename}")
     
     # Validate file type
     if not file.filename.lower().endswith('.pdf'):
@@ -56,8 +58,8 @@ async def extract_tables(
         with open(file_path, "wb") as buffer:
             buffer.write(file_content)
 
-        # Get company info
-        company = await crud.get_company_by_id(db, company_id)
+        # Get company info with retry
+        company = await with_db_retry(db, crud.get_company_by_id, company_id=company_id)
         if not company:
             os.remove(file_path)
             raise HTTPException(status_code=404, detail="Company not found")
@@ -69,15 +71,16 @@ async def extract_tables(
             raise HTTPException(status_code=500, detail="Failed to upload file to S3.")
         s3_url = get_s3_file_url(s3_key)
 
-        # Extract tables with new pipeline (simple backend-like flow)
-        logger.info("Starting advanced table extraction...")
-        print(f"🚀 API: Starting extraction for {file.filename}")
+        # Extract tables with enhanced pipeline (includes format learning)
+        logger.info("Starting enhanced table extraction with format learning...")
+        print(f"🚀 API: Starting enhanced extraction for {file.filename}")
         
-        # Extract tables without timeout - let it take as long as needed
-        # The single extractor approach should still provide good performance
-        print(f"🔧 API: Calling extraction pipeline...")
-        extraction_result = await asyncio.to_thread(extraction_pipeline.extract_tables, file_path)
-        print(f"✅ API: Extraction pipeline completed")
+        # Extract tables with format learning
+        print(f"🔧 API: Calling enhanced extraction pipeline...")
+        extraction_result = await extraction_pipeline.extract_tables_with_format_learning(
+            file_path, company_id, db
+        )
+        print(f"✅ API: Enhanced extraction pipeline completed")
         
         if not extraction_result.get("success"):
             raise HTTPException(
@@ -100,6 +103,10 @@ async def extract_tables(
         if "metadata" in extraction_result:
             client_response["pipeline_metadata"] = extraction_result["metadata"]
         
+        # Add format learning metadata
+        if "format_learning" in extraction_result:
+            client_response["format_learning"] = extraction_result["format_learning"]
+        
         # Create statement upload record for database
         upload_id = uuid4()
         db_upload = schemas.StatementUpload(
@@ -113,7 +120,8 @@ async def extract_tables(
             mapping_used=None
         )
         
-        await crud.save_statement_upload(db, db_upload)
+        # Save statement upload with retry
+        await with_db_retry(db, crud.save_statement_upload, upload=db_upload)
         
         # Clean up local file
         os.remove(file_path)
@@ -135,11 +143,11 @@ async def extract_tables(
             os.remove(file_path)
         raise
     except Exception as e:
-        logger.error(f"Extraction error: {str(e)}")
+        logger.error(f"Enhanced extraction error: {str(e)}")
         # Clean up file on error
         if os.path.exists(file_path):
             os.remove(file_path)
-        raise HTTPException(status_code=500, detail=f"Extraction failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Enhanced extraction failed: {str(e)}")
 
 @router.post("/extract-tables-docai/")
 async def extract_tables_docai(

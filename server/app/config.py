@@ -41,9 +41,11 @@ engine = create_async_engine(
     },
     # SQLAlchemy pool settings for long-running operations
     pool_pre_ping=True,
-    pool_recycle=3600,  # Recycle connections every hour
+    pool_recycle=1800,  # Recycle connections every 30 minutes (more frequent)
     pool_timeout=60,    # Wait up to 60 seconds for a connection
-    max_overflow=10,    # Allow up to 10 extra connections
+    max_overflow=20,    # Allow up to 20 extra connections
+    pool_size=10,       # Maintain 10 connections in the pool
+    echo=False,         # Set to True for debugging SQL queries
 )
 AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
