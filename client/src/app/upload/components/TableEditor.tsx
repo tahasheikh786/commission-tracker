@@ -570,7 +570,7 @@ export default function TableEditor({
     if (row1.length !== row2.length) return 0
     
     let matchingCells = 0
-    let totalCells = row1.length
+    const totalCells = row1.length
     
     for (let i = 0; i < row1.length; i++) {
       const cell1 = (row1[i] || '').trim().toLowerCase()
