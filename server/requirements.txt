@@ -27,7 +27,7 @@ pdf2image==1.16.3
 
 # Environment and data handling
 python-dotenv
-pydantic==2.5.2
+pydantic>=2.6.0,<3.0.0
 python-multipart==0.0.6
 
 # Image processing - Pin scikit-image to version with Python 3.11 wheels
@@ -45,7 +45,7 @@ python-dateutil==2.8.2
 openai>=1.0.0
 
 # ===== ADVANCED DOCLING SETUP =====
-docling==1.20.0
+docling==2.43.0
 
 # ML and Computer Vision
 torch>=2.2.2,<3.0.0

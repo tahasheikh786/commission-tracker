@@ -118,8 +118,15 @@ async def save_statement_upload(db, upload: StatementUpload):
     return db_upload
 
 async def get_company_by_id(db, company_id):
-    result = await db.execute(select(Company).where(Company.id == company_id))
-    return result.scalar_one_or_none()
+    try:
+        # Convert string to UUID if needed
+        if isinstance(company_id, str):
+            company_id = UUID(company_id)
+        result = await db.execute(select(Company).where(Company.id == company_id))
+        return result.scalar_one_or_none()
+    except ValueError:
+        # Invalid UUID format
+        return None
 
 async def create_extraction(db, extraction: ExtractionCreate):
     """
@@ -387,11 +394,25 @@ async def delete_company(db: AsyncSession, company_id: str):
             SELECT table_name 
             FROM information_schema.tables 
             WHERE table_schema = 'public' 
-            AND table_name IN ('company_field_mappings', 'edited_tables', 'statement_uploads', 'extractions')
+            AND table_name IN ('company_field_mappings', 'edited_tables', 'statement_uploads', 'extractions', 'company_configurations', 'carrier_format_learning')
         """))
         existing_tables = {row[0] for row in result.fetchall()}
         
         # Delete related data first (cascade delete)
+        # Delete company configurations
+        if 'company_configurations' in existing_tables:
+            await db.execute(
+                text("DELETE FROM company_configurations WHERE company_id = :company_id"),
+                {"company_id": company_id}
+            )
+        
+        # Delete carrier format learning
+        if 'carrier_format_learning' in existing_tables:
+            await db.execute(
+                text("DELETE FROM carrier_format_learning WHERE company_id = :company_id"),
+                {"company_id": company_id}
+            )
+        
         # Delete company field mappings
         if 'company_field_mappings' in existing_tables:
             await db.execute(
@@ -431,8 +452,15 @@ async def delete_company(db: AsyncSession, company_id: str):
         raise ValueError(f"Failed to delete company: {str(e)}")
 
 async def get_statement_by_id(db: AsyncSession, statement_id: str):
-    result = await db.execute(select(StatementUploadModel).where(StatementUploadModel.id == statement_id))
-    return result.scalar_one_or_none()
+    try:
+        # Convert string to UUID if needed
+        if isinstance(statement_id, str):
+            statement_id = UUID(statement_id)
+        result = await db.execute(select(StatementUploadModel).where(StatementUploadModel.id == statement_id))
+        return result.scalar_one_or_none()
+    except ValueError:
+        # Invalid UUID format
+        return None
 
 async def delete_statement(db: AsyncSession, statement_id: str):
     statement = await get_statement_by_id(db, statement_id)

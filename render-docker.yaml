@@ -7,7 +7,7 @@ services:
     dockerContext: .
     envVars:
       - key: PYTHON_VERSION
-        value: 3.11.13
+        value: 3.10.14
       - key: RENDER_DB_KEY
         sync: false
       - key: SUPABASE_DB_KEY

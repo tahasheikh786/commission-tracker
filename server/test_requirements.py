@@ -78,7 +78,7 @@ def test_individual_packages():
         "pandas==2.1.4",
         "easyocr==1.7.0",
         "paddleocr==2.7.3",
-        "docling==1.20.0"
+        "docling==2.43.0"
     ]
     
     all_success = True
