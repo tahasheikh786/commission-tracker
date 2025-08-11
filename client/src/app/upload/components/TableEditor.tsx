@@ -22,7 +22,9 @@ import {
   Undo2,
   Sparkles,
   MoreHorizontal,
-
+  Filter,
+  Eye,
+  EyeOff,
 } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 
@@ -36,6 +38,7 @@ type TableData = {
     extraction_method?: string
     [key: string]: any
   }
+  summaryRows?: Set<number> // Track summary row indices
 }
 
 type TableEditorProps = {
@@ -126,10 +129,28 @@ export default function TableEditor({
   const [mergeHistory, setMergeHistory] = useState<MergeHistory[]>([])
   const [showHeaderActions, setShowHeaderActions] = useState<number | null>(null)
   const [showRowActions, setShowRowActions] = useState<{ tableIdx: number, rowIdx: number } | null>(null)
+  const [showSummaryRows, setShowSummaryRows] = useState(true) // Show/hide summary rows
+  const [autoDetectedCount, setAutoDetectedCount] = useState<number>(0) // Track auto-detected summary rows
   
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const pdfDisplayUrl = getPdfUrl(uploaded)
+
+  // Helper functions for summary rows
+  const isSummaryRow = (tableIdx: number, rowIdx: number) => {
+    return tables[tableIdx]?.summaryRows?.has(rowIdx) || false
+  }
+
+  const getDisplayRows = (tableIdx: number) => {
+    const table = tables[tableIdx]
+    if (!table) return []
+    
+    if (showSummaryRows) {
+      return table.rows
+    } else {
+      return table.rows.filter((_, rowIdx) => !isSummaryRow(tableIdx, rowIdx))
+    }
+  }
 
   // Helper functions for extraction method detection
   const getCurrentExtractionMethod = () => {
@@ -485,6 +506,194 @@ export default function TableEditor({
     })
   }
 
+  // Summary row functions
+  const markAsSummaryRow = (tableIdx: number, rowIdx: number) => {
+    saveToUndoStack()
+    const newTables = [...tables]
+    
+    // Initialize summaryRows set if it doesn't exist
+    if (!newTables[tableIdx].summaryRows) {
+      newTables[tableIdx].summaryRows = new Set()
+    }
+    
+    // Mark the selected row as summary
+    newTables[tableIdx].summaryRows!.add(rowIdx)
+    
+    // Find and mark similar rows
+    const selectedRow = newTables[tableIdx].rows[rowIdx]
+    const similarRows = findSimilarRows(newTables[tableIdx], selectedRow, rowIdx)
+    
+    similarRows.forEach(similarRowIdx => {
+      newTables[tableIdx].summaryRows!.add(similarRowIdx)
+    })
+    
+    onTablesChange(newTables)
+    toast.success(`Marked ${similarRows.length + 1} similar rows as summary rows`)
+    setShowRowActions(null)
+  }
+
+  const unmarkAsSummaryRow = (tableIdx: number, rowIdx: number) => {
+    saveToUndoStack()
+    const newTables = [...tables]
+    
+    if (newTables[tableIdx].summaryRows) {
+      newTables[tableIdx].summaryRows!.delete(rowIdx)
+      
+      // If no more summary rows, remove the set
+      if (newTables[tableIdx].summaryRows!.size === 0) {
+        delete newTables[tableIdx].summaryRows
+      }
+    }
+    
+    onTablesChange(newTables)
+    toast.success('Unmarked as summary row')
+    setShowRowActions(null)
+  }
+
+  const findSimilarRows = (table: TableData, targetRow: string[], targetRowIdx: number): number[] => {
+    const similarRows: number[] = []
+    const similarityThreshold = 0.7 // 70% similarity threshold
+    
+    table.rows.forEach((row, rowIdx) => {
+      if (rowIdx === targetRowIdx) return // Skip the target row itself
+      
+      const similarity = calculateRowSimilarity(targetRow, row)
+      if (similarity >= similarityThreshold) {
+        similarRows.push(rowIdx)
+      }
+    })
+    
+    return similarRows
+  }
+
+  const calculateRowSimilarity = (row1: string[], row2: string[]): number => {
+    if (row1.length !== row2.length) return 0
+    
+    let matchingCells = 0
+    let totalCells = row1.length
+    
+    for (let i = 0; i < row1.length; i++) {
+      const cell1 = (row1[i] || '').trim().toLowerCase()
+      const cell2 = (row2[i] || '').trim().toLowerCase()
+      
+      if (cell1 === cell2 && cell1 !== '') {
+        matchingCells++
+      } else if (cell1 === '' && cell2 === '') {
+        // Both empty cells are considered similar
+        matchingCells++
+      }
+    }
+    
+    return totalCells > 0 ? matchingCells / totalCells : 0
+  }
+
+  const deleteSummaryRows = (tableIdx: number) => {
+    saveToUndoStack()
+    const newTables = [...tables]
+    const table = newTables[tableIdx]
+    
+    if (table.summaryRows && table.summaryRows.size > 0) {
+      // Convert to array and sort in descending order to avoid index shifting
+      const summaryRowIndices = Array.from(table.summaryRows).sort((a, b) => b - a)
+      
+      // Delete rows from highest index to lowest
+      summaryRowIndices.forEach(rowIdx => {
+        table.rows.splice(rowIdx, 1)
+      })
+      
+      // Clear summary rows set
+      delete table.summaryRows
+      
+      onTablesChange(newTables)
+      toast.success(`Deleted ${summaryRowIndices.length} summary rows`)
+    }
+  }
+
+  // Learn summary row pattern
+  const learnSummaryRowPattern = async (tableIdx: number) => {
+    const table = tables[tableIdx]
+    if (!table.summaryRows || table.summaryRows.size === 0) {
+      toast.error('No summary rows marked to learn from')
+      return
+    }
+
+    try {
+      const response = await fetch('/api/summary-rows/learn-pattern/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          company_id: uploaded?.company_id || 'default',
+          table_data: {
+            header: table.header,
+            rows: table.rows
+          },
+          summary_row_indices: Array.from(table.summaryRows)
+        })
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        toast.success(`Learned pattern from ${result.summary_rows_count} summary rows`)
+      } else {
+        toast.error('Failed to learn pattern')
+      }
+    } catch (error) {
+      console.error('Error learning pattern:', error)
+      toast.error('Failed to learn pattern')
+    }
+  }
+
+  // Auto-detect summary rows using learned patterns
+  const autoDetectSummaryRows = async (tableIdx: number) => {
+    const table = tables[tableIdx]
+    
+    try {
+      const response = await fetch('/api/summary-rows/detect-summary-rows/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          company_id: uploaded?.company_id || 'default',
+          table_data: {
+            header: table.header,
+            rows: table.rows
+          }
+        })
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        if (result.detected_summary_rows.length > 0) {
+          saveToUndoStack()
+          const newTables = [...tables]
+          
+          // Initialize summaryRows set if it doesn't exist
+          if (!newTables[tableIdx].summaryRows) {
+            newTables[tableIdx].summaryRows = new Set()
+          }
+          
+          // Mark detected rows as summary rows
+          result.detected_summary_rows.forEach((rowIdx: number) => {
+            newTables[tableIdx].summaryRows!.add(rowIdx)
+          })
+          
+          onTablesChange(newTables)
+          toast.success(`Auto-detected ${result.detected_summary_rows.length} summary rows`)
+        } else {
+          toast.success('No summary rows detected')
+        }
+      } else {
+        toast.error('Failed to detect summary rows')
+      }
+    } catch (error) {
+      console.error('Error detecting summary rows:', error)
+      toast.error('Failed to detect summary rows')
+    }
+  }
+
   // Table operations
   const addTable = () => {
     saveToUndoStack()
@@ -669,6 +878,8 @@ export default function TableEditor({
 
   // Row Action Menu Component
   const RowActionMenu = ({ tableIdx, rowIdx }: { tableIdx: number, rowIdx: number }) => {
+    const isSummary = isSummaryRow(tableIdx, rowIdx)
+    
     return (
       <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 min-w-[200px]">
         <div className="p-2 border-b border-gray-100">
@@ -707,6 +918,27 @@ export default function TableEditor({
             <Edit3 className="w-4 h-4" />
             Edit Row
           </button>
+          
+          <div className="border-t border-gray-100 my-1"></div>
+          
+          {/* Summary Row Actions */}
+          {!isSummary ? (
+            <button
+              onClick={() => markAsSummaryRow(tableIdx, rowIdx)}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-blue-600 hover:bg-blue-50 rounded transition-colors"
+            >
+              <FileText className="w-4 h-4" />
+              Mark as Summary Row
+            </button>
+          ) : (
+            <button
+              onClick={() => unmarkAsSummaryRow(tableIdx, rowIdx)}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-orange-600 hover:bg-orange-50 rounded transition-colors"
+            >
+              <FileText className="w-4 h-4" />
+              Unmark as Summary Row
+            </button>
+          )}
           
           <div className="border-t border-gray-100 my-1"></div>
           
@@ -860,6 +1092,20 @@ export default function TableEditor({
                 Extracted Tables
               </span>
               <div className="flex items-center gap-2">
+                {/* Summary Row Toggle */}
+                <button
+                  onClick={() => setShowSummaryRows(!showSummaryRows)}
+                  className={`px-3 py-1.5 rounded-lg flex items-center gap-2 text-sm ${
+                    showSummaryRows 
+                      ? 'bg-green-600 text-white hover:bg-green-700' 
+                      : 'bg-gray-600 text-white hover:bg-gray-700'
+                  }`}
+                  title={showSummaryRows ? 'Hide summary rows' : 'Show summary rows'}
+                >
+                  {showSummaryRows ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+                  {showSummaryRows ? 'Show All' : 'Hide Summary'}
+                </button>
+                
                 {/* Table Navigation */}
                 <div className="flex items-center gap-2">
                   <button
@@ -916,6 +1162,40 @@ export default function TableEditor({
                       )}
                     </h3>
                     <div className="flex items-center gap-2">
+                      {/* Summary Row Controls */}
+                      <div className="flex items-center gap-2 mr-4">
+                        <button
+                          onClick={() => autoDetectSummaryRows(currentTableIdx)}
+                          className="px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2 text-sm"
+                          title="Auto-detect summary rows using learned patterns"
+                        >
+                          <Sparkles className="w-3 h-3" />
+                          Auto-Detect
+                        </button>
+                        
+                        {currentTable.summaryRows && currentTable.summaryRows.size > 0 && (
+                          <>
+                            <button
+                              onClick={() => learnSummaryRowPattern(currentTableIdx)}
+                              className="px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 text-sm"
+                              title="Learn pattern from marked summary rows"
+                            >
+                              <FileText className="w-3 h-3" />
+                              Learn Pattern
+                            </button>
+                            
+                            <button
+                              onClick={() => deleteSummaryRows(currentTableIdx)}
+                              className="px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center gap-2 text-sm"
+                              title="Delete all summary rows"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                              Delete Summary Rows
+                            </button>
+                          </>
+                        )}
+                      </div>
+                      
                       <button
                         onClick={() => deleteTable(currentTableIdx)}
                         className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
@@ -972,49 +1252,64 @@ export default function TableEditor({
                           </tr>
                         </thead>
                         <tbody>
-                          {currentTable.rows.map((row, rowIdx) => (
-                            <tr key={rowIdx} className="hover:bg-gray-50 group relative">
-                              {row.map((cell, colIdx) => (
-                                <td
-                                  key={colIdx}
-                                  className="px-3 py-3 text-xs text-gray-900 border-b border-gray-100 whitespace-nowrap"
-                                >
-                                  {editingCell && editingCell.tableIdx === currentTableIdx && editingCell.rowIdx === rowIdx && editingCell.colIdx === colIdx ? (
-                                    <input
-                                      type="text"
-                                      value={editingCell.value}
-                                      onChange={(e) => setEditingCell({ ...editingCell, value: e.target.value })}
-                                      onBlur={saveCellEdit}
-                                      onKeyDown={(e) => e.key === 'Enter' && saveCellEdit()}
-                                      className="w-full px-2 py-1 border border-blue-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs"
-                                      autoFocus
-                                    />
-                                  ) : (
-                                    <div
-                                      className="cursor-pointer hover:bg-blue-50 rounded px-1 py-0.5 transition-colors truncate"
-                                      onClick={() => startCellEdit(currentTableIdx, rowIdx, colIdx)}
-                                      title={cell}
-                                    >
-                                      {cell}
-                                    </div>
+                          {getDisplayRows(currentTableIdx).map((row, displayRowIdx) => {
+                            // Map display row index back to original row index
+                            const originalRowIdx = showSummaryRows 
+                              ? displayRowIdx 
+                              : currentTable.rows.findIndex((_, idx) => !isSummaryRow(currentTableIdx, idx) && 
+                                  currentTable.rows.slice(0, idx).filter((_, i) => !isSummaryRow(currentTableIdx, i)).length === displayRowIdx)
+                            
+                            return (
+                              <tr 
+                                key={originalRowIdx} 
+                                className={`hover:bg-gray-50 group relative ${
+                                  isSummaryRow(currentTableIdx, originalRowIdx) 
+                                    ? 'bg-orange-50 border-l-4 border-orange-400' 
+                                    : ''
+                                }`}
+                              >
+                                {row.map((cell, colIdx) => (
+                                  <td
+                                    key={colIdx}
+                                    className="px-3 py-3 text-xs text-gray-900 border-b border-gray-100 whitespace-nowrap"
+                                  >
+                                    {editingCell && editingCell.tableIdx === currentTableIdx && editingCell.rowIdx === originalRowIdx && editingCell.colIdx === colIdx ? (
+                                      <input
+                                        type="text"
+                                        value={editingCell.value}
+                                        onChange={(e) => setEditingCell({ ...editingCell, value: e.target.value })}
+                                        onBlur={saveCellEdit}
+                                        onKeyDown={(e) => e.key === 'Enter' && saveCellEdit()}
+                                        className="w-full px-2 py-1 border border-blue-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs"
+                                        autoFocus
+                                      />
+                                    ) : (
+                                      <div
+                                        className="cursor-pointer hover:bg-blue-50 rounded px-1 py-0.5 transition-colors truncate"
+                                        onClick={() => startCellEdit(currentTableIdx, originalRowIdx, colIdx)}
+                                        title={cell}
+                                      >
+                                        {cell}
+                                      </div>
+                                    )}
+                                  </td>
+                                ))}
+                                <td className="px-3 py-3 text-xs text-gray-900 border-b border-gray-100 whitespace-nowrap relative">
+                                  <button
+                                    onClick={() => setShowRowActions(showRowActions?.tableIdx === currentTableIdx && showRowActions?.rowIdx === originalRowIdx ? null : { tableIdx: currentTableIdx, rowIdx: originalRowIdx })}
+                                    className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                                  >
+                                    <MoreVertical size={12} />
+                                  </button>
+                                  
+                                  {/* Row Action Menu */}
+                                  {showRowActions?.tableIdx === currentTableIdx && showRowActions?.rowIdx === originalRowIdx && (
+                                    <RowActionMenu tableIdx={currentTableIdx} rowIdx={originalRowIdx} />
                                   )}
                                 </td>
-                              ))}
-                              <td className="px-3 py-3 text-xs text-gray-900 border-b border-gray-100 whitespace-nowrap relative">
-                                <button
-                                  onClick={() => setShowRowActions(showRowActions?.tableIdx === currentTableIdx && showRowActions?.rowIdx === rowIdx ? null : { tableIdx: currentTableIdx, rowIdx })}
-                                  className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
-                                >
-                                  <MoreVertical size={12} />
-                                </button>
-                                
-                                {/* Row Action Menu */}
-                                {showRowActions?.tableIdx === currentTableIdx && showRowActions?.rowIdx === rowIdx && (
-                                  <RowActionMenu tableIdx={currentTableIdx} rowIdx={rowIdx} />
-                                )}
-                              </td>
-                            </tr>
-                          ))}
+                              </tr>
+                            )
+                          })}
                         </tbody>
                       </table>
                     </div>

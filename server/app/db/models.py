@@ -145,3 +145,31 @@ class EditedTable(Base):
     rows = Column(JSON, nullable=False)    # Array of arrays (table data)
     created_at = Column(DateTime, server_default=text('now()'), nullable=False)
     updated_at = Column(DateTime, server_default=text('now()'), onupdate=text('now()'), nullable=False)
+
+class SummaryRowPattern(Base):
+    __tablename__ = 'summary_row_patterns'
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    company_id = Column(UUID(as_uuid=True), ForeignKey('companies.id'), nullable=False)
+    
+    # Pattern metadata
+    pattern_name = Column(String, nullable=False)  # Human-readable name for the pattern
+    table_signature = Column(String, nullable=False)  # Hash of table structure for matching
+    
+    # Pattern characteristics
+    column_patterns = Column(JSON, nullable=False)  # Patterns for each column (regex, keywords, etc.)
+    row_characteristics = Column(JSON, nullable=False)  # Characteristics that identify summary rows
+    
+    # Learning data
+    sample_rows = Column(JSON, nullable=False)  # Sample rows that were marked as summary
+    confidence_score = Column(Integer, default=80)  # Confidence in this pattern (0-100)
+    
+    # Usage tracking
+    usage_count = Column(Integer, default=1)  # How many times this pattern was used
+    last_used = Column(DateTime, server_default=text('now()'), nullable=False)
+    created_at = Column(DateTime, server_default=text('now()'), nullable=False)
+    updated_at = Column(DateTime, server_default=text('now()'), onupdate=text('now()'), nullable=False)
+    
+    # Add unique constraint for company and pattern name
+    __table_args__ = (
+        UniqueConstraint('company_id', 'pattern_name', name='uq_summary_row_pattern'),
+    )

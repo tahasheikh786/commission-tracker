@@ -43,6 +43,10 @@ class ProcessingConfig:
     enable_financial_processing: bool = True
     enable_advanced_metrics: bool = True
     multipage_similarity_threshold: float = 0.85
+    # Adaptive learning settings
+    enable_adaptive_learning: bool = True
+    pattern_matching_threshold: float = 0.6
+    content_similarity_threshold: float = 0.7
     
     def __post_init__(self):
         """Validate processing configuration."""
@@ -167,6 +171,9 @@ class Config:
                 'enable_financial_processing': self.processing.enable_financial_processing,
                 'enable_advanced_metrics': self.processing.enable_advanced_metrics,
                 'multipage_similarity_threshold': self.processing.multipage_similarity_threshold,
+                'enable_adaptive_learning': self.processing.enable_adaptive_learning,
+                'pattern_matching_threshold': self.processing.pattern_matching_threshold,
+                'content_similarity_threshold': self.processing.content_similarity_threshold,
             },
             'api': {
                 'host': self.api.host,

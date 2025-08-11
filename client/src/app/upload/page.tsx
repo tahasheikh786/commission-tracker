@@ -482,8 +482,57 @@ export default function UploadPage() {
   }
 
   // NEW: Handle table name changes from ExtractedTables
-  function handleExtractedTablesChange(newTables: any[]) {
+  async function handleExtractedTablesChange(newTables: any[]) {
     setUploaded((prev: any) => prev ? { ...prev, tables: newTables } : prev)
+    
+    // Auto-detect summary rows for each table if company is available
+    if (company?.id && newTables.length > 0) {
+      try {
+        const tablesWithSummaryRows = [...newTables]
+        
+        for (let tableIdx = 0; tableIdx < newTables.length; tableIdx++) {
+          const table = newTables[tableIdx]
+          
+          const response = await fetch('/api/summary-rows/detect-summary-rows/', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              company_id: company.id,
+              table_data: {
+                header: table.header,
+                rows: table.rows
+              }
+            })
+          })
+
+          if (response.ok) {
+            const result = await response.json()
+            if (result.detected_summary_rows.length > 0) {
+              // Initialize summaryRows set if it doesn't exist
+              if (!tablesWithSummaryRows[tableIdx].summaryRows) {
+                tablesWithSummaryRows[tableIdx].summaryRows = new Set()
+              }
+              
+              // Mark detected rows as summary rows
+              result.detected_summary_rows.forEach((rowIdx: number) => {
+                tablesWithSummaryRows[tableIdx].summaryRows!.add(rowIdx)
+              })
+              
+              console.log(`Auto-detected ${result.detected_summary_rows.length} summary rows in table ${tableIdx + 1}`)
+            }
+          }
+        }
+        
+        // Update tables with detected summary rows
+        setUploaded((prev: any) => prev ? { ...prev, tables: tablesWithSummaryRows } : prev)
+        
+      } catch (error) {
+        console.error('Error auto-detecting summary rows:', error)
+        // Don't show error toast as this is a background operation
+      }
+    }
   }
 
   // Table Editor handlers
