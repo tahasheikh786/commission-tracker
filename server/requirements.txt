@@ -30,12 +30,12 @@ python-dotenv
 pydantic==2.5.2
 python-multipart==0.0.6
 
-# Image processing - Using opencv-python-headless (fewer conflicts)
+# Image processing - Pin scikit-image to version with Python 3.11 wheels
 opencv-python-headless
 Pillow==10.1.0
 numpy
 scipy
-scikit-image
+scikit-image==0.22.0
 
 # Data processing
 pandas==2.1.4
@@ -47,25 +47,25 @@ openai>=1.0.0
 # ===== ADVANCED DOCLING SETUP =====
 docling==1.20.0
 
-# ML and Computer Vision - Let docling dictate compatible versions
+# ML and Computer Vision
 torch>=2.2.2,<3.0.0
 torchvision
 transformers
 huggingface-hub>=0.23.0,<1.0.0
 
-# OCR Engines - Keep the essential ones
+# OCR Engines
 easyocr==1.7.0
 pytesseract==0.3.10
 
 # Essential ML packages
-timm  # Needed for vision transformers in docling
-editdistance  # Needed for text similarity in docling
+timm
+editdistance
 
-# Document Processing - Keep layoutparser if you need advanced layout detection
+# Document Processing
 layoutparser==0.3.4
 
 # API and Web
-streamlit==1.28.2  # Keep if you have streamlit interface
+streamlit==1.28.2
 
 # Utilities
 tqdm==4.66.1
