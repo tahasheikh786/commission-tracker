@@ -33,8 +33,8 @@ python-multipart==0.0.6
 # Image processing
 opencv-python==4.8.1.78
 Pillow==10.1.0
-numpy==1.24.4
-scipy==1.11.4
+numpy==1.26.4
+scipy==1.14.1
 scikit-image==0.22.0
 
 # Data processing
@@ -49,8 +49,6 @@ openai>=1.0.0
 docling==1.20.0
 
 # ML and Computer Vision
-
-
 torch==2.2.2+cpu
 torchvision==0.17.2+cpu
 transformers==4.36.2
@@ -58,7 +56,7 @@ huggingface-hub==0.19.4
 
 # OCR Engines
 easyocr==1.7.0
-paddlepaddle==2.5.2
+# paddlepaddle==2.6.2  # Updated to Python 3.11 compatible version
 paddleocr==2.7.3
 tesseract==0.1.3
 tesserocr==2.6.2
