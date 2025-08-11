@@ -17,13 +17,6 @@ from PIL import Image
 import numpy as np
 from pdf2image import convert_from_path
 
-# Try to import python-docx for DOCX fallback
-try:
-    from docx import Document as DocxDocument
-    DOCX_AVAILABLE = True
-except ImportError:
-    DOCX_AVAILABLE = False
-
 from ..utils.config import Config, ProcessingConfig
 from ..utils.logging_utils import get_logger, LogExtractionOperation
 from ..utils.validation import DocumentValidator, ValidationResult
@@ -135,172 +128,86 @@ class DocumentProcessor:
         try:
             # Use Docling for primary processing
             start_time = time.time()
-            
-            # Try different method names for compatibility
-            if hasattr(self.docling_converter, 'convert_single'):
-                conversion_result = await asyncio.to_thread(
-                    self.docling_converter.convert_single, str(pdf_path)
-                )
-            elif hasattr(self.docling_converter, 'convert'):
-                conversion_result = await asyncio.to_thread(
-                    self.docling_converter.convert, str(pdf_path)
-                )
-            elif hasattr(self.docling_converter, 'convert_file'):
-                conversion_result = await asyncio.to_thread(
-                    self.docling_converter.convert_file, str(pdf_path)
-                )
-            else:
-                # Fallback to pdfplumber if docling methods are not available
-                self.logger.logger.warning("Docling converter methods not found, falling back to pdfplumber")
-                conversion_result = None
-                
+            conversion_result = await asyncio.to_thread(
+                self.docling_converter.convert_single, str(pdf_path)
+            )
             docling_time = time.time() - start_time
             
-            # Handle conversion result
-            if conversion_result is not None:
-                # Access the assembled document from ConversionResult
-                if hasattr(conversion_result, 'assembled') and conversion_result.assembled:
-                    document = conversion_result.assembled
-                    self.logger.log_model_performance(
-                        "docling_converter",
-                        docling_time,
-                        {"pages_processed": len(document.pages) if hasattr(document, 'pages') and document.pages else 1}
-                    )
-                else:
-                    raise DocumentProcessingError("ConversionResult does not contain assembled document")
-                
-                # Extract tables from the document
-                tables = self._extract_tables_from_document(document)
-                self.logger.logger.info(f"Found {len(tables)} tables in document")
-                
-                # Process extracted tables into structured data
-                extracted_tables = []
-                for i, table in enumerate(tables):
-                    table_data = self._extract_table_data(table, i, str(pdf_path))
-                    if table_data:
-                        extracted_tables.append(table_data)
-                
-                # Extract pages and metadata
-                pages = []
-                raw_images = []
-                
-                # Process pages and include table information
-                for page_num, page in enumerate(document.pages if hasattr(document, 'pages') and document.pages else []):
-                    page_data = {
-                        'page_number': page_num,
-                        'width': page.size.width if hasattr(page, 'size') and page.size else 0,
-                        'height': page.size.height if hasattr(page, 'size') and page.size else 0,
-                        'elements': [],
-                        'text': '',
-                        'tables': []
-                    }
-                    
-                    # Extract page elements
-                    if hasattr(page, 'elements'):
-                        for element in page.elements:
-                            element_data = {
-                                'type': element.__class__.__name__,
-                                'bbox': [element.bbox.l, element.bbox.t, 
-                                       element.bbox.r, element.bbox.b] if element.bbox else None,
-                                'text': getattr(element, 'text', ''),
-                                'confidence': getattr(element, 'confidence', 1.0)
-                            }
-                            page_data['elements'].append(element_data)
-                            
-                            if hasattr(element, 'text') and element.text:
-                                page_data['text'] += element.text + ' '
-                    
-                    # Extract table information if available
-                    if hasattr(page, 'tables'):
-                        for table in page.tables:
-                            table_data = {
-                                'bbox': [table.bbox.l, table.bbox.t, 
-                                       table.bbox.r, table.bbox.b] if table.bbox else None,
-                                'confidence': getattr(table, 'confidence', 1.0),
-                                'rows': getattr(table, 'num_rows', 0),
-                                'columns': getattr(table, 'num_cols', 0)
-                            }
-                            page_data['tables'].append(table_data)
-                    
-                    pages.append(page_data)
-                
-                # Get document metadata
-                metadata = {
-                    'title': getattr(document, 'title', ''),
-                    'num_pages': len(pages),
-                    'processing_time': docling_time,
-                    'source': 'docling',
-                    'docling_version': '1.20.0',
-                    'extracted_tables_count': len(extracted_tables)
-                }
+            # Access the assembled document from ConversionResult
+            if hasattr(conversion_result, 'assembled') and conversion_result.assembled:
+                document = conversion_result.assembled
+                self.logger.log_model_performance(
+                    "docling_converter",
+                    docling_time,
+                    {"pages_processed": len(document.pages) if hasattr(document, 'pages') and document.pages else 1}
+                )
             else:
-                # Fallback to pdfplumber processing
-                self.logger.logger.info("Using pdfplumber fallback for PDF processing")
-                pages = []
-                extracted_tables = []
-                
-                try:
-                    with pdfplumber.open(pdf_path) as pdf:
-                        for page_num, page in enumerate(pdf.pages):
-                            page_data = {
-                                'page_number': page_num,
-                                'width': page.width if hasattr(page, 'width') else 0,
-                                'height': page.height if hasattr(page, 'height') else 0,
-                                'elements': [],
-                                'text': page.extract_text() or '',
-                                'tables': []
-                            }
-                            
-                            # Extract tables from pdfplumber
-                            page_tables = page.extract_tables()
-                            for table_idx, table in enumerate(page_tables):
-                                if table and len(table) > 0:
-                                    # Convert pdfplumber table to our format
-                                    table_data = {
-                                        'bbox': None,  # pdfplumber doesn't provide bbox
-                                        'confidence': 0.8,  # Default confidence
-                                        'rows': len(table),
-                                        'columns': len(table[0]) if table[0] else 0
-                                    }
-                                    page_data['tables'].append(table_data)
-                                    
-                                    # Create extracted table data
-                                    extracted_table = {
-                                        'table_index': len(extracted_tables),
-                                        'page_number': page_num,
-                                        'headers': table[0] if table else [],
-                                        'rows': table[1:] if len(table) > 1 else [],
-                                        'source': 'pdfplumber',
-                                        'confidence': 0.8,
-                                        'bbox': None,
-                                        'metadata': {
-                                            'extraction_method': 'pdfplumber',
-                                            'pdf_path': str(pdf_path)
-                                        }
-                                    }
-                                    extracted_tables.append(extracted_table)
-                            
-                            pages.append(page_data)
-                except Exception as e:
-                    self.logger.logger.error(f"PDFPlumber processing failed: {e}")
-                    # Create minimal page data
-                    pages = [{
-                        'page_number': 0,
-                        'width': 0,
-                        'height': 0,
-                        'elements': [],
-                        'text': '',
-                        'tables': []
-                    }]
-                
-                metadata = {
-                    'title': '',
-                    'num_pages': len(pages),
-                    'processing_time': docling_time,
-                    'source': 'pdfplumber_fallback',
-                    'docling_version': 'fallback',
-                    'extracted_tables_count': len(extracted_tables)
+                raise DocumentProcessingError("ConversionResult does not contain assembled document")
+            
+            # Extract tables from the document
+            tables = self._extract_tables_from_document(document)
+            self.logger.logger.info(f"Found {len(tables)} tables in document")
+            
+            # Process extracted tables into structured data
+            extracted_tables = []
+            for i, table in enumerate(tables):
+                table_data = self._extract_table_data(table, i, str(pdf_path))
+                if table_data:
+                    extracted_tables.append(table_data)
+            
+            # Extract pages and metadata
+            pages = []
+            raw_images = []
+            
+            # Process pages and include table information
+            for page_num, page in enumerate(document.pages if hasattr(document, 'pages') and document.pages else []):
+                page_data = {
+                    'page_number': page_num,
+                    'width': page.size.width if hasattr(page, 'size') and page.size else 0,
+                    'height': page.size.height if hasattr(page, 'size') and page.size else 0,
+                    'elements': [],
+                    'text': '',
+                    'tables': []
                 }
+                
+                # Extract page elements
+                if hasattr(page, 'elements'):
+                    for element in page.elements:
+                        element_data = {
+                            'type': element.__class__.__name__,
+                            'bbox': [element.bbox.l, element.bbox.t, 
+                                   element.bbox.r, element.bbox.b] if element.bbox else None,
+                            'text': getattr(element, 'text', ''),
+                            'confidence': getattr(element, 'confidence', 1.0)
+                        }
+                        page_data['elements'].append(element_data)
+                        
+                        if hasattr(element, 'text') and element.text:
+                            page_data['text'] += element.text + ' '
+                
+                # Extract table information if available
+                if hasattr(page, 'tables'):
+                    for table in page.tables:
+                        table_data = {
+                            'bbox': [table.bbox.l, table.bbox.t, 
+                                   table.bbox.r, table.bbox.b] if table.bbox else None,
+                            'confidence': getattr(table, 'confidence', 1.0),
+                            'rows': getattr(table, 'num_rows', 0),
+                            'columns': getattr(table, 'num_cols', 0)
+                        }
+                        page_data['tables'].append(table_data)
+                
+                pages.append(page_data)
+            
+            # Get document metadata
+            metadata = {
+                'title': getattr(document, 'title', ''),
+                'num_pages': len(pages),
+                'processing_time': docling_time,
+                'source': 'docling',
+                'docling_version': '1.20.0',
+                'extracted_tables_count': len(extracted_tables)
+            }
             
             # Also extract text using pdfplumber for comparison
             try:
@@ -385,145 +292,57 @@ class DocumentProcessor:
         try:
             # Use Docling for DOCX processing
             start_time = time.time()
-            
-            # Try different method names for compatibility
-            if hasattr(self.docling_converter, 'convert_single'):
-                conversion_result = await asyncio.to_thread(
-                    self.docling_converter.convert_single, str(docx_path)
-                )
-            elif hasattr(self.docling_converter, 'convert'):
-                conversion_result = await asyncio.to_thread(
-                    self.docling_converter.convert, str(docx_path)
-                )
-            elif hasattr(self.docling_converter, 'convert_file'):
-                conversion_result = await asyncio.to_thread(
-                    self.docling_converter.convert_file, str(docx_path)
-                )
-            else:
-                # Fallback for DOCX processing
-                self.logger.logger.warning("Docling converter methods not found for DOCX, using fallback")
-                conversion_result = None
-                
+            conversion_result = await asyncio.to_thread(
+                self.docling_converter.convert_single, str(docx_path)
+            )
             docling_time = time.time() - start_time
             
-            # Handle conversion result
-            if conversion_result is not None:
-                # Extract content similar to PDF processing
-                pages = []
-                
-                # DOCX typically has one logical "page" but may contain multiple sections
-                page_data = {
-                    'page_number': 0,
-                    'width': 0,  # No physical dimensions for DOCX
-                    'height': 0,
-                    'elements': [],
-                    'text': '',
-                    'tables': []
-                }
-                
-                # Extract elements from the document
-                if hasattr(conversion_result.document, 'main_text'):
-                    page_data['text'] = conversion_result.document.main_text
-                
-                # Extract tables if available
-                if hasattr(conversion_result.document, 'tables'):
-                    for table in conversion_result.document.tables:
-                        table_data = {
-                            'bbox': None,  # No bbox for DOCX tables
-                            'confidence': 1.0,
-                            'rows': getattr(table, 'num_rows', 0),
-                            'columns': getattr(table, 'num_cols', 0)
-                        }
-                        page_data['tables'].append(table_data)
-                
-                pages.append(page_data)
-                
-                metadata = {
-                    'title': getattr(conversion_result.document, 'title', ''),
-                    'num_pages': 1,
-                    'processing_time': docling_time,
-                    'source': 'docling',
-                    'format': 'docx'
-                }
-                
-                return ProcessedDocument(
-                    document_path=str(docx_path),
-                    format=DocumentFormat.DOCX,
-                    pages=pages,
-                    metadata=metadata,
-                    docling_result=conversion_result,
-                    text_content=page_data['text']
-                )
-            else:
-                # Fallback to python-docx processing
-                self.logger.logger.info("Using python-docx fallback for DOCX processing")
-                
-                if not DOCX_AVAILABLE:
-                    raise DocumentProcessingError("python-docx library not available for DOCX fallback processing")
-                
-                try:
-                    # Use python-docx for fallback processing
-                    doc = DocxDocument(str(docx_path))
-                    
-                    # Extract text
-                    full_text = ""
-                    for paragraph in doc.paragraphs:
-                        full_text += paragraph.text + "\n"
-                    
-                    # Extract tables
-                    tables = []
-                    for table in doc.tables:
-                        table_data = []
-                        for row in table.rows:
-                            row_data = []
-                            for cell in row.cells:
-                                row_data.append(cell.text.strip())
-                            table_data.append(row_data)
-                        tables.append(table_data)
-                    
-                    # Create page data
-                    page_data = {
-                        'page_number': 0,
-                        'width': 0,
-                        'height': 0,
-                        'elements': [],
-                        'text': full_text,
-                        'tables': []
+            # Extract content similar to PDF processing
+            pages = []
+            
+            # DOCX typically has one logical "page" but may contain multiple sections
+            page_data = {
+                'page_number': 0,
+                'width': 0,  # No physical dimensions for DOCX
+                'height': 0,
+                'elements': [],
+                'text': '',
+                'tables': []
+            }
+            
+            # Extract elements from the document
+            if hasattr(conversion_result.document, 'main_text'):
+                page_data['text'] = conversion_result.document.main_text
+            
+            # Extract tables if available
+            if hasattr(conversion_result.document, 'tables'):
+                for table in conversion_result.document.tables:
+                    table_data = {
+                        'bbox': None,  # No bbox for DOCX tables
+                        'confidence': 1.0,
+                        'rows': getattr(table, 'num_rows', 0),
+                        'columns': getattr(table, 'num_cols', 0)
                     }
-                    
-                    # Add table information
-                    for table in tables:
-                        if table and len(table) > 0:
-                            table_info = {
-                                'bbox': None,
-                                'confidence': 0.8,
-                                'rows': len(table),
-                                'columns': len(table[0]) if table[0] else 0
-                            }
-                            page_data['tables'].append(table_info)
-                    
-                    pages = [page_data]
-                    
-                    metadata = {
-                        'title': '',
-                        'num_pages': 1,
-                        'processing_time': docling_time,
-                        'source': 'python-docx_fallback',
-                        'format': 'docx'
-                    }
-                    
-                    return ProcessedDocument(
-                        document_path=str(docx_path),
-                        format=DocumentFormat.DOCX,
-                        pages=pages,
-                        metadata=metadata,
-                        docling_result=None,
-                        text_content=full_text
-                    )
-                    
-                except Exception as e:
-                    self.logger.logger.error(f"python-docx fallback processing failed: {e}")
-                    raise DocumentProcessingError(f"Both Docling and python-docx processing failed: {e}")
+                    page_data['tables'].append(table_data)
+            
+            pages.append(page_data)
+            
+            metadata = {
+                'title': getattr(conversion_result.document, 'title', ''),
+                'num_pages': 1,
+                'processing_time': docling_time,
+                'source': 'docling',
+                'format': 'docx'
+            }
+            
+            return ProcessedDocument(
+                document_path=str(docx_path),
+                format=DocumentFormat.DOCX,
+                pages=pages,
+                metadata=metadata,
+                docling_result=conversion_result,
+                text_content=page_data['text']
+            )
             
         except Exception as e:
             self.logger.logger.error(f"DOCX processing failed: {e}")
