@@ -52,7 +52,7 @@ docling==1.20.0
 torch==2.2.2+cpu
 torchvision==0.17.2+cpu
 transformers==4.36.2
-huggingface-hub==0.19.4
+huggingface-hub==0.24.0
 
 # OCR Engines
 easyocr==1.7.0
