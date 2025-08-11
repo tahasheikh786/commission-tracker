@@ -12,6 +12,8 @@ ENV PYTHONUNBUFFERED=1 \
     # Model cache directories
     EASYOCR_MODULE_PATH=/app/model_cache/easyocr \
     DOCLING_CACHE_DIR=/app/model_cache/docling \
+    HF_HOME=/app/model_cache/transformers \
+    TRANSFORMERS_CACHE=/app/model_cache/transformers \
     # OpenAI configuration
     OPENAI_API_KEY="" \
     OPENAI_API_BASE="https://api.openai.com/v1" \
@@ -19,7 +21,7 @@ ENV PYTHONUNBUFFERED=1 \
     RENDER_DB_KEY="" \
     SUPABASE_DB_KEY=""
 
-# Install system dependencies required for OpenCV, EasyOCR, and other packages
+# Install system dependencies required for OpenCV, EasyOCR, Tesseract, and other packages
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
@@ -45,6 +47,13 @@ RUN apt-get update && apt-get install -y \
     libhdf5-103 \
     python3-dev \
     curl \
+    # Tesseract OCR dependencies
+    tesseract-ocr \
+    tesseract-ocr-eng \
+    libtesseract-dev \
+    # Additional ML dependencies
+    liblapack-dev \
+    libblas-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements file first (for better Docker layer caching)
@@ -60,12 +69,17 @@ RUN python -c "import easyocr; easyocr.Reader(['en'], gpu=False, download_enable
 # Pre-download Docling models to avoid runtime downloads
 RUN python -c "from docling import document_converter; converter = document_converter.DocumentConverter()"
 
+# Pre-download TableFormer models for the new extraction service
+RUN python -c "from transformers import AutoImageProcessor, AutoModelForObjectDetection; AutoImageProcessor.from_pretrained('microsoft/table-transformer-detection'); AutoModelForObjectDetection.from_pretrained('microsoft/table-transformer-detection')"
+RUN python -c "from transformers import AutoImageProcessor, AutoModelForObjectDetection; AutoImageProcessor.from_pretrained('microsoft/table-transformer-structure-recognition-v1.1-all'); AutoModelForObjectDetection.from_pretrained('microsoft/table-transformer-structure-recognition-v1.1-all')"
+
 # Create persistent model cache directories
-RUN mkdir -p /app/model_cache/easyocr /app/model_cache/docling
+RUN mkdir -p /app/model_cache/easyocr /app/model_cache/docling /app/model_cache/transformers
 
 # Copy downloaded models to persistent location
 RUN cp -r /root/.cache/easyocr/* /app/model_cache/easyocr/ 2>/dev/null || true
 RUN cp -r /root/.cache/docling/* /app/model_cache/docling/ 2>/dev/null || true
+RUN cp -r /root/.cache/huggingface/* /app/model_cache/transformers/ 2>/dev/null || true
 
 # Copy the entire server directory
 COPY server/ .

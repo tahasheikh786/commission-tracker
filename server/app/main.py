@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
-from app.api import company, mapping, extract, review, statements, advanced_extract, database_fields, plan_types, table_editor, improve_extraction, pending, dashboard, format_learning
+from app.api import company, mapping, review, statements, database_fields, plan_types, table_editor, improve_extraction, pending, dashboard, format_learning, new_extract
 from fastapi.middleware.cors import CORSMiddleware
 import os
 
@@ -27,8 +27,6 @@ app.add_middleware(
 
 app.include_router(company.router)
 app.include_router(mapping.router)
-app.include_router(extract.router)
-app.include_router(advanced_extract.router)
 app.include_router(review.router)
 app.include_router(statements.router)
 app.include_router(database_fields.router)
@@ -38,3 +36,4 @@ app.include_router(improve_extraction.router)
 app.include_router(pending.router)
 app.include_router(dashboard.router)
 app.include_router(format_learning.router)
+app.include_router(new_extract.router)

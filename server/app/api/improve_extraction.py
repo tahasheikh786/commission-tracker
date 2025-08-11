@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import crud
 from app.config import get_db
 from app.services.gpt4o_vision_service import GPT4oVisionService
-from app.services.extraction_pipeline import TableExtractionPipeline
+# Removed old extraction pipeline import - using new extraction service instead
 from app.services.s3_utils import download_file_from_s3
 import uuid
 import tempfile
@@ -24,7 +24,7 @@ router = APIRouter(prefix="/improve-extraction", tags=["improve-extraction"])
 
 # Initialize services
 gpt4o_service = GPT4oVisionService()
-extraction_pipeline = TableExtractionPipeline()
+# extraction_pipeline removed - using new extraction service instead
 
 class ImproveExtractionRequest:
     def __init__(self, upload_id: str, company_id: str, max_pages: int = 5):
@@ -313,57 +313,4 @@ async def improve_current_extraction(
             detail=f"Extraction improvement failed: {str(e)}"
         )
 
-@router.get("/status")
-async def get_improvement_service_status():
-    """
-    Check the status of the GPT-4o Vision improvement service.
-    """
-    try:
-        is_available = gpt4o_service.is_available()
-        
-        return JSONResponse({
-            "service": "gpt4o_vision_improvement",
-            "available": is_available,
-            "status": "ready" if is_available else "unavailable",
-            "timestamp": datetime.now().isoformat(),
-            "processing_method": "GPT-4o response driven"
-        })
-        
-    except Exception as e:
-        logger.error(f"Error checking improvement service status: {str(e)}")
-        return JSONResponse({
-            "service": "gpt4o_vision_improvement",
-            "available": False,
-            "status": "error",
-            "error": str(e),
-            "timestamp": datetime.now().isoformat()
-        })
-
-@router.post("/test-vision-service/")
-async def test_vision_service():
-    """
-    Test the GPT-4o Vision service with a simple validation.
-    """
-    try:
-        if not gpt4o_service.is_available():
-            return JSONResponse({
-                "success": False,
-                "error": "GPT-4o Vision service not available",
-                "message": "Please check OPENAI_API_KEY configuration"
-            })
-        
-        return JSONResponse({
-            "success": True,
-            "message": "GPT-4o Vision service is available and ready (strictly response driven)",
-            "service": "gpt4o_vision",
-            "timestamp": datetime.now().isoformat(),
-            "processing_method": "GPT-4o response driven"
-        })
-        
-    except Exception as e:
-        logger.error(f"Error testing vision service: {str(e)}")
-        return JSONResponse({
-            "success": False,
-            "error": str(e),
-            "message": "Vision service test failed"
-        }) 
+ 

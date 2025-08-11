@@ -29,3 +29,12 @@ services:
         value: "521303e404fb7809"
       - key: OPENAI_API_KEY
         sync: false
+      # New extraction service environment variables
+      - key: HF_HOME
+        value: "/app/model_cache/transformers"
+      - key: TRANSFORMERS_CACHE
+        value: "/app/model_cache/transformers"
+      - key: EASYOCR_MODULE_PATH
+        value: "/app/model_cache/easyocr"
+      - key: DOCLING_CACHE_DIR
+        value: "/app/model_cache/docling"
