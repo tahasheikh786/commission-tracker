@@ -1,5 +1,5 @@
-# Use Python 3.10 slim image as base
-FROM python:3.10-slim
+# Use Python 3.11.13 slim image as base
+FROM python:3.11.13-slim
 
 # Set working directory in the container
 WORKDIR /app
@@ -59,8 +59,9 @@ RUN apt-get update && apt-get install -y \
 # Copy requirements file first (for better Docker layer caching)
 COPY server/requirements.txt .
 
-# Install Python dependencies
-RUN pip install --upgrade pip && \
+# Verify Python version and install Python dependencies
+RUN python --version && \
+    pip install --upgrade pip && \
     pip install -r requirements.txt
 
 # Pre-download EasyOCR English model during build to avoid slow first-time downloads
@@ -70,8 +71,8 @@ RUN python -c "import easyocr; easyocr.Reader(['en'], gpu=False, download_enable
 RUN python -c "from docling import document_converter; converter = document_converter.DocumentConverter()"
 
 # Pre-download TableFormer models for the new extraction service
-RUN python -c "from transformers import AutoImageProcessor, AutoModelForObjectDetection; AutoImageProcessor.from_pretrained('microsoft/table-transformer-detection'); AutoModelForObjectDetection.from_pretrained('microsoft/table-transformer-detection')"
-RUN python -c "from transformers import AutoImageProcessor, AutoModelForObjectDetection; AutoImageProcessor.from_pretrained('microsoft/table-transformer-structure-recognition-v1.1-all'); AutoModelForObjectDetection.from_pretrained('microsoft/table-transformer-structure-recognition-v1.1-all')"
+RUN python -c "from transformers import AutoImageProcessor, AutoModelForObjectDetection; AutoImageProcessor.from_pretrained('microsoft/table-transformer-detection', cache_dir='/app/model_cache/transformers'); AutoModelForObjectDetection.from_pretrained('microsoft/table-transformer-detection', cache_dir='/app/model_cache/transformers')"
+RUN python -c "from transformers import AutoImageProcessor, AutoModelForObjectDetection; AutoImageProcessor.from_pretrained('microsoft/table-transformer-structure-recognition-v1.1-all', cache_dir='/app/model_cache/transformers'); AutoModelForObjectDetection.from_pretrained('microsoft/table-transformer-structure-recognition-v1.1-all', cache_dir='/app/model_cache/transformers')"
 
 # Create persistent model cache directories
 RUN mkdir -p /app/model_cache/easyocr /app/model_cache/docling /app/model_cache/transformers
