@@ -10,6 +10,7 @@ from typing import Dict, List, Any, Optional, Tuple
 import asyncio
 import time
 import statistics
+import re
 
 from ..utils.config import Config
 from ..utils.logging_utils import get_logger
@@ -30,6 +31,7 @@ class ProductionTableFormer:
     def _load_detection_model(self):
         """Load Microsoft Table Transformer Detection model."""
         try:
+            # Try with configured cache directory first
             self.detection_processor = AutoImageProcessor.from_pretrained(
                 "microsoft/table-transformer-detection",
                 cache_dir=self.config.models.cache_dir
@@ -40,12 +42,28 @@ class ProductionTableFormer:
             ).to(self.device)
             self.detection_model.eval()
             self.logger.logger.info("Table detection model loaded successfully")
+        except (OSError, PermissionError) as e:
+            # Fallback: try without cache directory (uses default location)
+            self.logger.logger.warning(f"Failed to load detection model with cache dir {self.config.models.cache_dir}: {e}")
+            self.logger.logger.info("Attempting to load detection model without cache directory...")
+            try:
+                self.detection_processor = AutoImageProcessor.from_pretrained(
+                    "microsoft/table-transformer-detection"
+                )
+                self.detection_model = TableTransformerForObjectDetection.from_pretrained(
+                    "microsoft/table-transformer-detection"
+                ).to(self.device)
+                self.detection_model.eval()
+                self.logger.logger.info("Table detection model loaded successfully (fallback)")
+            except Exception as fallback_e:
+                raise RuntimeError(f"Failed to load detection model (both cache and fallback): {fallback_e}")
         except Exception as e:
             raise RuntimeError(f"Failed to load detection model: {e}")
             
     def _load_structure_model(self):
         """Load Microsoft Table Transformer Structure Recognition model."""
         try:
+            # Try with configured cache directory first
             self.structure_processor = AutoImageProcessor.from_pretrained(
                 "microsoft/table-transformer-structure-recognition-v1.1-all",
                 cache_dir=self.config.models.cache_dir
@@ -56,6 +74,21 @@ class ProductionTableFormer:
             ).to(self.device)
             self.structure_model.eval()
             self.logger.logger.info("Table structure model loaded successfully")
+        except (OSError, PermissionError) as e:
+            # Fallback: try without cache directory (uses default location)
+            self.logger.logger.warning(f"Failed to load structure model with cache dir {self.config.models.cache_dir}: {e}")
+            self.logger.logger.info("Attempting to load structure model without cache directory...")
+            try:
+                self.structure_processor = AutoImageProcessor.from_pretrained(
+                    "microsoft/table-transformer-structure-recognition-v1.1-all"
+                )
+                self.structure_model = TableTransformerForObjectDetection.from_pretrained(
+                    "microsoft/table-transformer-structure-recognition-v1.1-all"
+                ).to(self.device)
+                self.structure_model.eval()
+                self.logger.logger.info("Table structure model loaded successfully (fallback)")
+            except Exception as fallback_e:
+                raise RuntimeError(f"Failed to load structure model (both cache and fallback): {fallback_e}")
         except Exception as e:
             raise RuntimeError(f"Failed to load structure model: {e}")
     

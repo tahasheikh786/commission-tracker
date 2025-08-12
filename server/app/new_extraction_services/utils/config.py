@@ -210,9 +210,11 @@ def get_config(config_path: Optional[str] = None) -> Config:
     
     # Try to find config file in standard locations
     standard_paths = [
+        "configs/new_extraction_config.yaml",
         "configs/default.yaml",
         "configs/config.yaml",
         "config.yaml",
+        "../configs/new_extraction_config.yaml",
         "../configs/default.yaml"
     ]
     

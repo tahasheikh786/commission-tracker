@@ -1,3 +1,7 @@
+# Apply compatibility fixes first
+from app.new_extraction_services.utils.compatibility import apply_compatibility_fixes
+apply_compatibility_fixes()
+
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from app.api import company, mapping, review, statements, database_fields, plan_types, table_editor, improve_extraction, pending, dashboard, format_learning, new_extract, summary_rows

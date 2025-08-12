@@ -11,6 +11,11 @@ from pathlib import Path
 from typing import Dict, List, Optional, Any, Union
 import tempfile
 import os
+from app.new_extraction_services.utils.compatibility import apply_compatibility_fixes
+
+# Apply compatibility fixes
+apply_compatibility_fixes()
+
 
 # Import the new extraction solution
 from app.new_extraction_services.utils.config import get_config

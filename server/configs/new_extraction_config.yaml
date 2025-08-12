@@ -11,7 +11,7 @@ models:
   device: "cpu"
   batch_size: 1
   confidence_threshold: 0.7
-  cache_dir: "/app/model_cache"
+  cache_dir: "/tmp/model_cache"
   enable_advanced_tableformer: true
   enable_ensemble_ocr: true
 

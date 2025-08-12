@@ -10,10 +10,10 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     # Model cache directories
-    EASYOCR_MODULE_PATH=/app/model_cache/easyocr \
-    DOCLING_CACHE_DIR=/app/model_cache/docling \
-    HF_HOME=/app/model_cache/transformers \
-    TRANSFORMERS_CACHE=/app/model_cache/transformers \
+    EASYOCR_MODULE_PATH=/tmp/model_cache/easyocr \
+    DOCLING_CACHE_DIR=/tmp/model_cache/docling \
+    HF_HOME=/tmp/model_cache/transformers \
+    TRANSFORMERS_CACHE=/tmp/model_cache/transformers \
     # OpenAI configuration
     OPENAI_API_KEY="" \
     OPENAI_API_BASE="https://api.openai.com/v1" \
@@ -71,16 +71,16 @@ RUN python -c "import easyocr; easyocr.Reader(['en'], gpu=False, download_enable
 RUN python -c "from docling import document_converter; converter = document_converter.DocumentConverter()"
 
 # Pre-download TableFormer models for the new extraction service
-RUN python -c "from transformers import AutoImageProcessor, AutoModelForObjectDetection; AutoImageProcessor.from_pretrained('microsoft/table-transformer-detection', cache_dir='/app/model_cache/transformers'); AutoModelForObjectDetection.from_pretrained('microsoft/table-transformer-detection', cache_dir='/app/model_cache/transformers')"
-RUN python -c "from transformers import AutoImageProcessor, AutoModelForObjectDetection; AutoImageProcessor.from_pretrained('microsoft/table-transformer-structure-recognition-v1.1-all', cache_dir='/app/model_cache/transformers'); AutoModelForObjectDetection.from_pretrained('microsoft/table-transformer-structure-recognition-v1.1-all', cache_dir='/app/model_cache/transformers')"
+RUN python -c "from transformers import AutoImageProcessor, AutoModelForObjectDetection; AutoImageProcessor.from_pretrained('microsoft/table-transformer-detection', cache_dir='/tmp/model_cache/transformers'); AutoModelForObjectDetection.from_pretrained('microsoft/table-transformer-detection', cache_dir='/tmp/model_cache/transformers')"
+RUN python -c "from transformers import AutoImageProcessor, AutoModelForObjectDetection; AutoImageProcessor.from_pretrained('microsoft/table-transformer-structure-recognition-v1.1-all', cache_dir='/tmp/model_cache/transformers'); AutoModelForObjectDetection.from_pretrained('microsoft/table-transformer-structure-recognition-v1.1-all', cache_dir='/tmp/model_cache/transformers')"
 
 # Create persistent model cache directories
-RUN mkdir -p /app/model_cache/easyocr /app/model_cache/docling /app/model_cache/transformers
+RUN mkdir -p /tmp/model_cache/easyocr /tmp/model_cache/docling /tmp/model_cache/transformers
 
 # Copy downloaded models to persistent location
-RUN cp -r /root/.cache/easyocr/* /app/model_cache/easyocr/ 2>/dev/null || true
-RUN cp -r /root/.cache/docling/* /app/model_cache/docling/ 2>/dev/null || true
-RUN cp -r /root/.cache/huggingface/* /app/model_cache/transformers/ 2>/dev/null || true
+RUN cp -r /root/.cache/easyocr/* /tmp/model_cache/easyocr/ 2>/dev/null || true
+RUN cp -r /root/.cache/docling/* /tmp/model_cache/docling/ 2>/dev/null || true
+RUN cp -r /root/.cache/huggingface/* /tmp/model_cache/transformers/ 2>/dev/null || true
 
 # Copy the entire server directory
 COPY server/ .
