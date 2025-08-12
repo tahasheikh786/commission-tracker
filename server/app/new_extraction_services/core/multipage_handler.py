@@ -35,6 +35,8 @@ class MultiPageTableHandler:
         """Link tables that span multiple pages."""
         
         try:
+            self.logger.logger.info(f"🔗 Multipage handler: Processing {len(page_tables)} pages")
+            
             # Convert to PageTable objects
             all_page_tables = []
             for page_num, tables in enumerate(page_tables):
@@ -48,8 +50,14 @@ class MultiPageTableHandler:
                     )
                     all_page_tables.append(page_table)
             
+            self.logger.logger.info(f"📋 Converted to {len(all_page_tables)} PageTable objects")
+            
             # Find table continuation candidates
             continuation_groups = await self._find_continuation_groups(all_page_tables)
+            
+            self.logger.logger.info(f"🔍 Found {len(continuation_groups)} continuation groups")
+            for i, group in enumerate(continuation_groups):
+                self.logger.logger.info(f"   Group {i}: {len(group)} tables from pages {[pt.page_number for pt in group]}")
             
             # Merge continued tables
             merged_tables = []
@@ -69,7 +77,7 @@ class MultiPageTableHandler:
                 if id(page_table) not in processed_tables:
                     merged_tables.append(page_table.table_data)
             
-            self.logger.logger.info(f"Linked {len(page_tables)} pages into {len(merged_tables)} tables")
+            self.logger.logger.info(f"🔗 Linked {len(page_tables)} pages into {len(merged_tables)} tables")
             return merged_tables
             
         except Exception as e:
@@ -89,6 +97,8 @@ class MultiPageTableHandler:
         # Sort tables by page number
         sorted_tables = sorted(page_tables, key=lambda t: t.page_number)
         
+        self.logger.logger.info(f"🔍 Finding continuation groups among {len(sorted_tables)} tables")
+        
         for i, table in enumerate(sorted_tables):
             if id(table) in processed:
                 continue
@@ -96,6 +106,9 @@ class MultiPageTableHandler:
             # Start a new continuation group
             group = [table]
             processed.add(id(table))
+            
+            self.logger.logger.info(f"🔍 Starting new group with table from page {table.page_number}")
+            self.logger.logger.info(f"   Table headers: {table.headers[:3]}...")
             
             # Look for continuations in subsequent pages
             current_table = table
@@ -105,11 +118,15 @@ class MultiPageTableHandler:
                 if id(candidate) in processed:
                     continue
                 
+                self.logger.logger.info(f"🔍 Checking candidate table from page {candidate.page_number}")
+                self.logger.logger.info(f"   Candidate headers: {candidate.headers[:3]}...")
+                
                 # Check if candidate is a continuation
                 if await self._is_table_continuation(current_table, candidate):
                     group.append(candidate)
                     processed.add(id(candidate))
                     current_table = candidate
+                    self.logger.logger.info(f"✅ Added candidate to group (now {len(group)} tables)")
                 else:
                     # Check for gaps (table might continue after missing pages)
                     if candidate.page_number - current_table.page_number <= 3:  # Allow 3 page gap
@@ -117,12 +134,19 @@ class MultiPageTableHandler:
                             group.append(candidate)
                             processed.add(id(candidate))
                             current_table = candidate
+                            self.logger.logger.info(f"✅ Added candidate to group (gap detected, now {len(group)} tables)")
+                        else:
+                            self.logger.logger.info(f"❌ Candidate not a continuation (gap scenario)")
+                    else:
+                        self.logger.logger.info(f"❌ Candidate not a continuation (gap too large)")
             
             if len(group) > 1:  # Only add groups with multiple tables
                 continuation_groups.append(group)
+                self.logger.logger.info(f"✅ Added continuation group with {len(group)} tables")
             else:
                 # Single table, remove from processed to add individually
                 processed.remove(id(table))
+                self.logger.logger.info(f"📋 Single table group, will add individually")
         
         return continuation_groups
     
@@ -137,15 +161,23 @@ class MultiPageTableHandler:
         if table2.page_number - table1.page_number > 2:
             return False
         
-        # Check if table2's "headers" are actually data (continuation pattern)
+        # **IMPROVED: Check if table2's "headers" are actually data (strongest continuation indicator)**
         table2_headers_look_like_data = self._headers_look_like_data(table2.headers)
         
-        # If table2 headers look like data, it's likely a continuation
+        # If table2 headers look like data, it's very likely a continuation
         if table2_headers_look_like_data:
+            self.logger.logger.info(f"🔍 Table2 headers look like data: {table2.headers[:3]}...")
+            
             # Check if the "headers" match the structure of table1's data
             if self._matches_table_structure(table2.headers, table1.table_data):
+                self.logger.logger.info(f"✅ Structure matches - likely continuation")
                 # Additional check: ensure the data types/content are similar
                 if self._has_similar_content_pattern(table2.headers, table1.table_data):
+                    self.logger.logger.info(f"✅ Content patterns match - confirming continuation")
+                    return True
+                else:
+                    self.logger.logger.info(f"⚠️ Content patterns don't match, but structure does")
+                    # Still return True if structure matches, as this is a strong indicator
                     return True
         
         # Check header similarity (for cases where headers are repeated)
@@ -153,16 +185,19 @@ class MultiPageTableHandler:
         
         # High header similarity indicates same table with repeated headers
         if header_sim >= 0.8:  # High similarity threshold for repeated headers
+            self.logger.logger.info(f"🔍 High header similarity ({header_sim:.2f}) - likely repeated headers")
             # Check position similarity (tables should be in similar positions)
             pos_sim = self._calculate_position_similarity(table1.bbox, table2.bbox)
             if pos_sim >= 0.6:  # Reasonable position similarity
                 # Check structure similarity
                 struct_sim = self._calculate_structure_similarity(table1.table_data, table2.table_data)
                 if struct_sim >= 0.7:  # High structure similarity
+                    self.logger.logger.info(f"✅ Position and structure similarity confirm continuation")
                     return True  # No content validation needed for identical headers
         
         # Medium header similarity with content validation
         elif header_sim >= 0.6:  # Medium similarity threshold
+            self.logger.logger.info(f"🔍 Medium header similarity ({header_sim:.2f}) - checking additional criteria")
             # Check position similarity (tables should be in similar positions)
             pos_sim = self._calculate_position_similarity(table1.bbox, table2.bbox)
             if pos_sim >= 0.7:  # Higher position similarity requirement
@@ -171,12 +206,18 @@ class MultiPageTableHandler:
                 if struct_sim >= 0.6:  # Medium structure similarity
                     # Additional check: ensure content patterns are similar
                     if self._has_similar_content_pattern(table2.headers, table1.table_data):
+                        self.logger.logger.info(f"✅ All criteria met - confirming continuation")
                         return True
         
         # Additional checks for continuation patterns
         continuation_score = await self._calculate_continuation_score(table1, table2)
         
-        return continuation_score > 0.6  # Lowered threshold
+        if continuation_score > 0.6:
+            self.logger.logger.info(f"✅ Continuation score ({continuation_score:.2f}) indicates continuation")
+            return True
+        
+        self.logger.logger.info(f"❌ No continuation detected (score: {continuation_score:.2f})")
+        return False
     
     async def _is_table_continuation_with_gap(
         self, 
@@ -290,13 +331,16 @@ class MultiPageTableHandler:
         elif header_sim >= 0.6:  # High similarity
             score += 0.3
         
-        # Check if table2's "headers" are actually data (strong continuation indicator)
+        # **IMPROVED: Check if table2's "headers" are actually data (strongest continuation indicator)**
         if self._headers_look_like_data(table2.headers):
-            score += 0.4  # Strong indicator that this is a continuation
+            score += 0.6  # Increased from 0.4 - this is a very strong indicator
             
             # Additional check: ensure the data patterns match
             if self._has_similar_content_pattern(table2.headers, table1.table_data):
-                score += 0.3  # Content patterns match
+                score += 0.4  # Increased from 0.3 - content patterns match
+            else:
+                # Even if content patterns don't match exactly, headers looking like data is still a strong indicator
+                score += 0.2
         
         # Header presence patterns
         if not table2.headers and table1.headers:  # Continued table might not repeat headers
@@ -427,8 +471,19 @@ class MultiPageTableHandler:
             if self._is_data_like_content(header_str):
                 data_indicators += 1
         
-        # If more than 50% of headers look like data, they probably are data
-        return data_indicators >= total_headers * 0.5
+        # **IMPROVED: More lenient threshold for financial documents**
+        # If more than 40% of headers look like data, they probably are data
+        # This is especially true for financial documents where continuation tables
+        # often have company names, IDs, and amounts as "headers"
+        threshold = 0.4 if total_headers >= 5 else 0.5  # More lenient for larger tables
+        
+        result = data_indicators >= total_headers * threshold
+        
+        if result:
+            self.logger.logger.info(f"🔍 Headers look like data: {data_indicators}/{total_headers} indicators (threshold: {threshold:.1f})")
+            self.logger.logger.info(f"   Sample headers: {headers[:3]}...")
+        
+        return result
     
     def _is_data_like_content(self, content: str) -> bool:
         """Determine if content looks like data using statistical analysis."""
@@ -470,6 +525,31 @@ class MultiPageTableHandler:
         if any(c in content for c in [',', '.', '-', '/', '(', ')']):
             indicators += 1
         
+        # **NEW: Financial document specific patterns**
+        # 7. Company name patterns (LLC, Inc, Corp, etc.)
+        if any(suffix in content.upper() for suffix in ['LLC', 'INC', 'CORP', 'CO', 'COMPANY']):
+            indicators += 2  # Strong indicator
+        
+        # 8. State codes (2-letter uppercase)
+        if len(content) == 2 and content.isupper() and content.isalpha():
+            indicators += 2  # Strong indicator
+        
+        # 9. ID patterns (alphanumeric codes like UT123456)
+        if len(content) >= 6 and any(c.isdigit() for c in content) and any(c.isalpha() for c in content):
+            indicators += 1
+        
+        # 10. Currency amounts ($X,XXX.XX pattern)
+        if '$' in content and any(c.isdigit() for c in content):
+            indicators += 2  # Strong indicator
+        
+        # 11. Subscriber counts (small numbers)
+        if content.isdigit() and 1 <= int(content) <= 100:
+            indicators += 1
+        
+        # 12. Rate patterns (X.XX/subscriber)
+        if '/subscriber' in content.lower() or '/month' in content.lower():
+            indicators += 2  # Strong indicator
+        
         # 7. Header-like content detection (negative indicators)
         header_indicators = 0
         
@@ -486,6 +566,12 @@ class MultiPageTableHandler:
         # The main detection comes from length, case patterns, and character distribution analysis above
         if len(content) <= 10 and content.islower():
             header_indicators += 1
+        
+        # **NEW: Strong header indicators (negative)**
+        # Common header words that indicate this is actually a header
+        header_words = ['billing', 'group', 'premium', 'commission', 'rate', 'subscriber', 'total', 'due', 'current', 'prior', 'adjustment']
+        if any(word in content.lower() for word in header_words):
+            header_indicators += 2  # Strong negative indicator
         
         # Subtract header indicators from data indicators
         final_score = indicators - header_indicators

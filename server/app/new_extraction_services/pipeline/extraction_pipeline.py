@@ -432,10 +432,11 @@ class ExtractionPipeline:
     ) -> List[Dict[str, Any]]:
         """Link tables that span multiple pages."""
         try:
-            # Skip multipage processing if only one page or no page info
-            if processed_doc.num_pages <= 1:
-                self.logger.logger.info("Skipping multipage linking: single page document")
-                return tables
+            self.logger.logger.info(f"🔗 Starting multipage linking with {len(tables)} tables")
+            
+            # **IMPROVED: Don't skip multipage processing for single page documents**
+            # Even single page documents can have multiple tables that should be merged
+            # The multipage handler can handle both multipage and single-page table merging
             
             # Group tables by page
             page_tables = {}
@@ -445,19 +446,24 @@ class ExtractionPipeline:
                     page_tables[page_num] = []
                 page_tables[page_num].append(table)
             
-            # If all tables are on page 0 (Docling default), treat as single page
-            if len(page_tables) == 1 and 0 in page_tables:
-                self.logger.logger.info("All tables on page 0, treating as single page document")
-                return tables
+            self.logger.logger.info(f"📄 Tables grouped by page: {list(page_tables.keys())}")
+            for page_num, page_table_list in page_tables.items():
+                self.logger.logger.info(f"   Page {page_num}: {len(page_table_list)} tables")
+            
+            # **IMPROVED: Always use multipage handler for table merging**
+            # Even if all tables are on the same page, the multipage handler can merge them
+            # based on header similarity and data patterns
             
             # Convert to list format expected by multipage handler
             max_page = max(page_tables.keys()) if page_tables else 0
             page_tables_list = [page_tables.get(i, []) for i in range(max_page + 1)]
             
-            # Link multipage tables
+            self.logger.logger.info(f"📋 Page tables list: {len(page_tables_list)} pages")
+            
+            # Link multipage tables using the multipage handler
             linked_tables = await self.multipage_handler.link_multipage_tables(page_tables_list)
             
-            self.logger.logger.info(f"Multipage linking: {len(tables)} -> {len(linked_tables)} tables")
+            self.logger.logger.info(f"🔗 Multipage linking: {len(tables)} → {len(linked_tables)} tables")
             return linked_tables
             
         except Exception as e:
@@ -491,6 +497,8 @@ class ExtractionPipeline:
             return tables
         
         try:
+            self.logger.logger.info(f"🔗 Starting table merging: {len(tables)} tables")
+            
             merged_tables = []
             processed_indices = set()
             
@@ -502,6 +510,8 @@ class ExtractionPipeline:
                 similar_tables = [table]
                 table_headers = table.get('headers', [])
                 
+                self.logger.logger.info(f"🔍 Checking table {i} with headers: {table_headers[:3]}...")
+                
                 for j, other_table in enumerate(tables[i+1:], i+1):
                     if j in processed_indices:
                         continue
@@ -509,10 +519,32 @@ class ExtractionPipeline:
                     other_headers = other_table.get('headers', [])
                     similarity = self._calculate_header_similarity(table_headers, other_headers)
                     
-                    if similarity >= 0.95:  # 95% similarity threshold
+                    self.logger.logger.info(f"🔍 Comparing with table {j}: similarity = {similarity:.3f}")
+                    self.logger.logger.info(f"   Table {j} headers: {other_headers[:3]}...")
+                    
+                    # **IMPROVED: More lenient similarity threshold for multipage tables**
+                    # Also check if the other table's headers look like data (continuation pattern)
+                    if similarity >= 0.9:  # Very high similarity
                         similar_tables.append(other_table)
                         processed_indices.add(j)
-                        self.logger.logger.info(f"🔗 MERGING: Table {j} with Table {i} (similarity: {similarity:.2f})")
+                        self.logger.logger.info(f"🔗 MERGING: Table {j} with Table {i} (high similarity: {similarity:.3f})")
+                    elif similarity >= 0.7:  # Medium similarity
+                        # Check if this might be a continuation table
+                        if self._headers_look_like_data(other_headers, table_headers):
+                            similar_tables.append(other_table)
+                            processed_indices.add(j)
+                            self.logger.logger.info(f"🔗 MERGING: Table {j} with Table {i} (continuation pattern: {similarity:.3f})")
+                        else:
+                            self.logger.logger.info(f"⚠️ Table {j} has medium similarity but doesn't look like continuation")
+                    else:
+                        # **NEW: Check for data-like headers even with low similarity**
+                        # This handles the case where the second table's "headers" are actually data rows
+                        if self._headers_look_like_data(other_headers, table_headers):
+                            similar_tables.append(other_table)
+                            processed_indices.add(j)
+                            self.logger.logger.info(f"🔗 MERGING: Table {j} with Table {i} (data-like headers detected: {similarity:.3f})")
+                        else:
+                            self.logger.logger.info(f"❌ Table {j} similarity too low: {similarity:.3f}")
                 
                 # Merge the similar tables
                 if len(similar_tables) > 1:
@@ -521,6 +553,7 @@ class ExtractionPipeline:
                     self.logger.logger.info(f"✅ MERGED: {len(similar_tables)} tables into 1 with {len(merged_table.get('rows', []))} total rows")
                 else:
                     merged_tables.append(table)
+                    self.logger.logger.info(f"📋 Table {i} kept as single table")
                 
                 processed_indices.add(i)
             
@@ -536,13 +569,18 @@ class ExtractionPipeline:
         if not headers1 or not headers2:
             return 0.0
         
-        if len(headers1) != len(headers2):
+        # **IMPROVED: Handle different column counts**
+        # If column counts are very different, it's likely not the same table
+        if abs(len(headers1) - len(headers2)) > 2:
             return 0.0
         
+        # Use the shorter header list as reference to avoid index errors
+        min_len = min(len(headers1), len(headers2))
         matches = 0
-        for h1, h2 in zip(headers1, headers2):
-            h1_clean = str(h1).lower().strip()
-            h2_clean = str(h2).lower().strip()
+        
+        for i in range(min_len):
+            h1_clean = str(headers1[i]).lower().strip()
+            h2_clean = str(headers2[i]).lower().strip()
             
             # Exact match
             if h1_clean == h2_clean:
@@ -550,8 +588,45 @@ class ExtractionPipeline:
             # Partial match for similar terms
             elif h1_clean in h2_clean or h2_clean in h1_clean:
                 matches += 0.8
+            # **NEW: Check for common financial header variations**
+            elif self._are_headers_semantically_similar(h1_clean, h2_clean):
+                matches += 0.7
         
-        return matches / len(headers1)
+        # Calculate similarity based on the shorter header list
+        similarity = matches / min_len
+        
+        # **NEW: Bonus for same column count**
+        if len(headers1) == len(headers2):
+            similarity += 0.1
+        
+        return min(similarity, 1.0)
+    
+    def _are_headers_semantically_similar(self, header1: str, header2: str) -> bool:
+        """Check if two headers are semantically similar (same meaning, different wording)."""
+        # Common financial header variations
+        header_variations = {
+            'billing group': ['billing', 'group', 'company', 'organization'],
+            'group id': ['id', 'group id', 'company id', 'account id'],
+            'group state': ['state', 'group state', 'location', 'region'],
+            'premium': ['premium', 'amount', 'billing amount', 'total premium'],
+            'current month subscribers': ['subscribers', 'current subscribers', 'monthly subscribers'],
+            'prior month': ['prior', 'previous', 'prior month', 'previous month'],
+            'subscriber adjustments': ['adjustments', 'subscriber adjustments', 'changes'],
+            'total subscribers': ['total', 'total subscribers', 'subscriber total'],
+            'rate': ['rate', 'commission rate', 'rate per subscriber'],
+            'commission due': ['commission', 'due', 'commission due', 'amount due']
+        }
+        
+        # Check if headers are in the same variation group
+        for key, variations in header_variations.items():
+            if header1 in variations and header2 in variations:
+                return True
+            if header1 == key and header2 in variations:
+                return True
+            if header2 == key and header1 in variations:
+                return True
+        
+        return False
     
     async def _merge_table_group(self, table_group: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Merge a group of tables with similar headers into one table."""
@@ -637,9 +712,12 @@ class ExtractionPipeline:
         
         # Check for patterns that suggest these are data, not headers
         data_indicators = 0
+        header_indicators = 0  # Counter for header-like patterns
         
         for header in headers:
             header_str = str(header).strip()
+            
+            # **IMPROVED: More comprehensive data pattern detection**
             
             # Company names, IDs, state codes, dollar amounts indicate data
             if any(pattern in header_str for pattern in ['LLC', 'Inc', 'Corp', 'UT', '$']):
@@ -652,9 +730,54 @@ class ExtractionPipeline:
             # Numbers that look like subscriber counts
             if header_str.isdigit() and 1 <= int(header_str) <= 100:
                 data_indicators += 1
+            
+            # **NEW: Additional financial data patterns**
+            # Currency amounts ($X,XXX.XX pattern)
+            if '$' in header_str and any(c.isdigit() for c in header_str):
+                data_indicators += 1
+            
+            # Rate patterns (X.XX/subscriber)
+            if '/subscriber' in header_str.lower() or '/month' in header_str.lower():
+                data_indicators += 1
+            
+            # Company name patterns (multiple words, mixed case)
+            if len(header_str.split()) >= 2 and not header_str.isupper() and not header_str.islower():
+                data_indicators += 1
+            
+            # ID patterns (alphanumeric codes like UT123456)
+            if len(header_str) >= 6 and any(c.isdigit() for c in header_str) and any(c.isalpha() for c in header_str):
+                data_indicators += 1
+            
+            # **NEW: Header-like pattern detection (negative indicators)**
+            # Common financial header words
+            header_words = ['billing', 'group', 'premium', 'commission', 'rate', 'subscriber', 'total', 'due', 'current', 'prior', 'adjustment', 'month', 'amount']
+            if any(word in header_str.lower() for word in header_words):
+                header_indicators += 1
+            
+            # Headers are often shorter and more generic
+            if len(header_str) <= 25 and header_str.islower():
+                header_indicators += 1
+            
+            # Headers often have consistent case patterns
+            if header_str.islower() or header_str.istitle():
+                header_indicators += 1
         
-        # If more than half look like data, treat as data row
-        return data_indicators > len(headers) / 2
+        # **IMPROVED: More sophisticated scoring**
+        # If we have strong header indicators, reduce the data score
+        if header_indicators > 0:
+            data_indicators = max(0, data_indicators - header_indicators)
+        
+        # **IMPROVED: More lenient threshold for financial documents**
+        # If more than 40% of headers look like data, they probably are data
+        threshold = 0.4 if len(headers) >= 5 else 0.5
+        
+        result = data_indicators >= len(headers) * threshold
+        
+        if result:
+            self.logger.logger.info(f"🔍 Headers look like data: {data_indicators}/{len(headers)} indicators (threshold: {threshold:.1f})")
+            self.logger.logger.info(f"   Sample headers: {headers[:3]}...")
+        
+        return result
     
     def _align_rows_to_headers(self, rows: List[List[str]], target_headers: List[str]) -> List[List[str]]:
         """Align rows to match the target header structure."""

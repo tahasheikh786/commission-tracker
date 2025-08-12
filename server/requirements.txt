@@ -1,80 +1,80 @@
 --extra-index-url https://download.pytorch.org/whl/cpu
 
 # Web framework
-fastapi==0.104.1
-uvicorn==0.24.0
+fastapi>=0.104.0,<1.0.0
+uvicorn>=0.24.0,<1.0.0
 
 # Database
-sqlalchemy[asyncio]
-asyncpg
+sqlalchemy[asyncio]>=2.0.0
+asyncpg>=0.29.0
 
 # AWS S3 SDK
-boto3
+boto3>=1.34.0
 
 # Google Cloud Services
-google-cloud-documentai==2.25.0
-google-cloud-storage==2.14.0
-google-cloud-vision==3.4.4
-google-auth==2.28.1
-google-auth-oauthlib==1.1.0
-google-auth-httplib2==0.1.1
+google-cloud-documentai>=2.25.0,<3.0.0
+google-cloud-storage>=2.14.0,<3.0.0
+google-cloud-vision>=3.4.0,<4.0.0
+google-auth>=2.28.0,<3.0.0
+google-auth-oauthlib>=1.1.0,<2.0.0
+google-auth-httplib2>=0.1.0,<1.0.0
 
 # PDF processing
-PyMuPDF==1.23.3
-pdfplumber==0.11.0
-pypdf==4.0.1
-pdf2image==1.16.3
+PyMuPDF>=1.23.0,<2.0.0
+pdfplumber>=0.11.0,<1.0.0
+pypdf>=4.0.0,<5.0.0
+pdf2image>=1.16.0,<2.0.0
 
 # Environment and data handling
-python-dotenv
+python-dotenv>=1.0.0
 pydantic>=2.6.0,<3.0.0
-python-multipart==0.0.6
+python-multipart>=0.0.6,<1.0.0
 
 # Image processing - Pin scikit-image to version with Python 3.11 wheels
-opencv-python-headless
-Pillow==10.1.0
-numpy
-scipy
-scikit-image==0.22.0
+opencv-python-headless>=4.8.0,<4.9.0
+Pillow>=10.0.0
+numpy>=1.24.0,<2.0.0
+scipy>=1.10.0
+scikit-image>=0.21.0
 
 # Data processing
-pandas==2.1.4
-python-dateutil==2.8.2
+pandas>=2.0.0,<3.0.0
+python-dateutil>=2.8.0
 
 # OpenAI GPT-4o Vision API
-openai>=1.0.0
+openai>=1.0.0,<2.0.0
 
 # ===== ADVANCED DOCLING SETUP =====
-docling==1.20.0
+docling>=2.0.0,<3.0.0
 
 # ML and Computer Vision
 torch>=2.2.2,<3.0.0
-torchvision
-transformers
+torchvision>=0.17.0,<1.0.0
+transformers>=4.36.0,<5.0.0
 huggingface-hub>=0.23.0,<1.0.0
 
 # OCR Engines
-easyocr==1.7.3
-pytesseract==0.3.10
+easyocr>=1.7.0,<2.0.0
+pytesseract>=0.3.10,<1.0.0
 
 # Essential ML packages
-timm
-editdistance
+timm>=0.9.0
+editdistance>=0.8.0
 
 # Document Processing
-layoutparser==0.3.4
+layoutparser>=0.3.4,<1.0.0
 
 # API and Web
-streamlit==1.28.2
+streamlit>=1.28.0,<2.0.0
 
 # Utilities
-tqdm==4.66.1
-requests>=2.32.3,<3.0.0
-loguru==0.7.2
+tqdm>=4.66.0,<5.0.0
+requests>=2.32.0,<3.0.0
+loguru>=0.7.0,<1.0.0
 
 # Testing and Quality
-pytest==7.4.3
-pytest-cov==4.1.0
-black==23.11.0
-flake8==6.1.0
-mypy==1.7.1
+pytest>=7.4.0,<8.0.0
+pytest-cov>=4.1.0,<5.0.0
+black>=23.11.0,<24.0.0
+flake8>=6.1.0,<7.0.0
+mypy>=1.7.0,<2.0.0

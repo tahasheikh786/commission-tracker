@@ -129,7 +129,7 @@ class DocumentProcessor:
             # Use Docling for primary processing
             start_time = time.time()
             conversion_result = await asyncio.to_thread(
-                self.docling_converter.convert_single, str(pdf_path)
+                self.docling_converter.convert, str(pdf_path)
             )
             docling_time = time.time() - start_time
             
@@ -139,13 +139,17 @@ class DocumentProcessor:
                 self.logger.log_model_performance(
                     "docling_converter",
                     docling_time,
-                    {"pages_processed": len(document.pages) if hasattr(document, 'pages') and document.pages else 1}
+                    {"pages_processed": len(document.elements) if hasattr(document, 'elements') and document.elements else 1}
                 )
             else:
                 raise DocumentProcessingError("ConversionResult does not contain assembled document")
             
-            # Extract tables from the document
-            tables = self._extract_tables_from_document(document)
+            # Extract tables from the assembled document
+            tables = []
+            for element in document.elements:
+                if hasattr(element, '__class__') and 'Table' in element.__class__.__name__:
+                    tables.append(element)
+            
             self.logger.logger.info(f"Found {len(tables)} tables in document")
             
             # Process extracted tables into structured data
@@ -159,53 +163,49 @@ class DocumentProcessor:
             pages = []
             raw_images = []
             
-            # Process pages and include table information
-            for page_num, page in enumerate(document.pages if hasattr(document, 'pages') and document.pages else []):
-                page_data = {
-                    'page_number': page_num,
-                    'width': page.size.width if hasattr(page, 'size') and page.size else 0,
-                    'height': page.size.height if hasattr(page, 'size') and page.size else 0,
-                    'elements': [],
-                    'text': '',
-                    'tables': []
+            # Create a single page since Docling v2 doesn't have page-level structure
+            # All elements are in the assembled document
+            page_data = {
+                'page_number': 0,
+                'width': 0,  # Will be set from PDF if needed
+                'height': 0,
+                'elements': [],
+                'text': '',
+                'tables': []
+            }
+            
+            # Extract all elements from the assembled document
+            for element in document.elements:
+                element_data = {
+                    'type': element.__class__.__name__,
+                    'bbox': None,  # Docling v2 doesn't expose bbox directly
+                    'text': getattr(element, 'text', ''),
+                    'confidence': 1.0  # Default confidence
                 }
+                page_data['elements'].append(element_data)
                 
-                # Extract page elements
-                if hasattr(page, 'elements'):
-                    for element in page.elements:
-                        element_data = {
-                            'type': element.__class__.__name__,
-                            'bbox': [element.bbox.l, element.bbox.t, 
-                                   element.bbox.r, element.bbox.b] if element.bbox else None,
-                            'text': getattr(element, 'text', ''),
-                            'confidence': getattr(element, 'confidence', 1.0)
-                        }
-                        page_data['elements'].append(element_data)
-                        
-                        if hasattr(element, 'text') and element.text:
-                            page_data['text'] += element.text + ' '
+                if hasattr(element, 'text') and element.text:
+                    page_data['text'] += element.text + ' '
                 
-                # Extract table information if available
-                if hasattr(page, 'tables'):
-                    for table in page.tables:
-                        table_data = {
-                            'bbox': [table.bbox.l, table.bbox.t, 
-                                   table.bbox.r, table.bbox.b] if table.bbox else None,
-                            'confidence': getattr(table, 'confidence', 1.0),
-                            'rows': getattr(table, 'num_rows', 0),
-                            'columns': getattr(table, 'num_cols', 0)
-                        }
-                        page_data['tables'].append(table_data)
-                
-                pages.append(page_data)
+                # Check if this is a table
+                if hasattr(element, '__class__') and 'Table' in element.__class__.__name__:
+                    table_data = {
+                        'bbox': None,
+                        'confidence': 1.0,
+                        'rows': getattr(element, 'num_rows', 0),
+                        'columns': getattr(element, 'num_cols', 0)
+                    }
+                    page_data['tables'].append(table_data)
+            
+            pages.append(page_data)
             
             # Get document metadata
             metadata = {
-                'title': getattr(document, 'title', ''),
+                'title': '',  # Docling v2 doesn't expose title directly
                 'num_pages': len(pages),
                 'processing_time': docling_time,
                 'source': 'docling',
-                'docling_version': '1.20.0',
+                'docling_version': '2.43.0',
                 'extracted_tables_count': len(extracted_tables)
             }
             
@@ -293,7 +293,7 @@ class DocumentProcessor:
             # Use Docling for DOCX processing
             start_time = time.time()
             conversion_result = await asyncio.to_thread(
-                self.docling_converter.convert_single, str(docx_path)
+                self.docling_converter.convert, str(docx_path)
             )
             docling_time = time.time() - start_time
             
@@ -310,25 +310,36 @@ class DocumentProcessor:
                 'tables': []
             }
             
-            # Extract elements from the document
-            if hasattr(conversion_result.document, 'main_text'):
-                page_data['text'] = conversion_result.document.main_text
-            
-            # Extract tables if available
-            if hasattr(conversion_result.document, 'tables'):
-                for table in conversion_result.document.tables:
-                    table_data = {
-                        'bbox': None,  # No bbox for DOCX tables
-                        'confidence': 1.0,
-                        'rows': getattr(table, 'num_rows', 0),
-                        'columns': getattr(table, 'num_cols', 0)
+            # Extract elements from the assembled document
+            if hasattr(conversion_result, 'assembled') and conversion_result.assembled:
+                document = conversion_result.assembled
+                
+                for element in document.elements:
+                    element_data = {
+                        'type': element.__class__.__name__,
+                        'bbox': None,
+                        'text': getattr(element, 'text', ''),
+                        'confidence': 1.0
                     }
-                    page_data['tables'].append(table_data)
+                    page_data['elements'].append(element_data)
+                    
+                    if hasattr(element, 'text') and element.text:
+                        page_data['text'] += element.text + ' '
+                    
+                    # Check if this is a table
+                    if hasattr(element, '__class__') and 'Table' in element.__class__.__name__:
+                        table_data = {
+                            'bbox': None,
+                            'confidence': 1.0,
+                            'rows': getattr(element, 'num_rows', 0),
+                            'columns': getattr(element, 'num_cols', 0)
+                        }
+                        page_data['tables'].append(table_data)
             
             pages.append(page_data)
             
             metadata = {
-                'title': getattr(conversion_result.document, 'title', ''),
+                'title': '',  # Docling v2 doesn't expose title directly
                 'num_pages': 1,
                 'processing_time': docling_time,
                 'source': 'docling',
@@ -923,10 +934,10 @@ class DocumentProcessor:
 
     def _extract_tables_from_document(self, document) -> List[Any]:
         """
-        Extract table objects from Docling document.
+        Extract table objects from Docling v2 document.
         
         Args:
-            document: Docling document object
+            document: Docling v2 assembled document object
             
         Returns:
             List of table objects
@@ -934,40 +945,18 @@ class DocumentProcessor:
         tables = []
         
         try:
-            # Look for tables in the document structure
-            if hasattr(document, 'tables') and document.tables:
-                tables = document.tables
-                self.logger.logger.info(f"Found {len(tables)} tables via document.tables")
-            elif hasattr(document, 'elements'):
-                # Search through document elements for tables
+            # In Docling v2, tables are in the elements list
+            if hasattr(document, 'elements'):
                 for element in document.elements:
-                    # Check if element has a label (more reliable than type)
-                    if hasattr(element, 'label') and 'table' in str(element.label).lower():
+                    # Check if element is a table by class name
+                    if hasattr(element, '__class__') and 'Table' in element.__class__.__name__:
                         if self._is_valid_table_element(element):
                             tables.append(element)
-                            self.logger.logger.info(f"Found valid table element with label: {element.label}")
+                            self.logger.logger.info(f"Found valid table element: {element.__class__.__name__}")
                         else:
-                            self.logger.logger.debug(f"Skipping invalid table element: {element.label}")
-                    elif hasattr(element, 'type') and element.type == 'table':
-                        if self._is_valid_table_element(element):
-                            tables.append(element)
-                    elif hasattr(element, 'tables') and element.tables:
-                        for table in element.tables:
-                            if self._is_valid_table_element(table):
-                                tables.append(table)
+                            self.logger.logger.debug(f"Skipping invalid table element: {element.__class__.__name__}")
+                
                 self.logger.logger.info(f"Found {len(tables)} valid tables via document.elements")
-            
-            # Also check pages for tables
-            if hasattr(document, 'pages') and document.pages:
-                for page in document.pages:
-                    if hasattr(page, 'elements'):
-                        for element in page.elements:
-                            if hasattr(element, 'label') and 'table' in str(element.label).lower():
-                                tables.append(element)
-                            elif hasattr(element, 'type') and element.type == 'table':
-                                tables.append(element)
-                            elif hasattr(element, 'tables') and element.tables:
-                                tables.extend(element.tables)
             
             self.logger.logger.info(f"Total found {len(tables)} tables in document")
             
@@ -1059,13 +1048,13 @@ class DocumentProcessor:
         try:
             headers = []
             
-            # For Docling table elements, extract from cells structure
-            if hasattr(table, 'cluster') and hasattr(table.cluster, 'cells'):
-                # Group cells by row (y-coordinate) and column (x-coordinate)
-                cells_by_row = self._group_cells_by_position(table.cluster.cells)
+            # For Docling v2 table elements, extract from table_cells structure
+            if hasattr(table, 'table_cells') and table.table_cells:
+                # Group cells by row using the new Docling v2 structure
+                cells_by_row = self._group_cells_by_row_v2(table.table_cells)
                 
                 # **ADD DEBUG SECTION**
-                self.logger.logger.info(f"🔍 DEBUG: Found {len(cells_by_row)} rows in table, {len(table.cluster.cells)} total cells")
+                self.logger.logger.info(f"🔍 DEBUG: Found {len(cells_by_row)} rows in table, {len(table.table_cells)} total cells")
                 
                 if cells_by_row:
                     # **IMPROVED: Look for the row with most financial header indicators**
@@ -1136,15 +1125,37 @@ class DocumentProcessor:
             self.logger.logger.error(f"Error extracting headers: {e}")
             return ["Column_1"]
     
+    def _group_cells_by_row_v2(self, table_cells) -> Dict[int, List]:
+        """Group Docling v2 table cells by row using the new structure."""
+        cells_by_row = {}
+        
+        try:
+            for cell in table_cells:
+                # Use start_row_offset_idx for row grouping
+                row_idx = cell.start_row_offset_idx
+                if row_idx not in cells_by_row:
+                    cells_by_row[row_idx] = []
+                cells_by_row[row_idx].append(cell)
+            
+            # Sort cells within each row by column position
+            for row_idx in cells_by_row:
+                cells_by_row[row_idx].sort(key=lambda cell: cell.start_col_offset_idx)
+            
+            return cells_by_row
+            
+        except Exception as e:
+            self.logger.logger.error(f"Error grouping cells by row: {e}")
+            return {}
+    
     def _extract_rows(self, table) -> List[List[str]]:
         """Extract rows with consistent data handling."""
         try:
             rows = []
             
-            # For Docling table elements, extract from cells structure
-            if hasattr(table, 'cluster') and hasattr(table.cluster, 'cells'):
-                # Group cells by row (y-coordinate) and column (x-coordinate)
-                cells_by_row = self._group_cells_by_position(table.cluster.cells)
+            # For Docling v2 table elements, extract from table_cells structure
+            if hasattr(table, 'table_cells') and table.table_cells:
+                # Group cells by row using the new Docling v2 structure
+                cells_by_row = self._group_cells_by_row_v2(table.table_cells)
                 
                 if cells_by_row:
                     # Skip the first row (headers) and extract data rows
