@@ -1,7 +1,7 @@
 import React from 'react';
 import { Search, Eye, EyeOff } from 'lucide-react';
 
-interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
+interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'size'> {
   label?: string;
   error?: string;
   leftIcon?: React.ReactNode;

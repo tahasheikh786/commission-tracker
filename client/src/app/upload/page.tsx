@@ -55,6 +55,11 @@ export default function UploadPage() {
   // GPT-4o Vision improvement functionality
   const [isImprovingExtraction, setIsImprovingExtraction] = useState(false)
 
+  // Helper function to get label from database fields
+  const getLabelFromDatabaseFields = useCallback((fieldKey: string) => {
+    return (databaseFields.find(f => f.field === fieldKey)?.label) || fieldKey;
+  }, [databaseFields]);
+
   // Pending functionality
   const [showPendingFiles, setShowPendingFiles] = useState(false)
   const [currentStep, setCurrentStep] = useState('upload')
@@ -153,7 +158,7 @@ export default function UploadPage() {
           })
       }
     }
-  }, [uploaded?.tables?.length, company, fetchingMapping, mapping, fieldConfig, databaseFields])
+  }, [uploaded?.tables?.length, company, fetchingMapping, mapping, fieldConfig, databaseFields, getLabelFromDatabaseFields])
 
   // Debug state changes
   useEffect(() => {
@@ -286,7 +291,7 @@ export default function UploadPage() {
       resumeFileRef.current = false
       console.log('🎯 Resume file process completed')
     }
-  }, [company, databaseFields, loadProgress])
+  }, [company, loadProgress])
 
   // Check for active session
   const checkForActiveSession = useCallback(async () => {
@@ -383,10 +388,6 @@ export default function UploadPage() {
       fetchDatabaseFields()
     }
   }, [databaseFields.length, fieldConfig.length])
-  
-  function getLabelFromDatabaseFields(fieldKey: string) {
-    return (databaseFields.find(f => f.field === fieldKey)?.label) || fieldKey;
-  }
 
   function handleReset() {
     setCompany(null)

@@ -287,7 +287,7 @@ export default function FieldMapper({
       console.log('Force setting fields from database fields:', databaseFields)
       setFields(databaseFields)
     }
-  }, [databaseFields, fields.length])
+  }, [databaseFields, fields.length, initialFields])
 
   useEffect(() => {
     if (initialMapping && Object.keys(initialMapping).length > 0) {
