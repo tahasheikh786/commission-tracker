@@ -1,5 +1,5 @@
-from .models import Company, CompanyFieldMapping, CompanyConfiguration, DatabaseField, PlanType, Extraction, EditedTable, StatementUpload as StatementUploadModel, CarrierFormatLearning, SummaryRowPattern
-from .schemas import CompanyCreate, CompanyFieldMappingCreate, StatementUpload, DatabaseFieldCreate, DatabaseFieldUpdate, PlanTypeCreate, PlanTypeUpdate, ExtractionCreate, StatementUploadCreate, StatementUploadUpdate, PendingFile, CarrierFormatLearningCreate, CarrierFormatLearningUpdate
+from .models import Company, CompanyFieldMapping, CompanyConfiguration, DatabaseField, PlanType, Extraction, EditedTable, StatementUpload as StatementUploadModel, CarrierFormatLearning, SummaryRowPattern, EarnedCommission
+from .schemas import CompanyCreate, CompanyFieldMappingCreate, StatementUpload, DatabaseFieldCreate, DatabaseFieldUpdate, PlanTypeCreate, PlanTypeUpdate, ExtractionCreate, StatementUploadCreate, StatementUploadUpdate, PendingFile, CarrierFormatLearningCreate, CarrierFormatLearningUpdate, EarnedCommissionCreate, EarnedCommissionUpdate
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from datetime import datetime
 from sqlalchemy.future import select
@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 from uuid import UUID
 from typing import List, Optional
+from decimal import Decimal
 
 async def get_company_by_name(db, name: str):
     result = await db.execute(select(Company).where(Company.name == name))
@@ -361,6 +362,11 @@ async def save_statement_review(
     
     await db.commit()
     await db.refresh(db_upload)
+    
+    # If the statement is approved, process commission data
+    if status == "Approved":
+        await process_commission_data_from_statement(db, db_upload)
+    
     return db_upload
 
 async def get_all_statement_reviews(db):
@@ -1104,4 +1110,160 @@ async def delete_summary_row_pattern(db: AsyncSession, pattern_id: str, company_
         return True
     
     return False
+
+async def create_earned_commission(db: AsyncSession, commission: EarnedCommissionCreate):
+    """Create a new earned commission record."""
+    db_commission = EarnedCommission(
+        carrier_id=commission.carrier_id,
+        client_name=commission.client_name,
+        invoice_total=commission.invoice_total,
+        commission_earned=commission.commission_earned,
+        statement_count=commission.statement_count
+    )
+    db.add(db_commission)
+    await db.commit()
+    await db.refresh(db_commission)
+    return db_commission
+
+async def get_earned_commission_by_carrier_and_client(db: AsyncSession, carrier_id: UUID, client_name: str):
+    """Get earned commission record by carrier and client name."""
+    result = await db.execute(
+        select(EarnedCommission).where(
+            EarnedCommission.carrier_id == carrier_id,
+            EarnedCommission.client_name == client_name
+        )
+    )
+    return result.scalar_one_or_none()
+
+async def update_earned_commission(db: AsyncSession, commission_id: UUID, update_data: EarnedCommissionUpdate):
+    """Update an earned commission record."""
+    result = await db.execute(select(EarnedCommission).where(EarnedCommission.id == commission_id))
+    db_commission = result.scalar_one_or_none()
+    
+    if not db_commission:
+        return None
+    
+    update_dict = update_data.dict(exclude_unset=True)
+    for field, value in update_dict.items():
+        setattr(db_commission, field, value)
+    
+    db_commission.last_updated = datetime.utcnow()
+    await db.commit()
+    await db.refresh(db_commission)
+    return db_commission
+
+async def upsert_earned_commission(db: AsyncSession, carrier_id: UUID, client_name: str, invoice_total: float, commission_earned: float):
+    """Upsert earned commission data - create if not exists, update if exists."""
+    existing = await get_earned_commission_by_carrier_and_client(db, carrier_id, client_name)
+    
+    if existing:
+        # Update existing record - convert to Decimal for proper arithmetic
+        existing_invoice = float(existing.invoice_total) if existing.invoice_total else 0
+        existing_commission = float(existing.commission_earned) if existing.commission_earned else 0
+        
+        update_data = EarnedCommissionUpdate(
+            invoice_total=existing_invoice + invoice_total,
+            commission_earned=existing_commission + commission_earned,
+            statement_count=existing.statement_count + 1
+        )
+        return await update_earned_commission(db, existing.id, update_data)
+    else:
+        # Create new record
+        commission_data = EarnedCommissionCreate(
+            carrier_id=carrier_id,
+            client_name=client_name,
+            invoice_total=invoice_total,
+            commission_earned=commission_earned,
+            statement_count=1
+        )
+        return await create_earned_commission(db, commission_data)
+
+async def get_earned_commissions_by_carrier(db: AsyncSession, carrier_id: UUID):
+    """Get all earned commission records for a specific carrier."""
+    result = await db.execute(
+        select(EarnedCommission)
+        .where(EarnedCommission.carrier_id == carrier_id)
+        .order_by(EarnedCommission.client_name.asc())
+    )
+    return result.scalars().all()
+
+async def get_all_earned_commissions(db: AsyncSession):
+    """Get all earned commission records with carrier names."""
+    result = await db.execute(
+        select(EarnedCommission, Company.name.label('carrier_name'))
+        .join(Company, EarnedCommission.carrier_id == Company.id)
+        .order_by(Company.name.asc(), EarnedCommission.client_name.asc())
+    )
+    return result.all()
+
+async def process_commission_data_from_statement(db: AsyncSession, statement_upload: StatementUploadModel):
+    """Process commission data from an approved statement and update earned commission records."""
+    if not statement_upload.final_data or not statement_upload.field_config:
+        return None
+    
+    # Find the field mappings for Client Name and Commission Earned
+    client_name_field = None
+    commission_earned_field = None
+    invoice_total_field = None
+    
+    # Look for these specific database fields in the field_config
+    for field in statement_upload.field_config:
+        if isinstance(field, dict):
+            field_name = field.get('field', '')
+            if field_name == 'Company Name':
+                client_name_field = field.get('label', 'Company Name')
+            elif field_name == 'Commission Earned':
+                commission_earned_field = field.get('label', 'Commission Earned')
+            elif field_name == 'Invoice Total':
+                invoice_total_field = field.get('label', 'Invoice Total')
+    
+    if not client_name_field or not commission_earned_field:
+        # If we don't have the required field mappings, skip processing
+        return None
+    
+    # Process each row in the final_data
+    for row in statement_upload.final_data:
+        if isinstance(row, dict):
+            client_name = row.get(client_name_field, '').strip()
+            commission_earned_str = str(row.get(commission_earned_field, '0')).strip()
+            invoice_total_str = str(row.get(invoice_total_field or commission_earned_field, '0')).strip()
+            
+            if not client_name:
+                continue
+            
+            # Convert string values to float, handling various formats including negative values in parentheses
+            try:
+                # Handle negative values in parentheses
+                commission_earned_str_clean = commission_earned_str.replace('$', '').replace(',', '')
+                invoice_total_str_clean = invoice_total_str.replace('$', '').replace(',', '')
+                
+                # Check if values are negative (in parentheses)
+                commission_is_negative = commission_earned_str_clean.startswith('(') and commission_earned_str_clean.endswith(')')
+                invoice_is_negative = invoice_total_str_clean.startswith('(') and invoice_total_str_clean.endswith(')')
+                
+                # Remove parentheses and convert to float
+                commission_earned = float(commission_earned_str_clean.replace('(', '').replace(')', ''))
+                invoice_total = float(invoice_total_str_clean.replace('(', '').replace(')', ''))
+                
+                # Apply negative sign if values were in parentheses
+                if commission_is_negative:
+                    commission_earned = -commission_earned
+                if invoice_is_negative:
+                    invoice_total = -invoice_total
+            except (ValueError, TypeError):
+                commission_earned = 0
+                invoice_total = 0
+            
+            # Process all commission data (including negative adjustments)
+            if commission_earned != 0:
+                # Upsert the commission data
+                await upsert_earned_commission(
+                    db, 
+                    statement_upload.company_id, 
+                    client_name, 
+                    invoice_total, 
+                    commission_earned
+                )
+    
+    return True
 

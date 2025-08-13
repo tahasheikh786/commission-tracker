@@ -240,4 +240,27 @@ class PlanType(PlanTypeBase):
     class Config:
         orm_mode = True
 
+class EarnedCommissionBase(BaseModel):
+    carrier_id: UUID
+    client_name: str
+    invoice_total: float
+    commission_earned: float
+    statement_count: int
+
+class EarnedCommissionCreate(EarnedCommissionBase):
+    pass
+
+class EarnedCommissionUpdate(BaseModel):
+    invoice_total: Optional[float] = None
+    commission_earned: Optional[float] = None
+    statement_count: Optional[int] = None
+
+class EarnedCommission(EarnedCommissionBase):
+    id: UUID
+    last_updated: datetime
+    created_at: datetime
+
+    class Config:
+        orm_mode = True
+
 

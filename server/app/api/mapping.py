@@ -33,12 +33,13 @@ async def get_company_mapping(company_id: str, db: AsyncSession = Depends(get_db
     plan_types = company_config.plan_types if company_config and company_config.plan_types else []
     table_names = company_config.table_names if company_config and company_config.table_names else []
     
-    # Get field_config from company configuration if available, otherwise from database fields
+    # Get field_config from company configuration if available, otherwise return empty list for new carriers
     if company_config and company_config.field_config:
         field_config = company_config.field_config
     else:
-        database_fields = await with_db_retry(db, crud.get_all_database_fields, active_only=True)
-        field_config = [{"field": field.display_name, "label": field.display_name} for field in database_fields]
+        # For new carriers with no existing configuration, return empty field_config
+        # This allows the frontend to start with empty fields and let users add them manually
+        field_config = []
     
     return MappingConfig(
         mapping=mapping,

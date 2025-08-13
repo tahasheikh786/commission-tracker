@@ -8,7 +8,8 @@ import StatementPreviewModal from "./StatementPreviewModal";
 import DatabaseFieldsManager from "./DatabaseFieldsManager";
 import PlanTypesManager from "./PlanTypesManager";
 import toast from 'react-hot-toast';
-import Loader from "@/app/upload/components/Loader";
+import { TableLoader, CardLoader } from "@/app/upload/components/Loader";
+import { Database, Settings, Plus, Search, Filter } from "lucide-react";
 
 type Carrier = { id: string; name: string };
 type Statement = {
@@ -114,92 +115,166 @@ export default function CarrierTab() {
         setDeletingCarriers(false);
       });
   };
-  
-  
 
+  const tabConfig = [
+    {
+      id: 'carriers' as const,
+      label: 'Carriers',
+      icon: Database,
+      description: 'Manage carriers and statements'
+    },
+    {
+      id: 'database-fields' as const,
+      label: 'Database Fields',
+      icon: Settings,
+      description: 'Configure field mappings'
+    },
+    {
+      id: 'plan-types' as const,
+      label: 'Plan Types',
+      icon: Plus,
+      description: 'Add and manage plan types'
+    }
+  ];
+  
   return (
-    <div className="w-full max-w-[1600px] mx-auto px-2 md:px-10 py-6">
-      {/* Tab Navigation */}
-      <div className="flex gap-1 mb-6 bg-gray-100 p-1 rounded-lg w-fit">
-        <button
-          onClick={() => setActiveTab('carriers')}
-          className={`px-4 py-2 rounded-md font-medium transition ${
-            activeTab === 'carriers'
-              ? 'bg-white text-blue-600 shadow-sm'
-              : 'text-gray-600 hover:text-gray-900'
-          }`}
-        >
-          Carriers
-        </button>
-        <button
-          onClick={() => setActiveTab('database-fields')}
-          className={`px-4 py-2 rounded-md font-medium transition ${
-            activeTab === 'database-fields'
-              ? 'bg-white text-blue-600 shadow-sm'
-              : 'text-gray-600 hover:text-gray-900'
-          }`}
-        >
-          Database Fields
-        </button>
-        <button
-          onClick={() => setActiveTab('plan-types')}
-          className={`px-4 py-2 rounded-md font-medium transition ${
-            activeTab === 'plan-types'
-              ? 'bg-white text-blue-600 shadow-sm'
-              : 'text-gray-600 hover:text-gray-900'
-          }`}
-        >
-          Add Plan Types
-        </button>
+    <div className="w-full max-w-7xl mx-auto px-4 py-6 animate-fade-in">
+      {/* Enhanced Header */}
+      <div className="text-center mb-8">
+        <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent mb-2">
+          Carrier Management
+        </h1>
+        <p className="text-gray-600 text-lg">
+          Manage your carriers, review statements, and configure system settings
+        </p>
+      </div>
+
+      {/* Enhanced Tab Navigation */}
+      <div className="flex justify-center mb-8">
+        <div className="glass rounded-2xl shadow-lg p-2 max-w-4xl w-full">
+          <div className="flex gap-2">
+            {tabConfig.map((tabItem) => {
+              const Icon = tabItem.icon;
+              const isActive = activeTab === tabItem.id;
+              
+              return (
+                <button
+                  key={tabItem.id}
+                  onClick={() => setActiveTab(tabItem.id)}
+                  className={`flex-1 flex items-center gap-3 px-6 py-4 rounded-xl font-medium transition-all duration-300 group relative overflow-hidden ${
+                    isActive 
+                      ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg transform scale-105' 
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
+                  }`}
+                >
+                  <Icon 
+                    size={20} 
+                    className={`transition-transform duration-300 ${
+                      isActive ? 'text-white' : 'text-gray-500 group-hover:text-gray-700'
+                    } ${isActive ? 'scale-110' : 'group-hover:scale-105'}`}
+                  />
+                  
+                  <div className="text-left">
+                    <div className={`font-semibold ${isActive ? 'text-white' : 'text-gray-800'}`}>
+                      {tabItem.label}
+                    </div>
+                    <div className={`text-xs ${isActive ? 'text-white/80' : 'text-gray-500'}`}>
+                      {tabItem.description}
+                    </div>
+                  </div>
+                  
+                  {/* Active indicator */}
+                  {isActive && (
+                    <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-8 h-1 bg-white rounded-full"></div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       {activeTab === 'carriers' ? (
-        <div className="flex flex-col md:flex-row gap-10">
-          <CarrierList
-            carriers={carriers}
-            selected={selected}
-            onSelect={c => {
-              setSelected(c);
-              // Update the carrier in the list if name changed
-              setCarriers(prev => prev.map(car => car.id === c.id ? { ...car, name: c.name } : car));
-            }}
-            loading={loadingCarriers}
-            onDelete={handleCarrierDelete}
-            deleting={deletingCarriers}
-          />
-          <div className="flex-1 bg-white/80 rounded-2xl shadow p-6 min-h-[320px]">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-3 gap-3">
-              <div className="text-2xl font-bold text-blue-900">
-                {selected?.name || "Select a carrier"}
+        <div className="flex flex-col lg:flex-row gap-8 animate-slide-in">
+          {/* Enhanced Carrier List */}
+          <div className="lg:w-1/3">
+            <CarrierList
+              carriers={carriers}
+              selected={selected}
+              onSelect={c => {
+                setSelected(c);
+                // Update the carrier in the list if name changed
+                setCarriers(prev => prev.map(car => car.id === c.id ? { ...car, name: c.name } : car));
+              }}
+              loading={loadingCarriers}
+              onDelete={handleCarrierDelete}
+              deleting={deletingCarriers}
+            />
+          </div>
+          
+          {/* Enhanced Statements Panel */}
+          <div className="lg:flex-1">
+            <div className="card p-8 min-h-[500px]">
+              <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4">
+                <div>
+                  <h2 className="text-3xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">
+                    {selected?.name || "Select a carrier"}
+                  </h2>
+                  {selected && (
+                    <p className="text-gray-600 mt-1">
+                      {statements.length} statement{statements.length !== 1 ? 's' : ''} found
+                    </p>
+                  )}
+                </div>
+                
+                {selected && (
+                  <div className="flex gap-3">
+                    <button
+                      className="btn btn-secondary px-6 py-3"
+                      onClick={() => setShowEditMapping(true)}
+                    >
+                      <Settings size={18} className="mr-2" />
+                      Edit Mappings
+                    </button>
+                  </div>
+                )}
               </div>
-              {selected && (
-                <button
-                  className="px-4 py-2 bg-violet-600 text-white rounded font-semibold hover:bg-violet-700 transition"
-                  onClick={() => setShowEditMapping(true)}
-                >
-                  Edit Mappings
-                </button>
+              
+              {loadingStatements ? (
+                <TableLoader />
+              ) : selected ? (
+                <CarrierStatementsTable
+                  statements={statements}
+                  setStatements={setStatements}
+                  onPreview={setShowPreviewIdx}
+                  onCompare={setShowCompareIdx}
+                  onDelete={handleDelete}
+                  deleting={deletingStatements}
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center py-16 text-center">
+                  <Database className="text-gray-300 mb-4" size={64} />
+                  <h3 className="text-xl font-semibold text-gray-600 mb-2">
+                    No Carrier Selected
+                  </h3>
+                  <p className="text-gray-500 max-w-md">
+                    Select a carrier from the list to view and manage their statements
+                  </p>
+                </div>
               )}
             </div>
-            {loadingStatements ? (
-              <Loader />
-            ) : (
-              <CarrierStatementsTable
-                statements={statements}
-                setStatements={setStatements}
-                onPreview={setShowPreviewIdx}
-                onCompare={setShowCompareIdx}
-                onDelete={handleDelete}
-                deleting={deletingStatements}
-              />
-            )}
           </div>
         </div>
       ) : activeTab === 'database-fields' ? (
-        <DatabaseFieldsManager />
+        <div className="animate-slide-in">
+          <DatabaseFieldsManager />
+        </div>
       ) : (
-        <PlanTypesManager />
+        <div className="animate-slide-in">
+          <PlanTypesManager />
+        </div>
       )}
+      
       {/* Modals */}
       {showEditMapping && selected && (
         <EditMappingModal

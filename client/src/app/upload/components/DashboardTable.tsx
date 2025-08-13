@@ -332,11 +332,20 @@ export default function DashboardTable({
                 />
               </th>
             )}
-            {fieldConfig.map((f, idx) => (
-              <th key={f.field || idx} className="px-4 py-3 text-left font-bold text-gray-700 border-b">
-                {f.label}
-              </th>
-            ))}
+            {fieldConfig && fieldConfig.length > 0 ? (
+              fieldConfig.map((f, idx) => (
+                <th key={f.field || idx} className="px-4 py-3 text-left font-bold text-gray-700 border-b">
+                  {f.label}
+                </th>
+              ))
+            ) : (
+              // Fallback headers when fieldConfig is not available
+              rows[0]?.header?.map((header, idx) => (
+                <th key={idx} className="px-4 py-3 text-left font-bold text-gray-700 border-b">
+                  {header}
+                </th>
+              )) || []
+            )}
             {!readOnly && <th className="py-3 px-2 border-b w-40">Actions</th>}
           </tr>
         </thead>

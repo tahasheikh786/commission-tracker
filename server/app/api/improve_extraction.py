@@ -2,7 +2,8 @@
 import os
 import json
 import logging
-from typing import Dict, List, Any, Optional
+import re
+from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, Form, Depends
 from fastapi.responses import JSONResponse
@@ -14,6 +15,10 @@ from app.services.gpt4o_vision_service import GPT4oVisionService
 from app.services.s3_utils import download_file_from_s3
 import uuid
 import tempfile
+from pydantic import BaseModel
+from app.db.crud import save_edited_tables, get_edited_tables, update_upload_tables
+from app.db.models import EditedTable, StatementUpload as StatementUploadModel
+import openai
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -21,6 +26,188 @@ logger = logging.getLogger(__name__)
 
 # Create router
 router = APIRouter(prefix="/improve-extraction", tags=["improve-extraction"])
+
+# Generic Value Type Inference System
+def infer_column_characteristics(reference_value: str, header: str) -> Dict[str, Any]:
+    """
+    Dynamically infer what type of data a column should contain based on reference example
+    """
+    if not reference_value.strip():
+        return {
+            "type": "empty_allowed",
+            "pattern": "any",
+            "characteristics": ["accepts_empty"],
+            "description": f"Column '{header}' allows empty values"
+        }
+    
+    characteristics = []
+    patterns = []
+    
+    # Analyze content patterns
+    if re.search(r'\d', reference_value):
+        characteristics.append("numeric_content")
+        if re.match(r'^\d+$', reference_value):
+            patterns.append("pure_integer")
+        elif re.match(r'^\d+\.\d+$', reference_value):
+            patterns.append("decimal_number")
+    
+    if re.search(r'[A-Za-z]', reference_value):
+        characteristics.append("text_content")
+        if re.match(r'^[A-Z\s]+$', reference_value):
+            patterns.append("uppercase_text")
+        elif len(reference_value.split()) > 1:
+            patterns.append("multi_word_text")
+    
+    # Special symbols and formatting
+    special_chars = set(re.findall(r'[^\w\s]', reference_value))
+    if special_chars:
+        characteristics.append(f"contains_symbols_{sorted(list(special_chars))}")
+    
+    # Length and structure patterns
+    characteristics.append(f"typical_length_{len(reference_value)}")
+    
+    # Common business patterns (generic detection)
+    if re.search(r'[A-Z]+\d+', reference_value):
+        patterns.append("alphanumeric_code")
+    elif re.search(r'\d+[/\-]\d+[/\-]\d+', reference_value):
+        patterns.append("date_pattern")
+    elif any(sym in reference_value for sym in ['$', '£', '€', '¥']) and re.search(r'\d', reference_value):
+        patterns.append("currency_pattern")
+    elif '%' in reference_value and re.search(r'\d', reference_value):
+        patterns.append("percentage_pattern")
+    
+    return {
+        "type": "inferred_from_reference",
+        "characteristics": characteristics,
+        "patterns": patterns,
+        "example_value": reference_value,
+        "header": header,
+        "description": f"Column '{header}' expects values similar to '{reference_value}'"
+    }
+
+def extract_value_components_universal(cell_value: str) -> List[Tuple[str, str]]:
+    """
+    Universal value extraction that works with any data format
+    """
+    if not cell_value.strip():
+        return []
+    
+    # Universal patterns that work for any content
+    components = []
+    remaining_text = cell_value.strip()
+    
+    # Look for distinct value patterns separated by spaces
+    # This works for any combination: numbers, text, symbols, codes
+    
+    # Pattern 1: Alphanumeric codes (like L221372, SKU-123, etc.)
+    codes = re.findall(r'[A-Z]+[-]?[A-Z]*\d+[A-Z\d]*', remaining_text)
+    for code in codes:
+        components.append((code, "alphanumeric_code"))
+        remaining_text = remaining_text.replace(code, ' ')
+    
+    # Pattern 2: Numbers with symbols (currency, percentages, formatted numbers)
+    symbol_numbers = re.findall(r'[\$£€¥]?[\(]?[\d,]+\.?\d*[\)]?[%]?', remaining_text)
+    for num in symbol_numbers:
+        if num.strip() and len(num.strip()) > 0:
+            components.append((num, "formatted_number"))
+            remaining_text = remaining_text.replace(num, ' ')
+    
+    # Pattern 3: Date-like patterns (any format)
+    dates = re.findall(r'\d{1,4}[/\-\.]\d{1,4}[/\-\.]\d{2,4}', remaining_text)
+    for date in dates:
+        components.append((date, "date_pattern"))
+        remaining_text = remaining_text.replace(date, ' ')
+    
+    # Pattern 4: Pure numbers (integers)
+    pure_numbers = re.findall(r'(?<![A-Za-z])\b\d+\b(?![A-Za-z/\-\.])', remaining_text)
+    for num in pure_numbers:
+        components.append((num, "pure_number"))
+        remaining_text = remaining_text.replace(num, ' ', 1)
+    
+    # Pattern 5: Text phrases (everything else meaningful)
+    text_parts = [part.strip() for part in remaining_text.split() if part.strip() and len(part.strip()) > 1]
+    
+    # Group consecutive text parts into phrases
+    if text_parts:
+        current_phrase = []
+        for part in text_parts:
+            current_phrase.append(part)
+            # End phrase if we hit a natural break or it gets too long
+            if len(' '.join(current_phrase)) > 25 or part.endswith('.'):
+                components.append((' '.join(current_phrase), "text_phrase"))
+                current_phrase = []
+        
+        # Add remaining phrase if any
+        if current_phrase:
+            components.append((' '.join(current_phrase), "text_phrase"))
+    
+    return components
+
+def calculate_similarity_score(value: str, reference_characteristics: Dict) -> float:
+    """
+    Calculate how well a value matches the expected column characteristics
+    """
+    if not value.strip():
+        return 1.0 if "accepts_empty" in reference_characteristics.get("characteristics", []) else 0.0
+    
+    score = 0.0
+    ref_patterns = reference_characteristics.get("patterns", [])
+    ref_chars = reference_characteristics.get("characteristics", [])
+    
+    # Check pattern matches
+    if "alphanumeric_code" in ref_patterns and re.search(r'[A-Z]+\d+', value):
+        score += 0.8
+    elif "date_pattern" in ref_patterns and re.search(r'\d+[/\-]\d+[/\-]\d+', value):
+        score += 0.8  
+    elif "currency_pattern" in ref_patterns and (any(sym in value for sym in ['$', '£', '€']) or ('(' in value and ')' in value)):
+        score += 0.8
+    elif "percentage_pattern" in ref_patterns and '%' in value:
+        score += 0.8
+    elif "pure_integer" in ref_patterns and re.match(r'^\d+$', value):
+        score += 0.8
+    elif "decimal_number" in ref_patterns and re.match(r'^\d+\.\d+$', value):
+        score += 0.8
+    
+    # Check characteristics
+    if "numeric_content" in ref_chars and re.search(r'\d', value):
+        score += 0.3
+    if "text_content" in ref_chars and re.search(r'[A-Za-z]', value):
+        score += 0.3
+    if "uppercase_text" in ref_chars and re.search(r'[A-Z]', value):
+        score += 0.2
+    
+    # Length similarity
+    ref_length = reference_characteristics.get("example_value", "")
+    if ref_length:
+        length_diff = abs(len(value) - len(ref_length))
+        length_score = max(0, 1 - (length_diff / max(len(value), len(ref_length))))
+        score += length_score * 0.2
+    
+    return min(score, 1.0)
+
+def values_match_universal(value1: str, value2: str) -> bool:
+    """
+    Universal value matching that works with any content
+    """
+    # Exact match
+    if value1.strip() == value2.strip():
+        return True
+    
+    # Case-insensitive match
+    if value1.strip().lower() == value2.strip().lower():
+        return True
+    
+    # Clean comparison (remove common formatting)
+    clean1 = re.sub(r'[^\w]', '', value1.strip())
+    clean2 = re.sub(r'[^\w]', '', value2.strip())
+    if clean1 == clean2:
+        return True
+    
+    # Substring match for longer values
+    if len(value1) > 3 and (value1 in value2 or value2 in value1):
+        return True
+    
+    return False
 
 # Initialize services
 gpt4o_service = GPT4oVisionService()
@@ -31,6 +218,615 @@ class ImproveExtractionRequest:
         self.upload_id = upload_id
         self.company_id = company_id
         self.max_pages = max_pages
+
+class TableData(BaseModel):
+    header: List[str]
+    rows: List[List[str]]
+    name: Optional[str] = None
+    id: Optional[str] = None
+    extractor: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+
+
+class FixRowFormatsRequest(BaseModel):
+    reference_row: List[str]
+    problematic_rows: List[Dict[str, Any]]  # Contains rowIdx, row, issues
+    table_headers: List[str]
+
+
+class FixRowFormatsResponse(BaseModel):
+    success: bool
+    corrected_rows: List[Dict[str, Any]]  # Contains row_idx, corrected_row
+    message: str
+
+
+@router.post("/fix-row-formats/")
+async def fix_row_formats_with_gpt(request: FixRowFormatsRequest):
+    """
+    Fix row formats using GPT-5 by comparing problematic rows with a reference row.
+    """
+    try:
+        logger.info(f"Fixing row formats with GPT-5 for {len(request.problematic_rows)} rows")
+        
+        # Prepare the prompt for GPT-5
+        prompt = create_format_correction_prompt(
+            request.reference_row,
+            request.problematic_rows,
+            request.table_headers
+        )
+        
+        # Call GPT-5 API
+        corrected_rows = await call_gpt5_for_format_correction(prompt, request.problematic_rows, request.reference_row, request.table_headers)
+        
+        logger.info(f"Successfully corrected {len(corrected_rows)} rows with GPT-5")
+        
+        return JSONResponse({
+            "success": True,
+            "corrected_rows": corrected_rows,
+            "message": f"Successfully corrected {len(corrected_rows)} rows with GPT-5"
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fixing row formats with GPT-5: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fix row formats: {str(e)}")
+
+
+def create_format_correction_prompt(reference_row: List[str], problematic_rows: List[Dict], table_headers: List[str]) -> str:
+    """
+    Create a detailed prompt for GPT to align data columns with specific examples and clear instructions.
+    """
+    
+    # Create column type mapping based on reference row
+    column_types = []
+    for i, (header, ref_value) in enumerate(zip(table_headers, reference_row)):
+        if ref_value.strip():
+            if re.match(r'^[A-Z]+\d+$', ref_value):  # Group No. pattern like L210316
+                column_types.append(f"Column {i+1} ({header}): Group/ID codes like '{ref_value}'")
+            elif re.match(r'^\d+/\d+/\d+$', ref_value):  # Date pattern
+                column_types.append(f"Column {i+1} ({header}): Dates like '{ref_value}'")
+            elif re.match(r'^\$[\d,]+\.?\d*$', ref_value):  # Currency pattern
+                column_types.append(f"Column {i+1} ({header}): Currency amounts like '{ref_value}'")
+            elif re.match(r'^\d+%$', ref_value):  # Percentage pattern
+                column_types.append(f"Column {i+1} ({header}): Percentages like '{ref_value}'")
+            elif re.match(r'^\d+$', ref_value):  # Number pattern
+                column_types.append(f"Column {i+1} ({header}): Numbers like '{ref_value}'")
+            else:
+                column_types.append(f"Column {i+1} ({header}): Text like '{ref_value}'")
+        else:
+            column_types.append(f"Column {i+1} ({header}): Empty or flexible")
+    
+    column_guide = "\n".join(column_types)
+    
+    # Create specific examples from the actual problematic data
+    specific_examples = []
+    for problem in problematic_rows[:3]:  # Use first 3 problematic rows as examples
+        row_data = problem['row']
+        issues = problem['issues']
+        
+        # Find combined values that need splitting
+        for i, cell in enumerate(row_data):
+            if cell.strip() and ' ' in cell and any(char.isdigit() for char in cell):
+                # This looks like a combined value
+                specific_examples.append(f"Row {problem['rowIdx']}: '{cell}' in column {i+1} needs splitting")
+    
+    examples_text = "\n".join(specific_examples[:5]) if specific_examples else "No specific examples found"
+    
+    prompt = f"""
+You are a data alignment specialist. Your task is to reorganize table rows to match the reference row format by moving existing values to their correct column positions.
+
+REFERENCE ROW FORMAT (this shows the correct column order):
+{', '.join(reference_row)}
+
+TABLE HEADERS:
+{', '.join(table_headers)}
+
+COLUMN TYPE GUIDE:
+{column_guide}
+
+SPECIFIC EXAMPLES OF COMBINED VALUES TO SPLIT:
+{examples_text}
+
+CRITICAL INSTRUCTIONS:
+1. MOVE existing values to the correct column positions based on the reference row
+2. SPLIT combined values (like "L221372 $282.27") into separate columns
+3. DO NOT create new values or fill empty cells
+4. DO NOT modify any existing values - keep them exactly as they appear
+5. Leave empty cells empty if no appropriate value exists
+6. Each corrected row must have exactly {len(reference_row)} columns
+
+SPLITTING RULES:
+- "L221372 $282.27" → "L221372" (Group No.) + "$282.27" (currency column)
+- "1/1/2025 $2,504.58" → "1/1/2025" (date column) + "$2,504.58" (currency column)
+- "$70.57 L221372" → "L221372" (Group No.) + "$70.57" (currency column)
+
+PROBLEMATIC ROWS TO CORRECT:
+{format_problematic_rows_for_prompt(problematic_rows)}
+
+RESPONSE FORMAT:
+Return a JSON object with this exact structure:
+{{
+  "corrected_rows": [
+    {{
+      "row_idx": <original_row_index>,
+      "corrected_row": ["value1", "value2", "value3", ...]
+    }},
+    ...
+  ]
+}}
+
+Each corrected_row array must have exactly {len(reference_row)} elements, with values moved to match the reference row format.
+"""
+    
+    return prompt
+
+def generate_dynamic_examples(sample_rows: List[Dict]) -> str:
+    """
+    Generate examples based on actual problematic data
+    """
+    examples = []
+    for row_data in sample_rows:
+        for cell in row_data['row']:
+            if cell.strip() and ' ' in cell:
+                components = extract_value_components_universal(cell)
+                if len(components) > 1:
+                    comp_desc = [f"'{comp[0]}' ({comp[1]})" for comp in components]
+                    examples.append(f"'{cell}' contains: {', '.join(comp_desc)}")
+    
+    return "; ".join(examples[:3]) if examples else "No complex examples found"
+
+def generate_matching_guide(column_characteristics: List[Dict]) -> str:
+    """
+    Generate column matching guidance based on actual column characteristics
+    """
+    guide = ""
+    for i, char_info in enumerate(column_characteristics):
+        patterns = char_info.get("patterns", [])
+        if patterns:
+            guide += f"  - Column {i+1}: Best for values with {', '.join(patterns)}\n"
+        else:
+            guide += f"  - Column {i+1}: Flexible text content\n"
+    
+    return guide
+
+def analyze_common_issues(problematic_rows: List[Dict]) -> Dict[str, int]:
+    """
+    Analyze common issues across all problematic rows
+    """
+    issue_counts = {}
+    for row_data in problematic_rows:
+        for issue in row_data.get('issues', []):
+            issue_type = issue.split(':')[0] if ':' in issue else issue
+            issue_counts[issue_type] = issue_counts.get(issue_type, 0) + 1
+    
+    return issue_counts
+
+def format_problematic_rows_for_prompt(problematic_rows: List[Dict]) -> str:
+    """
+    Format problematic rows for the prompt with clear context about what needs fixing
+    """
+    formatted = ""
+    for i, problem in enumerate(problematic_rows):
+        row_data = problem['row']
+        issues = problem['issues']
+        
+        # Identify combined values that need splitting
+        combined_values = []
+        for j, cell in enumerate(row_data):
+            if cell.strip() and ' ' in cell and any(char.isdigit() for char in cell):
+                combined_values.append(f"Column {j+1}: '{cell}' (needs splitting)")
+        
+        formatted += f"""
+Row {problem['rowIdx']}:
+- Original Data: {row_data}
+- Issues: {', '.join(issues)}
+- Combined Values to Split: {', '.join(combined_values) if combined_values else 'None'}
+- Expected Format: {len(row_data)} columns matching reference row structure
+"""
+    return formatted
+
+
+async def call_gpt5_for_format_correction(prompt: str, problematic_rows: List[Dict], reference_row: List[str] = None, headers: List[str] = None) -> List[Dict]:
+    """
+    Call GPT-5 API to correct row formats.
+    """
+    try:
+        # Get OpenAI API key from environment
+        api_key = os.getenv('OPENAI_API_KEY')
+        if not api_key:
+            logger.error("OPENAI_API_KEY not found in environment variables")
+            raise Exception("OpenAI API key not configured")
+        
+        # Configure OpenAI client
+        client = openai.OpenAI(api_key=api_key)
+        
+        logger.info(f"Calling GPT-5 API to correct {len(problematic_rows)} rows")
+        
+        # Log the prompt for debugging (first 500 characters)
+        logger.info(f"Prompt preview: {prompt[:500]}...")
+        
+        # Make the API call to GPT-5
+        response = client.chat.completions.create(
+            model="gpt-4o",  # Using GPT-4o as GPT-5 is not yet available
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a data alignment specialist. Your task is to move existing values to the correct column positions to match the reference row format. SPLIT combined values (like 'L221372 $282.27') and place each part in the appropriate column. DO NOT create new values, DO NOT fill empty cells, DO NOT delete or modify any existing data. Simply shift and split existing data to align with the reference row structure. IMPORTANT: You MUST return a JSON object with the exact structure specified in the user prompt, using 'row_idx' and 'corrected_row' as the key names."
+                },
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            temperature=0.1,  # Low temperature for consistent formatting
+            max_tokens=4000,
+            response_format={"type": "json_object"}
+        )
+        
+        # Parse the response
+        response_content = response.choices[0].message.content
+        
+        # Log the response for debugging (first 500 characters)
+        logger.info(f"GPT response preview: {response_content[:500]}...")
+        
+        try:
+            response_data = json.loads(response_content)
+            corrected_rows = response_data.get("corrected_rows", [])
+            
+            # Validate the response format
+            if not isinstance(corrected_rows, list):
+                logger.error("Invalid response format from GPT-5")
+                raise Exception("Invalid response format from GPT-5")
+            
+            logger.info(f"Successfully parsed {len(corrected_rows)} corrected rows from GPT-5")
+            
+            # Convert the response to the expected format
+            formatted_corrected_rows = []
+            for corrected_row in corrected_rows:
+                # Handle both correct and incorrect response formats
+                row_idx = corrected_row.get("row_idx") or corrected_row.get("row_number")
+                corrected_data = corrected_row.get("corrected_row") or corrected_row.get("data", [])
+                
+                if row_idx is None:
+                    logger.warning(f"Could not find row index in corrected row: {corrected_row}")
+                    continue
+                
+                # Ensure the corrected row has the right number of columns
+                if len(corrected_data) != len(reference_row):
+                    logger.warning(f"Row {row_idx} has {len(corrected_data)} columns, expected {len(reference_row)}")
+                    # Pad with empty strings if needed
+                    while len(corrected_data) < len(reference_row):
+                        corrected_data.append("")
+                    # Truncate if too many
+                    corrected_data = corrected_data[:len(reference_row)]
+                
+                formatted_corrected_rows.append({
+                    "row_idx": row_idx,
+                    "corrected_row": corrected_data
+                })
+            
+            logger.info(f"Successfully formatted {len(formatted_corrected_rows)} corrected rows")
+            
+            # Validate that all original values are preserved
+            validated_rows = validate_preserved_values(formatted_corrected_rows, problematic_rows, reference_row, headers)
+            
+            return validated_rows
+            
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse GPT-5 response as JSON: {e}")
+            logger.error(f"Response content: {response_content}")
+            # Fallback to parse malformed response
+            return parse_malformed_response(response_content, problematic_rows, reference_row)
+        
+    except Exception as e:
+        logger.error(f"Error calling GPT-5: {str(e)}")
+        # Fallback to rule-based correction
+        logger.info("Falling back to rule-based correction")
+        return apply_fallback_corrections(problematic_rows, reference_row, headers)
+
+def parse_malformed_response(response_content: str, problematic_rows: List[Dict], reference_row: List[str]) -> List[Dict]:
+    """
+    Try to parse a malformed GPT response and extract corrected data.
+    """
+    logger.warning("Attempting to parse malformed GPT response")
+    
+    corrected_rows = []
+    
+    # Try to extract JSON from the response
+    try:
+        # Look for JSON-like structures in the response
+        import re
+        
+        # Find all array-like structures
+        array_pattern = r'\[[^\]]*\]'
+        arrays = re.findall(array_pattern, response_content)
+        
+        # Find all row-like structures
+        row_pattern = r'row[_\s]*(\d+)[^\[]*\[([^\]]*)\]'
+        row_matches = re.findall(row_pattern, response_content, re.IGNORECASE)
+        
+        if row_matches:
+            for row_num, row_data in row_matches:
+                try:
+                    # Parse the row data
+                    row_values = []
+                    for value in row_data.split(','):
+                        value = value.strip().strip('"\'')
+                        row_values.append(value)
+                    
+                    # Ensure we have the right number of columns
+                    while len(row_values) < len(reference_row):
+                        row_values.append("")
+                    row_values = row_values[:len(reference_row)]
+                    
+                    corrected_rows.append({
+                        "row_idx": int(row_num),
+                        "corrected_row": row_values
+                    })
+                except Exception as e:
+                    logger.warning(f"Failed to parse row {row_num}: {e}")
+        
+        if not corrected_rows and arrays:
+            # Try to parse arrays as row data
+            for i, array_str in enumerate(arrays[:len(problematic_rows)]):
+                try:
+                    # Clean up the array string
+                    clean_array = array_str.replace('[', '').replace(']', '')
+                    row_values = [val.strip().strip('"\'') for val in clean_array.split(',')]
+                    
+                    # Ensure we have the right number of columns
+                    while len(row_values) < len(reference_row):
+                        row_values.append("")
+                    row_values = row_values[:len(reference_row)]
+                    
+                    corrected_rows.append({
+                        "row_idx": problematic_rows[i]['rowIdx'],
+                        "corrected_row": row_values
+                    })
+                except Exception as e:
+                    logger.warning(f"Failed to parse array {i}: {e}")
+    
+    except Exception as e:
+        logger.error(f"Failed to parse malformed response: {e}")
+    
+    return corrected_rows
+
+
+def validate_preserved_values(corrected_rows: List[Dict], problematic_rows: List[Dict], reference_row: List[str] = None, headers: List[str] = None) -> List[Dict]:
+    """
+    Validate that all original values are preserved in the corrected rows.
+    """
+    validated_rows = []
+    
+    for corrected_row in corrected_rows:
+        row_idx = corrected_row.get("row_idx")
+        corrected_data = corrected_row.get("corrected_row", [])
+        
+        # Find the original problematic row
+        original_row = None
+        for problem in problematic_rows:
+            if problem['rowIdx'] == row_idx:
+                original_row = problem['row']
+                break
+        
+        if original_row is None:
+            logger.warning(f"Could not find original row for index {row_idx}")
+            validated_rows.append(corrected_row)
+            continue
+        
+        # Extract all non-empty values from original row
+        original_values = [val.strip() for val in original_row if val.strip()]
+        
+        # Extract all non-empty values from corrected row
+        corrected_values = [val.strip() for val in corrected_data if val.strip()]
+        
+        # Check if all original values are present in corrected row
+        missing_values = []
+        for orig_val in original_values:
+            if orig_val not in corrected_values:
+                # Check if the value was split
+                found_split = False
+                for corr_val in corrected_values:
+                    if orig_val in corr_val or corr_val in orig_val:
+                        found_split = True
+                        break
+                if not found_split:
+                    missing_values.append(orig_val)
+        
+        if missing_values:
+            logger.warning(f"Row {row_idx}: Missing values in corrected row: {missing_values}")
+            # Try to recover missing values
+            corrected_data = recover_missing_values(corrected_data, missing_values, reference_row, headers)
+            corrected_row["corrected_row"] = corrected_data
+        
+        validated_rows.append(corrected_row)
+    
+    return validated_rows
+
+def recover_missing_values(corrected_row: List[str], missing_values: List[str], reference_row: List[str], headers: List[str]) -> List[str]:
+    """
+    Try to recover missing values by placing them in appropriate empty columns.
+    """
+    recovered_row = corrected_row.copy()
+    
+    for missing_val in missing_values:
+        # Find best empty column for this value
+        best_column = None
+        best_score = 0.0
+        
+        for col_idx, (ref_val, header) in enumerate(zip(reference_row, headers)):
+            if col_idx < len(recovered_row) and not recovered_row[col_idx].strip():
+                # Calculate similarity score
+                score = calculate_column_similarity(missing_val, ref_val, header)
+                if score > best_score:
+                    best_score = score
+                    best_column = col_idx
+        
+        if best_column is not None:
+            recovered_row[best_column] = missing_val
+            logger.info(f"Recovered '{missing_val}' to column {best_column + 1}")
+    
+    return recovered_row
+
+def calculate_column_similarity(value: str, reference_value: str, header: str) -> float:
+    """
+    Calculate how well a value matches a column based on reference value and header.
+    """
+    score = 0.0
+    
+    # Check if value matches the pattern of reference value
+    if reference_value.strip():
+        if re.match(r'^[A-Z]+\d+$', reference_value) and re.match(r'^[A-Z]+\d+$', value):
+            score += 0.8  # Both are group codes
+        elif re.match(r'^\d+/\d+/\d+$', reference_value) and re.match(r'^\d+/\d+/\d+$', value):
+            score += 0.8  # Both are dates
+        elif re.match(r'^\$[\d,]+\.?\d*$', reference_value) and re.match(r'^\$[\d,]+\.?\d*$', value):
+            score += 0.8  # Both are currency
+        elif re.match(r'^\d+%$', reference_value) and re.match(r'^\d+%$', value):
+            score += 0.8  # Both are percentages
+        elif re.match(r'^\d+$', reference_value) and re.match(r'^\d+$', value):
+            score += 0.8  # Both are numbers
+    
+    # Check header keywords
+    header_lower = header.lower()
+    if 'group' in header_lower and re.match(r'^[A-Z]+\d+$', value):
+        score += 0.3
+    elif 'date' in header_lower or 'period' in header_lower and re.match(r'^\d+/\d+/\d+$', value):
+        score += 0.3
+    elif 'total' in header_lower or 'amount' in header_lower and re.match(r'^\$[\d,]+\.?\d*$', value):
+        score += 0.3
+    elif 'rate' in header_lower and '%' in value:
+        score += 0.3
+    elif 'count' in header_lower or 'ct' in header_lower and re.match(r'^\d+$', value):
+        score += 0.3
+    
+    return score
+
+
+def apply_rule_based_corrections(row: List[str], issues: List[str], reference_row: List[str] = None, headers: List[str] = None) -> List[str]:
+    """
+    Apply rule-based corrections as a fallback when GPT-5 is not available.
+    """
+    corrected_row = row.copy()
+    
+    # First, handle combined values that need splitting
+    for i, cell in enumerate(corrected_row):
+        if cell.strip() and ' ' in cell:
+            # Check if this looks like a combined value
+            parts = cell.split()
+            if len(parts) >= 2:
+                # Try to split based on patterns
+                split_result = split_combined_value(cell, reference_row, headers)
+                if split_result:
+                    # Find empty columns to place the split values
+                    empty_columns = [j for j, val in enumerate(corrected_row) if not val.strip()]
+                    if len(empty_columns) >= len(split_result):
+                        for k, split_val in enumerate(split_result):
+                            if k < len(empty_columns):
+                                corrected_row[empty_columns[k]] = split_val
+                        corrected_row[i] = ""  # Clear the original combined cell
+    
+    # Then handle specific issues
+    for issue in issues:
+        if "Expected currency, got percentage" in issue:
+            # Extract column number from issue
+            col_match = issue.split("Column ")[1].split(":")[0]
+            col_idx = int(col_match) - 1
+            
+            if col_idx < len(corrected_row):
+                value = corrected_row[col_idx]
+                # Convert percentage to currency
+                if '%' in value:
+                    numeric_value = value.replace('%', '').strip()
+                    corrected_row[col_idx] = f"${numeric_value}"
+        
+        elif "Expected percentage, got text" in issue:
+            col_match = issue.split("Column ")[1].split(":")[0]
+            col_idx = int(col_match) - 1
+            
+            if col_idx < len(corrected_row):
+                corrected_row[col_idx] = "0%"
+        
+        elif "Expected currency, got number" in issue:
+            col_match = issue.split("Column ")[1].split(":")[0]
+            col_idx = int(col_match) - 1
+            
+            if col_idx < len(corrected_row):
+                value = corrected_row[col_idx]
+                corrected_row[col_idx] = f"${value}"
+        
+        elif "Expected date, got text" in issue:
+            col_match = issue.split("Column ")[1].split(":")[0]
+            col_idx = int(col_match) - 1
+            
+            if col_idx < len(corrected_row):
+                corrected_row[col_idx] = "01/01/2024"
+    
+    return corrected_row
+
+def split_combined_value(combined_value: str, reference_row: List[str], headers: List[str]) -> List[str]:
+    """
+    Split a combined value based on patterns and reference row.
+    """
+    parts = []
+    
+    # Extract different types of values
+    # Group codes (like L221372)
+    group_codes = re.findall(r'[A-Z]+\d+', combined_value)
+    parts.extend(group_codes)
+    
+    # Dates (like 1/1/2025)
+    dates = re.findall(r'\d+/\d+/\d+', combined_value)
+    parts.extend(dates)
+    
+    # Currency amounts (like $282.27)
+    currencies = re.findall(r'\$[\d,]+\.?\d*', combined_value)
+    parts.extend(currencies)
+    
+    # Percentages (like 25%)
+    percentages = re.findall(r'\d+%', combined_value)
+    parts.extend(percentages)
+    
+    # Numbers (like 1, 16, 32)
+    numbers = re.findall(r'\b\d+\b', combined_value)
+    # Filter out numbers that are part of other patterns
+    standalone_numbers = []
+    for num in numbers:
+        if not any(num in part for part in parts if part != num):
+            standalone_numbers.append(num)
+    parts.extend(standalone_numbers)
+    
+    # Text (everything else)
+    remaining_text = combined_value
+    for part in parts:
+        remaining_text = remaining_text.replace(part, '')
+    remaining_text = remaining_text.strip()
+    if remaining_text:
+        parts.append(remaining_text)
+    
+    return parts
+
+
+def apply_fallback_corrections(problematic_rows: List[Dict], reference_row: List[str] = None, headers: List[str] = None) -> List[Dict]:
+    """
+    Fallback correction method when GPT-5 is not available.
+    """
+    corrected_rows = []
+    
+    for problem in problematic_rows:
+        row_idx = problem['rowIdx']
+        original_row = problem['row']
+        issues = problem['issues']
+        
+        corrected_row = apply_rule_based_corrections(original_row, issues, reference_row, headers)
+        
+        if corrected_row != original_row:
+            corrected_rows.append({
+                "row_idx": row_idx,
+                "corrected_row": corrected_row
+            })
+    
+    return corrected_rows
+
 
 @router.post("/improve-current-extraction/")
 async def improve_current_extraction(

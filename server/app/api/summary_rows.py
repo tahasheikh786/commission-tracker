@@ -20,6 +20,37 @@ logger = logging.getLogger(__name__)
 # Create router
 router = APIRouter(prefix="/summary-rows", tags=["summary-rows"])
 
+# Enhanced summary row detection patterns
+SUMMARY_ROW_PATTERNS = [
+    # Total for Group patterns
+    r'^Total for Group:?\s*[A-Za-z\s]+$',
+    r'^Total\s+for\s+Group:?\s*[A-Za-z\s]+$',
+    r'^Group\s+Total:?\s*[A-Za-z\s]+$',
+    
+    # General total patterns
+    r'^Total:?\s*[A-Za-z\s]*$',
+    r'^Subtotal:?\s*[A-Za-z\s]*$',
+    r'^Grand Total:?\s*[A-Za-z\s]*$',
+    r'^Summary:?\s*[A-Za-z\s]*$',
+    
+    # Company/group specific patterns
+    r'^[A-Za-z\s]+\s+Total$',
+    r'^Total\s+[A-Za-z\s]+$',
+    
+    # Row patterns that start with summary indicators
+    r'^(Total|Subtotal|Summary|Group|Grand)\s+',
+    r'^.*\s+(Total|Subtotal|Summary)$',
+    
+    # Patterns with numbers and totals
+    r'^.*\s+\d+\s+.*\s+\$\d+\.?\d*$',  # Pattern like "FALCON EXPRESS LOGISTI 29 $1,270.91"
+]
+
+# Keywords that indicate summary rows
+SUMMARY_KEYWORDS = [
+    'total', 'subtotal', 'summary', 'grand', 'group', 'sum', 'count', 'amount',
+    'balance', 'net', 'final', 'overall', 'combined', 'aggregate'
+]
+
 
 class TableData(BaseModel):
     header: List[str]
@@ -325,14 +356,26 @@ async def detect_summary_rows(request: DetectSummaryRowsRequest, db: AsyncSessio
             if any(score >= min_confidence for score in confidence_scores.values())
         ]
         
-        logger.info(f"Detected {len(final_detected_rows)} summary rows")
+        # Use enhanced detection as a fallback and to catch additional patterns
+        enhanced_detected_rows = enhanced_detect_summary_rows(
+            request.table_data.header, 
+            request.table_data.rows
+        )
+        
+        # Combine both detection methods
+        all_detected_rows = list(set(final_detected_rows + enhanced_detected_rows))
+        all_detected_rows.sort()
+        
+        logger.info(f"Detected {len(all_detected_rows)} summary rows (pattern-based: {len(final_detected_rows)}, enhanced: {len(enhanced_detected_rows)})")
         
         return JSONResponse({
             "success": True,
-            "detected_summary_rows": final_detected_rows,
+            "detected_summary_rows": all_detected_rows,
             "patterns_used": len(patterns),
             "confidence_scores": confidence_scores,
-            "total_rows_analyzed": len(request.table_data.rows)
+            "total_rows_analyzed": len(request.table_data.rows),
+            "pattern_based_detected": final_detected_rows,
+            "enhanced_detected": enhanced_detected_rows
         })
         
     except Exception as e:
@@ -383,6 +426,80 @@ def apply_pattern_to_table(pattern: SummaryRowPattern, header: List[str], rows: 
                 detected_rows.append(row_idx)
             if content_patterns.get("contains_subtotal") and "subtotal" in row_text:
                 detected_rows.append(row_idx)
+    
+    return list(set(detected_rows))  # Remove duplicates
+
+
+def enhanced_detect_summary_rows(header: List[str], rows: List[List[str]]) -> List[int]:
+    """
+    Enhanced summary row detection using multiple strategies.
+    """
+    detected_rows = []
+    
+    for row_idx, row in enumerate(rows):
+        if not row:  # Skip empty rows
+            continue
+            
+        # Convert row to string for pattern matching
+        row_text = " ".join(str(cell) for cell in row).strip()
+        row_lower = row_text.lower()
+        
+        # Strategy 1: Check against predefined patterns
+        for pattern in SUMMARY_ROW_PATTERNS:
+            if re.search(pattern, row_text, re.IGNORECASE):
+                detected_rows.append(row_idx)
+                break
+        
+        # Strategy 2: Check for summary keywords in first few columns
+        if len(row) > 0:
+            first_cell = str(row[0]).lower()
+            if any(keyword in first_cell for keyword in SUMMARY_KEYWORDS):
+                detected_rows.append(row_idx)
+                continue
+        
+        # Strategy 3: Check for "Total for Group" pattern specifically
+        if "total for group" in row_lower:
+            detected_rows.append(row_idx)
+            continue
+        
+        # Strategy 4: Check for rows that have summary characteristics
+        # - Start with "Total" or similar words
+        # - Contain numeric totals in later columns
+        # - Have empty cells in certain positions (typical of summary rows)
+        
+        if len(row) >= 3:
+            # Check if first column contains summary indicators
+            first_col = str(row[0]).lower()
+            if any(keyword in first_col for keyword in ['total', 'subtotal', 'summary', 'group']):
+                # Check if later columns contain numeric values (totals)
+                has_numeric_totals = False
+                for i in range(1, min(5, len(row))):  # Check first 5 columns
+                    cell_value = str(row[i]).strip()
+                    if re.match(r'^\$?[\d,]+\.?\d*$', cell_value) or re.match(r'^\d+$', cell_value):
+                        has_numeric_totals = True
+                        break
+                
+                if has_numeric_totals:
+                    detected_rows.append(row_idx)
+                    continue
+        
+        # Strategy 5: Check for rows that have a specific structure
+        # - First column: "Total for Group: [NAME]"
+        # - Later columns: numeric values
+        # - Some columns empty (typical pattern)
+        if len(row) >= 4:
+            first_col = str(row[0]).strip()
+            if first_col.startswith("Total for Group:"):
+                # Check if there are numeric values in columns 3-5
+                numeric_count = 0
+                for i in range(2, min(5, len(row))):
+                    cell_value = str(row[i]).strip()
+                    if re.match(r'^\$?[\d,]+\.?\d*$', cell_value) or re.match(r'^\d+$', cell_value):
+                        numeric_count += 1
+                
+                if numeric_count >= 1:  # At least one numeric value
+                    detected_rows.append(row_idx)
+                    continue
     
     return list(set(detected_rows))  # Remove duplicates
 

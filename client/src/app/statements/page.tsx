@@ -197,14 +197,14 @@ export default function StatementsPage() {
   };
 
   const handlePreview = async (statement: Statement) => {
-    // Check if the statement already has final_data (from dashboard API)
-    if (statement.final_data) {
+    // Check if the statement already has final_data and field_config (from dashboard API)
+    if (statement.final_data && statement.field_config) {
       // Data is already available, no need for API call
       setPreviewStatement(statement);
       return;
     }
 
-    // If final_data is not available, fetch it from the statements API
+    // If final_data or field_config is not available, fetch it from the statements API
     setPreviewLoading(true);
     try {
       // Find the carrier ID from the carriers list
@@ -216,7 +216,15 @@ export default function StatementsPage() {
           const statements = await response.json();
           const fullStatement = statements.find((s: any) => s.id === statement.id);
           if (fullStatement) {
-            setPreviewStatement(fullStatement);
+            // Ensure we have the complete data structure
+            const completeStatement = {
+              ...statement,
+              final_data: fullStatement.final_data || statement.final_data,
+              field_config: fullStatement.field_config || statement.field_config,
+              raw_data: fullStatement.raw_data || statement.raw_data,
+              plan_types: fullStatement.plan_types || statement.plan_types
+            };
+            setPreviewStatement(completeStatement);
           } else {
             console.error('Statement not found in company statements');
           }

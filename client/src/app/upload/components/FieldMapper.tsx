@@ -113,7 +113,7 @@ export default function FieldMapper({
   const [databaseFields, setDatabaseFields] = useState<FieldConf[]>([])
   const [loadingFields, setLoadingFields] = useState(true)
   const [fields, setFields] = useState<FieldConf[]>(initialFields)
-  const [mapping, setMapping] = useState<Record<string, string>>(initialMapping || {}) // Initialize with initialMapping
+  const [mapping, setMapping] = useState<Record<string, string>>(initialMapping || {}) // Initialize with initialMapping or empty object
   const [saving, setSaving] = useState(false)
   const [newFieldName, setNewFieldName] = useState('')
   const [planTypes, setPlanTypes] = useState<string[]>(initialPlanTypes)
@@ -135,6 +135,14 @@ export default function FieldMapper({
       setMappingSource('manual')
     }
   }, [initialMapping])
+
+  // Add effect to handle initialFields changes
+  useEffect(() => {
+    if (initialFields && initialFields.length > 0) {
+      console.log('initialFields changed, updating fields state:', initialFields)
+      setFields(initialFields)
+    }
+  }, [initialFields])
 
   console.log('FieldMapper Debug:', {
     initialFields,
@@ -162,9 +170,7 @@ export default function FieldMapper({
   // For dropdowns: always use the columns prop, never fallback to mapping values
   const allDropdownColumns = columns || []
   
-  console.log('Dropdown columns:', allDropdownColumns)
-  console.log('Current mapping:', mapping)
-  console.log('Fields being rendered:', fields.map(f => ({ field: f.field, label: f.label })))
+  // Debug logs removed - issue fixed
 
   // Fetch database fields from backend
   useEffect(() => {
@@ -180,10 +186,18 @@ export default function FieldMapper({
           }))
           setDatabaseFields(fieldsFromBackend)
           
-          // Set as default fieldConfig if not already set
-          if (fields.length === 0) {
-            setFields(fieldsFromBackend)
+          // Debug logs removed - issue fixed
+          
+          // IMPORTANT: Only set fields if we don't already have fields AND we have initial fields
+          // This prevents auto-populating with all database fields for new carriers
+          if (fields.length === 0 && initialFields.length > 0) {
+            // Use initialFields if provided
+            setFields(initialFields)
+          } else if (fields.length === 0 && initialFields.length === 0) {
+            // For new carriers with no existing mapping, keep fields empty
+            // Don't set fields - let them remain empty
           }
+          // If fields.length > 0, don't change anything
         } else {
           console.error('Failed to fetch database fields')
           toast.error('Failed to load database fields')
@@ -197,7 +211,7 @@ export default function FieldMapper({
     }
 
     fetchDatabaseFields()
-  }, [fields.length])
+  }, []) // Remove dependencies to prevent re-running and auto-populating fields
 
   // Fetch plan types from backend
   useEffect(() => {
@@ -327,6 +341,17 @@ export default function FieldMapper({
       console.log('New mapping after update:', newMapping)
       return newMapping
     })
+  }
+
+  function resetMapping() {
+    console.log('Resetting mapping state')
+    setMapping({})
+    setFields([])
+  }
+
+  function clearMapping() {
+    console.log('Clearing mapping state')
+    setMapping({})
   }
 
   async function handleAddDatabaseField() {
@@ -508,10 +533,6 @@ export default function FieldMapper({
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
             <span className="ml-3 text-gray-600">Loading database fields...</span>
           </div>
-        ) : fields.length === 0 ? (
-          <div className="flex items-center justify-center py-12">
-            <span className="text-gray-600">No database fields available</span>
-          </div>
         ) : (
 
         <DndContext
@@ -524,17 +545,26 @@ export default function FieldMapper({
             strategy={verticalListSortingStrategy}
           >
             <div className="overflow-x-auto">
-              <div className="max-h-[480px] overflow-y-auto">
-                <table className="w-full">
-                  <thead className="bg-gray-50">
+              <table className="w-full">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="w-12 p-0"></th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Database Field</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Extracted Column</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {fields.length === 0 ? (
                     <tr>
-                      <th className="w-12 py-3 px-4"></th>
-                      <th className="w-1/3 py-3 px-4 text-left text-sm font-semibold text-gray-900">Database Field</th>
-                      <th className="w-2/3 py-3 px-4 text-left text-sm font-semibold text-gray-900">Extracted Column</th>
+                      <td colSpan={3} className="py-8 text-center">
+                        <div className="text-gray-500">
+                          <p className="mb-2">No database fields configured yet.</p>
+                          <p className="text-sm">Add database fields below to start mapping your extracted columns.</p>
+                        </div>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {fields.map((f, i) => (
+                  ) : (
+                    fields.map((f, i) => (
                       <DraggableRow key={f.field} id={f.field}>
                         {({ attributes, listeners, isDragging }) => (
                           <>
@@ -557,7 +587,7 @@ export default function FieldMapper({
                             </td>
                             <td className="w-2/3 py-3 px-4 align-middle">
                               <select
-                                key={`select-${f.field}`}
+                                key={`select-${f.field}-${i}`}
                                 className="border border-gray-300 rounded-md px-3 py-2 w-full min-w-[140px] text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                 value={mapping[f.field] || ""}
                                 onChange={e => setFieldMap(f.field, e.target.value)}
@@ -571,11 +601,10 @@ export default function FieldMapper({
                           </>
                         )}
                       </DraggableRow>
-                    ))}
-                  </tbody>
-
-                </table>
-              </div>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
           </SortableContext>
         </DndContext>

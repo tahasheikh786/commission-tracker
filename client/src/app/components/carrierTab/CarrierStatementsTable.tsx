@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Eye, LayoutList } from "lucide-react";
+import { Eye, LayoutList, Trash2, CheckCircle, XCircle, Clock, FileText, ExternalLink } from "lucide-react";
 import { useRouter } from 'next/navigation';
 
 type Statement = {
@@ -12,7 +12,7 @@ type Statement = {
 
 type Props = {
   statements: Statement[];
-  setStatements: React.Dispatch<React.SetStateAction<Statement[]>>;  // Corrected type for setStatements
+  setStatements: React.Dispatch<React.SetStateAction<Statement[]>>;
   onPreview: (idx: number) => void;
   onCompare: (idx: number) => void;
   onDelete: (ids: string[]) => void;
@@ -37,8 +37,8 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
   const handleDelete = () => {
     if (selectedStatements.size > 0) {
       const idsToDelete = Array.from(selectedStatements);
-      onDelete(idsToDelete);  // Trigger the delete function passed from the parent component
-      setSelectedStatements(new Set());  // Clear selected checkboxes after delete
+      onDelete(idsToDelete);
+      setSelectedStatements(new Set());
     }
   };
 
@@ -51,109 +51,207 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
     setSelectAll(!selectAll);
   };
 
+  const getStatusInfo = (status: string) => {
+    switch (status.toLowerCase()) {
+      case 'approved':
+      case 'completed':
+        return {
+          label: 'Approved',
+          color: 'success',
+          icon: CheckCircle,
+          bgColor: 'bg-success/10',
+          textColor: 'text-success',
+          borderColor: 'border-success/20'
+        };
+      case 'rejected':
+        return {
+          label: 'Rejected',
+          color: 'destructive',
+          icon: XCircle,
+          bgColor: 'bg-destructive/10',
+          textColor: 'text-destructive',
+          borderColor: 'border-destructive/20'
+        };
+      case 'pending':
+      case 'extracted':
+      case 'success':
+      default:
+        return {
+          label: 'Pending',
+          color: 'warning',
+          icon: Clock,
+          bgColor: 'bg-warning/10',
+          textColor: 'text-warning',
+          borderColor: 'border-warning/20'
+        };
+    }
+  };
+
   return (
-    <div className="overflow-x-auto relative">
+    <div className="overflow-hidden relative">
       {deleting && (
-        <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-10">
-          <div className="flex items-center space-x-2">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-red-600"></div>
+        <div className="absolute inset-0 bg-white/90 backdrop-blur-sm flex items-center justify-center z-10">
+          <div className="flex items-center space-x-3">
+            <div className="loading-spinner w-6 h-6"></div>
             <span className="text-gray-700 font-medium">Deleting statements...</span>
           </div>
         </div>
       )}
-      <div className="flex justify-between items-center mb-3">
-        {selectedStatements.size > 0 && (
-          <button
-            onClick={handleDelete}
-            disabled={deleting}
-            className="px-4 py-2 bg-red-600 text-white rounded font-semibold hover:bg-red-700 transition focus:outline-none focus:ring-2 focus:ring-red-400 disabled:opacity-50 disabled:cursor-not-allowed"
-            aria-label="Delete selected statements"
-          >
-            {deleting ? 'Deleting...' : 'Delete Selected'}
-          </button>
-        )}
-      </div>
-      <table className="w-full text-left rounded-lg overflow-hidden shadow border bg-white" role="table" aria-label="Carrier statements">
-        <thead>
-          <tr className="text-gray-600 font-semibold bg-blue-50">
-                          <th className="p-2">
+      
+      {/* Enhanced Delete Button */}
+      {selectedStatements.size > 0 && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Trash2 className="text-red-600" size={20} />
+              <span className="text-red-700 font-medium">
+                {selectedStatements.size} statement{selectedStatements.size !== 1 ? 's' : ''} selected for deletion
+              </span>
+            </div>
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className="btn btn-destructive px-4 py-2"
+            >
+              <Trash2 size={16} className="mr-2" />
+              {deleting ? 'Deleting...' : 'Delete Selected'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Enhanced Table */}
+      <div className="card overflow-hidden">
+        <table className="table w-full">
+          <thead>
+            <tr>
+              <th className="p-4 w-12">
                 <input
                   type="checkbox"
                   checked={selectAll}
                   onChange={handleSelectAllChange}
                   disabled={deleting}
-                  className="mr-2 accent-blue-600 w-4 h-4 disabled:opacity-50"
-                  aria-label="Select all statements"
+                  className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
                 />
               </th>
-            <th className="p-2">Statement</th>
-            <th className="p-2">Uploaded On</th>
-            <th className="p-2">Status</th>
-            <th className="p-2">Rejection Reason</th>
-            <th className="p-2 text-center">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {statements.map((statement, idx) => (
-            <tr key={statement.id} className="hover:bg-blue-50 transition focus-within:bg-blue-100">
-              <td className="p-2">
-                <input
-                  type="checkbox"
-                  checked={selectedStatements.has(statement.id)}
-                  onChange={() => handleCheckboxChange(statement.id)}
-                  disabled={deleting}
-                  className="mr-2 accent-blue-600 w-4 h-4 disabled:opacity-50"
-                  aria-label={`Select statement ${statement.file_name}`}
-                />
-              </td>
-              <td className="p-2">{statement.file_name}</td>
-              <td className="p-2">{new Date(statement.uploaded_at).toLocaleDateString()}</td>
-              <td className="p-2">
-                <span className={
-                  statement.status === "Approved" || statement.status === "completed"
-                    ? "bg-green-100 text-green-700 px-2 py-1 rounded-md"
-                    : statement.status === "Rejected" || statement.status === "rejected"
-                      ? "bg-red-100 text-red-700 px-2 py-1 rounded-md"
-                      : "bg-yellow-100 text-yellow-700 px-2 py-1 rounded-md"
-                }>
-                  {statement.status === "extracted" || statement.status === "success" || statement.status === "pending" ? "Pending" : statement.status}
-                </span>
-              </td>
-              <td className="p-2">{statement.rejection_reason || "-"}</td>
-              <td className="p-2 flex gap-2 justify-center">
-                {/* Show eye icon only for approved/rejected statements */}
-                {(statement.status === "Approved" || statement.status === "completed" || statement.status === "Rejected" || statement.status === "rejected") && (
-                  <button
-                    title="View mapped table"
-                    className="text-blue-600 hover:bg-blue-100 p-1 rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
-                    onClick={() => onPreview(idx)}
-                    aria-label={`View mapped table for ${statement.file_name}`}
-                  >
-                    <Eye size={18} />
-                  </button>
-                )}
-                <button
-                  title="Compare mapped & extracted"
-                  className="text-purple-600 hover:bg-purple-100 p-1 rounded focus:outline-none focus:ring-2 focus:ring-purple-400"
-                  onClick={() => onCompare(idx)}
-                  aria-label={`Compare mapped and extracted for ${statement.file_name}`}
-                >
-                  <LayoutList size={18} />
-                </button>
-                {(statement.status === "Pending" || statement.status === "pending" || statement.status === "extracted" || statement.status === "success") && (
-                  <button
-                    onClick={() => router.push(`/upload?resume=${statement.id}`)}
-                    className="px-3 py-1 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors"
-                    title="Complete Review"
-                  >
-                    Complete Review
-                  </button>
-                )}
-              </td>
+              <th className="p-4 text-left">
+                <div className="flex items-center gap-2">
+                  <FileText size={16} className="text-gray-500" />
+                  Statement
+                </div>
+              </th>
+              <th className="p-4 text-left">Uploaded On</th>
+              <th className="p-4 text-left">Status</th>
+              <th className="p-4 text-left">Rejection Reason</th>
+              <th className="p-4 text-center">Actions</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {statements.map((statement, idx) => {
+              const statusInfo = getStatusInfo(statement.status);
+              const StatusIcon = statusInfo.icon;
+              
+              return (
+                <tr 
+                  key={statement.id} 
+                  className="hover:bg-gray-50 transition-colors duration-200 animate-fade-in"
+                  style={{ animationDelay: `${idx * 50}ms` }}
+                >
+                  <td className="p-4">
+                    <input
+                      type="checkbox"
+                      checked={selectedStatements.has(statement.id)}
+                      onChange={() => handleCheckboxChange(statement.id)}
+                      disabled={deleting}
+                      className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+                    />
+                  </td>
+                  <td className="p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center">
+                        <FileText size={16} className="text-primary" />
+                      </div>
+                      <div>
+                        <div className="font-medium text-gray-900">{statement.file_name}</div>
+                        <div className="text-sm text-gray-500">ID: {statement.id.slice(0, 8)}...</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="p-4">
+                    <div className="text-sm text-gray-900">
+                      {new Date(statement.uploaded_at).toLocaleDateString()}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {new Date(statement.uploaded_at).toLocaleTimeString()}
+                    </div>
+                  </td>
+                  <td className="p-4">
+                    <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium border ${statusInfo.bgColor} ${statusInfo.textColor} ${statusInfo.borderColor}`}>
+                      <StatusIcon size={14} />
+                      {statusInfo.label}
+                    </div>
+                  </td>
+                  <td className="p-4">
+                    <div className="max-w-xs">
+                      {statement.rejection_reason ? (
+                        <div className="text-sm text-gray-600 bg-red-50 p-2 rounded border border-red-200">
+                          {statement.rejection_reason}
+                        </div>
+                      ) : (
+                        <span className="text-gray-400">—</span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="p-4">
+                    <div className="flex items-center justify-center gap-2">
+                      {/* Show eye icon only for approved/rejected statements */}
+                      {(statement.status === "Approved" || statement.status === "completed" || statement.status === "Rejected" || statement.status === "rejected") && (
+                        <button
+                          title="View mapped table"
+                          className="btn btn-ghost p-2 text-primary hover:bg-primary/10"
+                          onClick={() => onPreview(idx)}
+                        >
+                          <Eye size={16} />
+                        </button>
+                      )}
+                      
+                      <button
+                        title="Compare mapped & extracted"
+                        className="btn btn-ghost p-2 text-secondary hover:bg-secondary/10"
+                        onClick={() => onCompare(idx)}
+                      >
+                        <LayoutList size={16} />
+                      </button>
+                      
+                      {(statement.status === "Pending" || statement.status === "pending" || statement.status === "extracted" || statement.status === "success") && (
+                        <button
+                          onClick={() => router.push(`/upload?resume=${statement.id}`)}
+                          className="btn btn-primary px-3 py-2 text-sm"
+                          title="Complete Review"
+                        >
+                          <ExternalLink size={14} className="mr-1" />
+                          Review
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        
+        {/* Empty State */}
+        {statements.length === 0 && (
+          <div className="text-center py-12">
+            <FileText className="mx-auto h-12 w-12 text-gray-300 mb-4" />
+            <h3 className="text-lg font-medium text-gray-600 mb-2">No statements found</h3>
+            <p className="text-gray-500">
+              Upload statements to see them listed here
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

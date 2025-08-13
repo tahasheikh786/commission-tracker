@@ -114,3 +114,169 @@ export function useStatements() {
 
   return { statements, loading, error, fetchStatements };
 } 
+
+// Earned Commission Hooks
+export const useEarnedCommissionStats = () => {
+  const [stats, setStats] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchStats = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/earned-commission/stats`);
+      if (response.ok) {
+        const data = await response.json();
+        setStats(data);
+      } else {
+        setError('Failed to fetch earned commission stats');
+      }
+    } catch (err) {
+      setError('Error fetching earned commission stats');
+      console.error('Error fetching earned commission stats:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchStats();
+  }, [fetchStats]);
+
+  return { stats, loading, error, refetch: fetchStats };
+};
+
+export const useCarrierCommissionStats = (carrierId: string | null) => {
+  const [stats, setStats] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchStats = useCallback(async () => {
+    if (!carrierId) {
+      setStats(null);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/earned-commission/carrier/${carrierId}/stats`);
+      if (response.ok) {
+        const data = await response.json();
+        setStats(data);
+      } else {
+        setError('Failed to fetch carrier commission stats');
+      }
+    } catch (err) {
+      setError('Error fetching carrier commission stats');
+      console.error('Error fetching carrier commission stats:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [carrierId]);
+
+  useEffect(() => {
+    fetchStats();
+  }, [fetchStats]);
+
+  return { stats, loading, error, refetch: fetchStats };
+};
+
+export const useCarriersWithCommission = () => {
+  const [carriers, setCarriers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchCarriers = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/earned-commission/carriers`);
+      if (response.ok) {
+        const data = await response.json();
+        setCarriers(data);
+      } else {
+        setError('Failed to fetch carriers with commission data');
+      }
+    } catch (err) {
+      setError('Error fetching carriers with commission data');
+      console.error('Error fetching carriers with commission data:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchCarriers();
+  }, [fetchCarriers]);
+
+  return { carriers, loading, error, refetch: fetchCarriers };
+};
+
+export const useCarrierCommissionData = (carrierId: string | null) => {
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchData = useCallback(async () => {
+    if (!carrierId) {
+      setData(null);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/earned-commission/carrier/${carrierId}/data`);
+      if (response.ok) {
+        const responseData = await response.json();
+        setData(responseData);
+      } else {
+        setError('Failed to fetch carrier commission data');
+      }
+    } catch (err) {
+      setError('Error fetching carrier commission data');
+      console.error('Error fetching carrier commission data:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [carrierId]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  return { data, loading, error, refetch: fetchData };
+};
+
+export const useAllCommissionData = () => {
+  const [data, setData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/earned-commission/all-data`);
+      if (response.ok) {
+        const responseData = await response.json();
+        setData(responseData);
+      } else {
+        setError('Failed to fetch all commission data');
+      }
+    } catch (err) {
+      setError('Error fetching all commission data');
+      console.error('Error fetching all commission data:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  return { data, loading, error, refetch: fetchData };
+}; 

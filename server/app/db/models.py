@@ -1,5 +1,5 @@
 from sqlalchemy import (
-    Column, String, Integer, Text, TIMESTAMP, JSON, ForeignKey, DateTime, text, UniqueConstraint
+    Column, String, Integer, Text, TIMESTAMP, JSON, ForeignKey, DateTime, text, UniqueConstraint, Numeric
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.declarative import declarative_base
@@ -134,6 +134,22 @@ class PlanType(Base):
     is_active = Column(Integer, default=1)  # 1 for active, 0 for inactive
     created_at = Column(DateTime, server_default=text('now()'), nullable=False)
     updated_at = Column(DateTime, server_default=text('now()'), onupdate=text('now()'), nullable=False)
+
+class EarnedCommission(Base):
+    __tablename__ = 'earned_commissions'
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    carrier_id = Column(UUID(as_uuid=True), ForeignKey('companies.id'), nullable=False)
+    client_name = Column(String, nullable=False)  # Company name from the statement
+    invoice_total = Column(Numeric(15, 2), default=0)  # Total invoice amount
+    commission_earned = Column(Numeric(15, 2), default=0)  # Total commission earned
+    statement_count = Column(Integer, default=0)  # Number of statements contributing to this data
+    last_updated = Column(DateTime, server_default=text('now()'), onupdate=text('now()'), nullable=False)
+    created_at = Column(DateTime, server_default=text('now()'), nullable=False)
+    
+    # Add unique constraint for carrier and client combination
+    __table_args__ = (
+        UniqueConstraint('carrier_id', 'client_name', name='uq_carrier_client_commission'),
+    )
 
 class EditedTable(Base):
     __tablename__ = 'edited_tables'

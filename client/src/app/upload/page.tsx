@@ -117,7 +117,8 @@ export default function UploadPage() {
                     label: getLabelFromDatabaseFields(field)
                   }))
                 } else {
-                  fieldsArr = databaseFields
+                  // For new carriers with no existing mapping, start with empty fields
+                  fieldsArr = []
                 }
                 if (map.plan_types) loadedPlanTypes = map.plan_types
                 if (map.table_names) loadedTableNames = map.table_names
@@ -132,7 +133,7 @@ export default function UploadPage() {
                       label: getLabelFromDatabaseFields(row.field_key) // Use pretty label!
                     })
                 })
-                if (!fieldsArr.length) fieldsArr = fieldConfig
+                if (!fieldsArr.length) fieldsArr = [] // Start with empty fields for new carriers
               }
             }
             if (mappingObj && Object.keys(mappingObj).length) {
@@ -214,8 +215,8 @@ export default function UploadPage() {
         setShowFieldMapper(false)
         setSkipped(false)
       } else if (currentStep === 'field_mapper') {
-        setMapping(upload.field_mapping || {})
-        setFieldConfig(upload.field_config || databaseFields)
+        setMapping(upload.field_mapping || null) // Don't set empty object, keep as null
+        setFieldConfig(upload.field_config || []) // Don't default to database fields for new carriers
         setPlanTypes(upload.plan_types || [])
         setShowFieldMapper(true)
         setShowTableEditor(false)
@@ -223,7 +224,7 @@ export default function UploadPage() {
       } else if (currentStep === 'dashboard') {
         // For dashboard step, we need to restore the final processed data
         setFinalTables(upload.final_data || upload.edited_tables || upload.raw_data || [])
-        setFieldConfig(upload.field_config || databaseFields)
+        setFieldConfig(upload.field_config || []) // Don't default to database fields for new carriers
         setPlanTypes(upload.plan_types || [])
         setMapping(upload.field_mapping || null)
         setSkipped(upload.status === 'skipped')
@@ -250,18 +251,12 @@ export default function UploadPage() {
             const companyResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${upload.company_id}`)
             if (companyResponse.ok) {
               const companyData = await companyResponse.json()
-              if (companyData.success && companyData.company) {
-                setCompany({
-                  id: upload.company_id,
-                  name: companyData.company.name || 'Unknown Company'
-                })
-                console.log('🎯 Company fetched from backend:', companyData.company)
-              } else {
-                setCompany({
-                  id: upload.company_id,
-                  name: 'Unknown Company'
-                })
-              }
+              // The API now returns the company directly, not wrapped in success/company
+              setCompany({
+                id: upload.company_id,
+                name: companyData.name || 'Unknown Company'
+              })
+              console.log('🎯 Company fetched from backend:', companyData)
             } else {
               setCompany({
                 id: upload.company_id,
@@ -367,7 +362,9 @@ export default function UploadPage() {
           
           // Set as default fieldConfig if not already set
           if (fieldConfig.length === 0) {
-            setFieldConfig(fieldsFromBackend)
+            // Don't auto-populate with database fields for new carriers
+            // Let the user add fields manually
+            setFieldConfig([])
           }
         } else {
           console.error('Failed to fetch database fields')
@@ -399,7 +396,7 @@ export default function UploadPage() {
     setCurrentStep('upload')
     clearAutoSave()
     setFinalTables([])
-    setFieldConfig(databaseFields)
+    setFieldConfig([]) // Don't default to database fields
     fetchMappingRef.current = false
     resumeFileRef.current = false
     setShowFieldMapper(false)
@@ -446,7 +443,7 @@ export default function UploadPage() {
     
     setUploaded({ tables, upload_id, file_name, file })
     setFinalTables([])
-    setFieldConfig(field_config || databaseFields)
+    setFieldConfig(field_config || []) // Don't default to database fields for new carriers
     setFormatLearning(format_learning) // Store format learning data
     
     // Auto-populate mapping from format learning if available
@@ -1128,16 +1125,7 @@ export default function UploadPage() {
               </div>
               {(editedTables.length > 0 ? editedTables : uploaded.tables.length > 0 ? uploaded.tables : finalTables)[0]?.header && (editedTables.length > 0 ? editedTables : uploaded.tables.length > 0 ? uploaded.tables : finalTables)[0].header.length > 0 && (
                 <>
-                  {console.log('🎯 Rendering FieldMapper with props:', {
-                    company,
-                    columns: (editedTables.length > 0 ? editedTables : uploaded.tables.length > 0 ? uploaded.tables : finalTables)[0].header,
-                    initialMapping: mapping,
-                    initialFields: fieldConfig,
-                    initialPlanTypes: planTypes,
-                    showFieldMapper,
-                    mappingAutoApplied,
-                    tablesSource: editedTables.length > 0 ? 'editedTables' : uploaded.tables.length > 0 ? 'uploaded.tables' : 'finalTables'
-                  })}
+                  {/* Debug logs removed - issue fixed */}
                   <FieldMapper
                     company={company}
                     columns={(editedTables.length > 0 ? editedTables : uploaded.tables.length > 0 ? uploaded.tables : finalTables)[0].header}

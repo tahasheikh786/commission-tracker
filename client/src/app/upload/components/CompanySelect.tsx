@@ -17,6 +17,12 @@ export default function CompanySelect({
   const [newCompany, setNewCompany] = useState('')
   const [loading, setLoading] = useState(true)
   const [addLoading, setAddLoading] = useState(false)
+  const [isClient, setIsClient] = useState(false)
+
+  // Fix hydration issue by ensuring client-side only rendering
+  useEffect(() => {
+    setIsClient(true)
+  }, [])
 
   useEffect(() => {
     setLoading(true)
@@ -86,6 +92,22 @@ export default function CompanySelect({
     }
   }
 
+  // Don't render until client-side to prevent hydration mismatch
+  if (!isClient) {
+    return (
+      <div className="my-8">
+        <label className="block mb-2 font-semibold text-gray-700 text-lg">
+          Select or Add Carrier
+        </label>
+        <div className="relative">
+          <div className="border px-4 py-2 rounded bg-gray-100 text-gray-500">
+            Loading carriers...
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="my-8">
       <label className="block mb-2 font-semibold text-gray-700 text-lg">
@@ -105,6 +127,7 @@ export default function CompanySelect({
           classNamePrefix="react-select"
           menuPlacement="auto"
           maxMenuHeight={160}
+          instanceId="company-select" // Add consistent instance ID
           styles={{
             container: base => ({ ...base, width: '100%', marginBottom: 16 }),
             menu: base => ({ ...base, zIndex: 50 })
