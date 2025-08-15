@@ -15,6 +15,7 @@ class ApprovePayload(BaseModel):
     final_data: List[Dict[str, Any]]
     field_config: Optional[List[Dict[str, str]]] = None
     plan_types: Optional[List[str]] = None
+    selected_statement_date: Optional[Dict[str, Any]] = None
 
 class RejectPayload(BaseModel):
     upload_id: UUID
@@ -36,6 +37,7 @@ async def approve_statement(
             status="Approved",
             field_config=payload.field_config,
             plan_types=payload.plan_types,
+            selected_statement_date=payload.selected_statement_date,
         )
         return {"success": True, "review": schemas.StatementReview.from_orm(updated)}
     except Exception as e:

@@ -286,6 +286,23 @@ async def get_all_earned_commissions(db: AsyncSession = Depends(get_db)):
                 "invoice_total": float(commission.invoice_total),
                 "commission_earned": float(commission.commission_earned),
                 "statement_count": commission.statement_count,
+                "statement_date": commission.statement_date.isoformat() if commission.statement_date else None,
+                "statement_month": commission.statement_month,
+                "statement_year": commission.statement_year,
+                "monthly_breakdown": {
+                    "jan": float(commission.jan_commission),
+                    "feb": float(commission.feb_commission),
+                    "mar": float(commission.mar_commission),
+                    "apr": float(commission.apr_commission),
+                    "may": float(commission.may_commission),
+                    "jun": float(commission.jun_commission),
+                    "jul": float(commission.jul_commission),
+                    "aug": float(commission.aug_commission),
+                    "sep": float(commission.sep_commission),
+                    "oct": float(commission.oct_commission),
+                    "nov": float(commission.nov_commission),
+                    "dec": float(commission.dec_commission)
+                },
                 "last_updated": commission.last_updated.isoformat() if commission.last_updated else None,
                 "created_at": commission.created_at.isoformat() if commission.created_at else None
             })
@@ -319,6 +336,23 @@ async def get_earned_commissions_by_carrier(carrier_id: UUID, db: AsyncSession =
                 "invoice_total": float(commission.invoice_total),
                 "commission_earned": float(commission.commission_earned),
                 "statement_count": commission.statement_count,
+                "statement_date": commission.statement_date.isoformat() if commission.statement_date else None,
+                "statement_month": commission.statement_month,
+                "statement_year": commission.statement_year,
+                "monthly_breakdown": {
+                    "jan": float(commission.jan_commission),
+                    "feb": float(commission.feb_commission),
+                    "mar": float(commission.mar_commission),
+                    "apr": float(commission.apr_commission),
+                    "may": float(commission.may_commission),
+                    "jun": float(commission.jun_commission),
+                    "jul": float(commission.jul_commission),
+                    "aug": float(commission.aug_commission),
+                    "sep": float(commission.sep_commission),
+                    "oct": float(commission.oct_commission),
+                    "nov": float(commission.nov_commission),
+                    "dec": float(commission.dec_commission)
+                },
                 "last_updated": commission.last_updated.isoformat() if commission.last_updated else None,
                 "created_at": commission.created_at.isoformat() if commission.created_at else None
             })

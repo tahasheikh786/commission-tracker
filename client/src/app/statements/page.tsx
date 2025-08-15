@@ -56,7 +56,7 @@ export default function StatementsPage() {
   const [loading, setLoading] = useState(false);
   const [statementsLoading, setStatementsLoading] = useState(true);
   
-  const ITEMS_PER_PAGE = 15; // For statements
+  const ITEMS_PER_PAGE = 10; // For statements
   const CARRIERS_PER_PAGE = 10; // For carriers
 
   // Handle URL parameters for initial tab

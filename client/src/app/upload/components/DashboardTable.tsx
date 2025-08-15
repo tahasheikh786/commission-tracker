@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { Pencil, Trash2, X, Check, Clock } from 'lucide-react'
+import { Pencil, Trash2, X, Check, Clock, Calendar } from 'lucide-react'
 import clsx from 'clsx'
 
 type TableData = {
@@ -22,7 +22,8 @@ type DashboardTableProps = {
   onTableChange?: (tables: TableData[]) => void,
   planTypes?: string[],
   onSendToPending?: () => void,
-  uploadId?: string
+  uploadId?: string,
+  selectedStatementDate?: any // Add selected statement date prop
 }
 
 function fixPercent(val: string): string {
@@ -74,15 +75,14 @@ export default function DashboardTable({
   planTypes = [],
   onSendToPending,
   uploadId,
+  selectedStatementDate, // Add selected statement date prop
 }: DashboardTableProps) {
-  console.log('DashboardTable received tables:', tables)
-  console.log('DashboardTable received fieldConfig:', fieldConfig)
+
   
   // --- Main Table State (tracks edits/deletes) ---
   const [rows, setRows] = useState<TableData[]>(tables)
   // If `tables` prop changes (new upload, remap, etc), update local state
   useEffect(() => {
-    console.log('DashboardTable updating rows with:', tables)
     setRows(tables)
   }, [tables])
 
@@ -246,7 +246,7 @@ export default function DashboardTable({
   }
 
   return (
-    <div className="mt-8 mb-20 shadow-lg rounded-2xl p-5 border bg-white overflow-x-auto w-full">
+    <div className="shadow-lg rounded-2xl p-5 border bg-white overflow-x-auto w-full h-full flex flex-col">
       {planTypes && planTypes.length > 0 && (
         <div className="mb-4 flex flex-wrap gap-2 items-center">
           <span className="font-semibold text-gray-700 text-base mr-2">Plan Types:</span>
@@ -305,8 +305,9 @@ export default function DashboardTable({
         )}
        
       </div>
-      <table className="min-w-full">
-        <thead className="bg-gradient-to-br from-blue-100 to-purple-50">
+      <div className="flex-1 overflow-auto">
+        <table className="min-w-full">
+        <thead className="bg-gradient-to-br from-blue-100 to-purple-50 sticky top-0">
           {/* Render table name row only above the corresponding table's header */}
           {pagedRowsWithHeaders.map((item, i) => {
             if (item.type === 'header' && item.name) {
@@ -417,11 +418,14 @@ export default function DashboardTable({
           })}
         </tbody>
       </table>
-      <Pagination
-        page={page}
-        setPage={setPage}
-        pageCount={pageCount}
-      />
+      </div>
+      <div className="mt-4">
+        <Pagination
+          page={page}
+          setPage={setPage}
+          pageCount={pageCount}
+        />
+      </div>
     </div>
   )
 }

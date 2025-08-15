@@ -28,6 +28,7 @@ class SaveTablesRequest(BaseModel):
     upload_id: str
     tables: List[TableData]
     company_id: str
+    selected_statement_date: Optional[Dict[str, Any]] = None
 
 
 class GetTablesRequest(BaseModel):
@@ -40,7 +41,10 @@ async def save_tables(request: SaveTablesRequest):
     Save edited tables to the database.
     """
     try:
-        logger.info(f"Saving edited tables for upload_id: {request.upload_id}")
+        logger.info(f"🎯 Table Editor API: Saving edited tables for upload_id: {request.upload_id}")
+        logger.info(f"🎯 Table Editor API: Tables count: {len(request.tables)}")
+        logger.info(f"🎯 Table Editor API: Selected statement date: {request.selected_statement_date}")
+        logger.info(f"🎯 Table Editor API: Company ID: {request.company_id}")
         
         # Convert tables to the format expected by the database
         tables_data = []
@@ -56,13 +60,18 @@ async def save_tables(request: SaveTablesRequest):
             }
             tables_data.append(table_data)
         
+        logger.info(f"🎯 Table Editor API: Converted {len(tables_data)} tables to database format")
+        
         # Save to database
         saved_tables = await save_edited_tables(tables_data)
+        logger.info(f"🎯 Table Editor API: Saved {len(saved_tables)} edited tables to database")
         
-        # Update the original upload with the edited tables
-        await update_upload_tables(request.upload_id, tables_data)
+        # Update the original upload with the edited tables and selected statement date
+        logger.info(f"🎯 Table Editor API: Updating upload with tables and statement date")
+        await update_upload_tables(request.upload_id, tables_data, request.selected_statement_date)
+        logger.info(f"🎯 Table Editor API: Successfully updated upload with statement date")
         
-        logger.info(f"Successfully saved {len(saved_tables)} edited tables")
+        logger.info(f"🎯 Table Editor API: Successfully saved {len(saved_tables)} edited tables")
         
         return JSONResponse({
             "success": True,
@@ -73,7 +82,7 @@ async def save_tables(request: SaveTablesRequest):
         })
         
     except Exception as e:
-        logger.error(f"Error saving edited tables: {str(e)}")
+        logger.error(f"🎯 Table Editor API: Error saving edited tables: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to save tables: {str(e)}")
 
 

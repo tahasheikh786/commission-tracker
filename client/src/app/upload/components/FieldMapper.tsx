@@ -1,8 +1,9 @@
 'use client'
 import { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
-import { X, Plus, GripVertical } from 'lucide-react'
+import { X, Plus, GripVertical, Calendar } from 'lucide-react'
 import Loader from './Loader';
+import ProgressBar from './ProgressBar';
 
 import {
   DndContext,
@@ -97,10 +98,11 @@ export default function FieldMapper({
   tableNames = [],
   tableData = [], // Add table data for format learning
   isLoading = false, // Add loading prop
+  selectedStatementDate, // Add selected statement date
 }: {
   company: { id: string, name: string }
   columns: string[]
-  onSave: (mapping: Record<string, string>, fields: FieldConf[], planTypes: string[], tableNames?: string[]) => void
+  onSave: (mapping: Record<string, string>, fields: FieldConf[], planTypes: string[], tableNames?: string[], selectedStatementDate?: any) => void
   onSkip: () => void
   initialFields?: FieldConf[]
   initialMapping?: Record<string, string> | null
@@ -108,6 +110,7 @@ export default function FieldMapper({
   tableNames?: string[]
   tableData?: any[] // Add table data prop
   isLoading?: boolean // Add loading prop type
+  selectedStatementDate?: any // Add selected statement date
 }) {
   // State for database fields from backend
   const [databaseFields, setDatabaseFields] = useState<FieldConf[]>([])
@@ -130,37 +133,46 @@ export default function FieldMapper({
   // Add effect to handle initialMapping changes
   useEffect(() => {
     if (initialMapping && Object.keys(initialMapping).length > 0) {
-      console.log('initialMapping changed, updating mapping state:', initialMapping)
-      setMapping(initialMapping)
-      setMappingSource('manual')
+      // Validate that the mapping has valid field keys
+      const validMapping: Record<string, string> = {}
+      Object.entries(initialMapping).forEach(([key, value]) => {
+        if (key && key !== 'undefined' && value) {
+          validMapping[key] = value
+        }
+      })
+      
+      if (Object.keys(validMapping).length > 0) {
+        console.log('initialMapping changed, updating mapping state:', validMapping)
+        setMapping(validMapping)
+        setMappingSource('manual')
+      } else {
+        console.log('initialMapping provided but no valid mappings found')
+        setMapping({})
+        setMappingSource('manual')
+      }
     }
   }, [initialMapping])
 
   // Add effect to handle initialFields changes
   useEffect(() => {
     if (initialFields && initialFields.length > 0) {
-      console.log('initialFields changed, updating fields state:', initialFields)
-      setFields(initialFields)
+      // Validate that all fields have valid field keys
+      const validFields = initialFields.filter(f => f && f.field && f.field !== 'undefined')
+      if (validFields.length > 0) {
+        console.log('initialFields changed, updating fields state:', validFields)
+        setFields(validFields)
+      } else {
+        console.log('initialFields provided but no valid fields found, using database fields')
+        if (databaseFields.length > 0) {
+          setFields(databaseFields)
+        }
+      }
     }
-  }, [initialFields])
+  }, [initialFields, databaseFields])
 
-  console.log('FieldMapper Debug:', {
-    initialFields,
-    initialMapping,
-    fields,
-    databaseFields,
-    columns,
-    loadingFields,
-    apiUrl: process.env.NEXT_PUBLIC_API_URL
-  })
 
-  console.log('FieldMapper Render Debug:', {
-    initialMapping,
-    currentMapping: mapping,
-    mappingSource,
-    fieldsCount: fields.length,
-    columnsCount: columns.length
-  })
+
+
 
   // DnD-kit sensors
   const sensors = useSensors(
@@ -283,7 +295,7 @@ export default function FieldMapper({
 
   // Ensure fields are always populated from database fields if available
   useEffect(() => {
-    if (databaseFields.length > 0 && fields.length === 0) {
+    if (databaseFields.length > 0 && fields.length === 0 && initialFields.length === 0) {
       console.log('Force setting fields from database fields:', databaseFields)
       setFields(databaseFields)
     }
@@ -298,20 +310,17 @@ export default function FieldMapper({
       // Keep the learned mapping if it was already set
       console.log('Setting mapping from learnedMapping:', learnedMapping)
       setMapping(learnedMapping)
-    } else {
-      // Temporarily disable fuzzy matching to debug the issue
-      console.log('Skipping fuzzy matching for debugging')
-      /*
-      // Fuzzy match: try to auto-map by label or field name
+    } else if (columns && columns.length > 0 && fields && fields.length > 0) {
+      // Enable fuzzy matching for auto-mapping
+      console.log('Running fuzzy matching with columns:', columns)
+      console.log('Fields to match:', fields)
+      
       const map: Record<string, string> = {}
       const usedColumns = new Set<string>() // Track used columns to prevent duplicates
       
-      console.log('Fuzzy matching with columns:', columns)
-      console.log('Fields to match:', fields)
-      
       for (const f of fields) {
-        // Skip if field is missing required properties
-        if (!f.field || !f.label) continue;
+        // Skip if field is missing required properties or has invalid field key
+        if (!f.field || !f.label || f.field === 'undefined') continue;
         
         let found = columns.find(col => col && fuzzyMatch(col, f.label) && !usedColumns.has(col))
         if (!found) {
@@ -328,16 +337,16 @@ export default function FieldMapper({
       if (Object.keys(map).length > 0) {
         setMapping(map)
         setMappingSource('fuzzy')
+        toast.success('Fields auto-mapped using fuzzy matching!')
       }
-      */
     }
-  }, [initialMapping, learnedMapping, mappingSource]) // Remove columns and fields from dependencies to avoid unnecessary re-runs
+  }, [initialMapping, learnedMapping, mappingSource, columns, fields]) // Add columns and fields back to dependencies
 
   function setFieldMap(field: string, col: string) {
     console.log(`Setting field "${field}" to column "${col}"`)
     console.log('Current mapping before update:', mapping)
-    setMapping(m => {
-      const newMapping = { ...m, [field]: col }
+    setMapping(prevMapping => {
+      const newMapping = { ...prevMapping, [field]: col }
       console.log('New mapping after update:', newMapping)
       return newMapping
     })
@@ -406,8 +415,8 @@ export default function FieldMapper({
     try {
       // Call onSave directly without making a separate API call here
       // The parent component (page.tsx) will handle the API call
-      console.log('🎯 Calling onSave with:', { mapping, fields, planTypes })
-      onSave(mapping, fields, planTypes)
+      console.log('🎯 Calling onSave with:', { mapping, fields, planTypes, selectedStatementDate })
+      onSave(mapping, fields, planTypes, tableNames, selectedStatementDate)
       toast.success("Mapping saved and format learned!")
     } catch (error) {
       toast.error("Failed to save mapping.")
@@ -436,11 +445,14 @@ export default function FieldMapper({
   }
 
   return (
-    <div className="relative">
+    <div className="h-screen flex flex-col overflow-hidden">
       {(saving || isLoading) && <Loader message="Saving mapping and transitioning to dashboard..." />}
 
+      {/* Progress Bar */}
+      <ProgressBar currentStep="field_mapper" />
+
       {/* Header */}
-      <div className="mb-6 bg-white rounded-lg border border-gray-200 p-6">
+      <div className="flex-shrink-0 bg-white border-b border-gray-200 p-6">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="text-xl font-semibold text-gray-800">Field Mapping</h2>
@@ -448,6 +460,16 @@ export default function FieldMapper({
               Map your extracted columns to the correct database fields.
             </p>
           </div>
+          
+          {/* Statement Date Indicator */}
+          {selectedStatementDate && (
+            <div className="flex items-center gap-2 px-3 py-2 bg-green-100 text-green-800 rounded-lg border border-green-200">
+              <Calendar className="w-4 h-4 text-green-600" />
+              <span className="text-sm font-medium">
+                Statement Date: {selectedStatementDate.date}
+              </span>
+            </div>
+          )}
           
           {/* Mapping Source Indicator */}
           {mappingSource !== 'manual' && (
@@ -491,171 +513,232 @@ export default function FieldMapper({
         )}
       </div>
 
-      {/* Plan Type Selection */}
-      <div className="mb-6 bg-white rounded-lg border border-gray-200 p-6">
-        <label className="block text-lg font-semibold text-gray-800 mb-3">Plan Types</label>
-        {loadingPlanTypes ? (
-          <div className="flex items-center justify-center py-4">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-            <span className="ml-2 text-gray-600">Loading plan types...</span>
+      {/* Scrollable Content */}
+      <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
+        <div className="w-[90%] mx-auto">
+          {/* Plan Type Selection */}
+          <div className="mb-6 bg-white rounded-lg border border-gray-200 p-6">
+            <label className="block text-lg font-semibold text-gray-800 mb-3">Plan Types</label>
+            {loadingPlanTypes ? (
+              <div className="flex items-center justify-center py-4">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                <span className="ml-2 text-gray-600">Loading plan types...</span>
+              </div>
+            ) : (
+              <>
+                <div className="flex flex-wrap gap-3">
+                  {availablePlanTypes.map((pt: PlanType) => (
+                    <label key={pt.plan_key} className={
+                      `inline-flex items-center px-4 py-2 rounded-lg border border-gray-300 bg-white shadow-sm cursor-pointer transition-all hover:shadow-md ${planTypes.includes(pt.plan_key) ? 'ring-2 ring-blue-400 bg-blue-50' : ''}`
+                    }>
+                      <input
+                        type="checkbox"
+                        className="form-checkbox accent-blue-600 mr-2 h-4 w-4"
+                        checked={planTypes.includes(pt.plan_key)}
+                        onChange={() => handlePlanTypeChange(pt.plan_key)}
+                      />
+                      <span className="text-sm font-medium text-gray-800">{pt.display_name}</span>
+                    </label>
+                  ))}
+                </div>
+                <div className="text-sm text-gray-500 mt-2">Select all plan types included in this statement. You can select multiple.</div>
+              </>
+            )}
           </div>
-        ) : (
-          <>
-            <div className="flex flex-wrap gap-3">
-              {availablePlanTypes.map((pt: PlanType) => (
-                <label key={pt.plan_key} className={
-                  `inline-flex items-center px-4 py-2 rounded-lg border border-gray-300 bg-white shadow-sm cursor-pointer transition-all hover:shadow-md ${planTypes.includes(pt.plan_key) ? 'ring-2 ring-blue-400 bg-blue-50' : ''}`
-                }>
-                  <input
-                    type="checkbox"
-                    className="form-checkbox accent-blue-600 mr-2 h-4 w-4"
-                    checked={planTypes.includes(pt.plan_key)}
-                    onChange={() => handlePlanTypeChange(pt.plan_key)}
-                  />
-                  <span className="text-sm font-medium text-gray-800">{pt.display_name}</span>
-                </label>
-              ))}
+
+          {/* Add Database Field - Moved above the table */}
+          <div className="mb-6 bg-white rounded-lg border border-gray-200 p-6">
+            <h3 className="text-lg font-semibold text-gray-800 mb-3">Add Database Field</h3>
+            <div className="mb-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Field Name</label>
+                <input
+                  className="border border-gray-300 rounded-md px-3 py-2 w-full text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="e.g., Group Id"
+                  value={newFieldName}
+                  onChange={e => setNewFieldName(e.target.value)}
+                />
+              </div>
             </div>
-            <div className="text-sm text-gray-500 mt-2">Select all plan types included in this statement. You can select multiple.</div>
-          </>
-        )}
-      </div>
-
-      {/* Field Mapping Table */}
-      <div className="mb-6 bg-white rounded-lg border border-gray-200 overflow-hidden">
-        <div className="p-4 border-b border-gray-200 bg-gray-50">
-          <h3 className="text-lg font-semibold text-gray-800">Database Field Mapping</h3>
-          <p className="text-gray-600 text-sm mt-1">Drag to reorder and map extracted columns to database fields</p>
-        </div>
-
-        {loadingFields ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            <span className="ml-3 text-gray-600">Loading database fields...</span>
+            <button
+              type="button"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-blue-600 text-white font-medium shadow hover:bg-blue-700 transition"
+              onClick={handleAddDatabaseField}
+            >
+              <Plus size={16} /> Add Database Field
+            </button>
           </div>
-        ) : (
 
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragEnd={handleDragEnd}
-        >
-          <SortableContext
-            items={fields.map(f => f.field)}
-            strategy={verticalListSortingStrategy}
-          >
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="w-12 p-0"></th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Database Field</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Extracted Column</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {fields.length === 0 ? (
+          {/* Field Mapping Table */}
+          <div className="mb-6 bg-white rounded-lg border border-gray-200 overflow-hidden">
+            <div className="p-4 border-b border-gray-200 bg-gray-50">
+              <h3 className="text-lg font-semibold text-gray-800">Database Field Mapping</h3>
+              <p className="text-gray-600 text-sm mt-1">Drag to reorder and map extracted columns to database fields</p>
+            </div>
+
+            {loadingFields ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                <span className="ml-3 text-gray-600">Loading database fields...</span>
+              </div>
+            ) : (
+              <>
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd}
+                >
+                  <SortableContext
+                    items={fields.map(f => f.field)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <div className="overflow-x-auto max-h-96 overflow-y-auto">
+                      <table className="w-full">
+                        <thead className="bg-gray-50 sticky top-0">
+                          <tr>
+                            <th className="w-12 p-0"></th>
+                            <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Database Field</th>
+                            <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Extracted Column</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                          {fields.length === 0 ? (
+                            <tr>
+                              <td colSpan={3} className="py-8 text-center">
+                                <div className="text-gray-500">
+                                  <p className="mb-2">No database fields configured yet.</p>
+                                  <p className="text-sm">Add database fields above to start mapping your extracted columns.</p>
+                                </div>
+                              </td>
+                            </tr>
+                          ) : (
+                            fields.map((f, i) => (
+                              <DraggableRow key={`${f.field}-${i}`} id={f.field}>
+                                {({ attributes, listeners, isDragging }) => (
+                                  <>
+                                    <td
+                                      className="w-12 p-0 align-middle text-center"
+                                      {...attributes}
+                                      {...listeners}
+                                      style={{ verticalAlign: 'middle' }}
+                                    >
+                                      <GripVertical size={18} className="text-gray-400 mx-auto" />
+                                    </td>
+                                    <td className="w-1/3 py-3 px-4 align-middle">
+                                      <div
+                                        className="font-medium text-gray-800 truncate"
+                                        title={f.label}
+                                        style={{ minWidth: 120 }}
+                                      >
+                                        {f.label}
+                                      </div>
+                                    </td>
+                                    <td className="w-2/3 py-3 px-4 align-middle">
+                                      <select
+                                        key={`select-${f.field}`}
+                                        className="border border-gray-300 rounded-md px-3 py-2 w-full min-w-[140px] text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                        value={mapping[f.field] || ""}
+                                        onChange={e => setFieldMap(f.field, e.target.value)}
+                                      >
+                                        <option value="">Select column...</option>
+                                        {allDropdownColumns.map(col => (
+                                          <option key={col} value={col}>{col}</option>
+                                        ))}
+                                      </select>
+                                    </td>
+                                  </>
+                                )}
+                              </DraggableRow>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </SortableContext>
+                </DndContext>
+              </>
+            )}
+          </div>
+
+          {/* Extracted Table Component */}
+          {tableData && tableData.length > 0 && (
+            <div className="mb-6 bg-white rounded-lg border border-gray-200 overflow-hidden">
+              <div className="p-4 border-b border-gray-200 bg-gray-50">
+                <h3 className="text-lg font-semibold text-gray-800">Extracted Table Preview</h3>
+                <p className="text-gray-600 text-sm mt-1">Preview of the extracted data that will be mapped</p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50">
                     <tr>
-                      <td colSpan={3} className="py-8 text-center">
-                        <div className="text-gray-500">
-                          <p className="mb-2">No database fields configured yet.</p>
-                          <p className="text-sm">Add database fields below to start mapping your extracted columns.</p>
-                        </div>
-                      </td>
+                      {columns.map((col, index) => (
+                        <th key={index} className="text-left py-3 px-4 text-sm font-medium text-gray-700">
+                          {col}
+                        </th>
+                      ))}
                     </tr>
-                  ) : (
-                    fields.map((f, i) => (
-                      <DraggableRow key={f.field} id={f.field}>
-                        {({ attributes, listeners, isDragging }) => (
-                          <>
-                            <td
-                              className="w-12 p-0 align-middle text-center"
-                              {...attributes}
-                              {...listeners}
-                              style={{ verticalAlign: 'middle' }}
-                            >
-                              <GripVertical size={18} className="text-gray-400 mx-auto" />
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {tableData[0]?.rows?.slice(0, 5).map((row: any, rowIndex: number) => (
+                      <tr key={rowIndex} className="hover:bg-gray-50">
+                        {Array.isArray(row) ? (
+                          // Handle array format (legacy)
+                          row.map((cell: any, cellIndex: number) => (
+                            <td key={cellIndex} className="py-2 px-4 text-sm text-gray-900">
+                              {cell || '-'}
                             </td>
-                            <td className="w-1/3 py-3 px-4 align-middle">
-                              <div
-                                className="font-medium text-gray-800 truncate"
-                                title={f.label}
-                                style={{ minWidth: 120 }}
-                              >
-                                {f.label}
-                              </div>
+                          ))
+                        ) : (
+                          // Handle object format (new)
+                          columns.map((col: string, cellIndex: number) => (
+                            <td key={cellIndex} className="py-2 px-4 text-sm text-gray-900">
+                              {(row as Record<string, string>)[col] || '-'}
                             </td>
-                            <td className="w-2/3 py-3 px-4 align-middle">
-                              <select
-                                key={`select-${f.field}-${i}`}
-                                className="border border-gray-300 rounded-md px-3 py-2 w-full min-w-[140px] text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                value={mapping[f.field] || ""}
-                                onChange={e => setFieldMap(f.field, e.target.value)}
-                              >
-                                <option value="">Select column...</option>
-                                {allDropdownColumns.map(col => (
-                                  <option key={col} value={col}>{col}</option>
-                                ))}
-                              </select>
-                            </td>
-                          </>
+                          ))
                         )}
-                      </DraggableRow>
-                    ))
-                  )}
-                </tbody>
-              </table>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {tableData[0]?.rows?.length > 5 && (
+                <div className="p-4 border-t border-gray-200 bg-gray-50 text-center">
+                  <p className="text-sm text-gray-600">
+                    Showing first 5 rows of {tableData[0]?.rows?.length} total rows
+                  </p>
+                </div>
+              )}
             </div>
-          </SortableContext>
-        </DndContext>
-        )}
+          )}
+        </div>
       </div>
 
-      {/* Add Database Field */}
-      <div className="mb-6 bg-white rounded-lg border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-800 mb-3">Add Database Field</h3>
-        <div className="mb-3">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Field Name</label>
-            <input
-              className="border border-gray-300 rounded-md px-3 py-2 w-full text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="e.g., Group Id"
-              value={newFieldName}
-              onChange={e => setNewFieldName(e.target.value)}
-            />
+      {/* Action Buttons - Fixed at bottom */}
+      <div className="flex-shrink-0 bg-white border-t border-gray-200 p-6">
+        <div className="w-[90%] mx-auto">
+          <div className="flex gap-3">
+            <button
+              onClick={() => {
+                console.log('🎯 Save button clicked!')
+                handleSave()
+              }}
+              disabled={saving || isLoading}
+              className="px-6 py-2 rounded-md bg-blue-600 text-white font-semibold shadow hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {(saving || isLoading) ? "Saving..." : "Save Mapping"}
+            </button>
+            {onSkip && (
+              <button
+                type="button"
+                onClick={onSkip}
+                disabled={saving || isLoading}
+                className="px-6 py-2 rounded-md bg-gray-300 text-gray-700 font-semibold shadow hover:bg-gray-400 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Skip and Use Extracted Table
+              </button>
+            )}
           </div>
         </div>
-        <button
-          type="button"
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-blue-600 text-white font-medium shadow hover:bg-blue-700 transition"
-          onClick={handleAddDatabaseField}
-        >
-          <Plus size={16} /> Add Database Field
-        </button>
-      </div>
-
-      {/* Action Buttons */}
-      <div className="flex gap-3">
-        <button
-          onClick={() => {
-            console.log('🎯 Save button clicked!')
-            handleSave()
-          }}
-          disabled={saving || isLoading}
-          className="px-6 py-2 rounded-md bg-blue-600 text-white font-semibold shadow hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {(saving || isLoading) ? "Saving..." : "Save Mapping"}
-        </button>
-        {onSkip && (
-          <button
-            type="button"
-            onClick={onSkip}
-            disabled={saving || isLoading}
-            className="px-6 py-2 rounded-md bg-gray-300 text-gray-700 font-semibold shadow hover:bg-gray-400 transition disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Skip and Use Extracted Table
-          </button>
-        )}
       </div>
     </div>
   )

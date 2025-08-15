@@ -94,6 +94,7 @@ class StatementUpload(Base):
     field_config = Column(JSON)
     rejection_reason = Column(Text)
     plan_types = Column(JSON)  # Store list of plan types (Medical, Dental, etc)
+    selected_statement_date = Column(JSON)  # Store selected statement date from TableEditor
     
     # Timestamps
     last_updated = Column(DateTime, server_default=text('now()'), onupdate=text('now()'), nullable=False)
@@ -143,12 +144,35 @@ class EarnedCommission(Base):
     invoice_total = Column(Numeric(15, 2), default=0)  # Total invoice amount
     commission_earned = Column(Numeric(15, 2), default=0)  # Total commission earned
     statement_count = Column(Integer, default=0)  # Number of statements contributing to this data
+    
+    # Track which uploads contributed to this commission record
+    upload_ids = Column(JSON, nullable=True)  # Array of upload IDs that contributed to this record
+    
+    # Statement date for monthly breakdown
+    statement_date = Column(DateTime, nullable=True)  # Date from the statement
+    statement_month = Column(Integer, nullable=True)  # Month (1-12) for easier querying
+    statement_year = Column(Integer, nullable=True)  # Year for easier querying
+    
+    # Monthly breakdown columns
+    jan_commission = Column(Numeric(15, 2), default=0)
+    feb_commission = Column(Numeric(15, 2), default=0)
+    mar_commission = Column(Numeric(15, 2), default=0)
+    apr_commission = Column(Numeric(15, 2), default=0)
+    may_commission = Column(Numeric(15, 2), default=0)
+    jun_commission = Column(Numeric(15, 2), default=0)
+    jul_commission = Column(Numeric(15, 2), default=0)
+    aug_commission = Column(Numeric(15, 2), default=0)
+    sep_commission = Column(Numeric(15, 2), default=0)
+    oct_commission = Column(Numeric(15, 2), default=0)
+    nov_commission = Column(Numeric(15, 2), default=0)
+    dec_commission = Column(Numeric(15, 2), default=0)
+    
     last_updated = Column(DateTime, server_default=text('now()'), onupdate=text('now()'), nullable=False)
     created_at = Column(DateTime, server_default=text('now()'), nullable=False)
     
-    # Add unique constraint for carrier and client combination
+    # Add unique constraint for carrier, client, and statement date combination
     __table_args__ = (
-        UniqueConstraint('carrier_id', 'client_name', name='uq_carrier_client_commission'),
+        UniqueConstraint('carrier_id', 'client_name', 'statement_date', name='uq_carrier_client_date_commission'),
     )
 
 class EditedTable(Base):

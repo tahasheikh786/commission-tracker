@@ -246,6 +246,22 @@ class EarnedCommissionBase(BaseModel):
     invoice_total: float
     commission_earned: float
     statement_count: int
+    upload_ids: Optional[List[str]] = []
+    statement_date: Optional[datetime] = None
+    statement_month: Optional[int] = None
+    statement_year: Optional[int] = None
+    jan_commission: float = 0
+    feb_commission: float = 0
+    mar_commission: float = 0
+    apr_commission: float = 0
+    may_commission: float = 0
+    jun_commission: float = 0
+    jul_commission: float = 0
+    aug_commission: float = 0
+    sep_commission: float = 0
+    oct_commission: float = 0
+    nov_commission: float = 0
+    dec_commission: float = 0
 
 class EarnedCommissionCreate(EarnedCommissionBase):
     pass
@@ -254,6 +270,22 @@ class EarnedCommissionUpdate(BaseModel):
     invoice_total: Optional[float] = None
     commission_earned: Optional[float] = None
     statement_count: Optional[int] = None
+    upload_ids: Optional[List[str]] = None
+    statement_date: Optional[datetime] = None
+    statement_month: Optional[int] = None
+    statement_year: Optional[int] = None
+    jan_commission: Optional[float] = None
+    feb_commission: Optional[float] = None
+    mar_commission: Optional[float] = None
+    apr_commission: Optional[float] = None
+    may_commission: Optional[float] = None
+    jun_commission: Optional[float] = None
+    jul_commission: Optional[float] = None
+    aug_commission: Optional[float] = None
+    sep_commission: Optional[float] = None
+    oct_commission: Optional[float] = None
+    nov_commission: Optional[float] = None
+    dec_commission: Optional[float] = None
 
 class EarnedCommission(EarnedCommissionBase):
     id: UUID

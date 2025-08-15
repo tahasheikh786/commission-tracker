@@ -9,7 +9,7 @@ import DatabaseFieldsManager from "./DatabaseFieldsManager";
 import PlanTypesManager from "./PlanTypesManager";
 import toast from 'react-hot-toast';
 import { TableLoader, CardLoader } from "@/app/upload/components/Loader";
-import { Database, Settings, Plus, Search, Filter } from "lucide-react";
+import { Database, Settings, Plus, Search, Filter, Sparkles, Building2, FileText } from "lucide-react";
 
 type Carrier = { id: string; name: string };
 type Statement = {
@@ -121,83 +121,73 @@ export default function CarrierTab() {
       id: 'carriers' as const,
       label: 'Carriers',
       icon: Database,
-      description: 'Manage carriers and statements'
+      description: 'Manage carriers and statements',
+      gradient: 'from-violet-500 to-purple-600'
     },
     {
       id: 'database-fields' as const,
       label: 'Database Fields',
       icon: Settings,
-      description: 'Configure field mappings'
+      description: 'Configure field mappings',
+      gradient: 'from-blue-500 to-indigo-600'
     },
     {
       id: 'plan-types' as const,
       label: 'Plan Types',
       icon: Plus,
-      description: 'Add and manage plan types'
+      description: 'Add and manage plan types',
+      gradient: 'from-emerald-500 to-teal-600'
     }
   ];
   
   return (
-    <div className="w-full max-w-7xl mx-auto px-4 py-6 animate-fade-in">
+    <div className="w-full space-y-8">
       {/* Enhanced Header */}
-      <div className="text-center mb-8">
-        <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent mb-2">
-          Carrier Management
-        </h1>
-        <p className="text-gray-600 text-lg">
-          Manage your carriers, review statements, and configure system settings
+      <div className="text-center space-y-4">
+        <div className="flex items-center justify-center gap-3">
+          <Sparkles className="text-violet-500" size={24} />
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-slate-800 via-slate-700 to-slate-600 bg-clip-text text-transparent">
+            Carrier Management
+          </h1>
+          <Sparkles className="text-purple-500" size={24} />
+        </div>
+        <p className="text-lg text-slate-600 max-w-3xl mx-auto leading-relaxed">
+          Manage carriers, statements, and configure field mappings for optimal data processing
         </p>
       </div>
 
       {/* Enhanced Tab Navigation */}
-      <div className="flex justify-center mb-8">
-        <div className="glass rounded-2xl shadow-lg p-2 max-w-4xl w-full">
-          <div className="flex gap-2">
-            {tabConfig.map((tabItem) => {
-              const Icon = tabItem.icon;
-              const isActive = activeTab === tabItem.id;
-              
-              return (
-                <button
-                  key={tabItem.id}
-                  onClick={() => setActiveTab(tabItem.id)}
-                  className={`flex-1 flex items-center gap-3 px-6 py-4 rounded-xl font-medium transition-all duration-300 group relative overflow-hidden ${
-                    isActive 
-                      ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg transform scale-105' 
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
-                  }`}
-                >
-                  <Icon 
-                    size={20} 
-                    className={`transition-transform duration-300 ${
-                      isActive ? 'text-white' : 'text-gray-500 group-hover:text-gray-700'
-                    } ${isActive ? 'scale-110' : 'group-hover:scale-105'}`}
-                  />
-                  
-                  <div className="text-left">
-                    <div className={`font-semibold ${isActive ? 'text-white' : 'text-gray-800'}`}>
-                      {tabItem.label}
-                    </div>
-                    <div className={`text-xs ${isActive ? 'text-white/80' : 'text-gray-500'}`}>
-                      {tabItem.description}
-                    </div>
-                  </div>
-                  
-                  {/* Active indicator */}
-                  {isActive && (
-                    <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-8 h-1 bg-white rounded-full"></div>
-                  )}
-                </button>
-              );
-            })}
-          </div>
+      <div className="flex items-center justify-center">
+        <div className="flex items-center gap-2 bg-slate-100/80 backdrop-blur-sm rounded-2xl p-2 shadow-inner">
+          {tabConfig.map((tabItem) => {
+            const Icon = tabItem.icon;
+            const isActive = activeTab === tabItem.id;
+            
+            return (
+              <button
+                key={tabItem.id}
+                onClick={() => setActiveTab(tabItem.id)}
+                className={`group relative flex items-center gap-3 px-6 py-3 rounded-xl font-semibold transition-all duration-300 ${
+                  isActive 
+                    ? `bg-gradient-to-r ${tabItem.gradient} text-white shadow-lg transform scale-105` 
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/70 hover:shadow-md'
+                }`}
+              >
+                <Icon size={18} className={`transition-transform duration-200 ${isActive ? 'scale-110' : 'group-hover:scale-105'}`} />
+                <span>{tabItem.label}</span>
+                {isActive && (
+                  <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-2 h-2 bg-white rounded-full shadow-sm"></div>
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
 
       {activeTab === 'carriers' ? (
-        <div className="flex flex-col lg:flex-row gap-8 animate-slide-in">
-          {/* Enhanced Carrier List */}
-          <div className="lg:w-1/3">
+        <div className="flex gap-8">
+          {/* Enhanced Carrier List - Wider Sidebar */}
+          <div className="w-96 flex-shrink-0">
             <CarrierList
               carriers={carriers}
               selected={selected}
@@ -212,66 +202,95 @@ export default function CarrierTab() {
             />
           </div>
           
-          {/* Enhanced Statements Panel */}
-          <div className="lg:flex-1">
-            <div className="card p-8 min-h-[500px]">
-              <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4">
-                <div>
-                  <h2 className="text-3xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">
-                    {selected?.name || "Select a carrier"}
-                  </h2>
+          {/* Enhanced Statements Panel - Main Content */}
+          <div className="flex-1 min-w-0">
+            <div className="bg-white/90 backdrop-blur-xl rounded-3xl border border-white/50 shadow-2xl overflow-hidden">
+              <div className="p-6 border-b border-slate-200/50 bg-gradient-to-r from-slate-50/50 to-slate-100/50">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-3">
+                      <Building2 className="text-violet-600" size={24} />
+                      {selected?.name || "Select a carrier"}
+                    </h2>
+                    {selected && (
+                      <p className="text-sm text-slate-600 mt-2 flex items-center gap-2">
+                        <FileText className="text-slate-400" size={16} />
+                        {statements.length} statement{statements.length !== 1 ? 's' : ''} found
+                      </p>
+                    )}
+                  </div>
+                  
                   {selected && (
-                    <p className="text-gray-600 mt-1">
-                      {statements.length} statement{statements.length !== 1 ? 's' : ''} found
-                    </p>
-                  )}
-                </div>
-                
-                {selected && (
-                  <div className="flex gap-3">
                     <button
-                      className="btn btn-secondary px-6 py-3"
+                      className="inline-flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-violet-500 to-purple-600 text-white rounded-2xl hover:shadow-lg transition-all duration-200 hover:scale-105 font-semibold"
                       onClick={() => setShowEditMapping(true)}
                     >
-                      <Settings size={18} className="mr-2" />
+                      <Settings size={18} />
                       Edit Mappings
                     </button>
+                  )}
+                </div>
+              </div>
+              
+              <div className="p-6">
+                {loadingStatements ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 border-2 border-slate-200 border-t-violet-500 rounded-full animate-spin"></div>
+                      <span className="text-slate-600 font-medium">Loading statements...</span>
+                    </div>
+                  </div>
+                ) : selected ? (
+                  <CarrierStatementsTable
+                    statements={statements}
+                    setStatements={setStatements}
+                    onPreview={setShowPreviewIdx}
+                    onCompare={setShowCompareIdx}
+                    onDelete={handleDelete}
+                    deleting={deletingStatements}
+                  />
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-16 text-center">
+                    <div className="w-20 h-20 bg-gradient-to-r from-violet-100 to-purple-100 rounded-3xl flex items-center justify-center mb-6">
+                      <Database className="text-violet-500" size={40} />
+                    </div>
+                    <h3 className="text-xl font-bold text-slate-700 mb-3">
+                      No Carrier Selected
+                    </h3>
+                    <p className="text-slate-600 text-lg max-w-md leading-relaxed">
+                      Select a carrier from the list to view and manage their statements
+                    </p>
                   </div>
                 )}
               </div>
-              
-              {loadingStatements ? (
-                <TableLoader />
-              ) : selected ? (
-                <CarrierStatementsTable
-                  statements={statements}
-                  setStatements={setStatements}
-                  onPreview={setShowPreviewIdx}
-                  onCompare={setShowCompareIdx}
-                  onDelete={handleDelete}
-                  deleting={deletingStatements}
-                />
-              ) : (
-                <div className="flex flex-col items-center justify-center py-16 text-center">
-                  <Database className="text-gray-300 mb-4" size={64} />
-                  <h3 className="text-xl font-semibold text-gray-600 mb-2">
-                    No Carrier Selected
-                  </h3>
-                  <p className="text-gray-500 max-w-md">
-                    Select a carrier from the list to view and manage their statements
-                  </p>
-                </div>
-              )}
             </div>
           </div>
         </div>
       ) : activeTab === 'database-fields' ? (
-        <div className="animate-slide-in">
-          <DatabaseFieldsManager />
+        <div className="bg-white/90 backdrop-blur-xl rounded-3xl border border-white/50 shadow-2xl overflow-hidden">
+          <div className="p-6 border-b border-slate-200/50 bg-gradient-to-r from-slate-50/50 to-slate-100/50">
+            <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-3">
+              <Settings className="text-blue-600" size={24} />
+              Database Fields Configuration
+            </h2>
+            <p className="text-slate-600 mt-2">Configure field mappings for data extraction and processing</p>
+          </div>
+          <div className="p-6">
+            <DatabaseFieldsManager />
+          </div>
         </div>
       ) : (
-        <div className="animate-slide-in">
-          <PlanTypesManager />
+        <div className="bg-white/90 backdrop-blur-xl rounded-3xl border border-white/50 shadow-2xl overflow-hidden">
+          <div className="p-6 border-b border-slate-200/50 bg-gradient-to-r from-slate-50/50 to-slate-100/50">
+            <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-3">
+              <Plus className="text-emerald-600" size={24} />
+              Plan Types Management
+            </h2>
+            <p className="text-slate-600 mt-2">Add and manage plan types for commission tracking</p>
+          </div>
+          <div className="p-6">
+            <PlanTypesManager />
+          </div>
         </div>
       )}
       

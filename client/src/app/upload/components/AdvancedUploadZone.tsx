@@ -4,6 +4,7 @@ import toast from 'react-hot-toast'
 import { useCallback, useState } from 'react'
 import clsx from 'clsx'
 import Loader from './Loader'
+import { Calendar } from 'lucide-react' // Added import for Calendar icon
 
 type TableData = {
   header: string[]
@@ -234,6 +235,7 @@ export default function AdvancedUploadZone({
   onParsed,
   disabled,
   companyId,
+  selectedStatementDate, // Add selected statement date prop
 }: {
   onParsed: (result: { 
     tables: TableData[], 
@@ -244,7 +246,8 @@ export default function AdvancedUploadZone({
     extraction_config?: any
   }) => void,
   disabled?: boolean,
-  companyId: string
+  companyId: string,
+  selectedStatementDate?: any // Add selected statement date prop type
 }) {
   const [tables, setTables] = useState<TableData[]>([])
   const [loading, setLoading] = useState(false)
@@ -316,6 +319,16 @@ export default function AdvancedUploadZone({
   return (
     <div className="relative">
       {loading && <Loader message="AI-powered extraction in progress…" />}
+
+      {/* Date Display */}
+      {selectedStatementDate && (
+        <div className="mb-4 flex items-center justify-center gap-2 bg-green-100 px-4 py-2 rounded-full border border-green-200">
+          <Calendar className="w-4 h-4 text-green-600" />
+          <span className="text-sm text-green-700 font-medium">
+            Statement Date: {selectedStatementDate.date}
+          </span>
+        </div>
+      )}
 
       {/* Upload Zone */}
       <div

@@ -125,16 +125,21 @@ export const useEarnedCommissionStats = () => {
     setLoading(true);
     setError(null);
     try {
+      console.log('🔍 Fetching earned commission stats...');
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/earned-commission/stats`);
+      console.log('📊 Earned commission stats response:', response.status, response.ok);
       if (response.ok) {
         const data = await response.json();
+        console.log('📊 Earned commission stats data:', data);
         setStats(data);
       } else {
+        const errorText = await response.text();
+        console.error('❌ Failed to fetch earned commission stats:', errorText);
         setError('Failed to fetch earned commission stats');
       }
     } catch (err) {
+      console.error('❌ Error fetching earned commission stats:', err);
       setError('Error fetching earned commission stats');
-      console.error('Error fetching earned commission stats:', err);
     } finally {
       setLoading(false);
     }
@@ -192,7 +197,7 @@ export const useCarriersWithCommission = () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/earned-commission/carriers`);
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/dashboard/carriers`);
       if (response.ok) {
         const data = await response.json();
         setCarriers(data);
@@ -228,7 +233,7 @@ export const useCarrierCommissionData = (carrierId: string | null) => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/earned-commission/carrier/${carrierId}/data`);
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/dashboard/carriers/${carrierId}/earned-commissions`);
       if (response.ok) {
         const responseData = await response.json();
         setData(responseData);
@@ -259,16 +264,21 @@ export const useAllCommissionData = () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/earned-commission/all-data`);
+      console.log('🔍 Fetching all commission data...');
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/dashboard/earned-commissions`);
+      console.log('📊 All commission data response:', response.status, response.ok);
       if (response.ok) {
         const responseData = await response.json();
+        console.log('📊 All commission data:', responseData);
         setData(responseData);
       } else {
+        const errorText = await response.text();
+        console.error('❌ Failed to fetch all commission data:', errorText);
         setError('Failed to fetch all commission data');
       }
     } catch (err) {
+      console.error('❌ Error fetching all commission data:', err);
       setError('Error fetching all commission data');
-      console.error('Error fetching all commission data:', err);
     } finally {
       setLoading(false);
     }

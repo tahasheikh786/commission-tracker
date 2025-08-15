@@ -14,7 +14,7 @@ export type TableData = {
 export type TableEditorProps = {
   tables: TableData[]
   onTablesChange: (tables: TableData[]) => void
-  onSave: (tables: TableData[]) => void
+  onSave: (tables: TableData[], selectedStatementDate?: any) => void
   onUseAnotherExtraction: () => void
   onGoToFieldMapping: () => void
   onGoToPreviousExtraction?: () => void
@@ -27,6 +27,9 @@ export type TableEditorProps = {
   hasUsedAnotherExtraction?: boolean
   onImproveExtraction?: () => void
   isImprovingExtraction?: boolean
+  onStatementDateSelect?: (date: any) => void
+  companyId?: string
+  selectedStatementDate?: any
 }
 
 export type CellEdit = {

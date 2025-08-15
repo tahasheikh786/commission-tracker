@@ -11,6 +11,8 @@ import {
   MoreVertical,
   MoreHorizontal,
   Filter,
+  Calendar,
+  X,
 } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 
@@ -24,6 +26,10 @@ import { useUndoRedo } from './hooks/useUndoRedo'
 import PDFPreview from './components/PDFPreview'
 import TableHeader from './components/TableHeader'
 import TableControls from './components/TableControls'
+import DateSelectionModal from '../DateSelectionModal'
+import { dateExtractionService, ExtractedDate } from '../../services/dateExtractionService'
+
+import ProgressBar from '../ProgressBar'
 
 export default function TableEditor({
   tables,
@@ -39,7 +45,10 @@ export default function TableEditor({
   isUsingAnotherExtraction = false,
   hasUsedAnotherExtraction = false,
   onImproveExtraction,
-  isImprovingExtraction
+  isImprovingExtraction,
+  onStatementDateSelect,
+  companyId,
+  selectedStatementDate
 }: TableEditorProps) {
   const [currentTableIdx, setCurrentTableIdx] = useState(0)
   const [searchTerm, setSearchTerm] = useState('')
@@ -50,6 +59,15 @@ export default function TableEditor({
   const [showRowActions, setShowRowActions] = useState<{ tableIdx: number, rowIdx: number } | null>(null)
   const [showSummaryRows, setShowSummaryRows] = useState(true)
   const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set())
+  
+  // Date extraction state
+  const [showDateModal, setShowDateModal] = useState(false)
+  const [extractedDates, setExtractedDates] = useState<ExtractedDate[]>([])
+  const [dateExtractionLoading, setDateExtractionLoading] = useState(false)
+  const [hasTriggeredDateExtraction, setHasTriggeredDateExtraction] = useState(false)
+  
+  // Ref to prevent multiple API calls
+  const dateExtractionTriggeredRef = useRef(false)
   
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -161,6 +179,8 @@ export default function TableEditor({
     toast.success('Cleared all selections and format validation')
   }
 
+
+
   const selectAllRows = () => {
     const currentTable = tables[currentTableIdx]
     if (currentTable) {
@@ -213,6 +233,103 @@ export default function TableEditor({
     }
   }, [tables, extractionHistory, currentExtractionIndex, onTablesChange])
 
+  // Trigger date extraction when TableEditor loads
+  useEffect(() => {
+    console.log('🔍 Date extraction useEffect triggered:', {
+      tablesLength: tables.length,
+      hasFile: !!uploaded?.file,
+      companyId,
+      hasTriggered: hasTriggeredDateExtraction,
+      isLoading: dateExtractionLoading,
+      refTriggered: dateExtractionTriggeredRef.current
+    })
+    
+    // Only trigger if all conditions are met and we haven't triggered before
+    if (tables.length > 0 && 
+        uploaded?.file && 
+        companyId && 
+        !hasTriggeredDateExtraction && 
+        !dateExtractionLoading && 
+        !dateExtractionTriggeredRef.current) {
+      console.log('🚀 Conditions met, triggering date extraction')
+      dateExtractionTriggeredRef.current = true
+      triggerDateExtraction()
+    }
+    
+    // Cleanup function to reset ref when component unmounts
+    return () => {
+      dateExtractionTriggeredRef.current = false
+    }
+  }, [tables.length, uploaded?.file, companyId, hasTriggeredDateExtraction, dateExtractionLoading])
+
+  // Date extraction functions
+  const triggerDateExtraction = async () => {
+    if (!uploaded?.file || !companyId) return
+    
+    setHasTriggeredDateExtraction(true)
+    setDateExtractionLoading(true)
+    
+    try {
+      console.log('🚀 Triggering date extraction for file:', uploaded.file.name)
+      
+      // Check if we have a file object or need to create one
+      let fileToUse = uploaded.file
+      if (!fileToUse || typeof fileToUse === 'string') {
+        // If we don't have a proper file object, skip date extraction
+        console.log('No proper file object available for date extraction, skipping...')
+        toast.success('Date extraction skipped. You can manually select a date later.')
+        return
+      }
+      
+      const response = await dateExtractionService.extractDatesFromFile(fileToUse, companyId)
+      
+      console.log('📅 Date extraction response:', response)
+      
+      if (response.success && response.dates && response.dates.length > 0) {
+        setExtractedDates(response.dates)
+        setShowDateModal(true)
+        toast.success(`Found ${response.dates.length} date(s) in your document`)
+      } else {
+        console.log('No dates found or extraction failed:', response)
+        if (response.errors && response.errors.length > 0) {
+          console.log('Date extraction errors:', response.errors)
+        }
+        
+        // Show manual date selection modal even when no dates are found
+        setExtractedDates([])
+        setShowDateModal(true)
+        toast.success('No dates found in the document. You can manually select a date.')
+      }
+    } catch (error: any) {
+      console.error('Date extraction failed:', error)
+      const errorMessage = error.message || 'Failed to extract dates from document'
+      
+      // Don't show error toast for date extraction failures, just log it
+      console.log('Date extraction failed, but continuing with upload process...')
+      
+      // Show manual date selection modal
+      setExtractedDates([])
+      setShowDateModal(true)
+      toast.success('Date extraction failed. You can manually select a date.')
+    } finally {
+      setDateExtractionLoading(false)
+    }
+  }
+
+  const handleDateSelect = (selectedDate: string, dateType: string) => {
+    if (onStatementDateSelect) {
+      const dateInfo = {
+        date: selectedDate,
+        type: dateType,
+        source: 'extraction'
+      }
+      onStatementDateSelect(dateInfo)
+    } else {
+      console.error('🎯 TableEditor: onStatementDateSelect is not available!')
+    }
+    toast.success(`Selected statement date: ${selectedDate}`)
+  }
+
   // Close menus when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -235,7 +352,7 @@ export default function TableEditor({
 
   // Save changes
   const handleSave = () => {
-    onSave(tables)
+    onSave(tables, selectedStatementDate)
     setHasUnsavedChanges(false)
     clearHistory()
     toast.success('Changes saved successfully')
@@ -248,7 +365,8 @@ export default function TableEditor({
 
   // Header Action Menu Component
   const HeaderActionMenu = ({ tableIdx, colIdx }: { tableIdx: number, colIdx: number }) => {
-    const [newName, setNewName] = useState(currentTable?.header[colIdx] || '')
+    const table = tables[tableIdx]
+    const [newName, setNewName] = useState(table?.header[colIdx] || '')
     const [isRenaming, setIsRenaming] = useState(false)
 
     const handleRename = () => {
@@ -333,7 +451,8 @@ export default function TableEditor({
 
   // Row Action Menu Component
   const RowActionMenu = ({ tableIdx, rowIdx }: { tableIdx: number, rowIdx: number }) => {
-    const isSummary = isSummaryRow(currentTable, rowIdx)
+    const table = tables[tableIdx]
+    const isSummary = table ? isSummaryRow(table, rowIdx) : false
     
     return (
       <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 min-w-[200px]">
@@ -447,6 +566,9 @@ export default function TableEditor({
       
       {/* Main Content - Side by Side Layout */}
       <div className="flex flex-col h-full">
+        {/* Progress Bar */}
+        <ProgressBar currentStep="table_editor" />
+        
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-purple-50 flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -456,50 +578,90 @@ export default function TableEditor({
                 {uploaded.file_name}
               </span>
             )}
+            {selectedStatementDate && (
+              <div className="flex items-center gap-2 bg-green-100 px-3 py-1 rounded-full border border-green-200">
+                <Calendar className="w-4 h-4 text-green-600" />
+                <span className="text-sm text-green-700 font-medium">
+                  Statement Date: {selectedStatementDate.date}
+                </span>
+                <button
+                  onClick={() => {
+                    if (onStatementDateSelect) {
+                      onStatementDateSelect(null)
+                    }
+                    dateExtractionTriggeredRef.current = false
+                    setHasTriggeredDateExtraction(false)
+                    setExtractedDates([])
+                    setShowDateModal(false)
+                    toast.success('Date selection reset. You can extract dates again.')
+                  }}
+                  className="ml-1 p-1 text-green-600 hover:text-green-800 hover:bg-green-200 rounded-full transition-colors"
+                  title="Reset date selection"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            )}
           </div>
           
-          <div className="flex items-center gap-3">
-            {/* Search */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <input
-                type="text"
-                placeholder="Search tables..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-sm"
-              />
-            </div>
-
-            {/* Undo/Redo */}
-            <button
-              onClick={undo}
-              disabled={undoStack.length === 0}
-              className="p-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 bg-white rounded-lg border border-gray-200 hover:border-gray-300"
-              title="Undo"
-            >
-              <RotateCcw className="w-4 h-4" />
-            </button>
-            <button
-              onClick={redo}
-              disabled={redoStack.length === 0}
-              className="p-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 bg-white rounded-lg border border-gray-200 hover:border-gray-300"
-              title="Redo"
-            >
-              <RotateCcw className="w-4 h-4 transform scale-x-[-1]" />
-            </button>
-
-            {/* Revert Merge */}
-            {mergeHistory.length > 0 && (
+                      <div className="flex items-center gap-3">
+              {/* Date Extraction Button */}
               <button
-                onClick={revertLastMerge}
-                className="p-2 text-orange-600 hover:text-orange-700 bg-white rounded-lg border border-orange-200 hover:border-orange-300"
-                title="Revert last merge"
+                onClick={() => {
+                  if (!dateExtractionLoading && !dateExtractionTriggeredRef.current) {
+                    console.log('🔧 Manual date extraction triggered')
+                    triggerDateExtraction()
+                  }
+                }}
+                disabled={dateExtractionLoading || dateExtractionTriggeredRef.current}
+                className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2 text-sm"
+                title="Extract dates from document"
+              >
+                <Calendar className="w-4 h-4" />
+                {dateExtractionLoading ? 'Extracting...' : dateExtractionTriggeredRef.current ? 'Already Extracted' : 'Extract Dates'}
+              </button>
+
+              {/* Search */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <input
+                  type="text"
+                  placeholder="Search tables..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-sm"
+                />
+              </div>
+
+              {/* Undo/Redo */}
+              <button
+                onClick={undo}
+                disabled={undoStack.length === 0}
+                className="p-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 bg-white rounded-lg border border-gray-200 hover:border-gray-300"
+                title="Undo"
               >
                 <RotateCcw className="w-4 h-4" />
               </button>
-            )}
-          </div>
+              <button
+                onClick={redo}
+                disabled={redoStack.length === 0}
+                className="p-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 bg-white rounded-lg border border-gray-200 hover:border-gray-300"
+                title="Redo"
+              >
+                <RotateCcw className="w-4 h-4 transform scale-x-[-1]" />
+              </button>
+
+              {/* Revert Merge */}
+              {mergeHistory.length > 0 && (
+                <button
+                  onClick={revertLastMerge}
+                  className="p-2 text-orange-600 hover:text-orange-700 bg-white rounded-lg border border-orange-200 hover:border-orange-300"
+                  title="Revert last merge"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                </button>
+              )}
+            </div>
         </div>
 
         {/* Side by Side Content */}
@@ -802,8 +964,24 @@ export default function TableEditor({
               <span className="text-sm text-gray-600">
                 {tables.reduce((acc, table) => acc + table.rows.length, 0)} total rows
               </span>
+              {selectedStatementDate && (
+                <div className="flex items-center gap-1 text-sm text-green-600">
+                  <Calendar className="w-3 h-3" />
+                  <span>Date: {selectedStatementDate.date}</span>
+                </div>
+              )}
               <button
-                onClick={onGoToFieldMapping}
+                onClick={() => {
+                  console.log('🎯 TableEditor: Save & Go to Field Mapping clicked')
+                  console.log('🎯 TableEditor: Current tables:', tables)
+                  console.log('🎯 TableEditor: Current selectedStatementDate:', selectedStatementDate)
+                  console.log('🎯 TableEditor: onSave function available:', !!onSave)
+                  console.log('🎯 TableEditor: onGoToFieldMapping function available:', !!onGoToFieldMapping)
+                  // Save tables and date first
+                  onSave(tables)
+                  // Then go to field mapping
+                  onGoToFieldMapping()
+                }}
                 disabled={loading || isUsingAnotherExtraction}
                 className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2 font-medium"
               >
@@ -822,6 +1000,17 @@ export default function TableEditor({
           onChange={() => {}} // TODO: Implement import functionality
           className="hidden"
         />
+
+        {/* Date Selection Modal */}
+        <DateSelectionModal
+          isOpen={showDateModal}
+          onClose={() => setShowDateModal(false)}
+          onDateSelect={handleDateSelect}
+          extractedDates={extractedDates}
+          fileName={uploaded?.file_name || 'Unknown file'}
+          loading={dateExtractionLoading}
+        />
+
       </div>
     </div>
   )

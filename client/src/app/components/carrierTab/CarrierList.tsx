@@ -18,7 +18,7 @@ export default function CarrierList({ carriers, selected, onSelect, loading, onD
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCarriers, setSelectedCarriers] = useState<Set<string>>(new Set());
   const [currentPage, setCurrentPage] = useState(1);
-  const [carriersPerPage] = useState(15);
+  const [carriersPerPage] = useState(10);
   const [editingCarrierId, setEditingCarrierId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [updating, setUpdating] = useState(false);
@@ -97,7 +97,7 @@ export default function CarrierList({ carriers, selected, onSelect, loading, onD
   };
 
   return (
-    <div className="card p-6 relative">
+    <div className="card p-4 relative w-full">
       {deleting && (
         <div className="absolute inset-0 bg-white/90 backdrop-blur-sm flex items-center justify-center z-10 rounded-2xl">
           <div className="flex items-center space-x-3">

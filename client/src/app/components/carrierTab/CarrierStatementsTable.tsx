@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Eye, LayoutList, Trash2, CheckCircle, XCircle, Clock, FileText, ExternalLink } from "lucide-react";
+import { Eye, LayoutList, Trash2, CheckCircle, XCircle, Clock, FileText, ExternalLink, ChevronLeft, ChevronRight } from "lucide-react";
 import { useRouter } from 'next/navigation';
 
 type Statement = {
@@ -22,7 +22,20 @@ type Props = {
 export default function CarrierStatementsTable({ statements, setStatements, onPreview, onCompare, onDelete, deleting }: Props) {
   const [selectedStatements, setSelectedStatements] = useState<Set<string>>(new Set());
   const [selectAll, setSelectAll] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
   const router = useRouter();
+
+  const totalPages = Math.ceil(statements.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedStatements = statements.slice(startIndex, endIndex);
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    setSelectedStatements(new Set()); // Clear selections when changing pages
+    setSelectAll(false);
+  };
 
   const handleCheckboxChange = (id: string) => {
     const newSelectedStatements = new Set(selectedStatements);
@@ -39,13 +52,14 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
       const idsToDelete = Array.from(selectedStatements);
       onDelete(idsToDelete);
       setSelectedStatements(new Set());
+      setSelectAll(false);
     }
   };
 
   const handleSelectAllChange = () => {
     const newSelectedStatements = new Set<string>();
     if (!selectAll) {
-      statements.forEach(statement => newSelectedStatements.add(statement.id));
+      paginatedStatements.forEach(statement => newSelectedStatements.add(statement.id));
     }
     setSelectedStatements(newSelectedStatements);
     setSelectAll(!selectAll);
@@ -121,7 +135,7 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
       )}
 
       {/* Enhanced Table */}
-      <div className="card overflow-hidden">
+      <div className="card overflow-hidden w-full">
         <table className="table w-full">
           <thead>
             <tr>
@@ -147,7 +161,7 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
             </tr>
           </thead>
           <tbody>
-            {statements.map((statement, idx) => {
+            {paginatedStatements.map((statement, idx) => {
               const statusInfo = getStatusInfo(statement.status);
               const StatusIcon = statusInfo.icon;
               
@@ -209,7 +223,7 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
                         <button
                           title="View mapped table"
                           className="btn btn-ghost p-2 text-primary hover:bg-primary/10"
-                          onClick={() => onPreview(idx)}
+                          onClick={() => onPreview(startIndex + idx)}
                         >
                           <Eye size={16} />
                         </button>
@@ -218,7 +232,7 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
                       <button
                         title="Compare mapped & extracted"
                         className="btn btn-ghost p-2 text-secondary hover:bg-secondary/10"
-                        onClick={() => onCompare(idx)}
+                        onClick={() => onCompare(startIndex + idx)}
                       >
                         <LayoutList size={16} />
                       </button>
@@ -241,6 +255,50 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
           </tbody>
         </table>
         
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 sm:px-6">
+            <div className="flex-1 flex justify-between sm:hidden">
+              <button
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage === 1}
+                className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+              >
+                Previous
+              </button>
+              <button
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={currentPage === totalPages}
+                className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+              >
+                Next
+              </button>
+            </div>
+            <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handlePageChange(1)}
+                  disabled={currentPage === 1}
+                  className="relative inline-flex items-center px-2 py-2 border border-gray-300 bg-white text-sm font-medium rounded-md text-gray-500 hover:bg-gray-50"
+                >
+                  <ChevronLeft className="h-5 w-5" />
+                </button>
+                <span className="text-sm text-gray-700">
+                  Page <span className="font-medium">{currentPage}</span> of{' '}
+                  <span className="font-medium">{totalPages}</span>
+                </span>
+                <button
+                  onClick={() => handlePageChange(totalPages)}
+                  disabled={currentPage === totalPages}
+                  className="relative inline-flex items-center px-2 py-2 border border-gray-300 bg-white text-sm font-medium rounded-md text-gray-500 hover:bg-gray-50"
+                >
+                  <ChevronRight className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Empty State */}
         {statements.length === 0 && (
           <div className="text-center py-12">

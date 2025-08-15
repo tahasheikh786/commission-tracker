@@ -1,6 +1,6 @@
 'use client'
 import React, { useState, useEffect, useCallback } from 'react'
-import { Plus, Edit, Trash2, Save, X } from 'lucide-react'
+import { Plus, Edit, Trash2, Save, X, ChevronLeft, ChevronRight } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 type DatabaseField = {
@@ -36,6 +36,17 @@ export default function DatabaseFieldsManager() {
     description: '',
     is_active: true
   })
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
+
+  const totalPages = Math.ceil(fields.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const paginatedFields = fields.slice(startIndex, endIndex)
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page)
+  }
 
   // Fetch database fields
   const fetchFields = useCallback(async () => {
@@ -225,7 +236,7 @@ export default function DatabaseFieldsManager() {
                     </tr>
                   </thead>
             <tbody className="divide-y divide-gray-200">
-              {fields.map((field) => (
+              {paginatedFields.map((field) => (
                 <tr key={field.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4">
                     {editingField === field.id ? (
@@ -314,6 +325,63 @@ export default function DatabaseFieldsManager() {
             </tbody>
           </table>
         </div>
+        
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-gray-50">
+            <div className="text-sm text-gray-700">
+              Showing {startIndex + 1} to {Math.min(endIndex, fields.length)} of {fields.length} fields
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage === 1}
+                className="flex items-center gap-1 px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft size={16} />
+                Previous
+              </button>
+              
+              <div className="flex items-center gap-1">
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let pageNum;
+                  if (totalPages <= 5) {
+                    pageNum = i + 1;
+                  } else if (currentPage <= 3) {
+                    pageNum = i + 1;
+                  } else if (currentPage >= totalPages - 2) {
+                    pageNum = totalPages - 4 + i;
+                  } else {
+                    pageNum = currentPage - 2 + i;
+                  }
+                  
+                  return (
+                    <button
+                      key={pageNum}
+                      onClick={() => handlePageChange(pageNum)}
+                      className={`px-3 py-2 text-sm rounded-lg transition-colors ${
+                        currentPage === pageNum
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+              </div>
+              
+              <button
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={currentPage === totalPages}
+                className="flex items-center gap-1 px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                Next
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        )}
         
         {fields.length === 0 && (
           <div className="text-center py-12">
