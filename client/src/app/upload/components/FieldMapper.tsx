@@ -223,7 +223,7 @@ export default function FieldMapper({
     }
 
     fetchDatabaseFields()
-  }, []) // Remove dependencies to prevent re-running and auto-populating fields
+  }, [fields.length, initialFields]) // Add missing dependencies
 
   // Fetch plan types from backend
   useEffect(() => {

@@ -263,7 +263,7 @@ export default function TableEditor({
   }, [tables.length, uploaded?.file, companyId, hasTriggeredDateExtraction, dateExtractionLoading])
 
   // Date extraction functions
-  const triggerDateExtraction = async () => {
+  const triggerDateExtraction = useCallback(async () => {
     if (!uploaded?.file || !companyId) return
     
     setHasTriggeredDateExtraction(true)
@@ -273,7 +273,7 @@ export default function TableEditor({
       console.log('🚀 Triggering date extraction for file:', uploaded.file.name)
       
       // Check if we have a file object or need to create one
-      let fileToUse = uploaded.file
+      const fileToUse = uploaded.file
       if (!fileToUse || typeof fileToUse === 'string') {
         // If we don't have a proper file object, skip date extraction
         console.log('No proper file object available for date extraction, skipping...')
@@ -314,7 +314,7 @@ export default function TableEditor({
     } finally {
       setDateExtractionLoading(false)
     }
-  }
+  }, [uploaded?.file, companyId])
 
   const handleDateSelect = (selectedDate: string, dateType: string) => {
     if (onStatementDateSelect) {

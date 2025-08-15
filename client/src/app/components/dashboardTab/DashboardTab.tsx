@@ -54,7 +54,7 @@ export default function DashboardTab() {
   useEffect(() => {
     console.log('🔄 DashboardTab mounted, refreshing earned commission stats...');
     refetchEarnedCommissionStats();
-  }, []);
+  }, [refetchEarnedCommissionStats]);
 
   // Load selected statement date from upload progress
   const loadSelectedStatementDate = useCallback(async () => {

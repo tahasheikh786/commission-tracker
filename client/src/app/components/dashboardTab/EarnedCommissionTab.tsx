@@ -90,7 +90,7 @@ export default function EarnedCommissionTab() {
   // Refresh data when component mounts or when selectedCarrier changes
   useEffect(() => {
     refreshAllData();
-  }, [selectedCarrier]);
+  }, [selectedCarrier, refreshAllData]);
 
   const ITEMS_PER_PAGE = 10;
 

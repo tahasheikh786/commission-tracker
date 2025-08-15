@@ -77,7 +77,7 @@ export function useUploadPage() {
         selected_statement_date: dateInfo
       })
     }
-  }, [uploaded?.upload_id, saveProgress])
+  }, [uploaded?.upload_id])
 
   // Helper function to get label from database fields
   const getLabelFromDatabaseFields = useCallback((fieldKey: string) => {
@@ -348,7 +348,7 @@ export function useUploadPage() {
         }
       })
     }
-  }, [showFieldMapper, uploaded?.upload_id, selectedStatementDate, loadProgress])
+  }, [showFieldMapper, uploaded?.upload_id, selectedStatementDate])
 
   // Auto-save progress when user navigates away or closes browser
   useEffect(() => {
@@ -376,7 +376,7 @@ export function useUploadPage() {
       window.removeEventListener('beforeunload', handleBeforeUnload)
       handleBeforeUnload()
     }
-  }, [uploaded?.upload_id, showTableEditor, showFieldMapper, finalTables, fieldConfig, mapping, planTypes, skipped, editedTables, autoSaveProgress])
+  }, [uploaded?.upload_id, showTableEditor, showFieldMapper, finalTables, fieldConfig, mapping, planTypes, skipped, editedTables, selectedStatementDate, autoSaveProgress])
 
   function handleReset() {
     setCompany(null)
