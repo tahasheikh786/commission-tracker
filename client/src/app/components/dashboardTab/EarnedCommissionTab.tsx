@@ -1,5 +1,5 @@
 'use client'
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   DollarSign,
   Building2,
@@ -76,7 +76,7 @@ export default function EarnedCommissionTab() {
   const { data: allData, loading: allDataLoading, refetch: refetchAllData } = useAllCommissionData();
 
   // Refresh all data
-  const refreshAllData = () => {
+  const refreshAllData = useCallback(() => {
     console.log('🔄 Refreshing all earned commission data...');
     refetchStats();
     refetchCarriers();
@@ -85,7 +85,7 @@ export default function EarnedCommissionTab() {
       refetchCarrierStats();
       refetchCarrierData();
     }
-  };
+  }, [refetchStats, refetchCarriers, refetchAllData, selectedCarrier, refetchCarrierStats, refetchCarrierData]);
 
   // Refresh data when component mounts or when selectedCarrier changes
   useEffect(() => {
