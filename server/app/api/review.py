@@ -23,6 +23,7 @@ class RejectPayload(BaseModel):
     rejection_reason: str
     field_config: Optional[List[Dict[str, str]]] = None
     plan_types: Optional[List[str]] = None
+    selected_statement_date: Optional[Dict[str, Any]] = None
 
 @router.post("/approve/")
 async def approve_statement(
@@ -57,6 +58,7 @@ async def reject_statement(
             field_config=payload.field_config,
             rejection_reason=payload.rejection_reason,
             plan_types=payload.plan_types,
+            selected_statement_date=payload.selected_statement_date,
         )
         return {"success": True, "review": schemas.StatementReview.from_orm(updated)}
     except Exception as e:

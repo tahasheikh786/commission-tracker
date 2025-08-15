@@ -1,5 +1,6 @@
 'use client'
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { flushSync } from 'react-dom'
 import { 
   Pencil, 
   Trash2, 
@@ -48,7 +49,8 @@ export default function TableEditor({
   isImprovingExtraction,
   onStatementDateSelect,
   companyId,
-  selectedStatementDate
+  selectedStatementDate,
+  disableAutoDateExtraction = false
 }: TableEditorProps) {
   const [currentTableIdx, setCurrentTableIdx] = useState(0)
   const [searchTerm, setSearchTerm] = useState('')
@@ -64,12 +66,27 @@ export default function TableEditor({
   const [showDateModal, setShowDateModal] = useState(false)
   const [extractedDates, setExtractedDates] = useState<ExtractedDate[]>([])
   const [dateExtractionLoading, setDateExtractionLoading] = useState(false)
-  const [hasTriggeredDateExtraction, setHasTriggeredDateExtraction] = useState(false)
   
-  // Ref to prevent multiple API calls
-  const dateExtractionTriggeredRef = useRef(false)
+  // Ref to track processed data keys to prevent duplicate extractions
+  const processedDataKeysRef = useRef<Set<string>>(new Set())
+  
+  // Debug modal state changes
+  useEffect(() => {
+    console.log('🎭 Modal state changed:', {
+      showDateModal,
+      extractedDatesLength: extractedDates.length,
+      dateExtractionLoading
+    })
+  }, [showDateModal, extractedDates.length, dateExtractionLoading])
+  
+  // Ref to track if component is unmounting
+  const isUnmountingRef = useRef(false)
+  
+
   
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+
 
   // Custom hooks
   const {
@@ -169,17 +186,11 @@ export default function TableEditor({
     })
   }
 
-
-
   const onClearAll = () => {
-    // Clear row selection
     setSelectedRows(new Set())
-    // Clear format validation
     clearFormatValidation()
     toast.success('Cleared all selections and format validation')
   }
-
-
 
   const selectAllRows = () => {
     const currentTable = tables[currentTableIdx]
@@ -235,86 +246,69 @@ export default function TableEditor({
 
   // Trigger date extraction when TableEditor loads
   useEffect(() => {
-    console.log('🔍 Date extraction useEffect triggered:', {
-      tablesLength: tables.length,
-      hasFile: !!uploaded?.file,
-      companyId,
-      hasTriggered: hasTriggeredDateExtraction,
-      isLoading: dateExtractionLoading,
-      refTriggered: dateExtractionTriggeredRef.current
-    })
-    
-    // Only trigger if all conditions are met and we haven't triggered before
-    if (tables.length > 0 && 
-        uploaded?.file && 
-        companyId && 
-        !hasTriggeredDateExtraction && 
-        !dateExtractionLoading && 
-        !dateExtractionTriggeredRef.current) {
-      console.log('🚀 Conditions met, triggering date extraction')
-      dateExtractionTriggeredRef.current = true
-      triggerDateExtraction()
+    if (!tables.length || !uploaded?.file || !companyId || disableAutoDateExtraction || dateExtractionLoading) {
+      return
     }
-    
-    // Cleanup function to reset ref when component unmounts
-    return () => {
-      dateExtractionTriggeredRef.current = false
-    }
-  }, [tables.length, uploaded?.file, companyId, hasTriggeredDateExtraction, dateExtractionLoading])
 
-  // Date extraction functions
-  const triggerDateExtraction = useCallback(async () => {
-    if (!uploaded?.file || !companyId) return
+    const dataKey = `${tables.length}-${uploaded.file_name}-${companyId}`
     
-    setHasTriggeredDateExtraction(true)
-    setDateExtractionLoading(true)
+    // Skip if already processed
+    if (processedDataKeysRef.current.has(dataKey)) {
+      console.log('⏭️ Skipping - already processed:', dataKey)
+      return
+    }
+
+    console.log('🚀 Starting date extraction for:', dataKey)
+    processedDataKeysRef.current.add(dataKey)
     
-    try {
-      console.log('🚀 Triggering date extraction for file:', uploaded.file.name)
+    const extractDates = async () => {
+      if (isUnmountingRef.current) return
       
-      // Check if we have a file object or need to create one
-      const fileToUse = uploaded.file
-      if (!fileToUse || typeof fileToUse === 'string') {
-        // If we don't have a proper file object, skip date extraction
-        console.log('No proper file object available for date extraction, skipping...')
-        toast.success('Date extraction skipped. You can manually select a date later.')
-        return
-      }
+      setDateExtractionLoading(true)
       
-      const response = await dateExtractionService.extractDatesFromFile(fileToUse, companyId)
-      
-      console.log('📅 Date extraction response:', response)
-      
-      if (response.success && response.dates && response.dates.length > 0) {
-        setExtractedDates(response.dates)
-        setShowDateModal(true)
-        toast.success(`Found ${response.dates.length} date(s) in your document`)
-      } else {
-        console.log('No dates found or extraction failed:', response)
-        if (response.errors && response.errors.length > 0) {
-          console.log('Date extraction errors:', response.errors)
-        }
+      try {
+        const response = await dateExtractionService.extractDatesFromFile(uploaded.file, companyId)
         
-        // Show manual date selection modal even when no dates are found
+        console.log('🎯 Date extraction completed:', {
+          success: response.success,
+          datesCount: response.dates?.length || 0,
+          isUnmounting: isUnmountingRef.current
+        })
+        
+        // Always try to show modal if we have a successful response, even if component is unmounting
+        if (response.success) {
+          setExtractedDates(response.dates || [])
+          setShowDateModal(true) // 🎯 This will now work!
+          console.log('✅ Modal should show with', response.dates?.length || 0, 'dates')
+          
+          if (response.dates && response.dates.length > 0) {
+            toast.success(`Found ${response.dates.length} date(s) in your document`)
+          } else {
+            toast.success('No dates found in the document. You can manually select a date.')
+          }
+        }
+      } catch (error) {
+        console.log('❌ Date extraction failed:', error)
+        // Always try to show modal for manual selection, even if component is unmounting
         setExtractedDates([])
         setShowDateModal(true)
-        toast.success('No dates found in the document. You can manually select a date.')
+        toast.error('Date extraction failed. Please select manually.')
+      } finally {
+        // Always reset loading state
+        setDateExtractionLoading(false)
       }
-    } catch (error: any) {
-      console.error('Date extraction failed:', error)
-      const errorMessage = error.message || 'Failed to extract dates from document'
-      
-      // Don't show error toast for date extraction failures, just log it
-      console.log('Date extraction failed, but continuing with upload process...')
-      
-      // Show manual date selection modal
-      setExtractedDates([])
-      setShowDateModal(true)
-      toast.success('Date extraction failed. You can manually select a date.')
-    } finally {
-      setDateExtractionLoading(false)
     }
-  }, [uploaded?.file, companyId])
+    
+    extractDates()
+  }, [tables.length, uploaded?.file, uploaded?.file_name, companyId, disableAutoDateExtraction, dateExtractionLoading])
+
+  // Cleanup effect that only runs on unmount
+  useEffect(() => {
+    return () => {
+      console.log('🧹 Component unmounting - cleaning up extraction state')
+      isUnmountingRef.current = true
+    }
+  }, [])
 
   const handleDateSelect = (selectedDate: string, dateType: string) => {
     if (onStatementDateSelect) {
@@ -324,8 +318,6 @@ export default function TableEditor({
         source: 'extraction'
       }
       onStatementDateSelect(dateInfo)
-    } else {
-      console.error('🎯 TableEditor: onStatementDateSelect is not available!')
     }
     toast.success(`Selected statement date: ${selectedDate}`)
   }
@@ -589,8 +581,9 @@ export default function TableEditor({
                     if (onStatementDateSelect) {
                       onStatementDateSelect(null)
                     }
-                    dateExtractionTriggeredRef.current = false
-                    setHasTriggeredDateExtraction(false)
+                    // Reset all date extraction state to allow re-extraction
+                    processedDataKeysRef.current.clear()
+                    setDateExtractionLoading(false)
                     setExtractedDates([])
                     setShowDateModal(false)
                     toast.success('Date selection reset. You can extract dates again.')
@@ -604,64 +597,151 @@ export default function TableEditor({
             )}
           </div>
           
-                      <div className="flex items-center gap-3">
-              {/* Date Extraction Button */}
-              <button
-                onClick={() => {
-                  if (!dateExtractionLoading && !dateExtractionTriggeredRef.current) {
-                    console.log('🔧 Manual date extraction triggered')
-                    triggerDateExtraction()
+          <div className="flex items-center gap-3">
+            {/* Date Extraction Button */}
+            <button
+              onClick={() => {
+                console.log('🔧 Manual extraction button clicked')
+                if (!dateExtractionLoading) {
+                  console.log('🚀 Starting manual extraction')
+                  setDateExtractionLoading(true)
+                  
+                  const performManualDateExtraction = async () => {
+                    console.log('🎯 performManualDateExtraction called')
+                    
+                    // Check if component is unmounting
+                    if (isUnmountingRef.current) {
+                      console.log('❌ Component unmounting - cancelling manual extraction')
+                      return
+                    }
+                    
+                    if (!uploaded?.file || !companyId) {
+                      console.log('❌ Manual extraction - missing file or companyId')
+                      setDateExtractionLoading(false)
+                      return
+                    }
+                    
+                    try {
+                      const fileToUse = uploaded.file
+                      let response
+                      
+                      console.log('📁 Starting manual API call')
+                      
+                      if (fileToUse instanceof File) {
+                        console.log('📄 Manual - Using File object:', fileToUse.name)
+                        response = await dateExtractionService.extractDatesFromFile(fileToUse, companyId)
+                      } else if (fileToUse && typeof fileToUse === 'object' && fileToUse.url) {
+                        console.log('🌐 Manual - Using file URL:', fileToUse.url)
+                        try {
+                          const fileResponse = await fetch(fileToUse.url)
+                          if (!fileResponse.ok) {
+                            throw new Error(`Failed to fetch file from URL: ${fileResponse.status}`)
+                          }
+                          const fileBlob = await fileResponse.blob()
+                          const fileName = uploaded.file_name || 'document.pdf'
+                          const file = new File([fileBlob], fileName, { type: fileBlob.type || 'application/pdf' })
+                          response = await dateExtractionService.extractDatesFromFile(file, companyId)
+                        } catch (fetchError) {
+                          console.log('❌ Manual - File fetch failed:', fetchError)
+                          // Always try to show modal, even if component is unmounting
+                          setExtractedDates([])
+                          setShowDateModal(true)
+                          toast.success('Could not access the file for date extraction. You can manually select a date.')
+                          setDateExtractionLoading(false)
+                          return
+                        }
+                      } else {
+                        console.log('❌ Manual - No proper file object')
+                        // Always try to show modal, even if component is unmounting
+                        setExtractedDates([])
+                        setShowDateModal(true)
+                        toast.success('Date extraction not available. You can manually select a date.')
+                        setDateExtractionLoading(false)
+                        return
+                      }
+                      
+                      console.log('✅ Manual - API response received:', {
+                        success: response.success,
+                        datesCount: response.dates?.length || 0
+                      })
+                      
+                      // Always try to show modal, even if component is unmounting
+                      if (response.success && response.dates && response.dates.length > 0) {
+                        console.log('✅ Manual - Setting dates:', response.dates.length)
+                        setExtractedDates(response.dates)
+                        setShowDateModal(true)
+                        toast.success(`Found ${response.dates.length} date(s) in your document`)
+                      } else {
+                        console.log('📋 Manual - No dates found')
+                        setExtractedDates([])
+                        setShowDateModal(true)
+                        toast.success('No dates found in the document. You can manually select a date.')
+                      }
+                    } catch (error: any) {
+                      console.log('❌ Manual - API call failed:', error)
+                      // Always try to show modal for manual selection, even if component is unmounting
+                      setExtractedDates([])
+                      setShowDateModal(true)
+                      toast.success('Date extraction failed. You can manually select a date.')
+                    } finally {
+                      console.log('🏁 Manual - Finishing extraction')
+                      // Always reset loading state
+                      setDateExtractionLoading(false)
+                    }
                   }
-                }}
-                disabled={dateExtractionLoading || dateExtractionTriggeredRef.current}
-                className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2 text-sm"
-                title="Extract dates from document"
-              >
-                <Calendar className="w-4 h-4" />
-                {dateExtractionLoading ? 'Extracting...' : dateExtractionTriggeredRef.current ? 'Already Extracted' : 'Extract Dates'}
-              </button>
+                  
+                  performManualDateExtraction()
+                }
+              }}
+              disabled={dateExtractionLoading}
+              className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2 text-sm"
+              title="Extract dates from document"
+            >
+              <Calendar className="w-4 h-4" />
+              {dateExtractionLoading ? 'Extracting...' : 'Extract Dates'}
+            </button>
 
-              {/* Search */}
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <input
-                  type="text"
-                  placeholder="Search tables..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-sm"
-                />
-              </div>
+            {/* Search */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <input
+                type="text"
+                placeholder="Search tables..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-sm"
+              />
+            </div>
 
-              {/* Undo/Redo */}
+            {/* Undo/Redo */}
+            <button
+              onClick={undo}
+              disabled={undoStack.length === 0}
+              className="p-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 bg-white rounded-lg border border-gray-200 hover:border-gray-300"
+              title="Undo"
+            >
+              <RotateCcw className="w-4 h-4" />
+            </button>
+            <button
+              onClick={redo}
+              disabled={redoStack.length === 0}
+              className="p-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 bg-white rounded-lg border border-gray-200 hover:border-gray-300"
+              title="Redo"
+            >
+              <RotateCcw className="w-4 h-4 transform scale-x-[-1]" />
+            </button>
+
+            {/* Revert Merge */}
+            {mergeHistory.length > 0 && (
               <button
-                onClick={undo}
-                disabled={undoStack.length === 0}
-                className="p-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 bg-white rounded-lg border border-gray-200 hover:border-gray-300"
-                title="Undo"
+                onClick={revertLastMerge}
+                className="p-2 text-orange-600 hover:text-orange-700 bg-white rounded-lg border border-orange-200 hover:border-orange-300"
+                title="Revert last merge"
               >
                 <RotateCcw className="w-4 h-4" />
               </button>
-              <button
-                onClick={redo}
-                disabled={redoStack.length === 0}
-                className="p-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 bg-white rounded-lg border border-gray-200 hover:border-gray-300"
-                title="Redo"
-              >
-                <RotateCcw className="w-4 h-4 transform scale-x-[-1]" />
-              </button>
-
-              {/* Revert Merge */}
-              {mergeHistory.length > 0 && (
-                <button
-                  onClick={revertLastMerge}
-                  className="p-2 text-orange-600 hover:text-orange-700 bg-white rounded-lg border border-orange-200 hover:border-orange-300"
-                  title="Revert last merge"
-                >
-                  <RotateCcw className="w-4 h-4" />
-                </button>
-              )}
-            </div>
+            )}
+          </div>
         </div>
 
         {/* Side by Side Content */}
@@ -972,14 +1052,7 @@ export default function TableEditor({
               )}
               <button
                 onClick={() => {
-                  console.log('🎯 TableEditor: Save & Go to Field Mapping clicked')
-                  console.log('🎯 TableEditor: Current tables:', tables)
-                  console.log('🎯 TableEditor: Current selectedStatementDate:', selectedStatementDate)
-                  console.log('🎯 TableEditor: onSave function available:', !!onSave)
-                  console.log('🎯 TableEditor: onGoToFieldMapping function available:', !!onGoToFieldMapping)
-                  // Save tables and date first
                   onSave(tables)
-                  // Then go to field mapping
                   onGoToFieldMapping()
                 }}
                 disabled={loading || isUsingAnotherExtraction}

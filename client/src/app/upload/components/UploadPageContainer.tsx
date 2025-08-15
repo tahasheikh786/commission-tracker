@@ -143,6 +143,7 @@ export default function UploadPageContainer() {
         onStatementDateSelect={handleStatementDateSelect}
         companyId={company?.id}
         selectedStatementDate={selectedStatementDate}
+        disableAutoDateExtraction={false}
       />
     )
   }

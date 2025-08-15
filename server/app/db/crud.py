@@ -354,6 +354,7 @@ async def save_statement_review(
     print(f"💾 Saving statement review: upload_id={upload_id}, status={status}")
     print(f"📋 Field config being saved: {field_config}")
     print(f"📊 Final data rows: {len(final_data) if final_data else 0}")
+    print(f"📅 Selected statement date being saved: {selected_statement_date}")
     
     # Update the upload with final data
     db_upload.final_data = final_data
@@ -1419,6 +1420,8 @@ async def process_commission_data_from_statement(db: AsyncSession, statement_upl
     
     print(f"🎯 Commission Processing: Checking for selected statement date")
     print(f"🎯 Commission Processing: selected_statement_date from upload: {statement_upload.selected_statement_date}")
+    print(f"🎯 Commission Processing: Upload ID: {statement_upload.id}")
+    print(f"🎯 Commission Processing: Upload status: {statement_upload.status}")
     
     if statement_upload.selected_statement_date:
         print(f"🎯 Commission Processing: Found selected statement date in upload")

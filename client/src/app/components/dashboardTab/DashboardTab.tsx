@@ -225,15 +225,22 @@ export default function DashboardTab() {
     
     setSubmitting(true);
     try {
+      console.log('🎯 DashboardTab: handleApprove called with selectedStatementDate:', selectedStatementDate);
+      
+      const requestBody = {
+        upload_id: uploaded.upload_id,
+        final_data: finalTables,
+        field_config: fieldConfig,
+        plan_types: planTypes,
+        selected_statement_date: selectedStatementDate,
+      };
+      
+      console.log('🎯 DashboardTab: Approve request body:', requestBody);
+      
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/review/approve/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          upload_id: uploaded.upload_id,
-          final_data: finalTables,
-          field_config: fieldConfig,
-          plan_types: planTypes,
-        }),
+        body: JSON.stringify(requestBody),
       });
       
       if (response.ok) {
@@ -266,16 +273,23 @@ export default function DashboardTab() {
     
     setSubmitting(true);
     try {
+      console.log('🎯 DashboardTab: handleRejectSubmit called with selectedStatementDate:', selectedStatementDate);
+      
+      const requestBody = {
+        upload_id: uploaded.upload_id,
+        final_data: finalTables,
+        rejection_reason: rejectReason,
+        field_config: fieldConfig,
+        plan_types: planTypes,
+        selected_statement_date: selectedStatementDate,
+      };
+      
+      console.log('🎯 DashboardTab: Reject request body:', requestBody);
+      
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/review/reject/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          upload_id: uploaded.upload_id,
-          final_data: finalTables,
-          rejection_reason: rejectReason,
-          field_config: fieldConfig,
-          plan_types: planTypes,
-        }),
+        body: JSON.stringify(requestBody),
       });
       
       if (response.ok) {
@@ -417,6 +431,7 @@ export default function DashboardTab() {
           uploaded={uploaded}
           companyId={company?.id}
           selectedStatementDate={selectedStatementDate}
+          disableAutoDateExtraction={false}
         />
       </div>
     );

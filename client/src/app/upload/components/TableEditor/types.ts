@@ -30,6 +30,7 @@ export type TableEditorProps = {
   onStatementDateSelect?: (date: any) => void
   companyId?: string
   selectedStatementDate?: any
+  disableAutoDateExtraction?: boolean
 }
 
 export type CellEdit = {
