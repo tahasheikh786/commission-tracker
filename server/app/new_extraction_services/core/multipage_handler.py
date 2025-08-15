@@ -439,6 +439,10 @@ class MultiPageTableHandler:
             'merge_confidence': np.mean([pt.confidence for pt in table_group])
         }
         
+        # Preserve page order information for sequential merging
+        base_table['page_number'] = table_group[0].page_number  # Use first page number
+        base_table['page_sequence'] = [pt.page_number for pt in table_group]  # Track all pages
+        
         return base_table
     
     def _is_header_row(self, row: List[str], expected_headers: List[str]) -> bool:

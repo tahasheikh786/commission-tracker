@@ -188,7 +188,7 @@ class ExtractionPipeline:
                 
                 # Stage 5: Merge tables with identical headers
                 self.logger.log_extraction_progress("table_merging", 0.75)
-                tables = await self._merge_identical_tables(tables)
+                tables = await self._merge_sequential_tables(tables)
                 
                 # Stage 6: Post-processing and validation
                 self.logger.log_extraction_progress(
@@ -289,7 +289,8 @@ class ExtractionPipeline:
                         "confidence": table_confidence,
                         "extraction_method": "docling",
                         "row_count": table_data.get('row_count', 0),
-                        "column_count": table_data.get('column_count', 0)
+                        "column_count": table_data.get('column_count', 0),
+                        "page_number": table_data.get('page_number', 0)  # Ensure page number is included
                     }
                     all_tables.append(formatted_table)
                     
@@ -328,7 +329,8 @@ class ExtractionPipeline:
                                 "extraction_method": "docling_adaptive",
                                 "adaptive_threshold": threshold,  # Mark for debugging
                                 "row_count": table_data.get('row_count', 0),
-                                "column_count": table_data.get('column_count', 0)
+                                "column_count": table_data.get('column_count', 0),
+                                "page_number": table_data.get('page_number', 0)
                             }
                             candidate_tables.append(formatted_table)
                     
@@ -491,78 +493,423 @@ class ExtractionPipeline:
             self.logger.logger.error(f"Financial processing failed: {e}")
             return tables
     
-    async def _merge_identical_tables(self, tables: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Merge tables with identical or very similar headers."""
+    async def _merge_sequential_tables(self, tables: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Merge tables that are sequential continuations of each other, respecting page order."""
         if len(tables) <= 1:
             return tables
         
         try:
-            self.logger.logger.info(f"🔗 Starting table merging: {len(tables)} tables")
+            self.logger.logger.info(f"🔗 Starting sequential table merging: {len(tables)} tables")
+            
+            # Sort tables by page number and position within page
+            sorted_tables = sorted(tables, key=lambda t: (
+                t.get('page_number', 0),
+                t.get('metadata', {}).get('table_index', 0)
+            ))
+            
+            self.logger.logger.info(f"📋 Tables sorted by page order:")
+            for i, table in enumerate(sorted_tables):
+                page_num = table.get('page_number', 0)
+                table_idx = table.get('metadata', {}).get('table_index', 0)
+                headers = table.get('headers', [])
+                row_count = len(table.get('rows', []))
+                self.logger.logger.info(f"   {i}: Page {page_num}, Table {table_idx}, Headers: {headers[:3]}..., Rows: {row_count}")
             
             merged_tables = []
-            processed_indices = set()
+            current_table_group = []
             
-            for i, table in enumerate(tables):
-                if i in processed_indices:
+            for i, table in enumerate(sorted_tables):
+                if not current_table_group:
+                    # Start a new group
+                    current_table_group = [table]
+                    self.logger.logger.info(f"🔍 Starting new table group with table from page {table.get('page_number', 0)}")
                     continue
                 
-                # Find all tables with similar headers
-                similar_tables = [table]
-                table_headers = table.get('headers', [])
+                # Check if this table is a sequential continuation of the current group
+                is_continuation = await self._is_sequential_continuation(current_table_group, table)
                 
-                self.logger.logger.info(f"🔍 Checking table {i} with headers: {table_headers[:3]}...")
+                self.logger.logger.info(f"🔍 Table from page {table.get('page_number', 0)}: continuation = {is_continuation}")
                 
-                for j, other_table in enumerate(tables[i+1:], i+1):
-                    if j in processed_indices:
-                        continue
-                    
-                    other_headers = other_table.get('headers', [])
-                    similarity = self._calculate_header_similarity(table_headers, other_headers)
-                    
-                    self.logger.logger.info(f"🔍 Comparing with table {j}: similarity = {similarity:.3f}")
-                    self.logger.logger.info(f"   Table {j} headers: {other_headers[:3]}...")
-                    
-                    # **IMPROVED: More lenient similarity threshold for multipage tables**
-                    # Also check if the other table's headers look like data (continuation pattern)
-                    if similarity >= 0.9:  # Very high similarity
-                        similar_tables.append(other_table)
-                        processed_indices.add(j)
-                        self.logger.logger.info(f"🔗 MERGING: Table {j} with Table {i} (high similarity: {similarity:.3f})")
-                    elif similarity >= 0.7:  # Medium similarity
-                        # Check if this might be a continuation table
-                        if self._headers_look_like_data(other_headers, table_headers):
-                            similar_tables.append(other_table)
-                            processed_indices.add(j)
-                            self.logger.logger.info(f"🔗 MERGING: Table {j} with Table {i} (continuation pattern: {similarity:.3f})")
-                        else:
-                            self.logger.logger.info(f"⚠️ Table {j} has medium similarity but doesn't look like continuation")
-                    else:
-                        # **NEW: Check for data-like headers even with low similarity**
-                        # This handles the case where the second table's "headers" are actually data rows
-                        if self._headers_look_like_data(other_headers, table_headers):
-                            similar_tables.append(other_table)
-                            processed_indices.add(j)
-                            self.logger.logger.info(f"🔗 MERGING: Table {j} with Table {i} (data-like headers detected: {similarity:.3f})")
-                        else:
-                            self.logger.logger.info(f"❌ Table {j} similarity too low: {similarity:.3f}")
-                
-                # Merge the similar tables
-                if len(similar_tables) > 1:
-                    merged_table = await self._merge_table_group(similar_tables)
-                    merged_tables.append(merged_table)
-                    self.logger.logger.info(f"✅ MERGED: {len(similar_tables)} tables into 1 with {len(merged_table.get('rows', []))} total rows")
+                if is_continuation:
+                    # Add to current group
+                    current_table_group.append(table)
+                    self.logger.logger.info(f"✅ Added table from page {table.get('page_number', 0)} to current group (now {len(current_table_group)} tables)")
                 else:
-                    merged_tables.append(table)
-                    self.logger.logger.info(f"📋 Table {i} kept as single table")
-                
-                processed_indices.add(i)
+                    # Finalize current group and start new one
+                    if len(current_table_group) > 1:
+                        merged_table = await self._merge_table_group(current_table_group)
+                        merged_tables.append(merged_table)
+                        self.logger.logger.info(f"🔗 MERGED: {len(current_table_group)} sequential tables into 1")
+                    else:
+                        merged_tables.append(current_table_group[0])
+                        self.logger.logger.info(f"📋 Added single table from page {current_table_group[0].get('page_number', 0)}")
+                    
+                    # Start new group with current table
+                    current_table_group = [table]
+                    self.logger.logger.info(f"🔍 Starting new table group with table from page {table.get('page_number', 0)}")
             
-            self.logger.logger.info(f"📊 TABLE MERGING: {len(tables)} → {len(merged_tables)} tables")
+            # Handle the last group
+            if current_table_group:
+                if len(current_table_group) > 1:
+                    merged_table = await self._merge_table_group(current_table_group)
+                    merged_tables.append(merged_table)
+                    self.logger.logger.info(f"🔗 MERGED: {len(current_table_group)} sequential tables into 1 (final group)")
+                else:
+                    merged_tables.append(current_table_group[0])
+                    self.logger.logger.info(f"📋 Added single table from page {current_table_group[0].get('page_number', 0)} (final)")
+            
+            self.logger.logger.info(f"📊 SEQUENTIAL MERGING: {len(tables)} → {len(merged_tables)} tables")
             return merged_tables
             
         except Exception as e:
-            self.logger.logger.error(f"Error merging tables: {e}")
+            self.logger.logger.error(f"Error in sequential table merging: {e}")
             return tables
+    
+    async def _is_sequential_continuation(
+        self, 
+        current_group: List[Dict[str, Any]], 
+        candidate_table: Dict[str, Any]
+    ) -> bool:
+        """Check if candidate table is a sequential continuation of the current group."""
+        
+        if not current_group:
+            return False
+        
+        # Get the last table in the current group
+        last_table = current_group[-1]
+        
+        # Check page sequence
+        last_page = last_table.get('page_number', 0)
+        candidate_page = candidate_table.get('page_number', 0)
+        
+        # Must be on the same page or the next page
+        if candidate_page > last_page + 1:
+            self.logger.logger.info(f"❌ Page gap too large: {last_page} → {candidate_page}")
+            return False
+        
+        # Check header similarity
+        last_headers = last_table.get('headers', [])
+        candidate_headers = candidate_table.get('headers', [])
+        
+        # **IMPROVED: Check if candidate headers look like data (strongest continuation indicator)**
+        if self._headers_look_like_data(candidate_headers, last_headers):
+            self.logger.logger.info(f"✅ Candidate headers look like data - likely continuation")
+            return True
+        
+        # Check header similarity
+        similarity = self._calculate_header_similarity(last_headers, candidate_headers)
+        
+        if similarity >= 0.8:  # High similarity
+            self.logger.logger.info(f"✅ High header similarity ({similarity:.3f}) - likely continuation")
+            return True
+        elif similarity >= 0.6:  # Medium similarity
+            # Additional checks for medium similarity
+            if self._has_similar_structure(last_table, candidate_table):
+                self.logger.logger.info(f"✅ Medium similarity with similar structure - likely continuation")
+                return True
+        
+        self.logger.logger.info(f"❌ Not a continuation (similarity: {similarity:.3f})")
+        return False
+    
+    def _has_similar_structure(self, table1: Dict[str, Any], table2: Dict[str, Any]) -> bool:
+        """Check if two tables have similar structure."""
+        
+        # Compare column counts
+        cols1 = table1.get('column_count', len(table1.get('headers', [])))
+        cols2 = table2.get('column_count', len(table2.get('headers', [])))
+        
+        if abs(cols1 - cols2) > 1:
+            return False
+        
+        # Compare row patterns
+        rows1 = table1.get('rows', [])
+        rows2 = table2.get('rows', [])
+        
+        if not rows1 or not rows2:
+            return True  # If one has no rows, assume similar structure
+        
+        # Check if the data patterns are similar
+        return self._has_similar_content_pattern(rows2, table1)
+    
+    def _has_similar_content_pattern(self, candidate_rows: List[List[str]], reference_table: Dict[str, Any]) -> bool:
+        """Check if candidate rows have similar content patterns to the reference table."""
+        
+        if not candidate_rows or not reference_table:
+            return False
+        
+        reference_rows = reference_table.get('rows', [])
+        if not reference_rows:
+            return False
+        
+        # Learn patterns from reference table
+        column_patterns = self._learn_column_patterns(reference_rows)
+        
+        # Check if candidate rows match learned patterns
+        pattern_matches = 0
+        total_checks = 0
+        
+        for row in candidate_rows[:3]:  # Check first 3 rows
+            row_matches = 0
+            row_checks = 0
+            
+            for i, cell in enumerate(row):
+                if i >= len(column_patterns):
+                    break
+                
+                cell_str = str(cell).strip()
+                column_pattern = column_patterns[i]
+                
+                if self._matches_column_pattern(cell_str, column_pattern):
+                    row_matches += 1
+                row_checks += 1
+            
+            if row_checks > 0:
+                pattern_matches += row_matches / row_checks
+                total_checks += 1
+        
+        # Require at least 60% pattern match for continuation
+        return total_checks > 0 and (pattern_matches / total_checks) >= 0.6
+    
+    def _learn_column_patterns(self, rows: List[List[str]]) -> List[Dict[str, Any]]:
+        """Learn patterns from table data for each column."""
+        if not rows:
+            return []
+        
+        num_columns = max(len(row) for row in rows) if rows else 0
+        column_patterns = []
+        
+        for col_idx in range(num_columns):
+            column_data = []
+            for row in rows:
+                if col_idx < len(row):
+                    column_data.append(str(row[col_idx]).strip())
+            
+            if column_data:
+                pattern = self._analyze_column_pattern(column_data)
+                column_patterns.append(pattern)
+            else:
+                column_patterns.append({})
+        
+        return column_patterns
+    
+    def _analyze_column_pattern(self, column_data: List[str]) -> Dict[str, Any]:
+        """Analyze the pattern of a single column."""
+        if not column_data:
+            return {}
+        
+        pattern = {
+            'length_stats': self._calculate_length_stats(column_data),
+            'char_type_distribution': self._calculate_char_type_distribution(column_data),
+            'case_patterns': self._analyze_case_patterns(column_data),
+            'numeric_patterns': self._analyze_numeric_patterns(column_data),
+            'special_char_patterns': self._analyze_special_char_patterns(column_data),
+            'word_patterns': self._analyze_word_patterns(column_data)
+        }
+        
+        return pattern
+    
+    def _calculate_length_stats(self, data: List[str]) -> Dict[str, float]:
+        """Calculate length statistics for a column."""
+        lengths = [len(item) for item in data if item]
+        if not lengths:
+            return {'mean': 0, 'std': 0, 'min': 0, 'max': 0}
+        
+        mean_length = sum(lengths) / len(lengths)
+        variance = sum((x - mean_length) ** 2 for x in lengths) / len(lengths)
+        std_length = variance ** 0.5
+        
+        return {
+            'mean': mean_length,
+            'std': std_length,
+            'min': min(lengths),
+            'max': max(lengths)
+        }
+    
+    def _calculate_char_type_distribution(self, data: List[str]) -> Dict[str, float]:
+        """Calculate character type distribution for a column."""
+        total_chars = 0
+        alpha_chars = 0
+        digit_chars = 0
+        special_chars = 0
+        
+        for item in data:
+            for char in item:
+                total_chars += 1
+                if char.isalpha():
+                    alpha_chars += 1
+                elif char.isdigit():
+                    digit_chars += 1
+                else:
+                    special_chars += 1
+        
+        if total_chars == 0:
+            return {'alpha_ratio': 0, 'digit_ratio': 0, 'special_ratio': 0}
+        
+        return {
+            'alpha_ratio': alpha_chars / total_chars,
+            'digit_ratio': digit_chars / total_chars,
+            'special_ratio': special_chars / total_chars
+        }
+    
+    def _analyze_case_patterns(self, data: List[str]) -> Dict[str, Any]:
+        """Analyze case patterns in a column."""
+        all_upper = sum(1 for item in data if item.isupper())
+        all_lower = sum(1 for item in data if item.islower())
+        mixed_case = sum(1 for item in data if not item.isupper() and not item.islower() and item)
+        title_case = sum(1 for item in data if item.istitle())
+        
+        total = len(data)
+        if total == 0:
+            return {'all_upper_ratio': 0, 'all_lower_ratio': 0, 'mixed_case_ratio': 0, 'title_case_ratio': 0}
+        
+        return {
+            'all_upper_ratio': all_upper / total,
+            'all_lower_ratio': all_lower / total,
+            'mixed_case_ratio': mixed_case / total,
+            'title_case_ratio': title_case / total
+        }
+    
+    def _analyze_numeric_patterns(self, data: List[str]) -> Dict[str, Any]:
+        """Analyze numeric patterns in a column."""
+        numeric_count = 0
+        decimal_count = 0
+        currency_count = 0
+        
+        for item in data:
+            # Remove common non-numeric characters for analysis
+            clean_item = item.replace(',', '').replace('$', '').replace('%', '').strip()
+            
+            if clean_item.replace('.', '').isdigit():
+                numeric_count += 1
+                if '.' in clean_item:
+                    decimal_count += 1
+            
+            if '$' in item or '%' in item:
+                currency_count += 1
+        
+        total = len(data)
+        if total == 0:
+            return {'numeric_ratio': 0, 'decimal_ratio': 0, 'currency_ratio': 0}
+        
+        return {
+            'numeric_ratio': numeric_count / total,
+            'decimal_ratio': decimal_count / total,
+            'currency_ratio': currency_count / total
+        }
+    
+    def _analyze_special_char_patterns(self, data: List[str]) -> Dict[str, float]:
+        """Analyze special character patterns in a column."""
+        special_chars = set()
+        for item in data:
+            for char in item:
+                if not char.isalnum() and char != ' ':
+                    special_chars.add(char)
+        
+        # Calculate frequency of each special character
+        char_freq = {}
+        total_chars = sum(len(item) for item in data)
+        
+        if total_chars > 0:
+            for char in special_chars:
+                freq = sum(item.count(char) for item in data) / total_chars
+                char_freq[char] = freq
+        
+        return char_freq
+    
+    def _analyze_word_patterns(self, data: List[str]) -> Dict[str, Any]:
+        """Analyze word patterns in a column."""
+        word_counts = [len(item.split()) for item in data]
+        
+        if not word_counts:
+            return {'mean_words': 0, 'std_words': 0, 'max_words': 0}
+        
+        mean_words = sum(word_counts) / len(word_counts)
+        variance = sum((x - mean_words) ** 2 for x in word_counts) / len(word_counts)
+        std_words = variance ** 0.5
+        
+        return {
+            'mean_words': mean_words,
+            'std_words': std_words,
+            'max_words': max(word_counts)
+        }
+    
+    def _matches_column_pattern(self, cell: str, pattern: Dict[str, Any]) -> bool:
+        """Check if a cell matches the learned pattern for a column."""
+        if not pattern or not cell:
+            return False
+        
+        matches = 0
+        total_checks = 0
+        
+        # Check length pattern
+        if 'length_stats' in pattern:
+            length_stats = pattern['length_stats']
+            cell_length = len(cell)
+            mean_length = length_stats['mean']
+            std_length = length_stats['std']
+            
+            # Check if length is within 2 standard deviations
+            if abs(cell_length - mean_length) <= 2 * std_length:
+                matches += 1
+            total_checks += 1
+        
+        # Check character type distribution
+        if 'char_type_distribution' in pattern:
+            char_dist = pattern['char_type_distribution']
+            alpha_count = sum(1 for c in cell if c.isalpha())
+            digit_count = sum(1 for c in cell if c.isdigit())
+            special_count = len(cell) - alpha_count - digit_count
+            
+            if len(cell) > 0:
+                alpha_ratio = alpha_count / len(cell)
+                digit_ratio = digit_count / len(cell)
+                special_ratio = special_count / len(cell)
+                
+                # Check if ratios are similar (within 0.3 tolerance)
+                if (abs(alpha_ratio - char_dist['alpha_ratio']) <= 0.3 and
+                    abs(digit_ratio - char_dist['digit_ratio']) <= 0.3 and
+                    abs(special_ratio - char_dist['special_ratio']) <= 0.3):
+                    matches += 1
+                total_checks += 1
+        
+        # Check case pattern
+        if 'case_patterns' in pattern:
+            case_patterns = pattern['case_patterns']
+            if cell.isupper() and case_patterns['all_upper_ratio'] > 0.5:
+                matches += 1
+            elif cell.islower() and case_patterns['all_lower_ratio'] > 0.5:
+                matches += 1
+            elif not cell.isupper() and not cell.islower() and case_patterns['mixed_case_ratio'] > 0.3:
+                matches += 1
+            total_checks += 1
+        
+        # Check numeric pattern
+        if 'numeric_patterns' in pattern:
+            numeric_patterns = pattern['numeric_patterns']
+            clean_cell = cell.replace(',', '').replace('$', '').replace('%', '').strip()
+            
+            if clean_cell.replace('.', '').isdigit():
+                if numeric_patterns['numeric_ratio'] > 0.5:
+                    matches += 1
+                if '.' in clean_cell and numeric_patterns['decimal_ratio'] > 0.3:
+                    matches += 1
+            if ('$' in cell or '%' in cell) and numeric_patterns['currency_ratio'] > 0.3:
+                matches += 1
+            total_checks += 1
+        
+        # Check word count pattern
+        if 'word_patterns' in pattern:
+            word_patterns = pattern['word_patterns']
+            word_count = len(cell.split())
+            mean_words = word_patterns['mean_words']
+            std_words = word_patterns['std_words']
+            
+            if abs(word_count - mean_words) <= 2 * std_words:
+                matches += 1
+            total_checks += 1
+        
+        # Return True if at least 60% of checks pass
+        return total_checks > 0 and (matches / total_checks) >= 0.6
     
     def _calculate_header_similarity(self, headers1: List[str], headers2: List[str]) -> float:
         """Calculate similarity between two header sets."""
