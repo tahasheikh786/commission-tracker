@@ -17,27 +17,26 @@ class PageTable:
     confidence: float
     
 class MultiPageTableHandler:
-    """Handler for linking and reconstructing tables across multiple pages."""
+    """Handler for linking and reconstructing tables across multiple pages using sequence-based approach."""
     
     def __init__(self, config: Config):
         self.config = config
         self.logger = get_logger(__name__, config)
         
-        # Similarity thresholds
+        # Similarity thresholds for header detection
         self.header_similarity_threshold = 0.85
-        self.position_similarity_threshold = 0.1  # 10% of page width
-        self.structure_similarity_threshold = 0.8
+        self.new_table_detection_threshold = 0.3  # Low threshold to detect new tables
     
     async def link_multipage_tables(
         self, 
         page_tables: List[List[Dict[str, Any]]]
     ) -> List[Dict[str, Any]]:
-        """Link tables that span multiple pages."""
+        """Link tables that span multiple pages using sequence-based approach."""
         
         try:
-            self.logger.logger.info(f"🔗 Multipage handler: Processing {len(page_tables)} pages")
+            self.logger.logger.info(f"🔗 Sequence-based multipage handler: Processing {len(page_tables)} pages")
             
-            # Convert to PageTable objects
+            # Convert to PageTable objects and sort by page number
             all_page_tables = []
             for page_num, tables in enumerate(page_tables):
                 for table in tables:
@@ -50,192 +49,145 @@ class MultiPageTableHandler:
                     )
                     all_page_tables.append(page_table)
             
-            self.logger.logger.info(f"📋 Converted to {len(all_page_tables)} PageTable objects")
+            # Sort by page number to maintain sequence
+            all_page_tables.sort(key=lambda t: t.page_number)
             
-            # Find table continuation candidates
-            continuation_groups = await self._find_continuation_groups(all_page_tables)
+            self.logger.logger.info(f"📋 Converted to {len(all_page_tables)} PageTable objects across {len(page_tables)} pages")
             
-            self.logger.logger.info(f"🔍 Found {len(continuation_groups)} continuation groups")
-            for i, group in enumerate(continuation_groups):
+            # Group tables by sequence-based continuation
+            table_groups = await self._group_tables_by_sequence(all_page_tables)
+            
+            self.logger.logger.info(f"🔍 Found {len(table_groups)} table groups")
+            for i, group in enumerate(table_groups):
                 self.logger.logger.info(f"   Group {i}: {len(group)} tables from pages {[pt.page_number for pt in group]}")
             
-            # Merge continued tables
+            # Merge each group into a single table
             merged_tables = []
-            processed_tables = set()
-            
-            for group in continuation_groups:
+            for group in table_groups:
                 if group:
                     merged_table = await self._merge_table_group(group)
                     merged_tables.append(merged_table)
-                    
-                    # Mark as processed
-                    for page_table in group:
-                        processed_tables.add(id(page_table))
-            
-            # Add non-continued tables
-            for page_table in all_page_tables:
-                if id(page_table) not in processed_tables:
-                    merged_tables.append(page_table.table_data)
             
             self.logger.logger.info(f"🔗 Linked {len(page_tables)} pages into {len(merged_tables)} tables")
             return merged_tables
             
         except Exception as e:
-            self.logger.logger.error(f"Multi-page linking failed: {e}")
+            self.logger.logger.error(f"Sequence-based multi-page linking failed: {e}")
             # Return original tables if linking fails
             return [table for page in page_tables for table in page]
     
-    async def _find_continuation_groups(
+    async def _group_tables_by_sequence(
         self, 
         page_tables: List[PageTable]
     ) -> List[List[PageTable]]:
-        """Find groups of tables that are continuations of each other."""
+        """Group tables by sequence-based continuation logic."""
         
-        continuation_groups = []
-        processed = set()
+        if not page_tables:
+            return []
         
-        # Sort tables by page number
-        sorted_tables = sorted(page_tables, key=lambda t: t.page_number)
+        table_groups = []
+        current_group = []
+        current_headers = None
         
-        self.logger.logger.info(f"🔍 Finding continuation groups among {len(sorted_tables)} tables")
+        self.logger.logger.info(f"🔍 Starting sequence-based grouping of {len(page_tables)} tables")
         
-        for i, table in enumerate(sorted_tables):
-            if id(table) in processed:
-                continue
+        for i, table in enumerate(page_tables):
+            self.logger.logger.info(f"🔍 Processing table {i} from page {table.page_number}")
+            self.logger.logger.info(f"   Headers: {table.headers[:3]}...")
             
-            # Start a new continuation group
-            group = [table]
-            processed.add(id(table))
+            # Check if this table starts a new table group
+            is_new_table = await self._is_new_table_start(table, current_headers)
             
-            self.logger.logger.info(f"🔍 Starting new group with table from page {table.page_number}")
-            self.logger.logger.info(f"   Table headers: {table.headers[:3]}...")
-            
-            # Look for continuations in subsequent pages
-            current_table = table
-            for j in range(i + 1, len(sorted_tables)):
-                candidate = sorted_tables[j]
+            if is_new_table:
+                # Save current group if it exists
+                if current_group:
+                    table_groups.append(current_group)
+                    self.logger.logger.info(f"✅ Completed group with {len(current_group)} tables")
                 
-                if id(candidate) in processed:
-                    continue
+                # Start new group
+                current_group = [table]
+                current_headers = table.headers
+                self.logger.logger.info(f"🆕 Started new table group with headers: {table.headers[:3]}...")
                 
-                self.logger.logger.info(f"🔍 Checking candidate table from page {candidate.page_number}")
-                self.logger.logger.info(f"   Candidate headers: {candidate.headers[:3]}...")
-                
-                # Check if candidate is a continuation
-                if await self._is_table_continuation(current_table, candidate):
-                    group.append(candidate)
-                    processed.add(id(candidate))
-                    current_table = candidate
-                    self.logger.logger.info(f"✅ Added candidate to group (now {len(group)} tables)")
-                else:
-                    # Check for gaps (table might continue after missing pages)
-                    if candidate.page_number - current_table.page_number <= 3:  # Allow 3 page gap
-                        if await self._is_table_continuation_with_gap(current_table, candidate):
-                            group.append(candidate)
-                            processed.add(id(candidate))
-                            current_table = candidate
-                            self.logger.logger.info(f"✅ Added candidate to group (gap detected, now {len(group)} tables)")
-                        else:
-                            self.logger.logger.info(f"❌ Candidate not a continuation (gap scenario)")
-                    else:
-                        self.logger.logger.info(f"❌ Candidate not a continuation (gap too large)")
-            
-            if len(group) > 1:  # Only add groups with multiple tables
-                continuation_groups.append(group)
-                self.logger.logger.info(f"✅ Added continuation group with {len(group)} tables")
             else:
-                # Single table, remove from processed to add individually
-                processed.remove(id(table))
-                self.logger.logger.info(f"📋 Single table group, will add individually")
+                # Continue current group
+                current_group.append(table)
+                self.logger.logger.info(f"✅ Added to current group (now {len(current_group)} tables)")
         
-        return continuation_groups
+        # Add the last group
+        if current_group:
+            table_groups.append(current_group)
+            self.logger.logger.info(f"✅ Completed final group with {len(current_group)} tables")
+        
+        return table_groups
     
-    async def _is_table_continuation(
+    async def _is_new_table_start(
         self, 
-        table1: PageTable, 
-        table2: PageTable
+        table: PageTable, 
+        current_headers: Optional[List[str]]
     ) -> bool:
-        """Check if table2 is a continuation of table1."""
+        """Determine if this table starts a new table group."""
         
-        # Must be consecutive or near-consecutive pages
-        if table2.page_number - table1.page_number > 2:
-            return False
-        
-        # **IMPROVED: Check if table2's "headers" are actually data (strongest continuation indicator)**
-        table2_headers_look_like_data = self._headers_look_like_data(table2.headers)
-        
-        # If table2 headers look like data, it's very likely a continuation
-        if table2_headers_look_like_data:
-            self.logger.logger.info(f"🔍 Table2 headers look like data: {table2.headers[:3]}...")
-            
-            # Check if the "headers" match the structure of table1's data
-            if self._matches_table_structure(table2.headers, table1.table_data):
-                self.logger.logger.info(f"✅ Structure matches - likely continuation")
-                # Additional check: ensure the data types/content are similar
-                if self._has_similar_content_pattern(table2.headers, table1.table_data):
-                    self.logger.logger.info(f"✅ Content patterns match - confirming continuation")
-                    return True
-                else:
-                    self.logger.logger.info(f"⚠️ Content patterns don't match, but structure does")
-                    # Still return True if structure matches, as this is a strong indicator
-                    return True
-        
-        # Check header similarity (for cases where headers are repeated)
-        header_sim = self._calculate_header_similarity(table1.headers, table2.headers)
-        
-        # High header similarity indicates same table with repeated headers
-        if header_sim >= 0.8:  # High similarity threshold for repeated headers
-            self.logger.logger.info(f"🔍 High header similarity ({header_sim:.2f}) - likely repeated headers")
-            # Check position similarity (tables should be in similar positions)
-            pos_sim = self._calculate_position_similarity(table1.bbox, table2.bbox)
-            if pos_sim >= 0.6:  # Reasonable position similarity
-                # Check structure similarity
-                struct_sim = self._calculate_structure_similarity(table1.table_data, table2.table_data)
-                if struct_sim >= 0.7:  # High structure similarity
-                    self.logger.logger.info(f"✅ Position and structure similarity confirm continuation")
-                    return True  # No content validation needed for identical headers
-        
-        # Medium header similarity with content validation
-        elif header_sim >= 0.6:  # Medium similarity threshold
-            self.logger.logger.info(f"🔍 Medium header similarity ({header_sim:.2f}) - checking additional criteria")
-            # Check position similarity (tables should be in similar positions)
-            pos_sim = self._calculate_position_similarity(table1.bbox, table2.bbox)
-            if pos_sim >= 0.7:  # Higher position similarity requirement
-                # Check structure similarity
-                struct_sim = self._calculate_structure_similarity(table1.table_data, table2.table_data)
-                if struct_sim >= 0.6:  # Medium structure similarity
-                    # Additional check: ensure content patterns are similar
-                    if self._has_similar_content_pattern(table2.headers, table1.table_data):
-                        self.logger.logger.info(f"✅ All criteria met - confirming continuation")
-                        return True
-        
-        # Additional checks for continuation patterns
-        continuation_score = await self._calculate_continuation_score(table1, table2)
-        
-        if continuation_score > 0.6:
-            self.logger.logger.info(f"✅ Continuation score ({continuation_score:.2f}) indicates continuation")
+        # If no current headers, this is definitely a new table
+        if current_headers is None:
+            self.logger.logger.info(f"🆕 First table - starting new group")
             return True
         
-        self.logger.logger.info(f"❌ No continuation detected (score: {continuation_score:.2f})")
-        return False
+        # If table has no headers, it's likely a continuation
+        if not table.headers:
+            self.logger.logger.info(f"📋 No headers - likely continuation")
+            return False
+        
+        # Check if headers look like data (strong continuation indicator)
+        if self._headers_look_like_data(table.headers):
+            self.logger.logger.info(f"📋 Headers look like data - likely continuation")
+            return False
+        
+        # Check header similarity with current table
+        header_similarity = self._calculate_header_similarity(current_headers, table.headers)
+        
+        # If headers are very similar, it's likely the same table with repeated headers
+        if header_similarity >= 0.8:
+            self.logger.logger.info(f"📋 High header similarity ({header_similarity:.2f}) - likely repeated headers")
+            return False
+        
+        # If headers are moderately similar, check additional criteria
+        elif header_similarity >= 0.5:
+            # Check if this looks like a continuation with similar structure
+            if await self._looks_like_continuation(table, current_headers):
+                self.logger.logger.info(f"📋 Moderate similarity but looks like continuation")
+                return False
+            else:
+                self.logger.logger.info(f"🆕 Moderate similarity but different table structure")
+                return True
+        
+        # Low similarity indicates new table
+        else:
+            self.logger.logger.info(f"🆕 Low header similarity ({header_similarity:.2f}) - new table")
+            return True
     
-    async def _is_table_continuation_with_gap(
+    async def _looks_like_continuation(
         self, 
-        table1: PageTable, 
-        table2: PageTable
+        table: PageTable, 
+        current_headers: List[str]
     ) -> bool:
-        """Check if table2 continues table1 with potential gaps."""
+        """Check if table looks like a continuation despite moderate header similarity."""
         
-        # More lenient checks for tables with gaps
-        header_sim = self._calculate_header_similarity(table1.headers, table2.headers)
-        pos_sim = self._calculate_position_similarity(table1.bbox, table2.bbox)
+        # Check if table structure matches current headers
+        if self._matches_table_structure(table.headers, {'headers': current_headers}):
+            return True
         
-        # Lower thresholds for gap scenarios
-        return (
-            header_sim > 0.7 and 
-            pos_sim > 0.7 and
-            self._has_continuation_indicators(table1, table2)
-        )
+        # Check if table position is consistent with continuation
+        if table.bbox and len(table.bbox) >= 4:
+            # Tables that continue often start near the top of the page
+            if table.bbox[1] < 100:  # Near top of page
+                return True
+        
+        # Check if the "headers" actually contain data patterns
+        if self._has_similar_content_pattern(table.headers, {'headers': current_headers}):
+            return True
+        
+        return False
     
     def _calculate_header_similarity(self, headers1: List[str], headers2: List[str]) -> float:
         """Calculate similarity between header lists."""
@@ -256,211 +208,8 @@ class MultiPageTableHandler:
         
         return intersection / union if union > 0 else 0.0
     
-    def _calculate_position_similarity(self, bbox1: List[float], bbox2: List[float]) -> float:
-        """Calculate position similarity between table bounding boxes."""
-        
-        if not bbox1 or not bbox2 or len(bbox1) != 4 or len(bbox2) != 4:
-            return 0.0
-        
-        # Compare x-positions (horizontal alignment)
-        x1_center = (bbox1[0] + bbox1[2]) / 2
-        x2_center = (bbox2[0] + bbox2[2]) / 2
-        
-        # Compare widths
-        width1 = bbox1[2] - bbox1[0]
-        width2 = bbox2[2] - bbox2[0]
-        
-        # Calculate similarity
-        x_similarity = 1 - abs(x1_center - x2_center) / max(width1, width2, 1)
-        width_similarity = 1 - abs(width1 - width2) / max(width1, width2, 1)
-        
-        return (x_similarity + width_similarity) / 2
-    
-    def _calculate_structure_similarity(
-        self, 
-        table1: Dict[str, Any], 
-        table2: Dict[str, Any]
-    ) -> float:
-        """Calculate structural similarity between tables."""
-        
-        # Compare number of columns
-        cols1 = table1.get('column_count', 0)
-        cols2 = table2.get('column_count', 0)
-        
-        if cols1 == 0 or cols2 == 0:
-            return 0.0
-        
-        col_similarity = 1 - abs(cols1 - cols2) / max(cols1, cols2)
-        
-        # Compare cell patterns
-        cells1 = table1.get('cells', [])
-        cells2 = table2.get('cells', [])
-        
-        if not cells1 or not cells2:
-            return col_similarity
-        
-        # Analyze cell confidence patterns
-        conf1 = [cell.get('confidence', 0) for cell in cells1]
-        conf2 = [cell.get('confidence', 0) for cell in cells2]
-        
-        conf_similarity = 1 - abs(np.mean(conf1) - np.mean(conf2))
-        
-        return (col_similarity + conf_similarity) / 2
-    
-    async def _calculate_continuation_score(
-        self, 
-        table1: PageTable, 
-        table2: PageTable
-    ) -> float:
-        """Calculate overall continuation likelihood score."""
-        
-        score = 0.0
-        
-        # Sequential page bonus
-        if table2.page_number == table1.page_number + 1:
-            score += 0.3
-        
-        # Position consistency
-        if table2.bbox[1] < 100:  # Table starts near top of page (continuation)
-            score += 0.2
-        
-        # Check header similarity for repeated headers scenario
-        header_sim = self._calculate_header_similarity(table1.headers, table2.headers)
-        if header_sim >= 0.8:  # Very high similarity (identical headers)
-            score += 0.5  # Strong indicator for repeated headers
-        elif header_sim >= 0.6:  # High similarity
-            score += 0.3
-        
-        # **IMPROVED: Check if table2's "headers" are actually data (strongest continuation indicator)**
-        if self._headers_look_like_data(table2.headers):
-            score += 0.6  # Increased from 0.4 - this is a very strong indicator
-            
-            # Additional check: ensure the data patterns match
-            if self._has_similar_content_pattern(table2.headers, table1.table_data):
-                score += 0.4  # Increased from 0.3 - content patterns match
-            else:
-                # Even if content patterns don't match exactly, headers looking like data is still a strong indicator
-                score += 0.2
-        
-        # Header presence patterns
-        if not table2.headers and table1.headers:  # Continued table might not repeat headers
-            score += 0.1
-        
-        # Row count patterns (continued tables often have fewer rows per page)
-        rows1 = table1.table_data.get('row_count', 0)
-        rows2 = table2.table_data.get('row_count', 0)
-        
-        if rows1 > 0 and rows2 > 0 and rows2 < rows1:
-            score += 0.1  # Second part might have fewer rows
-        
-        # Column count consistency
-        cols1 = table1.table_data.get('column_count', len(table1.headers))
-        cols2 = table2.table_data.get('column_count', len(table2.headers))
-        if cols1 > 0 and cols2 > 0 and abs(cols1 - cols2) <= 1:
-            score += 0.2  # Column counts are similar
-        
-        return min(score, 1.0)
-    
-    def _has_continuation_indicators(self, table1: PageTable, table2: PageTable) -> bool:
-        """Check for specific continuation indicators."""
-        
-        # Check if first table ends near bottom of page
-        if len(table1.bbox) >= 4 and table1.bbox[3] > 700:  # Assuming ~800px page height
-            return True
-        
-        # Check if second table starts near top of page
-        if len(table2.bbox) >= 4 and table2.bbox[1] < 100:
-            return True
-        
-        # Check for "continued" keywords in nearby text
-        # This would require OCR context - implement if available
-        
-        return False
-    
-    async def _merge_table_group(self, table_group: List[PageTable]) -> Dict[str, Any]:
-        """Merge a group of continued tables into a single table."""
-        
-        if not table_group:
-            return {}
-        
-        if len(table_group) == 1:
-            return table_group[0].table_data
-        
-        # Use first table as base
-        base_table = table_group[0].table_data.copy()
-        
-        # Merge rows from subsequent tables
-        all_rows = list(base_table.get('rows', []))
-        all_cells = list(base_table.get('cells', []))
-        
-        current_row_offset = len(all_rows)
-        
-        for i, page_table in enumerate(table_group[1:], 1):
-            table_data = page_table.table_data
-            
-            # Add rows (skip headers if they exist)
-            rows = table_data.get('rows', [])
-            
-            # Check if the "headers" of this table are actually data
-            if self._headers_look_like_data(table_data.get('headers', [])):
-                # The "headers" are actually data, so include them as the first row
-                if table_data.get('headers'):
-                    rows = [table_data.get('headers')] + rows
-            elif rows and table_data.get('headers') and i > 0:
-                # Skip first row if it looks like headers
-                if self._is_header_row(rows[0], base_table.get('headers', [])):
-                    rows = rows[1:]
-            
-            all_rows.extend(rows)
-            
-            # Add cells with updated row indices
-            cells = table_data.get('cells', [])
-            for cell in cells:
-                if cell.get('is_header', False) and i > 0:
-                    continue  # Skip header cells from continuation pages
-                
-                # Update row index
-                updated_cell = cell.copy()
-                updated_cell['row'] = cell.get('row', 0) + current_row_offset
-                all_cells.append(updated_cell)
-            
-            current_row_offset = len(all_rows)
-        
-        # Update merged table
-        base_table['rows'] = all_rows
-        base_table['cells'] = all_cells
-        base_table['row_count'] = len(all_rows)
-        
-        # Add multipage metadata
-        base_table['multipage_info'] = {
-            'is_multipage': True,
-            'page_count': len(table_group),
-            'page_numbers': [pt.page_number for pt in table_group],
-            'merge_confidence': np.mean([pt.confidence for pt in table_group])
-        }
-        
-        # Preserve page order information for sequential merging
-        base_table['page_number'] = table_group[0].page_number  # Use first page number
-        base_table['page_sequence'] = [pt.page_number for pt in table_group]  # Track all pages
-        
-        return base_table
-    
-    def _is_header_row(self, row: List[str], expected_headers: List[str]) -> bool:
-        """Check if a row looks like a header row."""
-        
-        if not row or not expected_headers:
-            return False
-        
-        # Compare with expected headers
-        similarity = sum(
-            1 for r, h in zip(row, expected_headers) 
-            if r.lower().strip() == h.lower().strip()
-        ) / max(len(row), len(expected_headers))
-        
-        return similarity > 0.7
-    
     def _headers_look_like_data(self, headers: List[str]) -> bool:
-        """Check if headers actually look like data rows instead of headers using adaptive learning."""
+        """Check if headers actually look like data rows instead of headers."""
         if not headers:
             return False
         
@@ -471,21 +220,17 @@ class MultiPageTableHandler:
         for header in headers:
             header_str = str(header).strip()
             
-            # Check for data-like characteristics using statistical patterns
+            # Check for data-like characteristics
             if self._is_data_like_content(header_str):
                 data_indicators += 1
         
-        # **IMPROVED: More lenient threshold for financial documents**
         # If more than 40% of headers look like data, they probably are data
-        # This is especially true for financial documents where continuation tables
-        # often have company names, IDs, and amounts as "headers"
-        threshold = 0.4 if total_headers >= 5 else 0.5  # More lenient for larger tables
+        threshold = 0.4 if total_headers >= 5 else 0.5
         
         result = data_indicators >= total_headers * threshold
         
         if result:
-            self.logger.logger.info(f"🔍 Headers look like data: {data_indicators}/{total_headers} indicators (threshold: {threshold:.1f})")
-            self.logger.logger.info(f"   Sample headers: {headers[:3]}...")
+            self.logger.logger.info(f"🔍 Headers look like data: {data_indicators}/{total_headers} indicators")
         
         return result
     
@@ -494,93 +239,75 @@ class MultiPageTableHandler:
         if not content:
             return False
         
-        # Calculate various statistical indicators
         indicators = 0
         
-        # 1. Length analysis (data often has consistent, moderate lengths)
+        # Length analysis
         if 3 <= len(content) <= 50:
             indicators += 1
         
-        # 2. Character type distribution
+        # Character type distribution
         alpha_count = sum(1 for c in content if c.isalpha())
         digit_count = sum(1 for c in content if c.isdigit())
-        special_count = len(content) - alpha_count - digit_count
         
         # Data often has mixed character types
         if alpha_count > 0 and digit_count > 0:
             indicators += 1
         
-        # 3. Case pattern analysis (data often has mixed case or specific patterns)
+        # Case pattern analysis
         if content != content.upper() and content != content.lower():
             indicators += 1
         
-        # 4. Numeric content detection (without hardcoding currency symbols)
+        # Numeric content detection
         if any(c.isdigit() for c in content):
-            # Check if it's a pure number or mixed content
             if digit_count > alpha_count:
                 indicators += 1
         
-        # 5. Word count analysis (data often has 1-3 words)
+        # Word count analysis
         word_count = len(content.split())
         if 1 <= word_count <= 3:
             indicators += 1
         
-        # 6. Special character analysis (data often has specific patterns)
+        # Special character analysis
         if any(c in content for c in [',', '.', '-', '/', '(', ')']):
             indicators += 1
         
-        # **NEW: Financial document specific patterns**
-        # 7. Company name patterns (LLC, Inc, Corp, etc.)
+        # Financial document specific patterns
         if any(suffix in content.upper() for suffix in ['LLC', 'INC', 'CORP', 'CO', 'COMPANY']):
-            indicators += 2  # Strong indicator
+            indicators += 2
         
-        # 8. State codes (2-letter uppercase)
         if len(content) == 2 and content.isupper() and content.isalpha():
-            indicators += 2  # Strong indicator
+            indicators += 2
         
-        # 9. ID patterns (alphanumeric codes like UT123456)
         if len(content) >= 6 and any(c.isdigit() for c in content) and any(c.isalpha() for c in content):
             indicators += 1
         
-        # 10. Currency amounts ($X,XXX.XX pattern)
         if '$' in content and any(c.isdigit() for c in content):
-            indicators += 2  # Strong indicator
+            indicators += 2
         
-        # 11. Subscriber counts (small numbers)
         if content.isdigit() and 1 <= int(content) <= 100:
             indicators += 1
         
-        # 12. Rate patterns (X.XX/subscriber)
         if '/subscriber' in content.lower() or '/month' in content.lower():
-            indicators += 2  # Strong indicator
+            indicators += 2
         
-        # 7. Header-like content detection (negative indicators)
+        # Header-like content detection (negative indicators)
         header_indicators = 0
         
-        # Headers are often shorter and more generic
         if len(content) <= 15 and alpha_count > digit_count:
             header_indicators += 1
         
-        # Headers often have consistent case patterns
         if content.islower() or content.istitle():
             header_indicators += 1
         
-        # Headers often have common words that appear in headers (detected statistically)
-        # This is a very minimal list of common header words, but the system primarily relies on statistical analysis
-        # The main detection comes from length, case patterns, and character distribution analysis above
         if len(content) <= 10 and content.islower():
             header_indicators += 1
         
-        # **NEW: Strong header indicators (negative)**
-        # Common header words that indicate this is actually a header
+        # Strong header indicators
         header_words = ['billing', 'group', 'premium', 'commission', 'rate', 'subscriber', 'total', 'due', 'current', 'prior', 'adjustment']
         if any(word in content.lower() for word in header_words):
-            header_indicators += 2  # Strong negative indicator
+            header_indicators += 2
         
-        # Subtract header indicators from data indicators
         final_score = indicators - header_indicators
-        
-        # Return True if content shows strong data-like characteristics
         return final_score >= 2
     
     def _matches_table_structure(self, potential_data_row: List[str], table_data: Dict[str, Any]) -> bool:
@@ -589,11 +316,8 @@ class MultiPageTableHandler:
             return False
         
         # Get the number of columns in the original table
-        original_columns = table_data.get('column_count', 0)
-        if original_columns == 0:
-            # Try to get from headers
-            original_headers = table_data.get('headers', [])
-            original_columns = len(original_headers)
+        original_headers = table_data.get('headers', [])
+        original_columns = len(original_headers)
         
         # Check if the potential data row has the same number of columns
         if len(potential_data_row) == original_columns:
@@ -606,7 +330,7 @@ class MultiPageTableHandler:
         return False
     
     def _has_similar_content_pattern(self, potential_data_row: List[str], table_data: Dict[str, Any]) -> bool:
-        """Check if the potential data row has similar content patterns to the table using adaptive learning."""
+        """Check if the potential data row has similar content patterns to the table."""
         if not potential_data_row or not table_data:
             return False
         
@@ -744,7 +468,6 @@ class MultiPageTableHandler:
         currency_count = 0
         
         for item in data:
-            # Remove common non-numeric characters for analysis
             clean_item = item.replace(',', '').replace('$', '').replace('%', '').strip()
             
             if clean_item.replace('.', '').isdigit():
@@ -773,7 +496,6 @@ class MultiPageTableHandler:
                 if not char.isalnum() and char != ' ':
                     special_chars.add(char)
         
-        # Calculate frequency of each special character
         char_freq = {}
         total_chars = sum(len(item) for item in data)
         
@@ -816,7 +538,6 @@ class MultiPageTableHandler:
             mean_length = length_stats['mean']
             std_length = length_stats['std']
             
-            # Check if length is within 2 standard deviations
             if abs(cell_length - mean_length) <= 2 * std_length:
                 matches += 1
             total_checks += 1
@@ -833,7 +554,6 @@ class MultiPageTableHandler:
                 digit_ratio = digit_count / len(cell)
                 special_ratio = special_count / len(cell)
                 
-                # Check if ratios are similar (within 0.3 tolerance)
                 if (abs(alpha_ratio - char_dist['alpha_ratio']) <= 0.3 and
                     abs(digit_ratio - char_dist['digit_ratio']) <= 0.3 and
                     abs(special_ratio - char_dist['special_ratio']) <= 0.3):
@@ -876,5 +596,96 @@ class MultiPageTableHandler:
                 matches += 1
             total_checks += 1
         
-        # Return True if at least 60% of checks pass
         return total_checks > 0 and (matches / total_checks) >= 0.6
+    
+    async def _merge_table_group(self, table_group: List[PageTable]) -> Dict[str, Any]:
+        """Merge a group of continued tables into a single table."""
+        
+        if not table_group:
+            return {}
+        
+        if len(table_group) == 1:
+            # For single tables, still add multipage_info
+            base_table = table_group[0].table_data.copy()
+            base_table['multipage_info'] = {
+                'is_multipage': False,
+                'page_count': 1,
+                'page_numbers': [table_group[0].page_number],
+                'merge_confidence': table_group[0].confidence
+            }
+            base_table['page_number'] = table_group[0].page_number
+            base_table['page_sequence'] = [table_group[0].page_number]
+            return base_table
+        
+        # Use first table as base
+        base_table = table_group[0].table_data.copy()
+        
+        # Merge rows from subsequent tables
+        all_rows = list(base_table.get('rows', []))
+        all_cells = list(base_table.get('cells', []))
+        
+        current_row_offset = len(all_rows)
+        
+        for i, page_table in enumerate(table_group[1:], 1):
+            table_data = page_table.table_data
+            
+            # Add rows (skip headers if they exist)
+            rows = table_data.get('rows', [])
+            
+            # Check if the "headers" of this table are actually data
+            if self._headers_look_like_data(table_data.get('headers', [])):
+                # The "headers" are actually data, so include them as the first row
+                if table_data.get('headers'):
+                    rows = [table_data.get('headers')] + rows
+            elif rows and table_data.get('headers') and i > 0:
+                # Skip first row if it looks like headers
+                if self._is_header_row(rows[0], base_table.get('headers', [])):
+                    rows = rows[1:]
+            
+            all_rows.extend(rows)
+            
+            # Add cells with updated row indices
+            cells = table_data.get('cells', [])
+            for cell in cells:
+                if cell.get('is_header', False) and i > 0:
+                    continue  # Skip header cells from continuation pages
+                
+                # Update row index
+                updated_cell = cell.copy()
+                updated_cell['row'] = cell.get('row', 0) + current_row_offset
+                all_cells.append(updated_cell)
+            
+            current_row_offset = len(all_rows)
+        
+        # Update merged table
+        base_table['rows'] = all_rows
+        base_table['cells'] = all_cells
+        base_table['row_count'] = len(all_rows)
+        
+        # Add multipage metadata (always add, even for single tables)
+        base_table['multipage_info'] = {
+            'is_multipage': len(table_group) > 1,
+            'page_count': len(table_group),
+            'page_numbers': [pt.page_number for pt in table_group],
+            'merge_confidence': np.mean([pt.confidence for pt in table_group])
+        }
+        
+        # Preserve page order information
+        base_table['page_number'] = table_group[0].page_number
+        base_table['page_sequence'] = [pt.page_number for pt in table_group]
+        
+        return base_table
+    
+    def _is_header_row(self, row: List[str], expected_headers: List[str]) -> bool:
+        """Check if a row looks like a header row."""
+        
+        if not row or not expected_headers:
+            return False
+        
+        # Compare with expected headers
+        similarity = sum(
+            1 for r, h in zip(row, expected_headers) 
+            if r.lower().strip() == h.lower().strip()
+        ) / max(len(row), len(expected_headers))
+        
+        return similarity > 0.7

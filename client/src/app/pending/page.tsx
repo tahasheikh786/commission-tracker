@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, Clock, FileText, Play, Trash2, AlertCircle, CheckCircle, Calendar } from 'lucide-react'
 import { toast } from 'react-hot-toast'
+import { useSubmission } from '@/context/SubmissionContext'
 
 interface PendingFile {
   id: string
@@ -17,6 +18,7 @@ interface PendingFile {
 
 export default function PendingFilesPage() {
   const router = useRouter()
+  const { triggerDashboardRefresh } = useSubmission();
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -105,6 +107,8 @@ export default function PendingFilesPage() {
       if (data.success) {
         setPendingFiles(prev => prev.filter(file => file.id !== fileId))
         toast.success('Pending file deleted successfully')
+        // Trigger global dashboard refresh after successful deletion
+        triggerDashboardRefresh();
       } else {
         throw new Error(data.message || 'Failed to delete pending file')
       }

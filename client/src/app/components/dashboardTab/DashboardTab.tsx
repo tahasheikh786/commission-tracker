@@ -13,12 +13,14 @@ import TableEditor from "../../upload/components/TableEditor/TableEditor";
 import FieldMapper from "../../upload/components/FieldMapper";
 import PendingFiles from "../PendingFiles";
 import toast from 'react-hot-toast';
+import { useSubmission } from "@/context/SubmissionContext";
 
 type FieldConfig = { field: string, label: string }
 
 export default function DashboardTab() {
   const router = useRouter();
-  const { stats, loading } = useDashboardStats();
+  const { refreshTrigger } = useSubmission();
+  const { stats, loading, refetch: refetchStats } = useDashboardStats();
   const { carriers, loading: carriersLoading, fetchCarriers } = useCarriers();
   const { stats: earnedCommissionStats, loading: earnedCommissionLoading, refetch: refetchEarnedCommissionStats } = useEarnedCommissionStats();
   const [carriersModalOpen, setCarriersModalOpen] = useState(false);
@@ -55,6 +57,13 @@ export default function DashboardTab() {
     console.log('🔄 DashboardTab mounted, refreshing earned commission stats...');
     refetchEarnedCommissionStats();
   }, [refetchEarnedCommissionStats]);
+
+  // Listen for global refresh events
+  useEffect(() => {
+    console.log('🔄 DashboardTab: Global refresh triggered, refreshing all data...');
+    refetchStats();
+    refetchEarnedCommissionStats();
+  }, [refreshTrigger, refetchStats, refetchEarnedCommissionStats]);
 
   // Load selected statement date from upload progress
   const loadSelectedStatementDate = useCallback(async () => {

@@ -10,6 +10,7 @@ import PlanTypesManager from "./PlanTypesManager";
 import toast from 'react-hot-toast';
 import { TableLoader, CardLoader } from "@/app/upload/components/Loader";
 import { Database, Settings, Plus, Search, Filter, Sparkles, Building2, FileText } from "lucide-react";
+import { useSubmission } from "@/context/SubmissionContext";
 
 type Carrier = { id: string; name: string };
 type Statement = {
@@ -24,6 +25,7 @@ type Statement = {
 };
 
 export default function CarrierTab() {
+  const { triggerDashboardRefresh } = useSubmission();
   const [carriers, setCarriers] = useState<Carrier[]>([]);
   const [selected, setSelected] = useState<Carrier | null>(null);
   const [statements, setStatements] = useState<Statement[]>([]);
@@ -79,6 +81,8 @@ export default function CarrierTab() {
         if (!res.ok) throw new Error('Failed to delete statements');
         setStatements(statements.filter(statement => !ids.includes(statement.id)));
         toast.success('Statements deleted successfully!');
+        // Trigger global dashboard refresh after successful deletion
+        triggerDashboardRefresh();
       })
       .catch((error) => {
         console.error('Delete statements error:', error);

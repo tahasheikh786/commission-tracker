@@ -30,6 +30,7 @@ import {
   useCarrierCommissionData,
   useAllCommissionData 
 } from '../../hooks/useDashboard';
+import { useSubmission } from '@/context/SubmissionContext';
 
 interface CommissionData {
   id: string;
@@ -60,6 +61,7 @@ interface CommissionData {
 }
 
 export default function EarnedCommissionTab() {
+  const { refreshTrigger } = useSubmission();
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [sortField, setSortField] = useState<keyof CommissionData>('client_name');
@@ -89,6 +91,12 @@ export default function EarnedCommissionTab() {
   useEffect(() => {
     refreshAllData();
   }, [refreshAllData]);
+
+  // Listen for global refresh events
+  useEffect(() => {
+    console.log('🔄 EarnedCommissionTab: Global refresh triggered, refreshing all data...');
+    refreshAllData();
+  }, [refreshTrigger, refreshAllData]);
 
   const ITEMS_PER_PAGE = 20;
 
@@ -222,6 +230,14 @@ export default function EarnedCommissionTab() {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(amount);
+  };
+
+  // Format monthly value - show dash for 0, currency for non-zero values
+  const formatMonthlyValue = (value: number | undefined | null) => {
+    if (value === undefined || value === null || value === 0) {
+      return '-';
+    }
+    return formatCurrency(value);
   };
 
   // Format date
@@ -564,40 +580,40 @@ export default function EarnedCommissionTab() {
                       {item.carrier_name || 'N/A'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900">
-                      {item.monthly_breakdown?.jan ? formatCurrency(item.monthly_breakdown.jan) : '-'}
+                      {formatMonthlyValue(item.monthly_breakdown?.jan)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900">
-                      {item.monthly_breakdown?.feb ? formatCurrency(item.monthly_breakdown.feb) : '-'}
+                      {formatMonthlyValue(item.monthly_breakdown?.feb)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900">
-                      {item.monthly_breakdown?.mar ? formatCurrency(item.monthly_breakdown.mar) : '-'}
+                      {formatMonthlyValue(item.monthly_breakdown?.mar)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900">
-                      {item.monthly_breakdown?.apr ? formatCurrency(item.monthly_breakdown.apr) : '-'}
+                      {formatMonthlyValue(item.monthly_breakdown?.apr)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900">
-                      {item.monthly_breakdown?.may ? formatCurrency(item.monthly_breakdown.may) : '-'}
+                      {formatMonthlyValue(item.monthly_breakdown?.may)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900">
-                      {item.monthly_breakdown?.jun ? formatCurrency(item.monthly_breakdown.jun) : '-'}
+                      {formatMonthlyValue(item.monthly_breakdown?.jun)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900">
-                      {item.monthly_breakdown?.jul ? formatCurrency(item.monthly_breakdown.jul) : '-'}
+                      {formatMonthlyValue(item.monthly_breakdown?.jul)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900">
-                      {item.monthly_breakdown?.aug ? formatCurrency(item.monthly_breakdown.aug) : '-'}
+                      {formatMonthlyValue(item.monthly_breakdown?.aug)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900">
-                      {item.monthly_breakdown?.sep ? formatCurrency(item.monthly_breakdown.sep) : '-'}
+                      {formatMonthlyValue(item.monthly_breakdown?.sep)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900">
-                      {item.monthly_breakdown?.oct ? formatCurrency(item.monthly_breakdown.oct) : '-'}
+                      {formatMonthlyValue(item.monthly_breakdown?.oct)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900">
-                      {item.monthly_breakdown?.nov ? formatCurrency(item.monthly_breakdown.nov) : '-'}
+                      {formatMonthlyValue(item.monthly_breakdown?.nov)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900">
-                      {item.monthly_breakdown?.dec ? formatCurrency(item.monthly_breakdown.dec) : '-'}
+                      {formatMonthlyValue(item.monthly_breakdown?.dec)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-emerald-600">
                       {formatCurrency(item.commission_earned)}

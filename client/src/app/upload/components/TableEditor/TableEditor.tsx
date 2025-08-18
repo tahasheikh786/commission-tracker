@@ -32,6 +32,24 @@ import { dateExtractionService, ExtractedDate } from '../../services/dateExtract
 
 import ProgressBar from '../ProgressBar'
 
+// Custom scrollbar styles
+const scrollbarStyles = `
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 8px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: #f3f4f6;
+    border-radius: 4px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #d1d5db;
+    border-radius: 4px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #9ca3af;
+  }
+`
+
 export default function TableEditor({
   tables,
   onTablesChange,
@@ -542,7 +560,9 @@ export default function TableEditor({
   }
 
   return (
-    <div className="fixed inset-0 bg-gradient-to-br from-gray-50 to-blue-50 z-50">
+    <>
+      <style dangerouslySetInnerHTML={{ __html: scrollbarStyles }} />
+      <div className="fixed inset-0 bg-gradient-to-br from-gray-50 to-blue-50 z-50">
       {/* Full-screen loader overlay */}
       {isUsingAnotherExtraction && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -816,8 +836,16 @@ export default function TableEditor({
                   
                   <div className="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
                     <div className="overflow-x-auto w-full">
-                      <table className="w-full min-w-full">
-                        <thead>
+                      <div 
+                        className="max-h-[420px] overflow-y-auto border-t border-gray-100 custom-scrollbar" 
+                        style={{ 
+                          scrollbarWidth: 'thin', 
+                          scrollbarColor: '#d1d5db #f3f4f6',
+                          msOverflowStyle: 'none'
+                        }}
+                      >
+                        <table className="w-full min-w-full">
+                        <thead className="sticky top-0 z-10">
                           <tr className="bg-gray-50">
                             {/* Checkbox column for multiple selection */}
                             <th className="px-3 py-3 text-left text-xs font-medium text-gray-900 border-b border-gray-200 w-12 whitespace-nowrap">
@@ -953,6 +981,9 @@ export default function TableEditor({
                           })}
                         </tbody>
                       </table>
+                        </div>
+                        {/* Scroll indicator */}
+                        <div className="h-1 bg-gradient-to-t from-gray-50 to-transparent pointer-events-none"></div>
                     </div>
                   </div>
                   
@@ -1086,5 +1117,6 @@ export default function TableEditor({
 
       </div>
     </div>
+    </>
   )
 }

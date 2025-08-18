@@ -13,6 +13,7 @@ import {
   ChevronRight,
 } from 'lucide-react'
 import { toast } from 'react-hot-toast'
+import { useSubmission } from '@/context/SubmissionContext'
 
 interface PendingFile {
   id: string
@@ -61,6 +62,7 @@ const PendingFiles = React.memo(function PendingFiles({
   onDeleteFile,
   className = "" 
 }: PendingFilesProps) {
+  const { triggerDashboardRefresh } = useSubmission();
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -147,6 +149,8 @@ const PendingFiles = React.memo(function PendingFiles({
         setPendingFiles(prev => prev.filter(file => file.id !== fileId))
         onDeleteFile(fileId)
         toast.success('Pending file deleted successfully')
+        // Trigger global dashboard refresh after successful deletion
+        triggerDashboardRefresh();
       } else {
         throw new Error(data.message || 'Failed to delete pending file')
       }
