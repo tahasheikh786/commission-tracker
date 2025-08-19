@@ -21,6 +21,7 @@ interface TableEditorSectionProps {
   companyId?: string
   selectedStatementDate?: any
   disableAutoDateExtraction?: boolean
+  tableEditorLearning?: any
 }
 
 export default function TableEditorSection({
@@ -42,7 +43,8 @@ export default function TableEditorSection({
   onStatementDateSelect,
   companyId,
   selectedStatementDate,
-  disableAutoDateExtraction
+  disableAutoDateExtraction,
+  tableEditorLearning
 }: TableEditorSectionProps) {
   return (
     <TableEditor
@@ -65,6 +67,7 @@ export default function TableEditorSection({
       companyId={companyId}
       selectedStatementDate={selectedStatementDate}
       disableAutoDateExtraction={disableAutoDateExtraction}
+      tableEditorLearning={tableEditorLearning}
     />
   )
 }

@@ -1,13 +1,18 @@
 import os
 import json
 import logging
-from typing import Dict, List, Any, Optional
+import hashlib
 from datetime import datetime
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form
+from typing import List, Dict, Any, Optional
+from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.db.models import StatementUpload, Company
 from app.db.crud import save_edited_tables, get_edited_tables, update_upload_tables
-from app.db.models import EditedTable, StatementUpload as StatementUploadModel
+from app.config import get_db
+from app.utils.db_retry import with_db_retry
+from app.services.format_learning_service import FormatLearningService
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -15,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 # Create router
 router = APIRouter(prefix="/table-editor", tags=["table-editor"])
+format_learning_service = FormatLearningService()
 
 
 class TableData(BaseModel):
@@ -22,6 +28,7 @@ class TableData(BaseModel):
     rows: List[List[str]]
     name: Optional[str] = None
     id: Optional[str] = None
+    summaryRows: Optional[List[int]] = None  # Convert Set to List for JSON serialization
 
 
 class SaveTablesRequest(BaseModel):
@@ -38,7 +45,7 @@ class GetTablesRequest(BaseModel):
 @router.post("/save-tables/")
 async def save_tables(request: SaveTablesRequest):
     """
-    Save edited tables to the database.
+    Save edited tables to the database and learn format patterns.
     """
     try:
         logger.info(f"🎯 Table Editor API: Saving edited tables for upload_id: {request.upload_id}")
@@ -71,19 +78,93 @@ async def save_tables(request: SaveTablesRequest):
         await update_upload_tables(request.upload_id, tables_data, request.selected_statement_date)
         logger.info(f"🎯 Table Editor API: Successfully updated upload with statement date")
         
+        # Learn format patterns from the edited tables
+        if request.tables and len(request.tables) > 0:
+            try:
+                logger.info(f"🎯 Table Editor API: Learning format patterns from edited tables")
+                
+                # Use the first table for format learning (most common case)
+                main_table = request.tables[0]
+                
+                # Extract table editor settings for learning
+                table_editor_settings = {
+                    'headers': main_table.header,
+                    'summary_rows': main_table.summaryRows if main_table.summaryRows else [],
+                    'table_structure': {
+                        'column_count': len(main_table.header),
+                        'row_count': len(main_table.rows),
+                        'has_summary_rows': bool(main_table.summaryRows and len(main_table.summaryRows) > 0),
+                        'summary_row_patterns': []
+                    }
+                }
+                
+                # Generate format signature for table editor settings
+                format_signature = format_learning_service.generate_format_signature(
+                    main_table.header, 
+                    table_editor_settings['table_structure']
+                )
+                
+                # Create format learning record for table editor settings
+                format_learning_data = {
+                    'company_id': request.company_id,
+                    'format_signature': format_signature,
+                    'headers': main_table.header,
+                    'table_structure': table_editor_settings['table_structure'],
+                    'table_editor_settings': table_editor_settings,
+                    'confidence_score': 85,  # High confidence for manually edited tables
+                    'usage_count': 1
+                }
+                
+                # Save table editor format learning
+                await save_table_editor_format_learning(format_learning_data)
+                
+                logger.info(f"🎯 Table Editor API: Successfully learned table editor format patterns")
+                
+            except Exception as e:
+                logger.error(f"🎯 Table Editor API: Error learning table editor format: {e}")
+                # Don't fail the save operation if format learning fails
+        
         logger.info(f"🎯 Table Editor API: Successfully saved {len(saved_tables)} edited tables")
         
-        return JSONResponse({
-            "success": True,
-            "message": f"Successfully saved {len(saved_tables)} tables",
-            "tables_count": len(saved_tables),
-            "upload_id": request.upload_id,
-            "timestamp": datetime.now().isoformat()
-        })
+        return JSONResponse(
+            status_code=200,
+            content={
+                "success": True,
+                "message": f"Successfully saved {len(saved_tables)} edited tables",
+                "saved_tables": saved_tables
+            }
+        )
         
     except Exception as e:
-        logger.error(f"🎯 Table Editor API: Error saving edited tables: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to save tables: {str(e)}")
+        logger.error(f"🎯 Table Editor API: Error saving tables: {e}")
+        raise HTTPException(status_code=500, detail=f"Error saving tables: {str(e)}")
+
+async def save_table_editor_format_learning(format_data: Dict[str, Any]):
+    """
+    Save table editor format learning data.
+    """
+    try:
+        from app.db import crud, schemas
+        
+        # Create format learning record
+        format_learning = schemas.CarrierFormatLearningCreate(
+            company_id=format_data['company_id'],
+            format_signature=format_data['format_signature'],
+            headers=format_data['headers'],
+            table_structure=format_data['table_structure'],
+            field_mapping={},  # Empty for table editor settings
+            table_editor_settings=format_data['table_editor_settings'],
+            confidence_score=format_data['confidence_score'],
+            usage_count=format_data['usage_count']
+        )
+        
+        # Save to database using the format learning service
+        db = await anext(get_db())
+        await crud.save_carrier_format_learning(db, format_learning)
+        
+    except Exception as e:
+        logger.error(f"Error saving table editor format learning: {e}")
+        raise
 
 
 @router.get("/get-tables/{upload_id}")

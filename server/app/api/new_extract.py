@@ -312,6 +312,7 @@ async def extract_tables_smart(
     Smart extraction endpoint that automatically detects PDF type and routes to appropriate extraction method.
     - Digital PDFs: Uses new advanced extraction pipeline (TableFormer + Docling)
     - Scanned PDFs: Uses existing extraction pipeline (Google DocAI + Docling)
+    - Includes format learning integration for automatic settings application
     """
     start_time = datetime.now()
     
@@ -393,11 +394,104 @@ async def extract_tables_smart(
             from app.services.extraction_utils import transform_pipeline_response_to_client_format
             client_response = transform_pipeline_response_to_client_format(extraction_result, file.filename)
         
+        # Apply format learning if tables are available
+        format_learning_data = None
+        if client_response.get("tables") and len(client_response["tables"]) > 0:
+            try:
+                logger.info(f"🎯 Applying format learning for company {company_id}")
+                from app.services.format_learning_service import FormatLearningService
+                format_learning_service = FormatLearningService()
+                
+                # Get the first table for format matching
+                first_table = client_response["tables"][0]
+                headers = first_table.get("header", [])
+                rows = first_table.get("rows", [])
+                
+                if headers and rows:
+                    # Analyze table structure
+                    table_structure = format_learning_service.analyze_table_structure(rows, headers)
+                    
+                    # Find matching format
+                    learned_format, match_score = await format_learning_service.find_matching_format(
+                        db=db,
+                        company_id=company_id,
+                        headers=headers,
+                        table_structure=table_structure
+                    )
+                    
+                    if learned_format and match_score > 0.8:  # High confidence threshold
+                        logger.info(f"🎯 Found matching format with score {match_score}")
+                        logger.info(f"🎯 Learned format field_mapping: {learned_format.get('field_mapping', {})}")
+                        logger.info(f"🎯 Learned format table_editor_settings: {learned_format.get('table_editor_settings')}")
+                        
+                        format_learning_data = {
+                            "found_match": True,
+                            "match_score": match_score,
+                            "learned_format": learned_format,
+                            "suggested_mapping": learned_format.get("field_mapping", {}),
+                            "table_editor_settings": learned_format.get("table_editor_settings")
+                        }
+                        
+                        logger.info(f"🎯 Created format_learning_data: {format_learning_data}")
+                        
+                        # Apply table editor settings if available
+                        if learned_format.get("table_editor_settings"):
+                            table_editor_settings = learned_format["table_editor_settings"]
+                            logger.info(f"🎯 Applying table editor settings: {table_editor_settings}")
+                            
+                            # Apply learned headers
+                            if table_editor_settings.get("headers") and len(table_editor_settings["headers"]) == len(headers):
+                                first_table["header"] = table_editor_settings["headers"]
+                                logger.info(f"🎯 Applied learned headers: {table_editor_settings['headers']}")
+                            else:
+                                logger.info(f"🎯 Headers not applied - count mismatch or missing headers")
+                            
+                            # Apply learned summary rows
+                            if table_editor_settings.get("summary_rows"):
+                                summary_rows_set = set(table_editor_settings["summary_rows"])
+                                first_table["summaryRows"] = summary_rows_set
+                                logger.info(f"🎯 Applied learned summary rows: {list(summary_rows_set)}")
+                            else:
+                                logger.info(f"🎯 No summary rows to apply")
+                        else:
+                            logger.info(f"🎯 No table editor settings found in learned format")
+                        
+                    else:
+                        logger.info(f"🎯 No matching format found (score: {match_score})")
+                        format_learning_data = {
+                            "found_match": False,
+                            "match_score": match_score or 0.0,
+                            "learned_format": None,
+                            "suggested_mapping": {},
+                            "table_editor_settings": None
+                        }
+                        
+            except Exception as e:
+                logger.error(f"🎯 Error applying format learning: {e}")
+                format_learning_data = {
+                    "found_match": False,
+                    "match_score": 0.0,
+                    "learned_format": None,
+                    "suggested_mapping": {},
+                    "table_editor_settings": None
+                }
+        
         # Add extraction timing and metadata
         extraction_time = (datetime.now() - start_time).total_seconds()
         client_response["extraction_time_seconds"] = extraction_time
         client_response["pdf_type"] = pdf_type
         client_response["extraction_method"] = extraction_method
+        
+        # Add format learning data to response (always include it)
+        client_response["format_learning"] = format_learning_data or {
+            "found_match": False,
+            "match_score": 0.0,
+            "learned_format": None,
+            "suggested_mapping": {},
+            "table_editor_settings": None
+        }
+        
+        logger.info(f"🎯 Final format_learning in response: {client_response.get('format_learning')}")
         
         # Create statement upload record for database
         upload_id = uuid4()

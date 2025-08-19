@@ -132,6 +132,7 @@ export default function FieldMapper({
 
   // Add effect to handle initialMapping changes
   useEffect(() => {
+    console.log('🎯 FieldMapper: initialMapping changed:', initialMapping)
     if (initialMapping && Object.keys(initialMapping).length > 0) {
       // Validate that the mapping has valid field keys
       const validMapping: Record<string, string> = {}
@@ -142,14 +143,16 @@ export default function FieldMapper({
       })
       
       if (Object.keys(validMapping).length > 0) {
-        console.log('initialMapping changed, updating mapping state:', validMapping)
+        console.log('🎯 FieldMapper: Setting valid mapping from initialMapping:', validMapping)
         setMapping(validMapping)
         setMappingSource('manual')
       } else {
-        console.log('initialMapping provided but no valid mappings found')
+        console.log('🎯 FieldMapper: initialMapping provided but no valid mappings found')
         setMapping({})
         setMappingSource('manual')
       }
+    } else {
+      console.log('🎯 FieldMapper: No initialMapping provided or empty')
     }
   }, [initialMapping])
 
@@ -249,49 +252,13 @@ export default function FieldMapper({
     fetchPlanTypes()
   }, [])
 
-  // Fetch learned mappings for this company
+  // Use format learning data from backend (already provided in upload response)
   useEffect(() => {
-    async function fetchLearnedMappings() {
-      if (!company?.id || !columns || columns.length === 0) return
-      
-      try {
-        // Analyze table structure for format matching
-        const tableStructure = {
-          column_count: columns.length,
-          typical_row_count: tableData.length > 0 ? tableData[0]?.rows?.length || 0 : 0,
-          has_header_row: true
-        }
-        
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${company.id}/find-format-match/`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            headers: columns,
-            table_structure: tableStructure
-          })
-        })
-        
-        if (response.ok) {
-          const result = await response.json()
-          if (result.found_match && result.learned_format?.field_mapping) {
-            setLearnedMapping(result.learned_format.field_mapping)
-            
-            // If no initial mapping is provided, use the learned mapping
-            if (!initialMapping || Object.keys(initialMapping).length === 0) {
-              setMapping(result.learned_format.field_mapping)
-              setMappingSource('learned')
-              toast.success('Field mappings auto-populated from learned format!')
-            }
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching learned mappings:', error)
-        // Don't show error toast as this is not critical
-      }
-    }
-
-    fetchLearnedMappings()
-  }, [company?.id, columns, tableData, initialMapping])
+    // The backend already provides format_learning data in the upload response
+    // This is handled in the parent component (useUploadPage) and passed as initialMapping
+    // No need to fetch learned mappings again here
+    console.log('FieldMapper: Using format learning data from backend via initialMapping:', initialMapping)
+  }, [initialMapping])
 
   // Ensure fields are always populated from database fields if available
   useEffect(() => {
@@ -303,17 +270,19 @@ export default function FieldMapper({
 
   useEffect(() => {
     if (initialMapping && Object.keys(initialMapping).length > 0) {
-      console.log('Setting mapping from initialMapping:', initialMapping)
+      console.log('🎯 FieldMapper: Setting mapping from initialMapping:', initialMapping)
       setMapping(initialMapping)
       setMappingSource('manual')
+      return // Exit early, don't run fuzzy matching
     } else if (learnedMapping && Object.keys(learnedMapping).length > 0 && mappingSource === 'learned') {
       // Keep the learned mapping if it was already set
-      console.log('Setting mapping from learnedMapping:', learnedMapping)
+      console.log('🎯 FieldMapper: Setting mapping from learnedMapping:', learnedMapping)
       setMapping(learnedMapping)
+      return // Exit early, don't run fuzzy matching
     } else if (columns && columns.length > 0 && fields && fields.length > 0) {
-      // Enable fuzzy matching for auto-mapping
-      console.log('Running fuzzy matching with columns:', columns)
-      console.log('Fields to match:', fields)
+      // Enable fuzzy matching for auto-mapping only if no valid mapping exists
+      console.log('🎯 FieldMapper: Running fuzzy matching with columns:', columns)
+      console.log('🎯 FieldMapper: Fields to match:', fields)
       
       const map: Record<string, string> = {}
       const usedColumns = new Set<string>() // Track used columns to prevent duplicates

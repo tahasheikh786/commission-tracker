@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'react-hot-toast'
 import { useProgressTracking } from '../../hooks/useProgressTracking'
+import { useTableEditorLearning } from './useTableEditorLearning'
 
 type FieldConfig = { field: string, label: string }
 type Company = { id: string, name: string } | null
@@ -10,6 +11,9 @@ type Company = { id: string, name: string } | null
 export function useUploadPage() {
   const [company, setCompany] = useState<Company>(null)
   const [uploaded, setUploaded] = useState<any>(null)
+  
+  // Table editor learning hook
+  const tableEditorLearning = useTableEditorLearning(company?.id)
   const [mapping, setMapping] = useState<Record<string, string> | null>(null)
   const [fieldConfig, setFieldConfig] = useState<FieldConfig[]>([])
   const [databaseFields, setDatabaseFields] = useState<FieldConfig[]>([])
@@ -405,7 +409,7 @@ export function useUploadPage() {
   }
 
   // Handle upload result with quality assessment
-  function handleUploadResult({ tables, upload_id, file_name, file, plan_types, field_config, quality_summary, extraction_config, format_learning }: any) {
+  async function handleUploadResult({ tables, upload_id, file_name, file, plan_types, field_config, quality_summary, extraction_config, format_learning }: any) {
     if (file && !originalFile) {
       setOriginalFile(file)
     }
@@ -418,16 +422,34 @@ export function useUploadPage() {
       setCurrentExtractionIndex(prev => prev + 1)
     }
     
+    // The backend already applies learned settings, so we use the tables as-is
     setUploaded({ tables, upload_id, file_name, file })
     setFinalTables([])
     setFieldConfig(field_config || [])
     setFormatLearning(format_learning)
     
-    if (format_learning?.suggested_mapping && Object.keys(format_learning.suggested_mapping).length > 0) {
-      setMapping(format_learning.suggested_mapping)
-      setMappingAutoApplied(true)
-      toast.success('Field mappings auto-populated from learned format!')
+    // Check if format learning was applied by the backend
+    if (format_learning?.found_match && format_learning?.match_score > 0.8) {
+      console.log('🎯 Backend applied learned format:', format_learning)
+      
+      // Show success message for table editor settings
+      if (format_learning.table_editor_settings) {
+        toast.success('Applied learned table editor settings!')
+      }
+      
+      // Apply field mappings if available
+      if (format_learning.suggested_mapping && Object.keys(format_learning.suggested_mapping).length > 0) {
+        console.log('🎯 Setting learned mapping:', format_learning.suggested_mapping)
+        setMapping(format_learning.suggested_mapping)
+        setMappingAutoApplied(true)
+        toast.success('Field mappings auto-populated from learned format!')
+      } else {
+        console.log('🎯 No suggested mapping in format learning data')
+        setMapping(null)
+        setMappingAutoApplied(false)
+      }
     } else {
+      console.log('🎯 No learned format found or low confidence:', format_learning)
       setMapping(null)
       setMappingAutoApplied(false)
     }
@@ -1084,5 +1106,8 @@ export function useUploadPage() {
     handleResumeFile,
     checkForActiveSession,
     handleStatementDateSelect,
+
+    // Table Editor Learning
+    tableEditorLearning,
   }
 }

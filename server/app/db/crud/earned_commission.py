@@ -153,13 +153,16 @@ async def get_earned_commissions_by_carrier(db: AsyncSession, carrier_id: UUID):
     )
     return result.scalars().all()
 
-async def get_all_earned_commissions(db: AsyncSession):
-    """Get all earned commission records with carrier names."""
-    result = await db.execute(
-        select(EarnedCommission, Company.name.label('carrier_name'))
+async def get_all_earned_commissions(db: AsyncSession, year: Optional[int] = None):
+    """Get all earned commission records with carrier names, optionally filtered by year."""
+    query = select(EarnedCommission, Company.name.label('carrier_name'))\
         .join(Company, EarnedCommission.carrier_id == Company.id)
-        .order_by(Company.name.asc(), EarnedCommission.client_name.asc())
-    )
+    
+    if year is not None:
+        query = query.where(EarnedCommission.statement_year == year)
+    
+    query = query.order_by(Company.name.asc(), EarnedCommission.client_name.asc())
+    result = await db.execute(query)
     return result.all()
 
 async def get_commission_record(db: AsyncSession, carrier_id: str, client_name: str, statement_date: datetime):

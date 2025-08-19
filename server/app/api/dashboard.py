@@ -4,7 +4,7 @@ from sqlalchemy import func, select
 from app.db import crud, schemas
 from app.config import get_db
 from app.db.models import StatementUpload, Company, EarnedCommission
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from uuid import UUID
 from decimal import Decimal
 from datetime import datetime
@@ -271,10 +271,10 @@ async def get_statements_by_carrier_and_status(
         raise HTTPException(status_code=500, detail=f"Error fetching carrier statements: {str(e)}")
 
 @router.get("/dashboard/earned-commissions")
-async def get_all_earned_commissions(db: AsyncSession = Depends(get_db)):
-    """Get all earned commission data with carrier names"""
+async def get_all_earned_commissions(year: Optional[int] = None, db: AsyncSession = Depends(get_db)):
+    """Get all earned commission data with carrier names, optionally filtered by year"""
     try:
-        commissions = await crud.get_all_earned_commissions(db)
+        commissions = await crud.get_all_earned_commissions(db, year=year)
         
         formatted_commissions = []
         for commission, carrier_name in commissions:
@@ -360,6 +360,21 @@ async def get_earned_commissions_by_carrier(carrier_id: UUID, db: AsyncSession =
         return formatted_commissions
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching carrier earned commissions: {str(e)}")
+
+@router.get("/dashboard/earned-commissions/years")
+async def get_available_years(db: AsyncSession = Depends(get_db)):
+    """Get all available years for earned commission data"""
+    try:
+        result = await db.execute(
+            select(EarnedCommission.statement_year)
+            .where(EarnedCommission.statement_year.isnot(None))
+            .distinct()
+            .order_by(EarnedCommission.statement_year.desc())
+        )
+        years = [row[0] for row in result.all() if row[0] is not None]
+        return {"years": years}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching available years: {str(e)}")
 
 @router.get("/dashboard/earned-commissions/summary")
 async def get_earned_commissions_summary(db: AsyncSession = Depends(get_db)):

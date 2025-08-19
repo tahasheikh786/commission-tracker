@@ -168,6 +168,7 @@ async def get_learned_formats(
                 "headers": format_record.headers,
                 "column_types": format_record.column_types,
                 "field_mapping": format_record.field_mapping,
+                "table_editor_settings": format_record.table_editor_settings,
                 "confidence_score": format_record.confidence_score,
                 "usage_count": format_record.usage_count,
                 "last_used": format_record.last_used,
@@ -180,6 +181,47 @@ async def get_learned_formats(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error getting learned formats: {str(e)}")
+
+@router.post("/companies/{company_id}/get-table-editor-settings/")
+async def get_table_editor_settings(
+    company_id: str,
+    request: FormatMatchRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get table editor settings for a matching format.
+    """
+    try:
+        # Validate company exists
+        company = await with_db_retry(db, crud.get_company_by_id, company_id=company_id)
+        if not company:
+            raise HTTPException(status_code=404, detail="Company not found")
+        
+        # Find matching format
+        learned_format, match_score = await format_learning_service.find_matching_format(
+            db=db,
+            company_id=company_id,
+            headers=request.headers,
+            table_structure=request.table_structure
+        )
+        
+        if learned_format and learned_format.get('table_editor_settings'):
+            return {
+                "found_match": True,
+                "match_score": match_score,
+                "table_editor_settings": learned_format['table_editor_settings']
+            }
+        else:
+            return {
+                "found_match": False,
+                "match_score": 0.0,
+                "table_editor_settings": None
+            }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting table editor settings: {str(e)}")
 
 @router.delete("/companies/{company_id}/learned-formats/{format_id}/")
 async def delete_learned_format(

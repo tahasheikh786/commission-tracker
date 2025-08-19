@@ -28,7 +28,8 @@ import {
   useCarriersWithCommission, 
   useCarrierCommissionStats, 
   useCarrierCommissionData,
-  useAllCommissionData 
+  useAllCommissionData,
+  useAvailableYears
 } from '../../hooks/useDashboard';
 import { useSubmission } from '@/context/SubmissionContext';
 
@@ -73,11 +74,13 @@ export default function EarnedCommissionTab() {
   const [carrierFilter, setCarrierFilter] = useState<string>('');
   const [minCommissionFilter, setMinCommissionFilter] = useState<string>('');
   const [maxCommissionFilter, setMaxCommissionFilter] = useState<string>('');
+  const [selectedYear, setSelectedYear] = useState<number | null>(null);
 
   // Fetch data
   const { stats: overallStats, loading: statsLoading, refetch: refetchStats } = useEarnedCommissionStats();
   const { carriers, loading: carriersLoading, refetch: refetchCarriers } = useCarriersWithCommission();
-  const { data: allData, loading: allDataLoading, refetch: refetchAllData } = useAllCommissionData();
+  const { data: allData, loading: allDataLoading, refetch: refetchAllData } = useAllCommissionData(selectedYear || undefined);
+  const { years: availableYears, loading: yearsLoading, refetch: refetchYears } = useAvailableYears();
 
   // Refresh all data
   const refreshAllData = useCallback(() => {
@@ -85,7 +88,8 @@ export default function EarnedCommissionTab() {
     refetchStats();
     refetchCarriers();
     refetchAllData();
-  }, [refetchStats, refetchCarriers, refetchAllData]);
+    refetchYears();
+  }, [refetchStats, refetchCarriers, refetchAllData, refetchYears]);
 
   // Refresh data when component mounts
   useEffect(() => {
@@ -216,11 +220,12 @@ export default function EarnedCommissionTab() {
     setCarrierFilter('');
     setMinCommissionFilter('');
     setMaxCommissionFilter('');
+    setSelectedYear(null);
     setCurrentPage(1);
   };
 
   // Check if any filters are active
-  const hasActiveFilters = searchQuery || carrierFilter || minCommissionFilter || maxCommissionFilter;
+  const hasActiveFilters = searchQuery || carrierFilter || minCommissionFilter || maxCommissionFilter || selectedYear !== null;
 
   // Format currency
   const formatCurrency = (amount: number) => {
@@ -260,9 +265,14 @@ export default function EarnedCommissionTab() {
           </h1>
           <Sparkles className="text-teal-500" size={24} />
         </div>
-        <p className="text-lg text-slate-600 max-w-3xl mx-auto leading-relaxed">
-          Track and analyze commission earnings across all carriers and clients with comprehensive insights
-        </p>
+                      <p className="text-lg text-slate-600 max-w-3xl mx-auto leading-relaxed">
+                Track and analyze commission earnings across all carriers and clients with comprehensive insights
+                {selectedYear && (
+                  <span className="block mt-2 text-sm font-medium text-emerald-600">
+                    📅 Showing data for year {selectedYear}
+                  </span>
+                )}
+              </p>
         
         {/* Refresh Button */}
         <div className="flex justify-center">
@@ -277,8 +287,10 @@ export default function EarnedCommissionTab() {
         </div>
       </div>
 
-      {/* Enhanced Stats Cards */}
-      <div className="grid gap-6 mb-8 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
+      
+
+        {/* Enhanced Stats Cards */}
+        <div className="grid gap-6 mb-8 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
         <div className="bg-white/90 backdrop-blur-xl rounded-3xl shadow-xl border border-white/50 p-6">
           <div className="flex items-center justify-between">
             <div>
@@ -380,8 +392,8 @@ export default function EarnedCommissionTab() {
                 }`}
               >
                 <SlidersHorizontal size={16} />
-                <span className="text-sm font-medium">Filters</span>
-                {hasActiveFilters && (
+                <span className="text-sm font-medium">Advanced Filters</span>
+                {(minCommissionFilter || maxCommissionFilter) && (
                   <div className="w-2 h-2 bg-red-500 rounded-full"></div>
                 )}
               </button>
@@ -391,19 +403,62 @@ export default function EarnedCommissionTab() {
             </div>
           </div>
 
-          {/* Search Bar */}
-          <div className="relative mb-4">
-            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} />
-            <input
-              type="text"
-              placeholder="Search companies or carriers..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-12 pr-4 py-3 text-sm bg-white/80 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200"
-            />
+          {/* Combined Search and Filter Row */}
+          <div className="space-y-4 mb-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="relative">
+                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} />
+                <input
+                  type="text"
+                  placeholder="Search by company..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-12 pr-4 py-3 text-sm bg-white/80 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200"
+                />
+              </div>
+              <div className="relative">
+                <Building2 className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} />
+                <input
+                  type="text"
+                  placeholder="Search by carrier..."
+                  value={carrierFilter}
+                  onChange={(e) => setCarrierFilter(e.target.value)}
+                  className="w-full pl-12 pr-4 py-3 text-sm bg-white/80 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200"
+                />
+              </div>
+              <div>
+                <select
+                  value={selectedYear || ''}
+                  onChange={(e) => setSelectedYear(e.target.value ? parseInt(e.target.value) : null)}
+                  className="w-full px-4 py-3 text-sm bg-white/80 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200"
+                >
+                  <option value="">All Years</option>
+                  {yearsLoading ? (
+                    <option value="" disabled>Loading years...</option>
+                  ) : (
+                    availableYears.map((year) => (
+                      <option key={year} value={year}>{year}</option>
+                    ))
+                  )}
+                </select>
+              </div>
+            </div>
+            
+            {/* Clear Filters Button */}
+            {hasActiveFilters && (
+              <div className="flex justify-center">
+                <button
+                  onClick={clearFilters}
+                  className="flex items-center gap-2 px-4 py-2 text-sm bg-red-100 text-red-600 rounded-xl hover:bg-red-200 transition-colors font-medium"
+                >
+                  <X size={16} />
+                  Clear All Filters
+                </button>
+              </div>
+            )}
           </div>
 
-          {/* Filter Panel */}
+          {/* Advanced Filters Panel */}
           {showFilters && (
             <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-4 mb-4 border border-slate-200/50">
               <div className="flex items-center justify-between mb-4">
@@ -422,17 +477,7 @@ export default function EarnedCommissionTab() {
                 )}
               </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-2">Carrier</label>
-                  <input
-                    type="text"
-                    placeholder="Filter by carrier..."
-                    value={carrierFilter}
-                    onChange={(e) => setCarrierFilter(e.target.value)}
-                    className="w-full px-3 py-2 text-sm bg-white/80 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                  />
-                </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-2">Min Commission</label>
                   <input

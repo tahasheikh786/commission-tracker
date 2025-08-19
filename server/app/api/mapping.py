@@ -90,7 +90,8 @@ async def update_company_mapping(company_id: str, config: MappingConfig, db: Asy
                 table_data=config.table_data,
                 headers=config.headers,
                 field_mapping=config.mapping,
-                confidence_score=80  # Default confidence score
+                confidence_score=80,  # Default confidence score
+                table_editor_settings=None  # Will be learned from table editor save
             )
             logger.info(f"🎯 Mapping API: Format learning completed successfully")
         except Exception as e:

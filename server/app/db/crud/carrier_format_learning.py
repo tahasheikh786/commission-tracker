@@ -36,6 +36,8 @@ async def save_carrier_format_learning(db: AsyncSession, format_learning: Carrie
             existing_format.data_quality_metrics = format_learning.data_quality_metrics
         if format_learning.field_mapping is not None:
             existing_format.field_mapping = format_learning.field_mapping
+        if format_learning.table_editor_settings is not None:
+            existing_format.table_editor_settings = format_learning.table_editor_settings
         
         await db.commit()
         await db.refresh(existing_format)
@@ -53,6 +55,7 @@ async def save_carrier_format_learning(db: AsyncSession, format_learning: Carrie
             table_structure=format_learning.table_structure,
             data_quality_metrics=format_learning.data_quality_metrics,
             field_mapping=format_learning.field_mapping,
+            table_editor_settings=format_learning.table_editor_settings,
             confidence_score=format_learning.confidence_score,
             usage_count=format_learning.usage_count,
             last_used=now,

@@ -81,20 +81,11 @@ export default function UploadPageContainer() {
     handleResumeFile,
     checkForActiveSession,
     handleStatementDateSelect,
+
+    // Table Editor Learning
+    tableEditorLearning,
   } = useUploadPage()
 
-  // Debug state changes
-  useEffect(() => {
-    console.log('🔄 State changed:', {
-      mapping: !!mapping,
-      showFieldMapper,
-      showTableEditor,
-      skipped,
-      finalTablesLength: finalTables.length,
-      dashboardCondition: (mapping && !showFieldMapper) || skipped || (finalTables.length > 0 && !showFieldMapper),
-      selectedStatementDate: selectedStatementDate
-    })
-  }, [mapping, showFieldMapper, showTableEditor, skipped, finalTables.length, selectedStatementDate])
 
   // 1. Show upload interface if no company selected or no upload yet
   if (!company || !uploaded) {
@@ -105,9 +96,6 @@ export default function UploadPageContainer() {
         onUploadResult={handleUploadResult}
         onReset={handleReset}
         onResumeFile={handleResumeFile}
-        onDeleteFile={(fileId) => {
-          console.log('Pending file deleted:', fileId)
-        }}
         selectedStatementDate={selectedStatementDate}
       />
     )
@@ -144,13 +132,13 @@ export default function UploadPageContainer() {
         companyId={company?.id}
         selectedStatementDate={selectedStatementDate}
         disableAutoDateExtraction={false}
+        tableEditorLearning={tableEditorLearning}
       />
     )
   }
 
   // 3. Show Field Mapper
   if ((uploaded?.tables?.length || finalTables.length > 0) && company && !fetchingMapping && showFieldMapper) {
-    console.log('🎯 UploadPageContainer: Rendering FieldMapperSection with selectedStatementDate:', selectedStatementDate)
     return (
       <FieldMapperSection
         company={company}
@@ -186,16 +174,9 @@ export default function UploadPageContainer() {
         showRejectModal={showRejectModal}
         rejectReason={rejectReason}
         onEditMapping={() => {
-          console.log('🎯 Edit Field Mapping clicked:', {
-            currentCompany: company,
-            showFieldMapper: showFieldMapper,
-            skipped: skipped,
-            uploaded: uploaded,
-            finalTables: finalTables
-          })
+        
           setShowFieldMapper(true);
           setSkipped(false);
-          console.log('🎯 States set - showFieldMapper: true, skipped: false')
         }}
         onApprove={handleApprove}
         onReject={handleReject}

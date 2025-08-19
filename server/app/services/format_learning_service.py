@@ -302,7 +302,8 @@ class FormatLearningService:
         table_data: List[List[str]], 
         headers: List[str], 
         field_mapping: Dict[str, str],
-        confidence_score: int = 80
+        confidence_score: int = 80,
+        table_editor_settings: Optional[Dict[str, Any]] = None
     ) -> bool:
         """
         Learn from a processed file and save the format information.
@@ -338,6 +339,7 @@ class FormatLearningService:
                 table_structure=table_structure,
                 data_quality_metrics=data_quality_metrics,
                 field_mapping=field_mapping,
+                table_editor_settings=table_editor_settings,
                 confidence_score=confidence_score,
                 usage_count=1
             )
@@ -371,15 +373,16 @@ class FormatLearningService:
             )
             
             if best_match:
-                return {
-                    'format_signature': best_match.format_signature,
-                    'headers': best_match.headers,
-                    'column_types': best_match.column_types,
-                    'column_patterns': best_match.column_patterns,
-                    'field_mapping': best_match.field_mapping,
-                    'confidence_score': best_match.confidence_score,
-                    'usage_count': best_match.usage_count
-                }, score
+                            return {
+                'format_signature': best_match.format_signature,
+                'headers': best_match.headers,
+                'column_types': best_match.column_types,
+                'column_patterns': best_match.column_patterns,
+                'field_mapping': best_match.field_mapping,
+                'table_editor_settings': best_match.table_editor_settings,
+                'confidence_score': best_match.confidence_score,
+                'usage_count': best_match.usage_count
+            }, score
             
             return None, 0.0
             

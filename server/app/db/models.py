@@ -58,6 +58,7 @@ class CarrierFormatLearning(Base):
     
     # Mapping information
     field_mapping = Column(JSON)  # Learned field mapping for this format
+    table_editor_settings = Column(JSON)  # Table editor settings (headers, summary rows, etc.)
     confidence_score = Column(Integer, default=0)  # Confidence in this format (0-100)
     
     # Usage tracking

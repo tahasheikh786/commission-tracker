@@ -61,6 +61,7 @@ class CarrierFormatLearningBase(BaseModel):
     table_structure: Optional[Dict[str, Any]] = None
     data_quality_metrics: Optional[Dict[str, Any]] = None
     field_mapping: Optional[Dict[str, str]] = None
+    table_editor_settings: Optional[Dict[str, Any]] = None
     confidence_score: int = 0
     usage_count: int = 1
 
@@ -75,6 +76,7 @@ class CarrierFormatLearningUpdate(BaseModel):
     table_structure: Optional[Dict[str, Any]] = None
     data_quality_metrics: Optional[Dict[str, Any]] = None
     field_mapping: Optional[Dict[str, str]] = None
+    table_editor_settings: Optional[Dict[str, Any]] = None
     confidence_score: Optional[int] = None
     usage_count: Optional[int] = None
 

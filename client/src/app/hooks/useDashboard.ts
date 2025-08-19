@@ -255,7 +255,43 @@ export const useCarrierCommissionData = (carrierId: string | null) => {
   return { data, loading, error, refetch: fetchData };
 };
 
-export const useAllCommissionData = () => {
+export const useAvailableYears = () => {
+  const [years, setYears] = useState<number[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchYears = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      console.log('🔍 Fetching available years...');
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/dashboard/earned-commissions/years`);
+      console.log('📊 Available years response:', response.status, response.ok);
+      if (response.ok) {
+        const responseData = await response.json();
+        console.log('📊 Available years:', responseData);
+        setYears(responseData.years || []);
+      } else {
+        const errorText = await response.text();
+        console.error('❌ Failed to fetch available years:', errorText);
+        setError('Failed to fetch available years');
+      }
+    } catch (err) {
+      console.error('❌ Error fetching available years:', err);
+      setError('Error fetching available years');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchYears();
+  }, [fetchYears]);
+
+  return { years, loading, error, refetch: fetchYears };
+};
+
+export const useAllCommissionData = (year?: number) => {
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -264,8 +300,11 @@ export const useAllCommissionData = () => {
     setLoading(true);
     setError(null);
     try {
-      console.log('🔍 Fetching all commission data...');
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/dashboard/earned-commissions`);
+      console.log('🔍 Fetching all commission data...', year ? `for year ${year}` : '');
+      const url = year 
+        ? `${process.env.NEXT_PUBLIC_API_URL}/dashboard/earned-commissions?year=${year}`
+        : `${process.env.NEXT_PUBLIC_API_URL}/dashboard/earned-commissions`;
+      const response = await fetch(url);
       console.log('📊 All commission data response:', response.status, response.ok);
       if (response.ok) {
         const responseData = await response.json();
@@ -282,7 +321,7 @@ export const useAllCommissionData = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [year]);
 
   useEffect(() => {
     fetchData();
