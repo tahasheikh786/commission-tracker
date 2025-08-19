@@ -32,6 +32,7 @@ export type TableEditorProps = {
   selectedStatementDate?: any
   disableAutoDateExtraction?: boolean
   tableEditorLearning?: any
+
 }
 
 export type CellEdit = {

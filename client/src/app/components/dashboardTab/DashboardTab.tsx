@@ -11,7 +11,6 @@ import DashboardTable from "../../upload/components/DashboardTable";
 import DashboardTableFullPage from "@/app/upload/components/DashboardTableFullPage";
 import TableEditor from "../../upload/components/TableEditor/TableEditor";
 import FieldMapper from "../../upload/components/FieldMapper";
-import PendingFiles from "../PendingFiles";
 import toast from 'react-hot-toast';
 import { useSubmission } from "@/context/SubmissionContext";
 
@@ -46,7 +45,6 @@ export default function DashboardTab() {
   const [editedTables, setEditedTables] = useState<any[]>([]);
   const [originalFile, setOriginalFile] = useState<File | null>(null);
   const [formatLearning, setFormatLearning] = useState<any>(null);
-  const [showPendingFiles, setShowPendingFiles] = useState(false);
   const [currentStep, setCurrentStep] = useState('upload');
   const [selectedStatementDate, setSelectedStatementDate] = useState<any>(null);
 
@@ -201,11 +199,17 @@ export default function DashboardTab() {
         for (const field of dashboardHeader) {
           const column = mapping[field];
           if (column) {
-            const colIndex = table.header.indexOf(column);
-            if (colIndex !== -1 && row[colIndex] !== undefined) {
-              mappedRow[field] = row[colIndex];
+            // Check if this is an auto-fill field (Invoice Total with __AUTO_FILL_ZERO__)
+            if (column === '__AUTO_FILL_ZERO__') {
+              mappedRow[field] = '$0.00'
+              console.log(`🎯 Auto-filling ${field} with $0.00`)
             } else {
-              mappedRow[field] = '';
+              const colIndex = table.header.indexOf(column);
+              if (colIndex !== -1 && row[colIndex] !== undefined) {
+                mappedRow[field] = row[colIndex];
+              } else {
+                mappedRow[field] = '';
+              }
             }
           } else {
             mappedRow[field] = '';
@@ -324,7 +328,6 @@ export default function DashboardTab() {
     setCompany(null);
     setUploaded(null);
     setMapping(null);
-    setShowPendingFiles(false);
     setCurrentStep('upload');
     setFinalTables([]);
     setFieldConfig([]);
@@ -563,30 +566,6 @@ export default function DashboardTab() {
         {/* Upload Interface */}
         {!company || !uploaded ? (
           <div className="space-y-6">
-            {/* Pending Files Toggle */}
-            {company && (
-              <div className="flex justify-center">
-                <button
-                  onClick={() => setShowPendingFiles(!showPendingFiles)}
-                  className="inline-flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-orange-500 to-amber-600 text-white rounded-2xl hover:shadow-lg transition-all duration-200 hover:scale-105 font-semibold"
-                >
-                  <Clock className="w-5 h-5" />
-                  {showPendingFiles ? 'Hide' : 'Show'} Pending Files
-                </button>
-              </div>
-            )}
-
-            {/* Pending Files Section */}
-            {showPendingFiles && company && (
-              <div className="bg-gradient-to-r from-orange-50 to-amber-50 rounded-2xl p-6 border border-orange-200/50">
-                <PendingFiles
-                  companyId={company.id}
-                  onResumeFile={() => {}}
-                  onDeleteFile={() => {}}
-                />
-              </div>
-            )}
-
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
               {/* Carrier Selection */}
               <div className="bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 rounded-3xl p-8 border border-blue-200/50 shadow-lg">

@@ -258,6 +258,12 @@ export default function FieldMapper({
     // This is handled in the parent component (useUploadPage) and passed as initialMapping
     // No need to fetch learned mappings again here
     console.log('FieldMapper: Using format learning data from backend via initialMapping:', initialMapping)
+    
+    // If we have a learned mapping, set it as the learned mapping for potential application
+    if (initialMapping && Object.keys(initialMapping).length > 0) {
+      setLearnedMapping(initialMapping)
+      console.log('FieldMapper: Set learned mapping from initialMapping:', initialMapping)
+    }
   }, [initialMapping])
 
   // Ensure fields are always populated from database fields if available
@@ -272,7 +278,7 @@ export default function FieldMapper({
     if (initialMapping && Object.keys(initialMapping).length > 0) {
       console.log('🎯 FieldMapper: Setting mapping from initialMapping:', initialMapping)
       setMapping(initialMapping)
-      setMappingSource('manual')
+      setMappingSource('learned') // Mark as learned since it came from backend
       return // Exit early, don't run fuzzy matching
     } else if (learnedMapping && Object.keys(learnedMapping).length > 0 && mappingSource === 'learned') {
       // Keep the learned mapping if it was already set
@@ -382,10 +388,31 @@ export default function FieldMapper({
     console.log('🎯 FieldMapper handleSave called with:', { mapping, fields, planTypes, tableNames })
     setSaving(true)
     try {
-      // Call onSave directly without making a separate API call here
-      // The parent component (page.tsx) will handle the API call
-      console.log('🎯 Calling onSave with:', { mapping, fields, planTypes, selectedStatementDate })
-      onSave(mapping, fields, planTypes, tableNames, selectedStatementDate)
+      // Check if Invoice Total field is mapped
+      const invoiceTotalField = fields.find(f => 
+        f.label.toLowerCase().includes('invoice total') || 
+        f.label.toLowerCase().includes('invoice amount') ||
+        f.label.toLowerCase().includes('premium amount')
+      )
+      
+      // If Invoice Total field exists but is not mapped, automatically fill with $0.00
+      if (invoiceTotalField && !mapping[invoiceTotalField.field]) {
+        console.log('🎯 Invoice Total field not mapped, will automatically fill with $0.00')
+        
+        // Create a new mapping that includes the Invoice Total field with a special value
+        const updatedMapping = {
+          ...mapping,
+          [invoiceTotalField.field]: '__AUTO_FILL_ZERO__' // Special marker for backend to handle
+        }
+        
+        console.log('🎯 Updated mapping with auto-fill for Invoice Total:', updatedMapping)
+        onSave(updatedMapping, fields, planTypes, tableNames, selectedStatementDate)
+      } else {
+        // Normal save without auto-fill
+        console.log('🎯 Calling onSave with:', { mapping, fields, planTypes, selectedStatementDate })
+        onSave(mapping, fields, planTypes, tableNames, selectedStatementDate)
+      }
+      
       toast.success("Mapping saved and format learned!")
     } catch (error) {
       toast.error("Failed to save mapping.")
@@ -614,6 +641,15 @@ export default function FieldMapper({
                                           <option key={col} value={col}>{col}</option>
                                         ))}
                                       </select>
+                                      {/* Show auto-fill indicator for Invoice Total fields */}
+                                      {(f.label.toLowerCase().includes('invoice total') || 
+                                        f.label.toLowerCase().includes('invoice amount') ||
+                                        f.label.toLowerCase().includes('premium amount')) && 
+                                        !mapping[f.field] && (
+                                        <div className="mt-1 text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                                          Will auto-fill with $0.00 if not mapped
+                                        </div>
+                                      )}
                                     </td>
                                   </>
                                 )}

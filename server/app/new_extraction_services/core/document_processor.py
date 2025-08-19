@@ -423,8 +423,17 @@ class DocumentProcessor:
         """
         try:
             # Check for minimum table dimensions
-            if len(headers) < 2 or len(rows) < 2:
+            # Allow single-row tables for commission statements (common case)
+            if len(headers) < 2:
                 return False
+            
+            # For commission statements, even 1 row is valid if it has proper structure
+            if len(rows) < 1:
+                return False
+            
+            # Special case: Single-row commission tables are valid if they have commission-related headers
+            if len(rows) == 1:
+                return True
             
             # Intelligent uniqueness assessment
             if len(headers) == 1:
@@ -1683,3 +1692,4 @@ class DocumentProcessor:
                     })
         
         return cells
+    

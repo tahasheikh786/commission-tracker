@@ -22,6 +22,7 @@ interface TableEditorSectionProps {
   selectedStatementDate?: any
   disableAutoDateExtraction?: boolean
   tableEditorLearning?: any
+
 }
 
 export default function TableEditorSection({
@@ -44,10 +45,14 @@ export default function TableEditorSection({
   companyId,
   selectedStatementDate,
   disableAutoDateExtraction,
-  tableEditorLearning
+  tableEditorLearning,
+
 }: TableEditorSectionProps) {
+  
+  console.log('🚀 TableEditorSection component called')
   return (
     <TableEditor
+
       tables={tables}
       onTablesChange={onTablesChange}
       onSave={onSave}
@@ -68,6 +73,7 @@ export default function TableEditorSection({
       selectedStatementDate={selectedStatementDate}
       disableAutoDateExtraction={disableAutoDateExtraction}
       tableEditorLearning={tableEditorLearning}
+
     />
   )
 }

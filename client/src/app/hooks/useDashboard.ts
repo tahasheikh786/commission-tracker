@@ -116,7 +116,7 @@ export function useStatements() {
 } 
 
 // Earned Commission Hooks
-export const useEarnedCommissionStats = () => {
+export const useEarnedCommissionStats = (year?: number) => {
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -125,8 +125,11 @@ export const useEarnedCommissionStats = () => {
     setLoading(true);
     setError(null);
     try {
-      console.log('🔍 Fetching earned commission stats...');
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/earned-commission/stats`);
+      console.log('🔍 Fetching earned commission stats...', year ? `for year ${year}` : '');
+      const url = year 
+        ? `${process.env.NEXT_PUBLIC_API_URL}/earned-commission/stats?year=${year}`
+        : `${process.env.NEXT_PUBLIC_API_URL}/earned-commission/stats`;
+      const response = await fetch(url);
       console.log('📊 Earned commission stats response:', response.status, response.ok);
       if (response.ok) {
         const data = await response.json();
@@ -143,11 +146,11 @@ export const useEarnedCommissionStats = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [year]);
 
   useEffect(() => {
     fetchStats();
-  }, [fetchStats]);
+  }, [year]);
 
   return { stats, loading, error, refetch: fetchStats };
 };
@@ -214,7 +217,7 @@ export const useCarriersWithCommission = () => {
 
   useEffect(() => {
     fetchCarriers();
-  }, [fetchCarriers]);
+  }, []);
 
   return { carriers, loading, error, refetch: fetchCarriers };
 };
@@ -286,7 +289,7 @@ export const useAvailableYears = () => {
 
   useEffect(() => {
     fetchYears();
-  }, [fetchYears]);
+  }, []);
 
   return { years, loading, error, refetch: fetchYears };
 };
@@ -325,7 +328,7 @@ export const useAllCommissionData = (year?: number) => {
 
   useEffect(() => {
     fetchData();
-  }, [fetchData]);
+  }, [year]);
 
   return { data, loading, error, refetch: fetchData };
 }; 

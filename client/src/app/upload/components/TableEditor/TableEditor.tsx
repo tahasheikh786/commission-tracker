@@ -70,8 +70,11 @@ export default function TableEditor({
   companyId,
   selectedStatementDate,
   disableAutoDateExtraction = false,
-  tableEditorLearning
+  tableEditorLearning,
+
 }: TableEditorProps) {
+  
+  console.log('🚀 TableEditor component called with props')
   const [currentTableIdx, setCurrentTableIdx] = useState(0)
   const [searchTerm, setSearchTerm] = useState('')
   const [zoom, setZoom] = useState(1)
@@ -86,6 +89,140 @@ export default function TableEditor({
   const [showDateModal, setShowDateModal] = useState(false)
   const [extractedDates, setExtractedDates] = useState<ExtractedDate[]>([])
   const [dateExtractionLoading, setDateExtractionLoading] = useState(false)
+  const [hasExtractedDates, setHasExtractedDates] = useState(false) // Track if dates were ever extracted
+
+  // Extraction handlers state
+  const [isExtractingWithGPT, setIsExtractingWithGPT] = useState(false)
+  const [isExtractingWithGoogleDocAI, setIsExtractingWithGoogleDocAI] = useState(false)
+  const [gptServiceAvailable, setGptServiceAvailable] = useState(true)
+  const [googleDocAIServiceAvailable, setGoogleDocAIServiceAvailable] = useState(true)
+
+  // Extraction handlers
+  const handleExtractWithGPT = async () => {
+    console.log('🚀 handleExtractWithGPT function called')
+    
+    // Always show loading state
+    setIsExtractingWithGPT(true)
+    toast.loading('Extracting with GPT-5 Vision...', { id: 'extract-gpt' })
+
+    try {
+      // Get upload ID from any possible field
+      const uploadId = uploaded?.upload_id || uploaded?.id || uploaded?.extraction_id
+      const currentCompanyId = companyId
+      
+      if (!uploadId || !currentCompanyId) {
+        throw new Error('Missing upload or company information')
+      }
+
+      const formData = new FormData()
+      formData.append('upload_id', uploadId)
+      formData.append('company_id', currentCompanyId)
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/extract-tables-gpt/`, {
+        method: 'POST',
+        body: formData
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        const errorMessage = errorData.detail || `HTTP error! status: ${response.status}`
+        
+        // Handle specific GPT error
+        if (errorMessage.includes("'str' object has no attribute 'append'")) {
+          setGptServiceAvailable(false)
+          throw new Error('GPT extraction service is experiencing technical difficulties. Please try again later.')
+        }
+        
+        throw new Error(errorMessage)
+      }
+
+      const result = await response.json()
+      console.log('📡 GPT extraction result:', result)
+      
+      if (result.success) {
+        // Update tables with new extraction result
+        const extractedTables = result.tables || []
+        onTablesChange(extractedTables)
+        
+        if (extractedTables.length === 0) {
+          toast('GPT extraction completed but no tables were found in the document.', { id: 'extract-gpt' })
+        } else {
+          toast.success(`GPT extraction completed! ${extractedTables.length} tables extracted.`, { id: 'extract-gpt' })
+        }
+      } else {
+        throw new Error(result.error || 'GPT extraction failed')
+      }
+    } catch (error) {
+      console.error('❌ Error in GPT extraction:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      toast.error(`GPT extraction failed: ${errorMessage}`, { id: 'extract-gpt' })
+    } finally {
+      setIsExtractingWithGPT(false)
+    }
+  }
+
+  const handleExtractWithGoogleDocAI = async () => {
+    console.log('🚀 handleExtractWithGoogleDocAI function called')
+    
+    // Always show loading state
+    setIsExtractingWithGoogleDocAI(true)
+    toast.loading('Extracting with Google Document AI...', { id: 'extract-google' })
+
+    try {
+      // Get upload ID from any possible field
+      const uploadId = uploaded?.upload_id || uploaded?.id || uploaded?.extraction_id
+      const currentCompanyId = companyId
+      
+      if (!uploadId || !currentCompanyId) {
+        throw new Error('Missing upload or company information')
+      }
+
+      const formData = new FormData()
+      formData.append('upload_id', uploadId)
+      formData.append('company_id', currentCompanyId)
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/extract-tables-google-docai/`, {
+        method: 'POST',
+        body: formData
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        const errorMessage = errorData.detail || `HTTP error! status: ${response.status}`
+        
+        // Handle specific Google DOCAI permission error
+        if (errorMessage.includes('IAM_PERMISSION_DENIED') || errorMessage.includes('documentai.processors.processOnline')) {
+          setGoogleDocAIServiceAvailable(false)
+          throw new Error('Google Document AI is not properly configured. Please contact your administrator.')
+        }
+        
+        throw new Error(errorMessage)
+      }
+
+      const result = await response.json()
+      console.log('📡 Google DOC AI extraction result:', result)
+      
+      if (result.success) {
+        // Update tables with new extraction result
+        const extractedTables = result.tables || []
+        onTablesChange(extractedTables)
+        
+        if (extractedTables.length === 0) {
+          toast('Google DOC AI extraction completed but no tables were found in the document.', { id: 'extract-google' })
+        } else {
+          toast.success(`Google DOC AI extraction completed! ${extractedTables.length} tables extracted.`, { id: 'extract-google' })
+        }
+      } else {
+        throw new Error(result.error || 'Google DOC AI extraction failed')
+      }
+    } catch (error) {
+      console.error('❌ Error in Google DOC AI extraction:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      toast.error(`Google DOC AI extraction failed: ${errorMessage}`, { id: 'extract-google' })
+    } finally {
+      setIsExtractingWithGoogleDocAI(false)
+    }
+  }
   
   // Ref to track processed data keys to prevent duplicate extractions
   const processedDataKeysRef = useRef<Set<string>>(new Set())
@@ -95,9 +232,29 @@ export default function TableEditor({
     console.log('🎭 Modal state changed:', {
       showDateModal,
       extractedDatesLength: extractedDates.length,
-      dateExtractionLoading
+      dateExtractionLoading,
+      hasExtractedDates
     })
-  }, [showDateModal, extractedDates.length, dateExtractionLoading])
+  }, [showDateModal, extractedDates.length, dateExtractionLoading, hasExtractedDates])
+
+  // Click outside handler for menus
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement
+      
+      // Check if click is outside of any menu
+      if (!target.closest('[data-header-menu]') && !target.closest('[data-row-actions-menu]') && 
+          !target.closest('[data-header-menu-trigger]') && !target.closest('[data-row-menu-trigger]')) {
+        setShowHeaderActions(null)
+        setShowRowActions(null)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [])
   
   // Ref to track if component is unmounting
   const isUnmountingRef = useRef(false)
@@ -298,6 +455,9 @@ export default function TableEditor({
         // Always try to show modal if we have a successful response, even if component is unmounting
         if (response.success) {
           setExtractedDates(response.dates || [])
+          if (response.dates && response.dates.length > 0) {
+            setHasExtractedDates(true) // Mark that dates were extracted
+          }
           setShowDateModal(true) // 🎯 This will now work!
           console.log('✅ Modal should show with', response.dates?.length || 0, 'dates')
           
@@ -311,6 +471,7 @@ export default function TableEditor({
         console.log('❌ Date extraction failed:', error)
         // Always try to show modal for manual selection, even if component is unmounting
         setExtractedDates([])
+        setHasExtractedDates(false) // Reset flag on error
         setShowDateModal(true)
         toast.error('Date extraction failed. Please select manually.')
       } finally {
@@ -354,13 +515,22 @@ export default function TableEditor({
       if (showColumnMenu && !target.closest('[data-column-menu]')) {
         setShowColumnMenu(null)
       }
+      
+      // Close header and row action menus
+      if (showHeaderActions !== null && !target.closest('[data-header-menu]')) {
+        setShowHeaderActions(null)
+      }
+      
+      if (showRowActions && !target.closest('[data-row-actions-menu]')) {
+        setShowRowActions(null)
+      }
     }
 
     document.addEventListener('mousedown', handleClickOutside)
     return () => {
       document.removeEventListener('mousedown', handleClickOutside)
     }
-  }, [showRowMenu, showColumnMenu])
+  }, [showRowMenu, showColumnMenu, showHeaderActions, showRowActions])
 
   // Save changes
   const handleSave = () => {
@@ -380,6 +550,7 @@ export default function TableEditor({
     const table = tables[tableIdx]
     const [newName, setNewName] = useState(table?.header[colIdx] || '')
     const [isRenaming, setIsRenaming] = useState(false)
+    const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 })
 
     const handleRename = () => {
       if (newName.trim()) {
@@ -388,8 +559,41 @@ export default function TableEditor({
       }
     }
 
+    // Calculate menu position when component mounts
+    useEffect(() => {
+      const headerElement = document.querySelector(`[data-header-menu-trigger="${tableIdx}-${colIdx}"]`) as HTMLElement
+      if (headerElement) {
+        const rect = headerElement.getBoundingClientRect()
+        const menuWidth = 200 // Approximate menu width
+        const menuHeight = 300 // Approximate menu height
+        
+        // Calculate position with viewport bounds checking
+        let left = rect.left + window.scrollX
+        let top = rect.bottom + window.scrollY + 4 // Add small gap
+        
+        // Adjust if menu would go off the right edge
+        if (left + menuWidth > window.innerWidth) {
+          left = window.innerWidth - menuWidth - 10
+        }
+        
+        // Adjust if menu would go off the bottom edge
+        if (top + menuHeight > window.innerHeight + window.scrollY) {
+          top = rect.top + window.scrollY - menuHeight - 4
+        }
+        
+        setMenuPosition({ top, left })
+      }
+    }, [tableIdx, colIdx])
+
     return (
-      <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 min-w-[200px]">
+      <div 
+        className="fixed bg-white border border-gray-200 rounded-lg shadow-2xl z-[99999] min-w-[200px] max-h-[300px] overflow-y-auto backdrop-blur-sm animate-in fade-in-0 zoom-in-95 duration-100"
+        style={{
+          top: `${menuPosition.top}px`,
+          left: `${menuPosition.left}px`
+        }}
+        data-header-menu
+      >
         <div className="p-2 border-b border-gray-100">
           <div className="text-xs font-medium text-gray-700 mb-2">Column Actions</div>
         </div>
@@ -465,9 +669,43 @@ export default function TableEditor({
   const RowActionMenu = ({ tableIdx, rowIdx }: { tableIdx: number, rowIdx: number }) => {
     const table = tables[tableIdx]
     const isSummary = table ? isSummaryRow(table, rowIdx) : false
+    const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 })
+    
+    // Calculate menu position when component mounts
+    useEffect(() => {
+      const rowElement = document.querySelector(`[data-row-menu-trigger="${tableIdx}-${rowIdx}"]`) as HTMLElement
+      if (rowElement) {
+        const rect = rowElement.getBoundingClientRect()
+        const menuWidth = 200 // Approximate menu width
+        const menuHeight = 300 // Approximate menu height
+        
+        // Calculate position with viewport bounds checking
+        let left = rect.left + window.scrollX
+        let top = rect.bottom + window.scrollY + 4 // Add small gap
+        
+        // Adjust if menu would go off the right edge
+        if (left + menuWidth > window.innerWidth) {
+          left = window.innerWidth - menuWidth - 10
+        }
+        
+        // Adjust if menu would go off the bottom edge
+        if (top + menuHeight > window.innerHeight + window.scrollY) {
+          top = rect.top + window.scrollY - menuHeight - 4
+        }
+        
+        setMenuPosition({ top, left })
+      }
+    }, [tableIdx, rowIdx])
     
     return (
-      <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 min-w-[200px]">
+      <div 
+        className="fixed bg-white border border-gray-200 rounded-lg shadow-2xl z-[99999] min-w-[200px] max-h-[300px] overflow-y-auto backdrop-blur-sm animate-in fade-in-0 zoom-in-95 duration-100"
+        style={{
+          top: `${menuPosition.top}px`,
+          left: `${menuPosition.left}px`
+        }}
+        data-row-actions-menu
+      >
         <div className="p-2 border-b border-gray-100">
           <div className="text-xs font-medium text-gray-700 mb-2">Row Actions</div>
         </div>
@@ -607,6 +845,7 @@ export default function TableEditor({
                     processedDataKeysRef.current.clear()
                     setDateExtractionLoading(false)
                     setExtractedDates([])
+                    setHasExtractedDates(false) // Reset the flag
                     setShowDateModal(false)
                     toast.success('Date selection reset. You can extract dates again.')
                   }}
@@ -624,6 +863,14 @@ export default function TableEditor({
             <button
               onClick={() => {
                 console.log('🔧 Manual extraction button clicked')
+                
+                // If dates were already extracted but no date was selected, just reopen the modal
+                if (hasExtractedDates && extractedDates.length > 0) {
+                  console.log('📅 Reopening modal with existing extracted dates')
+                  setShowDateModal(true)
+                  return
+                }
+                
                 if (!dateExtractionLoading) {
                   console.log('🚀 Starting manual extraction')
                   setDateExtractionLoading(true)
@@ -667,6 +914,7 @@ export default function TableEditor({
                           console.log('❌ Manual - File fetch failed:', fetchError)
                           // Always try to show modal, even if component is unmounting
                           setExtractedDates([])
+                          setHasExtractedDates(false) // Reset flag on error
                           setShowDateModal(true)
                           toast.success('Could not access the file for date extraction. You can manually select a date.')
                           setDateExtractionLoading(false)
@@ -676,6 +924,7 @@ export default function TableEditor({
                         console.log('❌ Manual - No proper file object')
                         // Always try to show modal, even if component is unmounting
                         setExtractedDates([])
+                        setHasExtractedDates(false) // Reset flag on error
                         setShowDateModal(true)
                         toast.success('Date extraction not available. You can manually select a date.')
                         setDateExtractionLoading(false)
@@ -691,11 +940,13 @@ export default function TableEditor({
                       if (response.success && response.dates && response.dates.length > 0) {
                         console.log('✅ Manual - Setting dates:', response.dates.length)
                         setExtractedDates(response.dates)
+                        setHasExtractedDates(true) // Mark that dates were extracted
                         setShowDateModal(true)
                         toast.success(`Found ${response.dates.length} date(s) in your document`)
                       } else {
                         console.log('📋 Manual - No dates found')
                         setExtractedDates([])
+                        setHasExtractedDates(false) // Reset flag when no dates found
                         setShowDateModal(true)
                         toast.success('No dates found in the document. You can manually select a date.')
                       }
@@ -703,6 +954,7 @@ export default function TableEditor({
                       console.log('❌ Manual - API call failed:', error)
                       // Always try to show modal for manual selection, even if component is unmounting
                       setExtractedDates([])
+                      setHasExtractedDates(false) // Reset flag on error
                       setShowDateModal(true)
                       toast.success('Date extraction failed. You can manually select a date.')
                     } finally {
@@ -717,11 +969,36 @@ export default function TableEditor({
               }}
               disabled={dateExtractionLoading}
               className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2 text-sm"
-              title="Extract dates from document"
+              title={hasExtractedDates && extractedDates.length > 0 ? "Reopen date selection modal" : "Extract dates from document"}
             >
               <Calendar className="w-4 h-4" />
-              {dateExtractionLoading ? 'Extracting...' : 'Extract Dates'}
+              {dateExtractionLoading ? 'Extracting...' : (hasExtractedDates && extractedDates.length > 0 ? 'Select Date' : 'Extract Dates')}
             </button>
+
+            {/* Extract with GPT 5 Button */}
+            <button
+              onClick={handleExtractWithGPT}
+              disabled={isExtractingWithGPT || loading || !gptServiceAvailable}
+              className="px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2 text-sm"
+              title="Extract tables using GPT-5 Vision"
+            >
+              <Brain className="w-4 h-4" />
+              {isExtractingWithGPT ? 'Extracting with GPT...' : !gptServiceAvailable ? 'GPT Service Unavailable' : 'Extract with GPT 5'}
+            </button>
+
+            {/* Extract with Google DOC AI Button */}
+            <button
+              onClick={handleExtractWithGoogleDocAI}
+              disabled={isExtractingWithGoogleDocAI || loading || !googleDocAIServiceAvailable}
+              className="px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center gap-2 text-sm"
+              title="Extract tables using Google Document AI"
+            >
+              <FileText className="w-4 h-4" />
+              {isExtractingWithGoogleDocAI ? 'Extracting with DOC AI...' : !googleDocAIServiceAvailable ? 'DOC AI Service Unavailable' : 'Extract with Google DOC AI'}
+            </button>
+
+
+
 
             {/* Search */}
             <div className="relative">
@@ -808,6 +1085,29 @@ export default function TableEditor({
                 </div>
               ) : currentTable ? (
                 <>
+                  {/* Merge Mode Indicator */}
+                  {mergeSelection && mergeSelection.tableIdx === currentTableIdx && (
+                    <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                          <span className="text-sm font-medium text-blue-800">
+                            Merge Mode Active
+                          </span>
+                          <span className="text-xs text-blue-600">
+                            Click on another column to merge with &quot;{currentTable.header[mergeSelection.colIdx]}&quot;
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => setMergeSelection(null)}
+                          className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  
                   <TableControls
                     currentTable={currentTable}
                     currentTableIdx={currentTableIdx}
@@ -836,7 +1136,11 @@ export default function TableEditor({
                     }}
                   />
                   
-                  <div className="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
+                  <div className={`bg-white border rounded-lg shadow-sm ${
+                    mergeSelection && mergeSelection.tableIdx === currentTableIdx
+                      ? 'border-blue-300 bg-blue-50/30'
+                      : 'border-gray-200'
+                  }`}>
                     <div className="overflow-x-auto w-full">
                       <div 
                         className="max-h-[420px] overflow-y-auto border-t border-gray-100 custom-scrollbar" 
@@ -872,13 +1176,38 @@ export default function TableEditor({
                             {currentTable?.header?.map((header, colIdx) => (
                               <th
                                 key={colIdx}
-                                className="px-3 py-3 text-left text-xs font-medium text-gray-900 border-b border-gray-200 whitespace-nowrap relative"
+                                className={`px-3 py-3 text-left text-xs font-medium text-gray-900 border-b border-gray-200 whitespace-nowrap relative ${
+                                  mergeSelection && mergeSelection.tableIdx === currentTableIdx && mergeSelection.colIdx === colIdx
+                                    ? 'bg-blue-100 border-blue-300'
+                                    : mergeSelection && mergeSelection.tableIdx === currentTableIdx
+                                    ? 'cursor-pointer hover:bg-blue-50 hover:border-blue-200'
+                                    : ''
+                                }`}
+                                title={
+                                  mergeSelection && mergeSelection.tableIdx === currentTableIdx && mergeSelection.colIdx !== colIdx
+                                    ? `Click to merge with &quot;${currentTable.header[mergeSelection.colIdx]}&quot;`
+                                    : mergeSelection && mergeSelection.tableIdx === currentTableIdx && mergeSelection.colIdx === colIdx
+                                    ? 'Selected for merge'
+                                    : ''
+                                }
+                                onClick={() => {
+                                  if (mergeSelection && mergeSelection.tableIdx === currentTableIdx) {
+                                    handleColumnClick(currentTableIdx, colIdx)
+                                  }
+                                }}
                               >
                                 <div className="flex items-center justify-between">
                                   <span className="truncate flex-1">{header}</span>
+                                  {mergeSelection && mergeSelection.tableIdx === currentTableIdx && mergeSelection.colIdx === colIdx && (
+                                    <div className="ml-1 w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                                  )}
                                   <button
-                                    onClick={() => setShowHeaderActions(showHeaderActions === colIdx ? null : colIdx)}
+                                    onClick={(e) => {
+                                      e.stopPropagation() // Prevent triggering column click for merge
+                                      setShowHeaderActions(showHeaderActions === colIdx ? null : colIdx)
+                                    }}
                                     className="ml-2 p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                                    data-header-menu-trigger={`${currentTableIdx}-${colIdx}`}
                                   >
                                     <MoreHorizontal size={12} />
                                   </button>
@@ -969,6 +1298,7 @@ export default function TableEditor({
                                   <button
                                     onClick={() => setShowRowActions(showRowActions?.tableIdx === currentTableIdx && showRowActions?.rowIdx === originalRowIdx ? null : { tableIdx: currentTableIdx, rowIdx: originalRowIdx })}
                                     className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                                    data-row-menu-trigger={`${currentTableIdx}-${originalRowIdx}`}
                                   >
                                     <MoreVertical size={12} />
                                   </button>
@@ -1111,8 +1441,9 @@ export default function TableEditor({
                   onSave(tables)
                   onGoToFieldMapping()
                 }}
-                disabled={loading || isUsingAnotherExtraction}
+                disabled={loading || isUsingAnotherExtraction || !selectedStatementDate}
                 className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2 font-medium"
+                title={!selectedStatementDate ? "Please select a statement date first" : "Save tables and proceed to field mapping"}
               >
                 <FileText className="w-4 h-4" />
                 Save & Go to Field Mapping

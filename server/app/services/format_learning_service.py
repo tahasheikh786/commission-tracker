@@ -8,6 +8,7 @@ import numpy as np
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import crud, schemas
 from app.utils.db_retry import with_db_retry
+from difflib import SequenceMatcher
 
 
 class FormatLearningService:
@@ -61,16 +62,30 @@ class FormatLearningService:
     
     def generate_format_signature(self, headers: List[str], table_structure: dict) -> str:
         """
-        Generate a unique signature for a table format based on headers and structure.
+        Generate a more flexible signature for a table format based on headers and structure.
+        This version is more tolerant of minor variations while still being specific enough.
         """
-        # Create a normalized representation
-        normalized_headers = [h.lower().strip() for h in headers]
-        normalized_headers.sort()  # Sort for consistency
+        # Create a more flexible normalized representation
+        normalized_headers = []
+        for h in headers:
+            if h:
+                # Remove common variations and normalize
+                normalized = h.lower().strip()
+                # Remove common prefixes/suffixes that don't affect meaning
+                normalized = re.sub(r'^(total|sum|amount|value|price|cost|fee|charge|commission|earned|paid|due|balance|net|gross)\s*', '', normalized)
+                normalized = re.sub(r'\s*(total|sum|amount|value|price|cost|fee|charge|commission|earned|paid|due|balance|net|gross)$', '', normalized)
+                # Remove punctuation and extra spaces
+                normalized = re.sub(r'[^\w\s]', '', normalized)
+                normalized = re.sub(r'\s+', ' ', normalized).strip()
+                if normalized:
+                    normalized_headers.append(normalized)
         
-        # Include structural information
+        # Sort for consistency but keep some order information
+        normalized_headers.sort()
+        
+        # Include structural information but be more flexible
         structure_info = {
             'column_count': table_structure.get('column_count', len(headers)),
-            'typical_row_count': table_structure.get('typical_row_count', 0),
             'has_header_row': table_structure.get('has_header_row', True)
         }
         
@@ -309,6 +324,11 @@ class FormatLearningService:
         Learn from a processed file and save the format information.
         """
         try:
+            print(f"🎯 FormatLearningService: Learning from processed file for company {company_id}")
+            print(f"🎯 FormatLearningService: Headers: {headers}")
+            print(f"🎯 FormatLearningService: Field mapping: {field_mapping}")
+            print(f"🎯 FormatLearningService: Table data length: {len(table_data)}")
+            
             # Analyze the table
             table_structure = self.analyze_table_structure(table_data, headers)
             column_types = self.analyze_column_types(table_data, headers)
@@ -318,6 +338,7 @@ class FormatLearningService:
             
             # Generate format signature
             format_signature = self.generate_format_signature(headers, table_structure)
+            print(f"🎯 FormatLearningService: Generated format signature: {format_signature}")
             
             # Convert all data to JSON-serializable format
             table_structure = self._convert_numpy_types(table_structure)
@@ -347,10 +368,13 @@ class FormatLearningService:
             # Save to database
             await with_db_retry(db, crud.save_carrier_format_learning, format_learning=format_learning)
             
+            print(f"🎯 FormatLearningService: Successfully learned format for company {company_id}")
             return True
             
         except Exception as e:
             print(f"Error learning from processed file: {e}")
+            import traceback
+            traceback.print_exc()
             return False
     
     async def find_matching_format(
@@ -361,9 +385,13 @@ class FormatLearningService:
         table_structure: dict
     ) -> Tuple[Optional[Dict[str, Any]], float]:
         """
-        Find the best matching format for a new file.
+        Find the best matching format for a new file with improved matching logic.
         """
         try:
+            print(f"🎯 FormatLearningService: Finding matching format for company {company_id}")
+            print(f"🎯 FormatLearningService: Headers: {headers}")
+            print(f"🎯 FormatLearningService: Table structure: {table_structure}")
+            
             best_match, score = await with_db_retry(
                 db, 
                 crud.find_best_matching_format, 
@@ -372,22 +400,32 @@ class FormatLearningService:
                 table_structure=table_structure
             )
             
+            print(f"🎯 FormatLearningService: Best match score: {score}")
+            
             if best_match:
-                            return {
-                'format_signature': best_match.format_signature,
-                'headers': best_match.headers,
-                'column_types': best_match.column_types,
-                'column_patterns': best_match.column_patterns,
-                'field_mapping': best_match.field_mapping,
-                'table_editor_settings': best_match.table_editor_settings,
-                'confidence_score': best_match.confidence_score,
-                'usage_count': best_match.usage_count
-            }, score
+                print(f"🎯 FormatLearningService: Found matching format with signature: {best_match.format_signature}")
+                print(f"🎯 FormatLearningService: Learned field mapping: {best_match.field_mapping}")
+                print(f"🎯 FormatLearningService: Learned table editor settings: {best_match.table_editor_settings}")
+                
+                return {
+                    'format_signature': best_match.format_signature,
+                    'headers': best_match.headers,
+                    'column_types': best_match.column_types,
+                    'column_patterns': best_match.column_patterns,
+                    'field_mapping': best_match.field_mapping,
+                    'table_editor_settings': best_match.table_editor_settings,
+                    'confidence_score': best_match.confidence_score,
+                    'usage_count': best_match.usage_count
+                }, score
+            else:
+                print(f"🎯 FormatLearningService: No matching format found")
             
             return None, 0.0
             
         except Exception as e:
             print(f"Error finding matching format: {e}")
+            import traceback
+            traceback.print_exc()
             return None, 0.0
     
     def validate_data_against_learned_format(
@@ -459,22 +497,76 @@ class FormatLearningService:
     
     def _calculate_header_similarity(self, headers1: List[str], headers2: List[str]) -> float:
         """
-        Calculate similarity between two header lists.
+        Calculate similarity between two header lists using improved matching.
         """
         if not headers1 or not headers2:
             return 0.0
         
         # Normalize headers
-        headers1_normalized = [h.lower().strip() for h in headers1]
-        headers2_normalized = [h.lower().strip() for h in headers2]
+        headers1_normalized = [self._normalize_header(h) for h in headers1 if h]
+        headers2_normalized = [self._normalize_header(h) for h in headers2 if h]
         
-        # Find common headers
-        common_headers = set(headers1_normalized) & set(headers2_normalized)
-        
-        # Calculate Jaccard similarity
-        union_headers = set(headers1_normalized) | set(headers2_normalized)
-        
-        if not union_headers:
+        if not headers1_normalized or not headers2_normalized:
             return 0.0
         
-        return len(common_headers) / len(union_headers)
+        # Calculate similarity using multiple methods
+        exact_matches = 0
+        fuzzy_matches = 0
+        total_headers = max(len(headers1_normalized), len(headers2_normalized))
+        
+        # Find exact matches first
+        used_headers2 = set()
+        for h1 in headers1_normalized:
+            for i, h2 in enumerate(headers2_normalized):
+                if i not in used_headers2 and h1 == h2:
+                    exact_matches += 1
+                    used_headers2.add(i)
+                    break
+        
+        # Find fuzzy matches for remaining headers
+        remaining_headers1 = [h for i, h in enumerate(headers1_normalized) if i not in used_headers2]
+        remaining_headers2 = [h for i, h in enumerate(headers2_normalized) if i not in used_headers2]
+        
+        for h1 in remaining_headers1:
+            best_match_score = 0
+            best_match_idx = -1
+            
+            for i, h2 in enumerate(remaining_headers2):
+                if i not in used_headers2:
+                    similarity = SequenceMatcher(None, h1, h2).ratio()
+                    if similarity > best_match_score and similarity > 0.7:  # 70% similarity threshold
+                        best_match_score = similarity
+                        best_match_idx = i
+            
+            if best_match_idx >= 0:
+                fuzzy_matches += 1
+                used_headers2.add(best_match_idx)
+        
+        # Calculate weighted score
+        exact_score = exact_matches / total_headers if total_headers > 0 else 0
+        fuzzy_score = fuzzy_matches / total_headers if total_headers > 0 else 0
+        
+        # Weight exact matches higher than fuzzy matches
+        total_score = (exact_score * 0.8) + (fuzzy_score * 0.2)
+        
+        return total_score
+    
+    def _normalize_header(self, header: str) -> str:
+        """
+        Normalize a header string for better matching.
+        """
+        if not header:
+            return ""
+        
+        # Convert to lowercase and remove extra spaces
+        normalized = header.lower().strip()
+        
+        # Remove common prefixes/suffixes that don't affect meaning
+        normalized = re.sub(r'^(total|sum|amount|value|price|cost|fee|charge|commission|earned|paid|due|balance|net|gross)\s*', '', normalized)
+        normalized = re.sub(r'\s*(total|sum|amount|value|price|cost|fee|charge|commission|earned|paid|due|balance|net|gross)$', '', normalized)
+        
+        # Remove punctuation and extra spaces
+        normalized = re.sub(r'[^\w\s]', '', normalized)
+        normalized = re.sub(r'\s+', ' ', normalized).strip()
+        
+        return normalized

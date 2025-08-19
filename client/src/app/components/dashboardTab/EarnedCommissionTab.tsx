@@ -77,7 +77,7 @@ export default function EarnedCommissionTab() {
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
 
   // Fetch data
-  const { stats: overallStats, loading: statsLoading, refetch: refetchStats } = useEarnedCommissionStats();
+  const { stats: overallStats, loading: statsLoading, refetch: refetchStats } = useEarnedCommissionStats(selectedYear || undefined);
   const { carriers, loading: carriersLoading, refetch: refetchCarriers } = useCarriersWithCommission();
   const { data: allData, loading: allDataLoading, refetch: refetchAllData } = useAllCommissionData(selectedYear || undefined);
   const { years: availableYears, loading: yearsLoading, refetch: refetchYears } = useAvailableYears();
@@ -91,15 +91,12 @@ export default function EarnedCommissionTab() {
     refetchYears();
   }, [refetchStats, refetchCarriers, refetchAllData, refetchYears]);
 
-  // Refresh data when component mounts
+  // Listen for global refresh events only
   useEffect(() => {
-    refreshAllData();
-  }, [refreshAllData]);
-
-  // Listen for global refresh events
-  useEffect(() => {
-    console.log('🔄 EarnedCommissionTab: Global refresh triggered, refreshing all data...');
-    refreshAllData();
+    if (refreshTrigger) {
+      console.log('🔄 EarnedCommissionTab: Global refresh triggered, refreshing all data...');
+      refreshAllData();
+    }
   }, [refreshTrigger, refreshAllData]);
 
   const ITEMS_PER_PAGE = 20;
@@ -581,7 +578,7 @@ export default function EarnedCommissionTab() {
                   </button>
                 </th>
                 <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">
-                  Last Updated
+                  Statement Year
                 </th>
                 <th className="px-6 py-4 text-right text-xs font-bold text-slate-600 uppercase tracking-wider">
                   Edit
@@ -667,7 +664,7 @@ export default function EarnedCommissionTab() {
                       {formatCurrency(item.invoice_total)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
-                      {item.last_updated ? formatDate(item.last_updated) : 'N/A'}
+                      {item.statement_year || 'N/A'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <button 

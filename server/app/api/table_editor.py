@@ -111,12 +111,14 @@ async def save_tables(request: SaveTablesRequest):
                     'headers': main_table.header,
                     'table_structure': table_editor_settings['table_structure'],
                     'table_editor_settings': table_editor_settings,
-                    'confidence_score': 85,  # High confidence for manually edited tables
+                    'confidence_score': 90,  # High confidence for manually edited tables
                     'usage_count': 1
                 }
                 
                 # Save table editor format learning
                 await save_table_editor_format_learning(format_learning_data)
+                
+                logger.info(f"🎯 Table Editor API: Successfully learned format with signature: {format_signature}")
                 
                 logger.info(f"🎯 Table Editor API: Successfully learned table editor format patterns")
                 

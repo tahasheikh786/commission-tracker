@@ -5,10 +5,14 @@ import { toast } from 'react-hot-toast'
 import { useProgressTracking } from '../../hooks/useProgressTracking'
 import { useTableEditorLearning } from './useTableEditorLearning'
 
+console.log('🔍 useUploadPage module loaded')
+
 type FieldConfig = { field: string, label: string }
 type Company = { id: string, name: string } | null
 
 export function useUploadPage() {
+  console.log('🚀 useUploadPage hook called - START')
+  
   const [company, setCompany] = useState<Company>(null)
   const [uploaded, setUploaded] = useState<any>(null)
   
@@ -45,6 +49,8 @@ export function useUploadPage() {
 
   // GPT-4o Vision improvement functionality
   const [isImprovingExtraction, setIsImprovingExtraction] = useState(false)
+
+
 
   // Date extraction state
   const [selectedStatementDate, setSelectedStatementDate] = useState<any>(null)
@@ -429,7 +435,7 @@ export function useUploadPage() {
     setFormatLearning(format_learning)
     
     // Check if format learning was applied by the backend
-    if (format_learning?.found_match && format_learning?.match_score > 0.8) {
+    if (format_learning?.found_match && format_learning?.match_score > 0.6) {
       console.log('🎯 Backend applied learned format:', format_learning)
       
       // Show success message for table editor settings
@@ -688,6 +694,8 @@ export function useUploadPage() {
     }
   }
 
+
+
   function handleGoToFieldMapping() {
     console.log('🎯 useUploadPage: handleGoToFieldMapping called')
     console.log('🎯 useUploadPage: Current selectedStatementDate:', selectedStatementDate)
@@ -746,11 +754,17 @@ export function useUploadPage() {
         for (const field of dashboardHeader) {
           const column = mapping[field]
           if (column) {
-            const colIndex = table.header.indexOf(column)
-            if (colIndex !== -1 && row[colIndex] !== undefined) {
-              mappedRow[field] = row[colIndex]
+            // Check if this is an auto-fill field (Invoice Total with __AUTO_FILL_ZERO__)
+            if (column === '__AUTO_FILL_ZERO__') {
+              mappedRow[field] = '$0.00'
+              console.log(`🎯 Auto-filling ${field} with $0.00`)
             } else {
-              mappedRow[field] = ''
+              const colIndex = table.header.indexOf(column)
+              if (colIndex !== -1 && row[colIndex] !== undefined) {
+                mappedRow[field] = row[colIndex]
+              } else {
+                mappedRow[field] = ''
+              }
             }
           } else {
             mappedRow[field] = ''
@@ -1032,6 +1046,11 @@ export function useUploadPage() {
     }
   }
 
+  // Debug logging for return values
+  console.log('🔍 useUploadPage returning handlers')
+  
+  console.log('🔍 useUploadPage about to return object with handlers')
+  
   return {
     // State
     company,
@@ -1059,6 +1078,7 @@ export function useUploadPage() {
     isUsingAnotherExtraction,
     hasUsedAnotherExtraction,
     isImprovingExtraction,
+
     selectedStatementDate,
 
     // Actions
@@ -1083,6 +1103,7 @@ export function useUploadPage() {
     setIsUsingAnotherExtraction,
     setHasUsedAnotherExtraction,
     setIsImprovingExtraction,
+
     setSelectedStatementDate,
 
     // Handlers
@@ -1092,6 +1113,7 @@ export function useUploadPage() {
     handleSaveEditedTables,
     handleUseAnotherExtraction,
     handleImproveExtraction,
+
     handleGoToFieldMapping,
     handleGoToPreviousExtraction,
     handleCloseTableEditor,
@@ -1111,3 +1133,5 @@ export function useUploadPage() {
     tableEditorLearning,
   }
 }
+
+console.log('🔍 useUploadPage hook completed')

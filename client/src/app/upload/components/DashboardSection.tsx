@@ -3,6 +3,7 @@ import Modal from '../../components/Modal'
 import DashboardTable from './DashboardTable'
 import ProgressBar from './ProgressBar'
 import Loader from './Loader'
+import { useState } from 'react'
 
 type FieldConfig = { field: string, label: string }
 type Company = { id: string, name: string } | null
@@ -46,6 +47,9 @@ export default function DashboardSection({
   onSendToPending,
   selectedStatementDate
 }: DashboardSectionProps) {
+  console.log('🚀 DashboardSection component rendered')
+  
+  const [showCarriersModal, setShowCarriersModal] = useState(false)
   return (
     <>
       {submitting && (

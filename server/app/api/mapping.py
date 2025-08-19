@@ -84,13 +84,17 @@ async def update_company_mapping(company_id: str, config: MappingConfig, db: Asy
     if config.table_data and config.headers and config.mapping:
         try:
             logger.info(f"🎯 Mapping API: Learning from processed file")
+            logger.info(f"🎯 Mapping API: Table data length: {len(config.table_data)}")
+            logger.info(f"🎯 Mapping API: Headers: {config.headers}")
+            logger.info(f"🎯 Mapping API: Mapping: {config.mapping}")
+            
             await format_learning_service.learn_from_processed_file(
                 db=db,
                 company_id=company_id,
                 table_data=config.table_data,
                 headers=config.headers,
                 field_mapping=config.mapping,
-                confidence_score=80,  # Default confidence score
+                confidence_score=85,  # Higher confidence for manually mapped data
                 table_editor_settings=None  # Will be learned from table editor save
             )
             logger.info(f"🎯 Mapping API: Format learning completed successfully")
@@ -172,6 +176,7 @@ async def process_commission_data_with_date(
         client_name_col = None
         invoice_total_col = None
         commission_col = None
+        auto_fill_invoice = False
         
         # Look for common field names in the mapping
         for display_name, column_name in mapping.items():
@@ -182,6 +187,12 @@ async def process_commission_data_with_date(
             elif any(keyword in display_lower for keyword in ['invoice', 'premium', 'total', 'amount']):
                 invoice_total_col = column_name
                 logger.info(f"🎯 Commission Processing: Found invoice total column: {column_name}")
+                
+                # Check if this is auto-filled with zero
+                if column_name == '__AUTO_FILL_ZERO__':
+                    auto_fill_invoice = True
+                    invoice_total_col = None  # We'll handle this specially
+                    logger.info(f"🎯 Commission Processing: Invoice total will be auto-filled with $0.00")
             elif any(keyword in display_lower for keyword in ['commission', 'earned', 'paid']):
                 commission_col = column_name
                 logger.info(f"🎯 Commission Processing: Found commission column: {column_name}")
@@ -222,7 +233,14 @@ async def process_commission_data_with_date(
             
             # Extract values
             client_name = row[headers.index(client_name_col)] if client_name_col else "Unknown"
-            invoice_total_str = row[headers.index(invoice_total_col)] if invoice_total_col else "0"
+            
+            # Handle invoice total - either from column or auto-filled with zero
+            if auto_fill_invoice:
+                invoice_total_str = "0"  # Auto-fill with zero
+                logger.info(f"🎯 Commission Processing: Auto-filling invoice total with $0.00 for {client_name}")
+            else:
+                invoice_total_str = row[headers.index(invoice_total_col)] if invoice_total_col else "0"
+            
             commission_str = row[headers.index(commission_col)] if commission_col else "0"
             
             logger.info(f"🎯 Commission Processing: Row {row_idx} - Client: {client_name}, Invoice: {invoice_total_str}, Commission: {commission_str}")
@@ -361,9 +379,8 @@ async def create_or_update_commission_record(
         logger.info(f"🎯 Commission Record: Creating/updating record for {carrier_id} - {client_name} - {statement_date}")
         
         # Check if record exists for this carrier, client, and statement date
-        existing_record = await with_db_retry(
+        existing_record = await crud.get_commission_record(
             db, 
-            crud.get_commission_record, 
             carrier_id=carrier_id,
             client_name=client_name,
             statement_date=statement_date
@@ -372,9 +389,8 @@ async def create_or_update_commission_record(
         if existing_record:
             logger.info(f"🎯 Commission Record: Updating existing record ID {existing_record.id}")
             # Update existing record
-            await with_db_retry(
+            await crud.update_commission_record(
                 db,
-                crud.update_commission_record,
                 record_id=existing_record.id,
                 invoice_total=invoice_total,
                 commission_earned=commission_earned,
@@ -408,7 +424,7 @@ async def create_or_update_commission_record(
                 setattr(commission_record, month_columns[statement_month], commission_earned)
                 logger.info(f"🎯 Commission Record: Set {month_columns[statement_month]} = {commission_earned}")
             
-            await with_db_retry(db, crud.create_commission_record, commission_record)
+            await crud.create_commission_record(db, commission_record)
             logger.info(f"🎯 Commission Record: Successfully created new record")
         
     except Exception as e:

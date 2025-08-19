@@ -3,6 +3,7 @@ import { Pencil } from 'lucide-react'
 import FieldMapper from './FieldMapper'
 import ExtractedTables from './ExtractedTable'
 import Loader from './Loader'
+import { useState } from 'react'
 
 type FieldConfig = { field: string, label: string }
 type Company = { id: string, name: string } | null
@@ -44,6 +45,9 @@ export default function FieldMapperSection({
   onGoToTableEditor,
   onReset
 }: FieldMapperSectionProps) {
+  console.log('🚀 FieldMapperSection component rendered')
+  
+  const [currentMapping, setCurrentMapping] = useState<Record<string, string>>({})
   console.log('🎯 FieldMapperSection: Received selectedStatementDate:', selectedStatementDate)
   const tablesToUse = editedTables.length > 0 ? editedTables : uploaded.tables.length > 0 ? uploaded.tables : finalTables
 

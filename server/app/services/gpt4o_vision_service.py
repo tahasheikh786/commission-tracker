@@ -793,3 +793,206 @@ Be precise and only report what you can clearly see in the images."""
                 aligned_row.append("")
         
         return aligned_row 
+
+    def extract_tables_with_vision(self, 
+                                  enhanced_images: List[str], 
+                                  max_pages: int = 5) -> Dict[str, Any]:
+        """
+        Extract tables from scratch using GPT-4o Vision analysis.
+        
+        Args:
+            enhanced_images: List of base64 encoded enhanced page images
+            max_pages: Maximum number of pages to analyze
+            
+        Returns:
+            Dictionary with extracted tables and metadata
+        """
+        if not self.is_available():
+            return {"success": False, "error": "GPT-4o Vision service not available"}
+        
+        try:
+            # Limit to max_pages
+            images_to_analyze = enhanced_images[:max_pages]
+            
+            # Prepare the prompt for table extraction
+            system_prompt = self._create_table_extraction_system_prompt()
+            user_prompt = self._create_table_extraction_user_prompt()
+            
+            # Prepare messages for the API call
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": [
+                    {"type": "text", "text": user_prompt}
+                ]}
+            ]
+            
+            # Add images to the user message content
+            for i, image_base64 in enumerate(images_to_analyze):
+                messages[1]["content"].append({
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:image/png;base64,{image_base64}"
+                    }
+                })
+            
+            # Call GPT-4o Vision API
+            logger.info(f"Calling GPT-4o Vision API for table extraction from {len(images_to_analyze)} pages")
+            
+            response = self.client.chat.completions.create(
+                model="gpt-4o",
+                messages=messages,
+                max_tokens=4000,
+                temperature=0.1
+            )
+            
+            # Extract the response content
+            response_content = response.choices[0].message.content
+            
+            # Parse the JSON response - handle markdown code blocks
+            try:
+                # Remove markdown code blocks if present
+                cleaned_content = response_content.strip()
+                if cleaned_content.startswith('```json'):
+                    cleaned_content = cleaned_content[7:]  # Remove ```json
+                if cleaned_content.startswith('```'):
+                    cleaned_content = cleaned_content[3:]  # Remove ```
+                if cleaned_content.endswith('```'):
+                    cleaned_content = cleaned_content[:-3]  # Remove ```
+                
+                cleaned_content = cleaned_content.strip()
+                extraction_result = json.loads(cleaned_content)
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse GPT-4o response as JSON: {e}")
+                logger.error(f"Response content: {response_content}")
+                return {
+                    "success": False,
+                    "error": "Failed to parse GPT-4o response as JSON"
+                }
+            
+            # Validate the response structure
+            if not extraction_result.get("tables"):
+                logger.warning("No tables found in GPT-4o response")
+                return {
+                    "success": True,
+                    "tables": [],
+                    "extraction_metadata": {
+                        "method": "gpt4o_vision",
+                        "pages_analyzed": len(images_to_analyze),
+                        "timestamp": datetime.now().isoformat(),
+                        "confidence": 0.0,
+                        "note": "No tables detected in the document"
+                    }
+                }
+            
+            # Process the extracted tables
+            processed_tables = []
+            for table in extraction_result.get("tables", []):
+                processed_table = self._process_extracted_table(table)
+                if processed_table:
+                    processed_tables.append(processed_table)
+            
+            return {
+                "success": True,
+                "tables": processed_tables,
+                "extraction_metadata": {
+                    "method": "gpt4o_vision",
+                    "pages_analyzed": len(images_to_analyze),
+                    "timestamp": datetime.now().isoformat(),
+                    "confidence": 0.95
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"Error in table extraction with GPT-4o Vision: {e}")
+            return {
+                "success": False,
+                "error": f"Table extraction failed: {str(e)}"
+            }
+
+    def _create_table_extraction_system_prompt(self) -> str:
+        """Create system prompt for table extraction."""
+        return """You are an expert table extraction system. Your task is to extract all tables from the provided document images.
+
+IMPORTANT: You must respond with a valid JSON object in the following format:
+{
+    "tables": [
+        {
+            "name": "Table Name",
+            "header": ["Column1", "Column2", "Column3", ...],
+            "rows": [
+                ["Value1", "Value2", "Value3", ...],
+                ["Value2", "Value2", "Value3", ...],
+                ...
+            ]
+        }
+    ]
+}
+
+Guidelines:
+1. Extract ALL tables visible in the images
+2. Identify column headers accurately
+3. Extract all data rows
+4. Maintain the original structure and formatting
+5. Handle merged cells appropriately
+6. Preserve numerical values and text exactly as they appear
+7. If a table spans multiple pages, extract it as separate tables
+8. Ensure all rows have the same number of columns as the header
+
+Return ONLY the JSON object, no additional text."""
+
+    def _create_table_extraction_user_prompt(self) -> str:
+        """Create user prompt for table extraction."""
+        return """Please extract all tables from the following document images. Focus on commission statements, financial data, and any tabular information.
+
+Extract tables with the following priority:
+1. Commission/earnings tables
+2. Policy/transaction tables
+3. Summary tables
+4. Any other structured data
+
+Ensure accurate extraction of:
+- Column headers
+- All data rows
+- Numerical values
+- Dates and text
+- Merged cells (split appropriately)
+
+Return the results in the specified JSON format."""
+
+    def _process_extracted_table(self, table: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Process a single extracted table."""
+        try:
+            name = table.get("name", "Extracted Table")
+            header = table.get("header", [])
+            rows = table.get("rows", [])
+            
+            # Validate table structure
+            if not header or not rows:
+                return None
+            
+            # Ensure all rows have the same length as header
+            normalized_rows = []
+            for row in rows:
+                if len(row) < len(header):
+                    # Pad with empty strings
+                    row = row + [""] * (len(header) - len(row))
+                elif len(row) > len(header):
+                    # Truncate to header length
+                    row = row[:len(header)]
+                normalized_rows.append(row)
+            
+            return {
+                "name": name,
+                "header": header,
+                "rows": normalized_rows,
+                "extractor": "gpt4o_vision",
+                "metadata": {
+                    "extraction_method": "gpt4o_vision",
+                    "timestamp": datetime.now().isoformat(),
+                    "confidence": 0.95
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"Error processing extracted table: {e}")
+            return None

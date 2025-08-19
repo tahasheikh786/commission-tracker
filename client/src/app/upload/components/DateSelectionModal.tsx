@@ -41,9 +41,10 @@ export default function DateSelectionModal({
       setSelectedDate('')
       setSelectedDateType('')
       setFallbackDate('')
-      setShowFallback(false)
+      // Automatically show fallback if no dates are found
+      setShowFallback(extractedDates.length === 0)
     }
-  }, [isOpen])
+  }, [isOpen, extractedDates.length])
 
   const handleDateSelect = (date: string, dateType: string) => {
     setSelectedDate(date)
@@ -136,12 +137,19 @@ export default function DateSelectionModal({
               <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">No dates found</h3>
               <p className="text-gray-600 mb-4">We couldn&apos;t automatically detect any dates in your document.</p>
-              <button
-                onClick={() => setShowFallback(true)}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                Select Date Manually
-              </button>
+              
+              {/* Show date picker directly */}
+              <div className="mt-6 p-4 bg-gray-50 rounded-lg max-w-md mx-auto">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Select statement date manually:
+                </label>
+                <input
+                  type="date"
+                  value={fallbackDate}
+                  onChange={(e) => setFallbackDate(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
             </div>
           ) : (
             <div className="space-y-4">
@@ -245,7 +253,7 @@ export default function DateSelectionModal({
               </button>
             )}
             
-            {selectedDate && (
+            {selectedDate && extractedDates.length > 0 && (
               <button
                 onClick={handleConfirm}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"

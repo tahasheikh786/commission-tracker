@@ -17,17 +17,18 @@ interface UploadInterfaceProps {
   selectedStatementDate?: any // Add selected statement date prop
 }
 
-export default function UploadInterface({ 
-  company, 
-  setCompany, 
-  onUploadResult, 
+export default function UploadInterface({
+  company,
+  setCompany,
+  onUploadResult,
   onReset,
   onResumeFile,
   onDeleteFile,
   selectedStatementDate // Add selected statement date prop
 }: UploadInterfaceProps) {
-  const [showPendingFiles, setShowPendingFiles] = useState(false)
-
+  console.log('🚀 UploadInterface component rendered')
+  
+  const [uploaded, setUploaded] = useState<any>(null)
   return (
     <div className="w-full space-y-8">
       {/* Enhanced Header */}
@@ -55,30 +56,6 @@ export default function UploadInterface({
       </div>
 
       <div className="bg-white/90 backdrop-blur-xl rounded-3xl border border-white/50 shadow-2xl p-8">
-        {/* Enhanced Pending Files Toggle */}
-        {company && (
-          <div className="mb-8 flex justify-center">
-            <button
-              onClick={() => setShowPendingFiles(!showPendingFiles)}
-              className="inline-flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-orange-500 to-amber-600 text-white rounded-2xl hover:shadow-lg transition-all duration-200 hover:scale-105 font-semibold"
-            >
-              <Clock className="w-5 h-5" />
-              {showPendingFiles ? 'Hide' : 'Show'} Pending Files
-            </button>
-          </div>
-        )}
-
-        {/* Enhanced Pending Files Section */}
-        {showPendingFiles && company && (
-          <div className="mb-8 bg-gradient-to-r from-orange-50 to-amber-50 rounded-2xl p-6 border border-orange-200/50">
-            <PendingFiles
-              companyId={company.id}
-              onResumeFile={onResumeFile || (() => {})}
-              onDeleteFile={onDeleteFile || (() => {})}
-            />
-          </div>
-        )}
-
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
           {/* Enhanced Left Column - Carrier Selection */}
           <div className="space-y-6">

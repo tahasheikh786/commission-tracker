@@ -344,6 +344,38 @@ class GoogleDocAIExtractor:
             print(f"❌ Google Document AI extraction failed: {e}")
             raise
 
+    async def extract_tables_async(self, pdf_path: str) -> Dict[str, Any]:
+        """
+        Async wrapper for extract_tables method.
+        
+        Args:
+            pdf_path: Path to the PDF file
+            
+        Returns:
+            Dictionary with extraction results
+        """
+        import asyncio
+        
+        # Run the synchronous extract_tables method in a thread pool
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, self.extract_tables, pdf_path)
+        
+        # Convert the result to the expected format
+        if isinstance(result, list):
+            # If result is a list of tables, wrap it in the expected format
+            return {
+                "success": True,
+                "tables": result,
+                "extraction_metadata": {
+                    "method": "google_docai",
+                    "timestamp": datetime.now().isoformat(),
+                    "confidence": 0.8
+                }
+            }
+        else:
+            # If result is already a dictionary, return it as is
+            return result
+
 
 
     def _process_document_with_retry(self, request: documentai.ProcessRequest) -> Any:

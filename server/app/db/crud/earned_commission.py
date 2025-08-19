@@ -36,14 +36,17 @@ async def create_earned_commission(db: AsyncSession, commission: EarnedCommissio
     await db.refresh(db_commission)
     return db_commission
 
-async def get_earned_commission_by_carrier_and_client(db: AsyncSession, carrier_id: UUID, client_name: str):
-    """Get earned commission record by carrier and client name."""
-    result = await db.execute(
-        select(EarnedCommission).where(
-            EarnedCommission.carrier_id == carrier_id,
-            EarnedCommission.client_name == client_name
-        )
+async def get_earned_commission_by_carrier_and_client(db: AsyncSession, carrier_id: UUID, client_name: str, statement_year: int = None):
+    """Get earned commission record by carrier, client name, and year."""
+    query = select(EarnedCommission).where(
+        EarnedCommission.carrier_id == carrier_id,
+        EarnedCommission.client_name == client_name
     )
+    
+    if statement_year is not None:
+        query = query.where(EarnedCommission.statement_year == statement_year)
+    
+    result = await db.execute(query)
     return result.scalar_one_or_none()
 
 async def update_earned_commission(db: AsyncSession, commission_id: UUID, update_data: EarnedCommissionUpdate):
@@ -65,7 +68,7 @@ async def update_earned_commission(db: AsyncSession, commission_id: UUID, update
 
 async def upsert_earned_commission(db: AsyncSession, carrier_id: UUID, client_name: str, invoice_total: float, commission_earned: float, statement_date: datetime = None, statement_month: int = None, statement_year: int = None, upload_id: str = None):
     """Upsert earned commission data - create if not exists, update if exists."""
-    existing = await get_earned_commission_by_carrier_and_client(db, carrier_id, client_name)
+    existing = await get_earned_commission_by_carrier_and_client(db, carrier_id, client_name, statement_year)
     
     if existing:
         # Update existing record - convert to Decimal for proper arithmetic
@@ -558,9 +561,56 @@ async def update_commission_record(db: AsyncSession, record_id: UUID, invoice_to
 
 async def process_commission_data_from_statement(db: AsyncSession, statement_upload: StatementUploadModel):
     """Process commission data from an approved statement and update earned commission records."""
-    if not statement_upload.final_data or not statement_upload.field_config:
-        print(f"Missing final_data or field_config: final_data={bool(statement_upload.final_data)}, field_config={bool(statement_upload.field_config)}")
+    if not statement_upload.final_data:
+        print(f"Missing final_data: final_data={bool(statement_upload.final_data)}")
         return None
+    
+    # Check if field_config is missing or empty
+    if not statement_upload.field_config:
+        print(f"Missing field_config: field_config={bool(statement_upload.field_config)}")
+        print("Attempting to process commission data without field_config by inferring fields from data...")
+        
+        # Try to infer fields from the data structure
+        if statement_upload.final_data and len(statement_upload.final_data) > 0:
+            first_table = statement_upload.final_data[0]
+            if isinstance(first_table, dict) and 'rows' in first_table and len(first_table['rows']) > 0:
+                first_row = first_table['rows'][0]
+                if isinstance(first_row, dict):
+                    # Try to infer field mapping from the data
+                    inferred_field_config = []
+                    for key, value in first_row.items():
+                        if key and value:
+                            # Try to determine field type based on key name and value
+                            field_type = 'unknown'
+                            if any(keyword in key.lower() for keyword in ['company', 'client', 'group', 'name']):
+                                field_type = 'client_name'
+                            elif any(keyword in key.lower() for keyword in ['commission', 'earned', 'paid']):
+                                field_type = 'commission_earned'
+                            elif any(keyword in key.lower() for keyword in ['invoice', 'premium', 'total', 'amount']):
+                                field_type = 'invoice_total'
+                            
+                            inferred_field_config.append({
+                                'field': key,
+                                'label': key,
+                                'type': field_type
+                            })
+                    
+                    if inferred_field_config:
+                        print(f"Inferred field_config: {inferred_field_config}")
+                        # Create a temporary field_config for processing
+                        statement_upload.field_config = inferred_field_config
+                    else:
+                        print("Could not infer field_config from data")
+                        return None
+                else:
+                    print("First row is not a dictionary")
+                    return None
+            else:
+                print("No valid table structure found")
+                return None
+        else:
+            print("No final_data available")
+            return None
     
     # Validate data structure
     if not isinstance(statement_upload.final_data, list):
@@ -596,6 +646,11 @@ async def process_commission_data_from_statement(db: AsyncSession, statement_upl
     print(f"🎯 Commission Processing: selected_statement_date from upload: {statement_upload.selected_statement_date}")
     print(f"🎯 Commission Processing: Upload ID: {statement_upload.id}")
     print(f"🎯 Commission Processing: Upload status: {statement_upload.status}")
+    
+    # Check if status is approved (case insensitive)
+    if statement_upload.status.lower() != 'approved':
+        print(f"🎯 Commission Processing: Statement status is not approved: {statement_upload.status}")
+        return None
     
     if statement_upload.selected_statement_date:
         print(f"🎯 Commission Processing: Found selected statement date in upload")

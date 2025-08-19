@@ -398,31 +398,55 @@ async def get_earned_commissions_summary(db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Error fetching earned commissions summary: {str(e)}")
 
 @router.get("/earned-commission/stats")
-async def get_earned_commission_stats(db: AsyncSession = Depends(get_db)):
-    """Get overall earned commission statistics"""
+async def get_earned_commission_stats(year: Optional[int] = None, db: AsyncSession = Depends(get_db)):
+    """Get overall earned commission statistics, optionally filtered by year"""
     try:
         # Get total invoice amounts
-        total_invoice_result = await db.execute(
-            select(func.sum(EarnedCommission.invoice_total))
-        )
+        if year is not None:
+            total_invoice_result = await db.execute(
+                select(func.sum(EarnedCommission.invoice_total))
+                .where(EarnedCommission.statement_year == year)
+            )
+        else:
+            total_invoice_result = await db.execute(
+                select(func.sum(EarnedCommission.invoice_total))
+            )
         total_invoice = float(total_invoice_result.scalar() or 0)
 
         # Get total commission earned
-        total_commission_result = await db.execute(
-            select(func.sum(EarnedCommission.commission_earned))
-        )
+        if year is not None:
+            total_commission_result = await db.execute(
+                select(func.sum(EarnedCommission.commission_earned))
+                .where(EarnedCommission.statement_year == year)
+            )
+        else:
+            total_commission_result = await db.execute(
+                select(func.sum(EarnedCommission.commission_earned))
+            )
         total_commission = float(total_commission_result.scalar() or 0)
 
         # Get total carriers with commission data
-        total_carriers_result = await db.execute(
-            select(func.count(func.distinct(EarnedCommission.carrier_id)))
-        )
+        if year is not None:
+            total_carriers_result = await db.execute(
+                select(func.count(func.distinct(EarnedCommission.carrier_id)))
+                .where(EarnedCommission.statement_year == year)
+            )
+        else:
+            total_carriers_result = await db.execute(
+                select(func.count(func.distinct(EarnedCommission.carrier_id)))
+            )
         total_carriers = total_carriers_result.scalar() or 0
 
         # Get total companies/clients
-        total_companies_result = await db.execute(
-            select(func.count(func.distinct(EarnedCommission.client_name)))
-        )
+        if year is not None:
+            total_companies_result = await db.execute(
+                select(func.count(func.distinct(EarnedCommission.client_name)))
+                .where(EarnedCommission.statement_year == year)
+            )
+        else:
+            total_companies_result = await db.execute(
+                select(func.count(func.distinct(EarnedCommission.client_name)))
+            )
         total_companies = total_companies_result.scalar() or 0
 
         return {

@@ -243,7 +243,8 @@ export default function AdvancedUploadZone({
     file_name: string, 
     file: File,
     quality_summary?: QualitySummary,
-    extraction_config?: any
+    extraction_config?: any,
+    format_learning?: any
   }) => void,
   disabled?: boolean,
   companyId: string,
@@ -299,7 +300,8 @@ export default function AdvancedUploadZone({
         file_name: json.s3_key || file.name, // Use S3 key if available, fallback to original filename
         file,
         quality_summary: json.quality_summary,
-        extraction_config: json.extraction_config
+        extraction_config: json.extraction_config,
+        format_learning: json.format_learning // Add format learning data
       })
       
       toast.success('Extraction completed successfully!')
