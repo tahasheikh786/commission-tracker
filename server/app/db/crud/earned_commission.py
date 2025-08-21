@@ -408,12 +408,22 @@ def parse_currency_amount(amount_str: str) -> float:
         clean_str = amount_str.replace('$', '').replace(',', '')
         
         # Handle negative values in parentheses
-        is_negative = clean_str.startswith('(') and clean_str.endswith(')')
-        if is_negative:
+        is_negative_parentheses = clean_str.startswith('(') and clean_str.endswith(')')
+        if is_negative_parentheses:
             clean_str = clean_str.replace('(', '').replace(')', '')
         
+        # Handle negative values with minus sign
+        is_negative_minus = clean_str.startswith('-')
+        if is_negative_minus:
+            clean_str = clean_str[1:]  # Remove the minus sign
+        
         amount = float(clean_str)
-        return -amount if is_negative else amount
+        
+        # Apply negative sign if value was in parentheses or had minus sign
+        if is_negative_parentheses or is_negative_minus:
+            return -amount
+        else:
+            return amount
         
     except (ValueError, TypeError):
         return 0.0
@@ -798,24 +808,26 @@ async def process_commission_data_from_statement(db: AsyncSession, statement_upl
                 
                 print(f"Processing row: client={client_name}, commission={commission_earned_str}, invoice={invoice_total_str}")
                 
-                # Convert string values to float, handling various formats including negative values in parentheses
+                # Convert string values to float, handling various formats including negative values in parentheses and minus signs
                 try:
-                    # Handle negative values in parentheses
+                    # Handle negative values in parentheses and minus signs
                     commission_earned_str_clean = commission_earned_str.replace('$', '').replace(',', '')
                     invoice_total_str_clean = invoice_total_str.replace('$', '').replace(',', '')
                     
-                    # Check if values are negative (in parentheses)
-                    commission_is_negative = commission_earned_str_clean.startswith('(') and commission_earned_str_clean.endswith(')')
-                    invoice_is_negative = invoice_total_str_clean.startswith('(') and invoice_total_str_clean.endswith(')')
+                    # Check if values are negative (in parentheses or with minus sign)
+                    commission_is_negative_parentheses = commission_earned_str_clean.startswith('(') and commission_earned_str_clean.endswith(')')
+                    commission_is_negative_minus = commission_earned_str_clean.startswith('-')
+                    invoice_is_negative_parentheses = invoice_total_str_clean.startswith('(') and invoice_total_str_clean.endswith(')')
+                    invoice_is_negative_minus = invoice_total_str_clean.startswith('-')
                     
-                    # Remove parentheses and convert to float
-                    commission_earned = float(commission_earned_str_clean.replace('(', '').replace(')', ''))
-                    invoice_total = float(invoice_total_str_clean.replace('(', '').replace(')', ''))
+                    # Remove parentheses and minus signs, then convert to float
+                    commission_earned = float(commission_earned_str_clean.replace('(', '').replace(')', '').replace('-', ''))
+                    invoice_total = float(invoice_total_str_clean.replace('(', '').replace(')', '').replace('-', ''))
                     
-                    # Apply negative sign if values were in parentheses
-                    if commission_is_negative:
+                    # Apply negative sign if values were in parentheses or had minus sign
+                    if commission_is_negative_parentheses or commission_is_negative_minus:
                         commission_earned = -commission_earned
-                    if invoice_is_negative:
+                    if invoice_is_negative_parentheses or invoice_is_negative_minus:
                         invoice_total = -invoice_total
                 except (ValueError, TypeError):
                     commission_earned = 0

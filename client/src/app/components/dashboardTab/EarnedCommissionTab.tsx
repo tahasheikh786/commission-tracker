@@ -23,6 +23,7 @@ import {
   SlidersHorizontal
 } from 'lucide-react';
 import EditCommissionModal from './EditCommissionModal';
+import MergeConfirmationModal from './MergeConfirmationModal';
 import { 
   useEarnedCommissionStats, 
   useCarriersWithCommission, 
@@ -70,11 +71,18 @@ export default function EarnedCommissionTab() {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editingData, setEditingData] = useState<CommissionData | null>(null);
   const [editLoading, setEditLoading] = useState(false);
+  const [mergeModalOpen, setMergeModalOpen] = useState(false);
+  const [mergeData, setMergeData] = useState<{
+    existingRecord: CommissionData;
+    newData: { client_name: string; invoice_total: number; commission_earned: number };
+    sourceId: string;
+  } | null>(null);
+  const [mergeLoading, setMergeLoading] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [carrierFilter, setCarrierFilter] = useState<string>('');
   const [minCommissionFilter, setMinCommissionFilter] = useState<string>('');
   const [maxCommissionFilter, setMaxCommissionFilter] = useState<string>('');
-  const [selectedYear, setSelectedYear] = useState<number | null>(null);
+  const [selectedYear, setSelectedYear] = useState<number | null>(2025);
 
   // Fetch data
   const { stats: overallStats, loading: statsLoading, refetch: refetchStats } = useEarnedCommissionStats(selectedYear || undefined);
@@ -201,6 +209,20 @@ export default function EarnedCommissionTab() {
         throw new Error('Failed to update commission data');
       }
 
+      const result = await response.json();
+
+      // Check if merge confirmation is required
+      if (result.requires_merge_confirmation) {
+        setMergeData({
+          existingRecord: result.existing_record,
+          newData: result.new_data,
+          sourceId: updatedData.id!
+        });
+        setMergeModalOpen(true);
+        setEditModalOpen(false);
+        return;
+      }
+
       // Refresh the data
       window.location.reload();
     } catch (error) {
@@ -211,18 +233,56 @@ export default function EarnedCommissionTab() {
     }
   };
 
+  const handleConfirmMerge = async () => {
+    if (!mergeData) return;
+    
+    setMergeLoading(true);
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/earned-commission/merge`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          source_id: mergeData.sourceId,
+          target_id: mergeData.existingRecord.id,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to merge commission records');
+      }
+
+      // Close modal and refresh data
+      setMergeModalOpen(false);
+      setMergeData(null);
+      window.location.reload();
+    } catch (error) {
+      console.error('Error merging commission records:', error);
+      alert('Failed to merge commission records. Please try again.');
+    } finally {
+      setMergeLoading(false);
+    }
+  };
+
+  const handleCancelMerge = () => {
+    setMergeModalOpen(false);
+    setMergeData(null);
+    setEditModalOpen(true); // Reopen the edit modal
+  };
+
   // Clear all filters
   const clearFilters = () => {
     setSearchQuery('');
     setCarrierFilter('');
     setMinCommissionFilter('');
     setMaxCommissionFilter('');
-    setSelectedYear(null);
+    setSelectedYear(2025);
     setCurrentPage(1);
   };
 
   // Check if any filters are active
-  const hasActiveFilters = searchQuery || carrierFilter || minCommissionFilter || maxCommissionFilter || selectedYear !== null;
+  const hasActiveFilters = searchQuery || carrierFilter || minCommissionFilter || maxCommissionFilter || selectedYear !== 2025;
 
   // Format currency
   const formatCurrency = (amount: number) => {
@@ -264,7 +324,7 @@ export default function EarnedCommissionTab() {
         </div>
                       <p className="text-lg text-slate-600 max-w-3xl mx-auto leading-relaxed">
                 Track and analyze commission earnings across all carriers and clients with comprehensive insights
-                {selectedYear && (
+                {selectedYear && selectedYear !== 2025 && (
                   <span className="block mt-2 text-sm font-medium text-emerald-600">
                     📅 Showing data for year {selectedYear}
                   </span>
@@ -425,7 +485,7 @@ export default function EarnedCommissionTab() {
               </div>
               <div>
                 <select
-                  value={selectedYear || ''}
+                  value={selectedYear || 2025}
                   onChange={(e) => setSelectedYear(e.target.value ? parseInt(e.target.value) : null)}
                   className="w-full px-4 py-3 text-sm bg-white/80 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200"
                 >
@@ -723,6 +783,20 @@ export default function EarnedCommissionTab() {
         data={editingData}
         onSave={handleSaveCommission}
         loading={editLoading}
+      />
+
+      {/* Merge Confirmation Modal */}
+      <MergeConfirmationModal
+        isOpen={mergeModalOpen}
+        onClose={() => {
+          setMergeModalOpen(false);
+          setMergeData(null);
+        }}
+        existingRecord={mergeData?.existingRecord!}
+        newData={mergeData?.newData!}
+        onConfirmMerge={handleConfirmMerge}
+        onCancel={handleCancelMerge}
+        loading={mergeLoading}
       />
     </div>
   );

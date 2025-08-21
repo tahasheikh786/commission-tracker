@@ -342,19 +342,38 @@ def parse_statement_date(date_str: str) -> datetime:
 
 def parse_currency(currency_str: str) -> float:
     """
-    Parse currency string to float value.
+    Parse currency string to float value, handling parentheses and minus signs.
     """
     try:
         if not currency_str:
             return 0.0
         
-        # Remove currency symbols, commas, and extra whitespace
-        cleaned = re.sub(r'[^\d.-]', '', currency_str.strip())
+        # Remove currency symbols and commas
+        clean_str = currency_str.replace('$', '').replace(',', '').strip()
         
-        if not cleaned:
+        # Handle negative values in parentheses
+        is_negative_parentheses = clean_str.startswith('(') and clean_str.endswith(')')
+        if is_negative_parentheses:
+            clean_str = clean_str.replace('(', '').replace(')', '')
+        
+        # Handle negative values with minus sign
+        is_negative_minus = clean_str.startswith('-')
+        if is_negative_minus:
+            clean_str = clean_str[1:]  # Remove the minus sign
+        
+        # Remove any remaining non-numeric characters except dots
+        clean_str = re.sub(r'[^\d.]', '', clean_str)
+        
+        if not clean_str:
             return 0.0
         
-        return float(cleaned)
+        amount = float(clean_str)
+        
+        # Apply negative sign if value was in parentheses or had minus sign
+        if is_negative_parentheses or is_negative_minus:
+            return -amount
+        else:
+            return amount
         
     except Exception as e:
         logger.error(f"🎯 Currency Parsing: Error parsing currency {currency_str}: {e}")

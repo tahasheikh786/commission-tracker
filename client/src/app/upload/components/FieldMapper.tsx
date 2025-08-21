@@ -99,6 +99,7 @@ export default function FieldMapper({
   tableData = [], // Add table data for format learning
   isLoading = false, // Add loading prop
   selectedStatementDate, // Add selected statement date
+  mappingAutoApplied = false, // Add prop to show if mapping was auto-applied
 }: {
   company: { id: string, name: string }
   columns: string[]
@@ -111,6 +112,7 @@ export default function FieldMapper({
   tableData?: any[] // Add table data prop
   isLoading?: boolean // Add loading prop type
   selectedStatementDate?: any // Add selected statement date
+  mappingAutoApplied?: boolean // Add prop to show if mapping was auto-applied
 }) {
   // State for database fields from backend
   const [databaseFields, setDatabaseFields] = useState<FieldConf[]>([])
@@ -446,6 +448,32 @@ export default function FieldMapper({
 
       {/* Progress Bar */}
       <ProgressBar currentStep="field_mapper" />
+
+      {/* Learned Mapping Notification */}
+      {mappingAutoApplied && (
+        <div className="flex-shrink-0 bg-green-50 border-b border-green-200 p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+              <div>
+                <p className="text-sm font-medium text-green-800">Learned Field Mapping Applied</p>
+                <p className="text-xs text-green-600">Field mappings were automatically populated from a previously saved format for this carrier</p>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                // Clear the auto-applied mapping and let user start fresh
+                setMapping({})
+                setMappingSource('manual')
+                toast.success('Cleared auto-applied mapping. You can now map fields manually.')
+              }}
+              className="text-xs text-green-600 hover:text-green-800 underline"
+            >
+              Clear & Start Fresh
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Header */}
       <div className="flex-shrink-0 bg-white border-b border-gray-200 p-6">

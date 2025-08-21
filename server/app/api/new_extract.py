@@ -441,25 +441,65 @@ async def extract_tables_smart(
                             table_editor_settings = learned_format["table_editor_settings"]
                             logger.info(f"🎯 Applying table editor settings: {table_editor_settings}")
                             
-                            # Apply learned headers with more flexible matching
+                            # Apply learned headers with intelligent matching
                             if table_editor_settings.get("headers"):
                                 learned_headers = table_editor_settings["headers"]
                                 current_headers = first_table.get("header", [])
                                 
-                                # Check if headers are similar enough to apply
-                                if len(learned_headers) == len(current_headers):
-                                    # Apply headers directly if count matches
+                                logger.info(f"🎯 Learned headers: {learned_headers}")
+                                logger.info(f"🎯 Current headers: {current_headers}")
+                                logger.info(f"🎯 Learned count: {len(learned_headers)}, Current count: {len(current_headers)}")
+                                
+                                # For financial tables, the learned headers are usually correct
+                                # Check if this looks like a financial table that needs header correction
+                                is_financial_table = any(keyword in ' '.join(current_headers).lower() for keyword in [
+                                    'premium', 'commission', 'billed', 'group', 'client', 'invoice',
+                                    'total', 'amount', 'due', 'paid', 'rate', 'percentage', 'period'
+                                ])
+                                
+                                if is_financial_table and match_score > 0.5:
+                                    # For financial tables with good match score, apply learned headers
+                                    # and adjust the data rows accordingly
+                                    logger.info(f"🎯 Financial table detected - applying learned headers")
+                                    
+                                    # Apply learned headers
                                     first_table["header"] = learned_headers
                                     logger.info(f"🎯 Applied learned headers: {learned_headers}")
-                                elif len(learned_headers) > len(current_headers):
-                                    # Pad current headers if learned has more columns
-                                    padded_headers = current_headers + [f"Column_{i+1}" for i in range(len(current_headers), len(learned_headers))]
-                                    first_table["header"] = learned_headers[:len(padded_headers)]
-                                    logger.info(f"🎯 Applied learned headers with padding: {learned_headers[:len(padded_headers)]}")
+                                    
+                                    # Adjust data rows if column count changed
+                                    current_rows = first_table.get("rows", [])
+                                    if current_rows and len(learned_headers) != len(current_headers):
+                                        logger.info(f"🎯 Adjusting data rows for header correction")
+                                        adjusted_rows = []
+                                        
+                                        for row in current_rows:
+                                            if len(learned_headers) > len(current_headers):
+                                                # Add empty columns if learned has more columns
+                                                adjusted_row = row + [""] * (len(learned_headers) - len(current_headers))
+                                            else:
+                                                # Truncate row if learned has fewer columns
+                                                adjusted_row = row[:len(learned_headers)]
+                                            
+                                            adjusted_rows.append(adjusted_row)
+                                        
+                                        first_table["rows"] = adjusted_rows
+                                        logger.info(f"🎯 Adjusted {len(adjusted_rows)} rows to match {len(learned_headers)} columns")
+                                    
                                 else:
-                                    # Truncate learned headers if current has more columns
-                                    first_table["header"] = learned_headers + [f"Column_{i+1}" for i in range(len(learned_headers), len(current_headers))]
-                                    logger.info(f"🎯 Applied learned headers with truncation: {first_table['header']}")
+                                    # For non-financial tables or low confidence, use length-based matching
+                                    if len(learned_headers) == len(current_headers):
+                                        # Apply headers directly if count matches
+                                        first_table["header"] = learned_headers
+                                        logger.info(f"🎯 Applied learned headers (length match): {learned_headers}")
+                                    elif len(learned_headers) > len(current_headers):
+                                        # Pad current headers if learned has more columns
+                                        padded_headers = current_headers + [f"Column_{i+1}" for i in range(len(current_headers), len(learned_headers))]
+                                        first_table["header"] = learned_headers[:len(padded_headers)]
+                                        logger.info(f"🎯 Applied learned headers with padding: {learned_headers[:len(padded_headers)]}")
+                                    else:
+                                        # Truncate learned headers if current has more columns
+                                        first_table["header"] = learned_headers + [f"Column_{i+1}" for i in range(len(learned_headers), len(current_headers))]
+                                        logger.info(f"🎯 Applied learned headers with truncation: {first_table['header']}")
                             else:
                                 logger.info(f"🎯 No learned headers to apply")
                             

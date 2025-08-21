@@ -29,6 +29,8 @@ class TableData(BaseModel):
     name: Optional[str] = None
     id: Optional[str] = None
     summaryRows: Optional[List[int]] = None  # Convert Set to List for JSON serialization
+    extractor: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
 
 
 class SaveTablesRequest(BaseModel):
@@ -56,26 +58,38 @@ async def save_tables(request: SaveTablesRequest):
         # Convert tables to the format expected by the database
         tables_data = []
         for table in request.tables:
+            # Clean metadata to ensure JSON serialization
+            cleaned_metadata = {}
+            if table.metadata:
+                for key, value in table.metadata.items():
+                    if isinstance(value, datetime):
+                        cleaned_metadata[key] = value.isoformat()
+                    else:
+                        cleaned_metadata[key] = value
+            
             table_data = {
                 "name": table.name or "Unnamed Table",
                 "header": table.header,
                 "rows": table.rows,
                 "upload_id": request.upload_id,
                 "company_id": request.company_id,
-                "created_at": datetime.now(),
-                "updated_at": datetime.now()
+                "created_at": datetime.now().isoformat(),
+                "updated_at": datetime.now().isoformat(),
+                "extractor": table.extractor,
+                "metadata": cleaned_metadata
             }
             tables_data.append(table_data)
         
         logger.info(f"🎯 Table Editor API: Converted {len(tables_data)} tables to database format")
         
         # Save to database
-        saved_tables = await save_edited_tables(tables_data)
-        logger.info(f"🎯 Table Editor API: Saved {len(saved_tables)} edited tables to database")
+        db = await anext(get_db())
+        saved_upload = await save_edited_tables(db, tables_data)
+        logger.info(f"🎯 Table Editor API: Saved edited tables to database")
         
         # Update the original upload with the edited tables and selected statement date
         logger.info(f"🎯 Table Editor API: Updating upload with tables and statement date")
-        await update_upload_tables(request.upload_id, tables_data, request.selected_statement_date)
+        await update_upload_tables(db, request.upload_id, tables_data, request.selected_statement_date)
         logger.info(f"🎯 Table Editor API: Successfully updated upload with statement date")
         
         # Learn format patterns from the edited tables
@@ -116,7 +130,7 @@ async def save_tables(request: SaveTablesRequest):
                 }
                 
                 # Save table editor format learning
-                await save_table_editor_format_learning(format_learning_data)
+                await save_table_editor_format_learning(format_learning_data, db)
                 
                 logger.info(f"🎯 Table Editor API: Successfully learned format with signature: {format_signature}")
                 
@@ -126,14 +140,14 @@ async def save_tables(request: SaveTablesRequest):
                 logger.error(f"🎯 Table Editor API: Error learning table editor format: {e}")
                 # Don't fail the save operation if format learning fails
         
-        logger.info(f"🎯 Table Editor API: Successfully saved {len(saved_tables)} edited tables")
+        logger.info(f"🎯 Table Editor API: Successfully saved {len(tables_data)} edited tables")
         
         return JSONResponse(
             status_code=200,
             content={
                 "success": True,
-                "message": f"Successfully saved {len(saved_tables)} edited tables",
-                "saved_tables": saved_tables
+                "message": f"Successfully saved {len(tables_data)} edited tables",
+                "saved_tables": tables_data
             }
         )
         
@@ -141,7 +155,7 @@ async def save_tables(request: SaveTablesRequest):
         logger.error(f"🎯 Table Editor API: Error saving tables: {e}")
         raise HTTPException(status_code=500, detail=f"Error saving tables: {str(e)}")
 
-async def save_table_editor_format_learning(format_data: Dict[str, Any]):
+async def save_table_editor_format_learning(format_data: Dict[str, Any], db: AsyncSession):
     """
     Save table editor format learning data.
     """
@@ -161,7 +175,6 @@ async def save_table_editor_format_learning(format_data: Dict[str, Any]):
         )
         
         # Save to database using the format learning service
-        db = await anext(get_db())
         await crud.save_carrier_format_learning(db, format_learning)
         
     except Exception as e:
@@ -170,29 +183,32 @@ async def save_table_editor_format_learning(format_data: Dict[str, Any]):
 
 
 @router.get("/get-tables/{upload_id}")
-async def get_tables(upload_id: str):
+async def get_tables(upload_id: str, db: AsyncSession = Depends(get_db)):
     """
     Retrieve edited tables for a specific upload.
     """
     try:
         logger.info(f"Retrieving edited tables for upload_id: {upload_id}")
         
-        tables = await get_edited_tables(upload_id)
+        tables = await get_edited_tables(db, upload_id)
         
         # Convert to the format expected by the frontend
         tables_data = []
-        for table in tables:
-            table_data = {
-                "id": str(table.id),
-                "name": table.name,
-                "header": table.header,
-                "rows": table.rows,
-                "upload_id": table.upload_id,
-                "company_id": table.company_id,
-                "created_at": table.created_at.isoformat() if table.created_at else None,
-                "updated_at": table.updated_at.isoformat() if table.updated_at else None
-            }
-            tables_data.append(table_data)
+        if tables:
+            for i, table in enumerate(tables):
+                table_data = {
+                    "id": str(i),  # Generate an ID since we don't have database IDs
+                    "name": table.get('name', f'Table {i+1}'),
+                    "header": table.get('header', []),
+                    "rows": table.get('rows', []),
+                    "upload_id": table.get('upload_id', upload_id),
+                    "company_id": table.get('company_id', ''),
+                    "created_at": table.get('created_at'),
+                    "updated_at": table.get('updated_at'),
+                    "extractor": table.get('extractor'),
+                    "metadata": table.get('metadata', {})
+                }
+                tables_data.append(table_data)
         
         logger.info(f"Retrieved {len(tables_data)} edited tables")
         
@@ -209,15 +225,18 @@ async def get_tables(upload_id: str):
 
 
 @router.delete("/delete-tables/{upload_id}")
-async def delete_tables(upload_id: str):
+async def delete_tables(upload_id: str, db: AsyncSession = Depends(get_db)):
     """
     Delete all edited tables for a specific upload.
     """
     try:
         logger.info(f"Deleting edited tables for upload_id: {upload_id}")
         
-        # This would be implemented in the CRUD layer
-        # await delete_edited_tables(upload_id)
+        # Delete edited tables using the CRUD layer
+        success = await delete_edited_tables(db, upload_id)
+        
+        if not success:
+            raise HTTPException(status_code=404, detail=f"Upload not found: {upload_id}")
         
         logger.info(f"Successfully deleted edited tables for upload_id: {upload_id}")
         
@@ -234,24 +253,25 @@ async def delete_tables(upload_id: str):
 
 
 @router.post("/export-tables/{upload_id}")
-async def export_tables(upload_id: str, format: str = "csv"):
+async def export_tables(upload_id: str, format: str = "csv", db: AsyncSession = Depends(get_db)):
     """
     Export edited tables in various formats.
     """
     try:
         logger.info(f"Exporting tables for upload_id: {upload_id} in format: {format}")
         
-        tables = await get_edited_tables(upload_id)
+        tables = await get_edited_tables(db, upload_id)
         
         if format.lower() == "csv":
             # Generate CSV content
             csv_content = ""
-            for table in tables:
-                csv_content += f"Table: {table.name}\n"
-                csv_content += ",".join(table.header) + "\n"
-                for row in table.rows:
-                    csv_content += ",".join([f'"{cell}"' for cell in row]) + "\n"
-                csv_content += "\n"
+            if tables:
+                for table in tables:
+                    csv_content += f"Table: {table.get('name', 'Unnamed Table')}\n"
+                    csv_content += ",".join(table.get('header', [])) + "\n"
+                    for row in table.get('rows', []):
+                        csv_content += ",".join([f'"{cell}"' for cell in row]) + "\n"
+                    csv_content += "\n"
             
             return JSONResponse({
                 "success": True,
@@ -263,13 +283,14 @@ async def export_tables(upload_id: str, format: str = "csv"):
         elif format.lower() == "json":
             # Generate JSON content
             tables_data = []
-            for table in tables:
-                table_data = {
-                    "name": table.name,
-                    "header": table.header,
-                    "rows": table.rows
-                }
-                tables_data.append(table_data)
+            if tables:
+                for table in tables:
+                    table_data = {
+                        "name": table.get('name', 'Unnamed Table'),
+                        "header": table.get('header', []),
+                        "rows": table.get('rows', [])
+                    }
+                    tables_data.append(table_data)
             
             return JSONResponse({
                 "success": True,

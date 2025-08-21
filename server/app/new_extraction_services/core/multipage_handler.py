@@ -126,7 +126,7 @@ class MultiPageTableHandler:
         table: PageTable, 
         current_headers: Optional[List[str]]
     ) -> bool:
-        """Determine if this table starts a new table group."""
+        """Determine if this table starts a new table group using enhanced similarity analysis."""
         
         # If no current headers, this is definitely a new table
         if current_headers is None:
@@ -143,28 +143,335 @@ class MultiPageTableHandler:
             self.logger.logger.info(f"📋 Headers look like data - likely continuation")
             return False
         
-        # Check header similarity with current table
-        header_similarity = self._calculate_header_similarity(current_headers, table.headers)
+        # Enhanced similarity analysis
+        similarity_score = await self._calculate_comprehensive_similarity(table, current_headers)
         
-        # If headers are very similar, it's likely the same table with repeated headers
-        if header_similarity >= 0.8:
-            self.logger.logger.info(f"📋 High header similarity ({header_similarity:.2f}) - likely repeated headers")
+        self.logger.logger.info(f"🔍 Comprehensive similarity score: {similarity_score:.3f}")
+        
+        # More flexible threshold for table merging
+        # If similarity is high enough, merge even with some header differences
+        if similarity_score >= 0.7:
+            self.logger.logger.info(f"📋 High comprehensive similarity ({similarity_score:.3f}) - merging tables")
             return False
-        
-        # If headers are moderately similar, check additional criteria
-        elif header_similarity >= 0.5:
-            # Check if this looks like a continuation with similar structure
-            if await self._looks_like_continuation(table, current_headers):
-                self.logger.logger.info(f"📋 Moderate similarity but looks like continuation")
+        elif similarity_score >= 0.5:
+            # Check additional structural criteria for moderate similarity
+            if await self._has_similar_structure(table, current_headers):
+                self.logger.logger.info(f"📋 Moderate similarity with similar structure - merging tables")
                 return False
             else:
-                self.logger.logger.info(f"🆕 Moderate similarity but different table structure")
+                self.logger.logger.info(f"🆕 Moderate similarity but different structure - new table")
+                return True
+        else:
+            self.logger.logger.info(f"🆕 Low similarity ({similarity_score:.3f}) - new table")
+            return True
+    
+    async def _calculate_comprehensive_similarity(
+        self, 
+        table: PageTable, 
+        current_headers: List[str]
+    ) -> float:
+        """Calculate comprehensive similarity score considering multiple factors."""
+        
+        scores = []
+        weights = []
+        
+        # 1. Header similarity (weight: 0.3)
+        header_similarity = self._calculate_header_similarity(current_headers, table.headers)
+        scores.append(header_similarity)
+        weights.append(0.3)
+        
+        # 2. Column count similarity (weight: 0.2)
+        col_count_similarity = self._calculate_column_count_similarity(current_headers, table.headers)
+        scores.append(col_count_similarity)
+        weights.append(0.2)
+        
+        # 3. Row format similarity (weight: 0.25)
+        row_format_similarity = await self._calculate_row_format_similarity(table, current_headers)
+        scores.append(row_format_similarity)
+        weights.append(0.25)
+        
+        # 4. Data pattern similarity (weight: 0.15)
+        data_pattern_similarity = await self._calculate_data_pattern_similarity(table, current_headers)
+        scores.append(data_pattern_similarity)
+        weights.append(0.15)
+        
+        # 5. Table positioning similarity (weight: 0.1)
+        position_similarity = self._calculate_position_similarity(table)
+        scores.append(position_similarity)
+        weights.append(0.1)
+        
+        # Calculate weighted average
+        weighted_sum = sum(score * weight for score, weight in zip(scores, weights))
+        total_weight = sum(weights)
+        
+        final_score = weighted_sum / total_weight if total_weight > 0 else 0.0
+        
+        self.logger.logger.info(f"🔍 Similarity breakdown:")
+        self.logger.logger.info(f"   Header: {header_similarity:.3f}")
+        self.logger.logger.info(f"   Column count: {col_count_similarity:.3f}")
+        self.logger.logger.info(f"   Row format: {row_format_similarity:.3f}")
+        self.logger.logger.info(f"   Data pattern: {data_pattern_similarity:.3f}")
+        self.logger.logger.info(f"   Position: {position_similarity:.3f}")
+        self.logger.logger.info(f"   Final weighted score: {final_score:.3f}")
+        
+        return final_score
+    
+    def _calculate_column_count_similarity(self, headers1: List[str], headers2: List[str]) -> float:
+        """Calculate similarity based on column count."""
+        count1 = len(headers1)
+        count2 = len(headers2)
+        
+        if count1 == count2:
+            return 1.0
+        elif count1 == 0 or count2 == 0:
+            return 0.0
+        else:
+            # Calculate similarity based on difference ratio
+            max_count = max(count1, count2)
+            min_count = min(count1, count2)
+            difference_ratio = (max_count - min_count) / max_count
+            return 1.0 - difference_ratio
+    
+    async def _calculate_row_format_similarity(
+        self, 
+        table: PageTable, 
+        current_headers: List[str]
+    ) -> float:
+        """Calculate similarity based on row format patterns."""
+        rows = table.table_data.get('rows', [])
+        if not rows:
+            return 0.0
+        
+        # Analyze row format characteristics
+        row_lengths = [len(row) for row in rows if row]
+        if not row_lengths:
+            return 0.0
+        
+        # Check if row lengths are consistent with current headers
+        expected_length = len(current_headers)
+        length_matches = sum(1 for length in row_lengths if abs(length - expected_length) <= 1)
+        length_similarity = length_matches / len(row_lengths) if row_lengths else 0.0
+        
+        # Analyze cell content patterns
+        cell_pattern_similarity = self._analyze_cell_pattern_similarity(rows, current_headers)
+        
+        # Combine length and pattern similarity
+        return (length_similarity * 0.6) + (cell_pattern_similarity * 0.4)
+    
+    def _analyze_cell_pattern_similarity(self, rows: List[List[str]], current_headers: List[str]) -> float:
+        """Analyze similarity of cell content patterns."""
+        if not rows or not current_headers:
+            return 0.0
+        
+        # Sample first few rows for pattern analysis
+        sample_rows = rows[:min(3, len(rows))]
+        
+        pattern_matches = 0
+        total_checks = 0
+        
+        for row in sample_rows:
+            if len(row) != len(current_headers):
+                continue
+            
+            row_matches = 0
+            for i, cell in enumerate(row):
+                if i >= len(current_headers):
+                    break
+                
+                # Check if cell content pattern matches expected pattern for this column
+                if self._cell_matches_column_pattern(cell, i, current_headers):
+                    row_matches += 1
+            
+            if len(current_headers) > 0:
+                pattern_matches += row_matches / len(current_headers)
+                total_checks += 1
+        
+        return pattern_matches / total_checks if total_checks > 0 else 0.0
+    
+    def _cell_matches_column_pattern(self, cell: str, column_index: int, headers: List[str]) -> bool:
+        """Check if a cell matches the expected pattern for its column."""
+        if not cell or column_index >= len(headers):
+            return False
+        
+        # Simple pattern matching based on column position and content
+        cell_lower = cell.lower().strip()
+        
+        # Check for common patterns based on column position
+        if column_index == 0:  # Usually company/name column
+            return len(cell_lower) > 2 and any(c.isalpha() for c in cell_lower)
+        elif column_index == len(headers) - 1:  # Usually total/amount column
+            return any(c.isdigit() for c in cell_lower) or '$' in cell_lower
+        
+        # For middle columns, check for mixed content
+        return len(cell_lower) > 0
+    
+    async def _calculate_data_pattern_similarity(
+        self, 
+        table: PageTable, 
+        current_headers: List[str]
+    ) -> float:
+        """Calculate similarity based on data value patterns."""
+        rows = table.table_data.get('rows', [])
+        if not rows:
+            return 0.0
+        
+        # Analyze data types in each column
+        column_patterns = self._analyze_column_data_patterns(rows)
+        
+        # Compare with expected patterns based on current headers
+        expected_patterns = self._get_expected_column_patterns(current_headers)
+        
+        # Calculate pattern similarity
+        pattern_matches = 0
+        total_columns = min(len(column_patterns), len(expected_patterns))
+        
+        for i in range(total_columns):
+            if self._patterns_are_similar(column_patterns[i], expected_patterns[i]):
+                pattern_matches += 1
+        
+        return pattern_matches / total_columns if total_columns > 0 else 0.0
+    
+    def _analyze_column_data_patterns(self, rows: List[List[str]]) -> List[Dict[str, Any]]:
+        """Analyze data patterns for each column."""
+        if not rows:
+            return []
+        
+        max_cols = max(len(row) for row in rows) if rows else 0
+        patterns = []
+        
+        for col_idx in range(max_cols):
+            column_data = []
+            for row in rows:
+                if col_idx < len(row):
+                    column_data.append(str(row[col_idx]).strip())
+            
+            pattern = {
+                'has_numbers': any(self._is_numeric(val) for val in column_data),
+                'has_currency': any('$' in val for val in column_data),
+                'has_dates': any(self._is_date(val) for val in column_data),
+                'avg_length': sum(len(val) for val in column_data) / len(column_data) if column_data else 0,
+                'has_alpha': any(any(c.isalpha() for c in val) for val in column_data)
+            }
+            patterns.append(pattern)
+        
+        return patterns
+    
+    def _get_expected_column_patterns(self, headers: List[str]) -> List[Dict[str, Any]]:
+        """Get expected patterns based on header names."""
+        patterns = []
+        
+        for header in headers:
+            header_lower = header.lower()
+            pattern = {
+                'has_numbers': any(word in header_lower for word in ['amount', 'total', 'count', 'number', 'rate', 'premium']),
+                'has_currency': any(word in header_lower for word in ['amount', 'total', 'premium', 'commission', 'due']),
+                'has_dates': any(word in header_lower for word in ['date', 'period', 'month', 'year']),
+                'avg_length': 10,  # Default expected length
+                'has_alpha': True  # Most headers contain text
+            }
+            patterns.append(pattern)
+        
+        return patterns
+    
+    def _patterns_are_similar(self, pattern1: Dict[str, Any], pattern2: Dict[str, Any]) -> bool:
+        """Check if two column patterns are similar."""
+        matches = 0
+        total_checks = 0
+        
+        for key in ['has_numbers', 'has_currency', 'has_dates', 'has_alpha']:
+            if pattern1.get(key) == pattern2.get(key):
+                matches += 1
+            total_checks += 1
+        
+        # Check length similarity
+        length_diff = abs(pattern1.get('avg_length', 0) - pattern2.get('avg_length', 0))
+        if length_diff <= 5:  # Allow 5 character difference
+            matches += 1
+        total_checks += 1
+        
+        return matches / total_checks >= 0.7 if total_checks > 0 else False
+    
+    def _calculate_position_similarity(self, table: PageTable) -> float:
+        """Calculate similarity based on table positioning."""
+        if not table.bbox or len(table.bbox) < 4:
+            return 0.5  # Neutral score if no position data
+        
+        # Tables that continue often start near the top of the page
+        y_position = table.bbox[1]
+        
+        # Higher score for tables near the top (likely continuations)
+        if y_position < 100:
+            return 0.9
+        elif y_position < 200:
+            return 0.7
+        elif y_position < 300:
+            return 0.5
+        else:
+            return 0.3
+    
+    async def _has_similar_structure(self, table: PageTable, current_headers: List[str]) -> bool:
+        """Check if table has similar structure to current headers."""
+        rows = table.table_data.get('rows', [])
+        if not rows:
+            return False
+        
+        # Check if row structure matches
+        expected_cols = len(current_headers)
+        structure_matches = 0
+        
+        for row in rows[:5]:  # Check first 5 rows
+            if len(row) == expected_cols:
+                structure_matches += 1
+        
+        structure_similarity = structure_matches / min(5, len(rows)) if rows else 0.0
+        
+        # Also check if the table appears to be a continuation
+        continuation_indicators = 0
+        
+        # Check if first row looks like data (not headers)
+        if rows and not self._headers_look_like_data(rows[0]):
+            continuation_indicators += 1
+        
+        # Check if table position suggests continuation
+        if table.bbox and len(table.bbox) >= 4:
+            if table.bbox[1] < 150:  # Near top of page
+                continuation_indicators += 1
+        
+        return structure_similarity >= 0.6 or continuation_indicators >= 2
+    
+    def _is_numeric(self, value: str) -> bool:
+        """Check if a value is numeric."""
+        if not value:
+            return False
+        
+        # Remove common non-numeric characters
+        clean_value = value.replace(',', '').replace('$', '').replace('%', '').strip()
+        
+        # Check if it's a number
+        try:
+            float(clean_value)
+            return True
+        except ValueError:
+            return False
+    
+    def _is_date(self, value: str) -> bool:
+        """Check if a value looks like a date."""
+        if not value:
+            return False
+        
+        # Simple date pattern detection
+        date_patterns = [
+            r'\d{1,2}/\d{1,2}/\d{2,4}',  # MM/DD/YYYY
+            r'\d{1,2}-\d{1,2}-\d{2,4}',  # MM-DD-YYYY
+            r'\d{4}-\d{1,2}-\d{1,2}',    # YYYY-MM-DD
+        ]
+        
+        import re
+        for pattern in date_patterns:
+            if re.search(pattern, value):
                 return True
         
-        # Low similarity indicates new table
-        else:
-            self.logger.logger.info(f"🆕 Low header similarity ({header_similarity:.2f}) - new table")
-            return True
+        return False
     
     async def _looks_like_continuation(
         self, 
@@ -190,7 +497,7 @@ class MultiPageTableHandler:
         return False
     
     def _calculate_header_similarity(self, headers1: List[str], headers2: List[str]) -> float:
-        """Calculate similarity between header lists."""
+        """Calculate similarity between header lists with enhanced column splitting detection."""
         
         if not headers1 or not headers2:
             return 0.0
@@ -198,6 +505,11 @@ class MultiPageTableHandler:
         # Normalize headers
         h1_norm = [h.lower().strip() for h in headers1]
         h2_norm = [h.lower().strip() for h in headers2]
+        
+        # Check for column splitting scenarios
+        if self._detect_column_splitting(h1_norm, h2_norm):
+            self.logger.logger.info(f"🔍 Detected column splitting - adjusting similarity calculation")
+            return self._calculate_similarity_with_column_splitting(h1_norm, h2_norm)
         
         # Calculate Jaccard similarity
         set1 = set(h1_norm)
@@ -207,6 +519,179 @@ class MultiPageTableHandler:
         union = len(set1.union(set2))
         
         return intersection / union if union > 0 else 0.0
+    
+    def _detect_column_splitting(self, headers1: List[str], headers2: List[str]) -> bool:
+        """Detect if headers show signs of column splitting or confusion using smart techniques."""
+        
+        if not headers1 or not headers2:
+            return False
+        
+        # Normalize headers
+        h1_norm = [h.lower().strip() for h in headers1 if h.strip()]
+        h2_norm = [h.lower().strip() for h in headers2 if h.strip()]
+        
+        # Technique 1: Word-level analysis
+        if self._detect_word_level_splitting(h1_norm, h2_norm):
+            return True
+        
+        # Technique 2: Phrase similarity analysis
+        if self._detect_phrase_similarity_splitting(h1_norm, h2_norm):
+            return True
+        
+        # Technique 3: Column count analysis with content similarity
+        if self._detect_column_count_splitting(h1_norm, h2_norm):
+            return True
+        
+        return False
+    
+    def _detect_word_level_splitting(self, headers1: List[str], headers2: List[str]) -> bool:
+        """Detect splitting by analyzing word-level patterns."""
+        
+        # Get all words from both header sets
+        words1 = set()
+        words2 = set()
+        
+        for header in headers1:
+            words1.update(header.split())
+        
+        for header in headers2:
+            words2.update(header.split())
+        
+        # Check for common words that might indicate splitting
+        common_words = words1.intersection(words2)
+        
+        # If there are many common words but different column counts, likely splitting
+        if len(common_words) >= 3 and abs(len(headers1) - len(headers2)) >= 1:
+            # Check if the common words form meaningful phrases when combined
+            common_words_list = list(common_words)
+            for i, word1 in enumerate(common_words_list):
+                for word2 in common_words_list[i+1:]:
+                    combined_phrase = f"{word1} {word2}"
+                    # Check if this combined phrase exists in either header set
+                    headers1_joined = " ".join(headers1)
+                    headers2_joined = " ".join(headers2)
+                    if combined_phrase in headers1_joined or combined_phrase in headers2_joined:
+                        return True
+        
+        return False
+    
+    def _detect_phrase_similarity_splitting(self, headers1: List[str], headers2: List[str]) -> bool:
+        """Detect splitting by analyzing phrase similarity patterns."""
+        
+        # Join headers into phrases
+        phrase1 = " ".join(headers1)
+        phrase2 = " ".join(headers2)
+        
+        # Calculate phrase similarity
+        phrase_similarity = self._calculate_phrase_similarity(phrase1, phrase2)
+        
+        # If phrases are very similar but have different word counts, likely splitting
+        if phrase_similarity >= 0.7:
+            words1 = phrase1.split()
+            words2 = phrase2.split()
+            
+            # Check if one has significantly more words than the other
+            if abs(len(words1) - len(words2)) >= 2:
+                return True
+        
+        return False
+    
+    def _detect_column_count_splitting(self, headers1: List[str], headers2: List[str]) -> bool:
+        """Detect splitting by analyzing column count differences with content similarity."""
+        
+        # If column counts are very different, check for content similarity
+        if abs(len(headers1) - len(headers2)) >= 1:
+            # Calculate content similarity
+            content_similarity = self._calculate_content_similarity(headers1, headers2)
+            
+            # If content is very similar but column counts differ, likely splitting
+            if content_similarity >= 0.6:
+                return True
+        
+        return False
+    
+    def _calculate_content_similarity(self, headers1: List[str], headers2: List[str]) -> float:
+        """Calculate similarity based on content analysis."""
+        
+        if not headers1 or not headers2:
+            return 0.0
+        
+        # Get all words from both sets
+        all_words1 = set()
+        all_words2 = set()
+        
+        for header in headers1:
+            all_words1.update(header.split())
+        
+        for header in headers2:
+            all_words2.update(header.split())
+        
+        # Calculate Jaccard similarity for words
+        intersection = len(all_words1.intersection(all_words2))
+        union = len(all_words1.union(all_words2))
+        
+        word_similarity = intersection / union if union > 0 else 0.0
+        
+        # Also check character-level similarity
+        char_similarity = self._calculate_character_similarity(headers1, headers2)
+        
+        # Combine word and character similarity
+        return (word_similarity * 0.7) + (char_similarity * 0.3)
+    
+    def _calculate_character_similarity(self, headers1: List[str], headers2: List[str]) -> float:
+        """Calculate character-level similarity between header sets."""
+        
+        # Join all headers into single strings
+        text1 = " ".join(headers1)
+        text2 = " ".join(headers2)
+        
+        # Calculate character-based similarity
+        chars1 = set(text1)
+        chars2 = set(text2)
+        
+        intersection = len(chars1.intersection(chars2))
+        union = len(chars1.union(chars2))
+        
+        return intersection / union if union > 0 else 0.0
+    
+    def _calculate_similarity_with_column_splitting(self, headers1: List[str], headers2: List[str]) -> float:
+        """Calculate similarity when column splitting is detected."""
+        
+        # Join headers to compare as phrases
+        h1_joined = " ".join(headers1)
+        h2_joined = " ".join(headers2)
+        
+        # Calculate phrase similarity
+        phrase_similarity = self._calculate_phrase_similarity(h1_joined, h2_joined)
+        
+        # Also consider individual word matches
+        words1 = set(h1_joined.split())
+        words2 = set(h2_joined.split())
+        
+        word_intersection = len(words1.intersection(words2))
+        word_union = len(words1.union(words2))
+        word_similarity = word_intersection / word_union if word_union > 0 else 0.0
+        
+        # Combine phrase and word similarity
+        combined_similarity = (phrase_similarity * 0.7) + (word_similarity * 0.3)
+        
+        self.logger.logger.info(f"🔍 Column splitting similarity: phrase={phrase_similarity:.3f}, word={word_similarity:.3f}, combined={combined_similarity:.3f}")
+        
+        return combined_similarity
+    
+    def _calculate_phrase_similarity(self, phrase1: str, phrase2: str) -> float:
+        """Calculate similarity between phrases."""
+        if not phrase1 or not phrase2:
+            return 0.0
+        
+        if phrase1 == phrase2:
+            return 1.0
+        
+        # Simple character-based similarity for phrases
+        common_chars = sum(1 for c in phrase1 if c in phrase2)
+        total_chars = max(len(phrase1), len(phrase2))
+        
+        return common_chars / total_chars if total_chars > 0 else 0.0
     
     def _headers_look_like_data(self, headers: List[str]) -> bool:
         """Check if headers actually look like data rows instead of headers."""

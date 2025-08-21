@@ -19,6 +19,7 @@ export default function EditMappingModal({
   const [loadingFields, setLoadingFields] = useState(true)
   const [mapping, setMapping] = useState<Record<string, string> | null>(null)
   const [planTypes, setPlanTypes] = useState<string[]>([])
+  const [savingMapping, setSavingMapping] = useState(false)
 
   function getLabelFromDatabaseFields(fieldKey: string) {
     return (databaseFields.find(f => f.field === fieldKey)?.label) || fieldKey;
@@ -104,9 +105,18 @@ export default function EditMappingModal({
         <FieldMapper
           company={company}
           columns={[]} // Will be populated when mapping is loaded
-          onSave={(map, fieldConf, selectedPlanTypes) => {
-            onSave(map, fieldConf, selectedPlanTypes)
-            onClose()
+          isLoading={savingMapping}
+          onSave={async (map, fieldConf, selectedPlanTypes) => {
+            setSavingMapping(true);
+            try {
+              await onSave(map, fieldConf, selectedPlanTypes);
+              onClose();
+            } catch (error) {
+              console.error('Error saving mapping:', error);
+              toast.error('Failed to save mapping');
+            } finally {
+              setSavingMapping(false);
+            }
           }}
           onSkip={onClose}
           initialFields={fieldConfig}

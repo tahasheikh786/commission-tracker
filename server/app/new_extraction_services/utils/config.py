@@ -47,6 +47,12 @@ class ProcessingConfig:
     enable_adaptive_learning: bool = True
     pattern_matching_threshold: float = 0.6
     content_similarity_threshold: float = 0.7
+    # Rotation detection settings
+    enable_automatic_rotation: bool = True
+    rotation_detection_threshold: float = 5.0
+    enable_exif_orientation: bool = True
+    enable_text_orientation: bool = True
+    enable_structure_orientation: bool = True
     
     def __post_init__(self):
         """Validate processing configuration."""
@@ -174,6 +180,11 @@ class Config:
                 'enable_adaptive_learning': self.processing.enable_adaptive_learning,
                 'pattern_matching_threshold': self.processing.pattern_matching_threshold,
                 'content_similarity_threshold': self.processing.content_similarity_threshold,
+                'enable_automatic_rotation': self.processing.enable_automatic_rotation,
+                'rotation_detection_threshold': self.processing.rotation_detection_threshold,
+                'enable_exif_orientation': self.processing.enable_exif_orientation,
+                'enable_text_orientation': self.processing.enable_text_orientation,
+                'enable_structure_orientation': self.processing.enable_structure_orientation,
             },
             'api': {
                 'host': self.api.host,

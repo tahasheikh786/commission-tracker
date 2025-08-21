@@ -112,61 +112,77 @@ export function useUploadPage() {
     
     if (uploaded?.tables?.length && company && !fetchingMapping && !mapping) {
       if (!fetchMappingRef.current) {
-        console.log('🚀 Fetching mapping for company:', company.id)
+        console.log('🚀 Fetching learned field mapping for company:', company.id)
         fetchMappingRef.current = true
         setFetchingMapping(true)
-        fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${company.id}/mapping/`)
-          .then(r => r.json())
-          .then(map => {
-            console.log('📥 Received mapping response:', map)
-            let mappingObj: Record<string, string> | null = null
-            let fieldsArr = fieldConfig
-            let loadedPlanTypes: string[] | null = null
-            let loadedTableNames: string[] | null = null
-            if (map && typeof map === 'object') {
-              if (map.mapping) {
-                mappingObj = map.mapping
-                if (Array.isArray(map.field_config) && map.field_config.length > 0) {
-                  fieldsArr = map.field_config
-                } else if (mappingObj) {
-                  fieldsArr = Object.keys(mappingObj).map(field => ({
-                    field,
-                    label: getLabelFromDatabaseFields(field)
-                  }))
-                } else {
-                  fieldsArr = []
-                }
-                if (map.plan_types) loadedPlanTypes = map.plan_types
-                if (map.table_names) loadedTableNames = map.table_names
-              } else if (Array.isArray(map)) {
-                mappingObj = {}
-                fieldsArr = []
-                map.forEach((row: any) => {
-                  mappingObj![row.field_key] = row.column_name
-                  if (!fieldsArr.some(f => f.field === row.field_key))
-                    fieldsArr.push({
-                      field: row.field_key,
-                      label: getLabelFromDatabaseFields(row.field_key)
-                    })
-                })
-                if (!fieldsArr.length) fieldsArr = []
-              }
-            }
-            if (mappingObj && Object.keys(mappingObj).length) {
-              console.log('✅ Found saved mapping:', mappingObj)
-              setMapping(mappingObj)
-              setFieldConfig(fieldsArr)
-              if (loadedPlanTypes) setPlanTypes(loadedPlanTypes)
-              console.log('✅ Mapping loaded, will show in FieldMapper')
-            } else {
-              console.log('❌ No mapping found or mapping is empty')
-            }
-            setFetchingMapping(false)
+        
+        // First, try to get learned field mapping based on the current table format
+        const mainTable = uploaded.tables[0]
+        const tableStructure = {
+          column_count: mainTable.header.length,
+          row_count: mainTable.rows.length,
+          has_header_row: true
+        }
+        
+        fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${company.id}/get-learned-field-mapping/`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            headers: mainTable.header,
+            table_structure: tableStructure
           })
-          .catch((error) => {
-            console.error('❌ Error fetching mapping:', error)
-            setFetchingMapping(false)
-          })
+        })
+        .then(r => r.json())
+        .then(learnedData => {
+          console.log('📥 Received learned field mapping response:', learnedData)
+          
+          if (learnedData.found_match && learnedData.field_mapping && Object.keys(learnedData.field_mapping).length > 0) {
+            console.log('✅ Found learned field mapping:', learnedData.field_mapping)
+            console.log('✅ Match score:', learnedData.match_score)
+            console.log('✅ Confidence score:', learnedData.confidence_score)
+            
+            // Use the learned field mapping
+            setMapping(learnedData.field_mapping)
+            setMappingAutoApplied(true)
+            toast.success(`Applied learned field mapping (${Math.round(learnedData.match_score * 100)}% match)!`)
+            
+            // Also fetch the general company mapping for field config and plan types
+            return fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${company.id}/mapping/`)
+          } else {
+            console.log('❌ No learned field mapping found, fetching general company mapping')
+            // If no learned mapping, fetch the general company mapping
+            return fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${company.id}/mapping/`)
+          }
+        })
+        .then(r => r.json())
+        .then(map => {
+          console.log('📥 Received general mapping response:', map)
+          let fieldsArr = fieldConfig
+          let loadedPlanTypes: string[] | null = null
+          let loadedTableNames: string[] | null = null
+          
+          if (map && typeof map === 'object') {
+            if (map.field_config && Array.isArray(map.field_config) && map.field_config.length > 0) {
+              fieldsArr = map.field_config
+            } else if (map.mapping && Object.keys(map.mapping).length > 0) {
+              fieldsArr = Object.keys(map.mapping).map(field => ({
+                field,
+                label: getLabelFromDatabaseFields(field)
+              }))
+            }
+            if (map.plan_types) loadedPlanTypes = map.plan_types
+            if (map.table_names) loadedTableNames = map.table_names
+          }
+          
+          setFieldConfig(fieldsArr)
+          if (loadedPlanTypes) setPlanTypes(loadedPlanTypes)
+          console.log('✅ Field config and plan types loaded')
+          setFetchingMapping(false)
+        })
+        .catch((error) => {
+          console.error('❌ Error fetching mappings:', error)
+          setFetchingMapping(false)
+        })
       }
     }
   }, [uploaded?.tables?.length, company, fetchingMapping, mapping, fieldConfig, databaseFields, getLabelFromDatabaseFields])
@@ -453,6 +469,53 @@ export function useUploadPage() {
         console.log('🎯 No suggested mapping in format learning data')
         setMapping(null)
         setMappingAutoApplied(false)
+      }
+      
+      // Auto-apply learned table editor settings if available
+      if (format_learning.table_editor_settings && tables && tables.length > 0) {
+        console.log('🎯 Auto-applying learned table editor settings')
+        try {
+          // Apply learned headers and settings to tables
+          const updatedTables = [...tables]
+          const mainTable = updatedTables[0]
+          
+          if (format_learning.table_editor_settings.headers) {
+            const learnedHeaders = format_learning.table_editor_settings.headers
+            const currentHeaders = mainTable.header || []
+            
+            // Apply learned headers if they're different
+            if (JSON.stringify(learnedHeaders) !== JSON.stringify(currentHeaders)) {
+              console.log('🎯 Applying learned headers:', learnedHeaders)
+              mainTable.header = learnedHeaders
+              
+              // Adjust data rows if column count changed
+              if (mainTable.rows && learnedHeaders.length !== currentHeaders.length) {
+                console.log('🎯 Adjusting data rows for header correction')
+                const adjustedRows = []
+                
+                for (const row of mainTable.rows) {
+                  if (learnedHeaders.length > currentHeaders.length) {
+                    // Add empty columns if learned has more columns
+                    const adjustedRow = row.concat(Array(learnedHeaders.length - currentHeaders.length).fill(''))
+                    adjustedRows.push(adjustedRow)
+                  } else {
+                    // Truncate row if learned has fewer columns
+                    adjustedRows.push(row.slice(0, learnedHeaders.length))
+                  }
+                }
+                
+                mainTable.rows = adjustedRows
+                console.log('🎯 Adjusted data rows to match learned headers')
+              }
+              
+              // Update the tables state with corrected data
+              setUploaded((prev: any) => prev ? { ...prev, tables: updatedTables } : prev)
+              toast.success('Applied learned table structure!')
+            }
+          }
+        } catch (error) {
+          console.error('🎯 Error auto-applying learned settings:', error)
+        }
       }
     } else {
       console.log('🎯 No learned format found or low confidence:', format_learning)
@@ -967,11 +1030,15 @@ export function useUploadPage() {
         selected_statement_date: selectedStatementDate,
       }
       
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${company!.id}/mapping/`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${company!.id}/mapping/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(config),
       })
+      
+      if (!response.ok) {
+        throw new Error(`Failed to save mapping: ${response.status}`)
+      }
       
       console.log('✅ Mapping saved successfully')
       
@@ -984,7 +1051,6 @@ export function useUploadPage() {
       applyMapping(editedTables.length > 0 ? editedTables : uploaded.tables.length > 0 ? uploaded.tables : finalTables, map, fieldConf, () => {
         console.log('🎯 applyMapping callback executed, hiding FieldMapper')
         setShowFieldMapper(false)
-        setSavingMapping(false)
         console.log('🎯 FieldMapper hidden, transitioning to dashboard')
       })
       
@@ -1005,6 +1071,7 @@ export function useUploadPage() {
     } catch (error) {
       console.error('❌ Error saving mapping:', error)
       toast.error('Failed to save field mappings')
+    } finally {
       setSavingMapping(false)
     }
   }

@@ -223,6 +223,51 @@ async def get_table_editor_settings(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error getting table editor settings: {str(e)}")
 
+@router.post("/companies/{company_id}/get-learned-field-mapping/")
+async def get_learned_field_mapping(
+    company_id: str,
+    request: FormatMatchRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get learned field mapping for a specific format.
+    """
+    try:
+        # Validate company exists
+        company = await with_db_retry(db, crud.get_company_by_id, company_id=company_id)
+        if not company:
+            raise HTTPException(status_code=404, detail="Company not found")
+        
+        # Find matching format
+        learned_format, match_score = await format_learning_service.find_matching_format(
+            db=db,
+            company_id=company_id,
+            headers=request.headers,
+            table_structure=request.table_structure
+        )
+        
+        if learned_format and learned_format.get('field_mapping') and match_score > 0.6:
+            return {
+                "found_match": True,
+                "match_score": match_score,
+                "field_mapping": learned_format['field_mapping'],
+                "table_editor_settings": learned_format.get('table_editor_settings'),
+                "confidence_score": learned_format.get('confidence_score', 0)
+            }
+        else:
+            return {
+                "found_match": False,
+                "match_score": match_score,
+                "field_mapping": {},
+                "table_editor_settings": None,
+                "confidence_score": 0
+            }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting learned field mapping: {str(e)}")
+
 @router.delete("/companies/{company_id}/learned-formats/{format_id}/")
 async def delete_learned_format(
     company_id: str,

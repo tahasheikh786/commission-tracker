@@ -418,13 +418,44 @@ export default function DashboardTab() {
           onTablesChange={(tables) => {
             setUploaded({ ...uploaded, tables });
           }}
-          onSave={(tables, selectedDate) => {
-            setUploaded({ ...uploaded, tables });
-            if (selectedDate) {
-              setSelectedStatementDate(selectedDate);
+          onSave={async (tables, selectedDate) => {
+            try {
+              // Save tables to backend to trigger format learning
+              if (uploaded?.upload_id && company?.id) {
+                const requestBody = {
+                  upload_id: uploaded.upload_id,
+                  company_id: company.id,
+                  tables: tables,
+                  selected_statement_date: selectedDate
+                }
+                
+                console.log('🎯 DashboardTab: Saving tables to backend for format learning:', requestBody)
+                
+                const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/table-editor/save-tables/`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(requestBody),
+                })
+                
+                if (!response.ok) {
+                  throw new Error(`Failed to save tables: ${response.status}`)
+                }
+                
+                console.log('✅ DashboardTab: Tables saved successfully, format learning triggered')
+              }
+              
+              // Update local state
+              setUploaded({ ...uploaded, tables });
+              if (selectedDate) {
+                setSelectedStatementDate(selectedDate);
+              }
+              setShowTableEditor(false);
+              setShowFieldMapper(true);
+              
+            } catch (error) {
+              console.error('❌ DashboardTab: Error saving tables:', error)
+              toast.error('Failed to save tables and learn format')
             }
-            setShowTableEditor(false);
-            setShowFieldMapper(true);
           }}
           onUseAnotherExtraction={() => {
             // Handle use another extraction
@@ -456,13 +487,50 @@ export default function DashboardTab() {
         <FieldMapper
           company={company}
           columns={uploaded?.tables?.[0]?.header || []}
-          onSave={(mapping, fields, planTypes, tableNames, selectedDate) => {
-            setFieldConfig(fields);
-            setPlanTypes(planTypes);
-            setMapping(mapping);
-            setShowFieldMapper(false);
-            // Apply mapping to get final tables
-            applyMapping(uploaded?.tables || [], mapping, fields);
+          isLoading={savingMapping}
+          onSave={async (mapping, fields, planTypes, tableNames, selectedDate) => {
+            setSavingMapping(true);
+            try {
+              // Save mapping to backend to trigger format learning
+              const config = {
+                mapping: mapping,
+                plan_types: planTypes,
+                table_names: tableNames || [],
+                field_config: fields,
+                table_data: uploaded?.tables?.length > 0 ? uploaded.tables[0]?.rows || [] : [],
+                headers: uploaded?.tables?.length > 0 ? uploaded.tables[0]?.header || [] : [],
+                selected_statement_date: selectedDate,
+              }
+              
+              console.log('🎯 DashboardTab: Saving mapping to backend for format learning:', config)
+              
+              const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${company.id}/mapping/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(config),
+              })
+              
+              if (!response.ok) {
+                throw new Error(`Failed to save mapping: ${response.status}`)
+              }
+              
+              console.log('✅ DashboardTab: Mapping saved successfully, format learning triggered')
+              
+              // Update local state
+              setFieldConfig(fields);
+              setPlanTypes(planTypes);
+              setMapping(mapping);
+              setShowFieldMapper(false);
+              
+              // Apply mapping to get final tables
+              applyMapping(uploaded?.tables || [], mapping, fields);
+              
+            } catch (error) {
+              console.error('❌ DashboardTab: Error saving mapping:', error)
+              toast.error('Failed to save mapping and learn format')
+            } finally {
+              setSavingMapping(false);
+            }
           }}
           onSkip={() => {
             setShowFieldMapper(false);

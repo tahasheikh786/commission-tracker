@@ -20,6 +20,7 @@ interface FieldMapperSectionProps {
   selectedStatementDate: any
   savingMapping: boolean
   fetchingMapping: boolean
+  mappingAutoApplied?: boolean
   onSave: (map: Record<string, string>, fieldConf: FieldConfig[], selectedPlanTypes: string[], tableNames?: string[], selectedStatementDate?: any) => Promise<void>
   onSkip: () => void
   onTablesChange: (newTables: any[]) => void
@@ -39,6 +40,7 @@ export default function FieldMapperSection({
   selectedStatementDate,
   savingMapping,
   fetchingMapping,
+  mappingAutoApplied = false,
   onSave,
   onSkip,
   onTablesChange,
@@ -112,6 +114,7 @@ export default function FieldMapperSection({
                       onSkip={onSkip}
                       initialFields={fieldConfig.length > 0 ? fieldConfig : databaseFields}
                       initialMapping={mapping}
+                      mappingAutoApplied={mappingAutoApplied}
                     />
                   </>
                 )}

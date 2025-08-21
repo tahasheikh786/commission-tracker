@@ -202,7 +202,7 @@ class GPT4oVisionService:
             response = self.client.chat.completions.create(
                 model="gpt-4o",
                 messages=messages,
-                max_tokens=4000,
+                max_tokens=8000,  # Increased for table structure analysis
                 temperature=0.1  # Low temperature for consistent, precise analysis
             )
             
@@ -841,12 +841,17 @@ Be precise and only report what you can clearly see in the images."""
             response = self.client.chat.completions.create(
                 model="gpt-4o",
                 messages=messages,
-                max_tokens=4000,
+                max_tokens=16000,  # Increased to handle large table data
                 temperature=0.1
             )
             
             # Extract the response content
             response_content = response.choices[0].message.content
+            
+            # Check if response was truncated
+            finish_reason = response.choices[0].finish_reason
+            if finish_reason == "length":
+                logger.warning("GPT-4o response was truncated due to token limit")
             
             # Parse the JSON response - handle markdown code blocks
             try:
@@ -860,14 +865,42 @@ Be precise and only report what you can clearly see in the images."""
                     cleaned_content = cleaned_content[:-3]  # Remove ```
                 
                 cleaned_content = cleaned_content.strip()
+                
+                # Check if response might be truncated
+                if not cleaned_content.endswith('}'):
+                    logger.warning("Response appears to be truncated, attempting to fix...")
+                    # Try to find the last complete JSON object
+                    last_brace = cleaned_content.rfind('}')
+                    if last_brace > 0:
+                        cleaned_content = cleaned_content[:last_brace + 1]
+                        logger.info("Attempting to parse truncated response")
+                
                 extraction_result = json.loads(cleaned_content)
             except json.JSONDecodeError as e:
                 logger.error(f"Failed to parse GPT-4o response as JSON: {e}")
-                logger.error(f"Response content: {response_content}")
-                return {
-                    "success": False,
-                    "error": "Failed to parse GPT-4o response as JSON"
-                }
+                logger.error(f"Response content length: {len(response_content)}")
+                logger.error(f"Response content preview: {response_content[:500]}...")
+                if len(response_content) > 500:
+                    logger.error(f"Response content end: ...{response_content[-500:]}")
+                
+                # Try to extract partial data if possible
+                try:
+                    # Look for any valid JSON structure
+                    import re
+                    json_match = re.search(r'\{.*\}', response_content, re.DOTALL)
+                    if json_match:
+                        partial_json = json_match.group(0)
+                        logger.info("Attempting to parse partial JSON")
+                        extraction_result = json.loads(partial_json)
+                        logger.warning("Successfully parsed partial JSON - some data may be missing")
+                    else:
+                        raise ValueError("No valid JSON structure found")
+                except Exception as partial_error:
+                    logger.error(f"Failed to parse partial JSON: {partial_error}")
+                    return {
+                        "success": False,
+                        "error": "Failed to parse GPT-4o response as JSON"
+                    }
             
             # Validate the response structure
             if not extraction_result.get("tables"):
@@ -911,53 +944,37 @@ Be precise and only report what you can clearly see in the images."""
 
     def _create_table_extraction_system_prompt(self) -> str:
         """Create system prompt for table extraction."""
-        return """You are an expert table extraction system. Your task is to extract all tables from the provided document images.
+        return """Extract all tables from the document images. Return ONLY valid JSON:
 
-IMPORTANT: You must respond with a valid JSON object in the following format:
 {
     "tables": [
         {
             "name": "Table Name",
-            "header": ["Column1", "Column2", "Column3", ...],
+            "header": ["Column1", "Column2", "Column3"],
             "rows": [
-                ["Value1", "Value2", "Value3", ...],
-                ["Value2", "Value2", "Value3", ...],
-                ...
+                ["Value1", "Value2", "Value3"],
+                ["Value2", "Value2", "Value3"]
             ]
         }
     ]
 }
 
 Guidelines:
-1. Extract ALL tables visible in the images
-2. Identify column headers accurately
-3. Extract all data rows
-4. Maintain the original structure and formatting
-5. Handle merged cells appropriately
-6. Preserve numerical values and text exactly as they appear
-7. If a table spans multiple pages, extract it as separate tables
-8. Ensure all rows have the same number of columns as the header
-
-Return ONLY the JSON object, no additional text."""
+- Extract ALL tables with accurate headers and data
+- Preserve exact values and formatting
+- Handle merged cells appropriately
+- Ensure all rows match header column count
+- For large tables, prioritize data accuracy over completeness if needed"""
 
     def _create_table_extraction_user_prompt(self) -> str:
         """Create user prompt for table extraction."""
-        return """Please extract all tables from the following document images. Focus on commission statements, financial data, and any tabular information.
+        return """Extract all tables from these document images. Focus on:
+- Commission/earnings tables
+- Policy/transaction tables  
+- Summary tables
+- Any structured data
 
-Extract tables with the following priority:
-1. Commission/earnings tables
-2. Policy/transaction tables
-3. Summary tables
-4. Any other structured data
-
-Ensure accurate extraction of:
-- Column headers
-- All data rows
-- Numerical values
-- Dates and text
-- Merged cells (split appropriately)
-
-Return the results in the specified JSON format."""
+Ensure accurate extraction of headers, data rows, numerical values, dates, and text."""
 
     def _process_extracted_table(self, table: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Process a single extracted table."""

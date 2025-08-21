@@ -149,11 +149,12 @@ def stitch_multipage_tables(tables: List[Dict[str, Any]]) -> List[Dict[str, Any]
     
     Strategies:
     1. Canonical header identification and unification
-    2. Exact header matching (case-insensitive)
-    3. Partial header matching (80% similarity threshold)
-    4. Structure-based matching (column count and data patterns)
-    5. Continuation detection (headers only on first page)
-    6. Column count alignment for missing headers
+    2. Comprehensive similarity analysis (header, structure, data patterns)
+    3. Exact header matching (case-insensitive)
+    4. Partial header matching (80% similarity threshold)
+    5. Structure-based matching (column count and data patterns)
+    6. Continuation detection (headers only on first page)
+    7. Column count alignment for missing headers
     """
     if not tables:
         return tables
@@ -165,124 +166,464 @@ def stitch_multipage_tables(tables: List[Dict[str, Any]]) -> List[Dict[str, Any]
     canonical_header = max(headers_list, key=len) if headers_list else []
     print(f"📎 Canonical header identified: {canonical_header} ({len(canonical_header)} columns)")
     
-    # Step 2: Pre-process tables to align with canonical header
-    processed_tables = []
-    total_extracted_rows = 0
-    total_mapped_rows = 0
+    # Step 2: Group tables by comprehensive similarity
+    table_groups = _group_tables_by_similarity(tables, canonical_header)
+    
+    print(f"📎 Grouped {len(tables)} tables into {len(table_groups)} groups")
+    
+    # Step 3: Merge each group
+    merged_tables = []
+    for i, group in enumerate(table_groups):
+        print(f"📎 Merging group {i+1} with {len(group)} tables")
+        merged_table = _merge_table_group(group, canonical_header)
+        merged_tables.append(merged_table)
+    
+    print(f"📎 Enhanced stitching completed: {len(merged_tables)} final tables")
+    return merged_tables
+
+def _group_tables_by_similarity(tables: List[Dict[str, Any]], canonical_header: List[str]) -> List[List[Dict[str, Any]]]:
+    """Group tables by comprehensive similarity analysis."""
+    if not tables:
+        return []
+    
+    groups = []
+    processed = set()
     
     for i, table in enumerate(tables):
-        headers = table.get("headers", [])
-        rows = table.get("rows", [])
+        if i in processed:
+            continue
         
-        print(f"📎 Pre-processing table {i}: {len(headers)} headers, {len(rows)} rows")
-        print(f"   Headers: {headers}")
+        # Start new group
+        current_group = [table]
+        processed.add(i)
         
-        # If headers are missing or empty, treat as continuation
-        if not headers or all(not h.strip() for h in headers):
-            print(f"   → Table {i}: No headers detected, treating as continuation")
-            # Align rows to canonical header length
-            aligned_rows = []
-            for row in rows:
-                aligned_row = row[:len(canonical_header)] + [""] * (len(canonical_header) - len(row))
-                aligned_rows.append(aligned_row)
+        # Find similar tables
+        for j, other_table in enumerate(tables):
+            if j in processed or j == i:
+                continue
             
-            processed_table = {
-                "headers": canonical_header,
-                "rows": aligned_rows,
-                "metadata": {
-                    "original_table_index": i,
-                    "header_source": "canonical",
-                    "row_alignment": "padded_to_canonical"
-                }
-            }
-            total_mapped_rows += len(aligned_rows)
+            # Calculate comprehensive similarity
+            similarity = _calculate_comprehensive_similarity(table, other_table, canonical_header)
             
-        # If headers match canonical (exact or similar)
-        elif _headers_exact_match(headers, canonical_header) or _headers_partial_match(headers, canonical_header):
-            print(f"   → Table {i}: Headers match canonical, direct merge")
-            processed_table = table.copy()
-            processed_table["headers"] = canonical_header
-            processed_table["metadata"] = {
-                "original_table_index": i,
-                "header_source": "canonical",
-                "row_alignment": "direct_match"
-            }
-            total_mapped_rows += len(rows)
+            print(f"📎 Similarity between table {i} and {j}: {similarity:.3f}")
             
-        # If column count matches but headers differ
-        elif len(headers) == len(canonical_header):
-            print(f"   → Table {i}: Column count matches, aligning headers")
-            # Use canonical header but keep original data
-            processed_table = table.copy()
-            processed_table["headers"] = canonical_header
-            processed_table["metadata"] = {
-                "original_table_index": i,
-                "header_source": "canonical",
-                "row_alignment": "column_count_match"
-            }
-            total_mapped_rows += len(rows)
-            
-        # If column count doesn't match, pad/truncate
+            # More flexible threshold for grouping
+            if similarity >= 0.6:
+                print(f"📎 Adding table {j} to group (similarity: {similarity:.3f})")
+                current_group.append(other_table)
+                processed.add(j)
+        
+        groups.append(current_group)
+    
+    return groups
+
+def _calculate_comprehensive_similarity(table1: Dict[str, Any], table2: Dict[str, Any], canonical_header: List[str]) -> float:
+    """Calculate comprehensive similarity score considering multiple factors."""
+    scores = []
+    weights = []
+    
+    # 1. Header similarity (weight: 0.3)
+    headers1 = table1.get("headers", [])
+    headers2 = table2.get("headers", [])
+    header_similarity = _calculate_header_similarity_comprehensive(headers1, headers2)
+    scores.append(header_similarity)
+    weights.append(0.3)
+    
+    # 2. Column count similarity (weight: 0.2)
+    col_count_similarity = _calculate_column_count_similarity(headers1, headers2)
+    scores.append(col_count_similarity)
+    weights.append(0.2)
+    
+    # 3. Row format similarity (weight: 0.25)
+    row_format_similarity = _calculate_row_format_similarity(table1, table2, canonical_header)
+    scores.append(row_format_similarity)
+    weights.append(0.25)
+    
+    # 4. Data pattern similarity (weight: 0.15)
+    data_pattern_similarity = _calculate_data_pattern_similarity(table1, table2)
+    scores.append(data_pattern_similarity)
+    weights.append(0.15)
+    
+    # 5. Structure similarity (weight: 0.1)
+    structure_similarity = _calculate_structure_similarity(table1, table2)
+    scores.append(structure_similarity)
+    weights.append(0.1)
+    
+    # Calculate weighted average
+    weighted_sum = sum(score * weight for score, weight in zip(scores, weights))
+    total_weight = sum(weights)
+    
+    final_score = weighted_sum / total_weight if total_weight > 0 else 0.0
+    
+    print(f"📎 Similarity breakdown for tables:")
+    print(f"   Header: {header_similarity:.3f}")
+    print(f"   Column count: {col_count_similarity:.3f}")
+    print(f"   Row format: {row_format_similarity:.3f}")
+    print(f"   Data pattern: {data_pattern_similarity:.3f}")
+    print(f"   Structure: {structure_similarity:.3f}")
+    print(f"   Final score: {final_score:.3f}")
+    
+    return final_score
+
+def _calculate_header_similarity_comprehensive(headers1: List[str], headers2: List[str]) -> float:
+    """Calculate comprehensive header similarity with smart column splitting detection."""
+    if not headers1 or not headers2:
+        return 0.0
+    
+    # Normalize headers
+    h1_norm = [h.lower().strip() for h in headers1]
+    h2_norm = [h.lower().strip() for h in headers2]
+    
+    # Check for smart column splitting detection
+    if _detect_smart_column_splitting(h1_norm, h2_norm):
+        print(f"   🔍 Smart column splitting detected - using enhanced similarity")
+        return _calculate_similarity_with_smart_splitting(h1_norm, h2_norm)
+    
+    # Calculate similarity for each header pair
+    similarities = []
+    max_len = max(len(h1_norm), len(h2_norm))
+    
+    for i in range(max_len):
+        h1 = h1_norm[i] if i < len(h1_norm) else ""
+        h2 = h2_norm[i] if i < len(h2_norm) else ""
+        
+        if h1 == h2:
+            similarities.append(1.0)
         else:
-            print(f"   → Table {i}: Column count mismatch, padding/truncating")
-            aligned_rows = []
-            for row in rows:
-                # Pad or truncate to canonical header length
-                aligned_row = row[:len(canonical_header)] + [""] * (len(canonical_header) - len(row))
-                aligned_rows.append(aligned_row)
-            
-            processed_table = {
-                "headers": canonical_header,
-                "rows": aligned_rows,
-                "metadata": {
-                    "original_table_index": i,
-                    "header_source": "canonical",
-                    "row_alignment": "padded_to_canonical"
-                }
-            }
-            total_mapped_rows += len(aligned_rows)
+            # Calculate partial similarity
+            similarity = _calculate_string_similarity(h1, h2)
+            similarities.append(similarity)
+    
+    return sum(similarities) / len(similarities) if similarities else 0.0
+
+def _detect_smart_column_splitting(headers1: List[str], headers2: List[str]) -> bool:
+    """Detect column splitting using smart, non-hardcoded techniques."""
+    
+    if not headers1 or not headers2:
+        return False
+    
+    # Technique 1: Word-level analysis
+    if _detect_word_level_splitting(headers1, headers2):
+        return True
+    
+    # Technique 2: Phrase similarity analysis
+    if _detect_phrase_similarity_splitting(headers1, headers2):
+        return True
+    
+    # Technique 3: Column count analysis with content similarity
+    if _detect_column_count_splitting(headers1, headers2):
+        return True
+    
+    return False
+
+def _detect_word_level_splitting(headers1: List[str], headers2: List[str]) -> bool:
+    """Detect splitting by analyzing word-level patterns."""
+    
+    # Get all words from both header sets
+    words1 = set()
+    words2 = set()
+    
+    for header in headers1:
+        words1.update(header.split())
+    
+    for header in headers2:
+        words2.update(header.split())
+    
+    # Check for common words that might indicate splitting
+    common_words = words1.intersection(words2)
+    
+    # If there are many common words but different column counts, likely splitting
+    if len(common_words) >= 3 and abs(len(headers1) - len(headers2)) >= 1:
+        # Check if the common words form meaningful phrases when combined
+        common_words_list = list(common_words)
+        for i, word1 in enumerate(common_words_list):
+            for word2 in common_words_list[i+1:]:
+                combined_phrase = f"{word1} {word2}"
+                # Check if this combined phrase exists in either header set
+                headers1_joined = " ".join(headers1)
+                headers2_joined = " ".join(headers2)
+                if combined_phrase in headers1_joined or combined_phrase in headers2_joined:
+                    return True
+    
+    return False
+
+def _detect_phrase_similarity_splitting(headers1: List[str], headers2: List[str]) -> bool:
+    """Detect splitting by analyzing phrase similarity patterns."""
+    
+    # Join headers into phrases
+    phrase1 = " ".join(headers1)
+    phrase2 = " ".join(headers2)
+    
+    # Calculate phrase similarity
+    phrase_similarity = _calculate_phrase_similarity(phrase1, phrase2)
+    
+    # If phrases are very similar but have different word counts, likely splitting
+    if phrase_similarity >= 0.7:
+        words1 = phrase1.split()
+        words2 = phrase2.split()
         
-        total_extracted_rows += len(rows)
-        processed_tables.append(processed_table)
+        # Check if one has significantly more words than the other
+        if abs(len(words1) - len(words2)) >= 2:
+            return True
     
-    # Step 3: Merge all processed tables
-    if not processed_tables:
-        return tables
+    return False
+
+def _detect_column_count_splitting(headers1: List[str], headers2: List[str]) -> bool:
+    """Detect splitting by analyzing column count differences with content similarity."""
     
-    merged_table = processed_tables[0].copy()
-    merged_rows = merged_table.get("rows", [])
+    # If column counts are very different, check for content similarity
+    if abs(len(headers1) - len(headers2)) >= 1:
+        # Calculate content similarity
+        content_similarity = _calculate_content_similarity(headers1, headers2)
+        
+        # If content is very similar but column counts differ, likely splitting
+        if content_similarity >= 0.6:
+            return True
     
-    print(f"📎 Merging {len(processed_tables)} processed tables...")
+    return False
+
+def _calculate_content_similarity(headers1: List[str], headers2: List[str]) -> float:
+    """Calculate similarity based on content analysis."""
     
-    for i, table in enumerate(processed_tables[1:], 1):
-        table_rows = table.get("rows", [])
-        print(f"   Merging table {i}: adding {len(table_rows)} rows")
-        merged_rows.extend(table_rows)
+    if not headers1 or not headers2:
+        return 0.0
     
-    # Create final merged table
-    final_table = {
+    # Get all words from both sets
+    all_words1 = set()
+    all_words2 = set()
+    
+    for header in headers1:
+        all_words1.update(header.split())
+    
+    for header in headers2:
+        all_words2.update(header.split())
+    
+    # Calculate Jaccard similarity for words
+    intersection = len(all_words1.intersection(all_words2))
+    union = len(all_words1.union(all_words2))
+    
+    word_similarity = intersection / union if union > 0 else 0.0
+    
+    # Also check character-level similarity
+    char_similarity = _calculate_character_similarity(headers1, headers2)
+    
+    # Combine word and character similarity
+    return (word_similarity * 0.7) + (char_similarity * 0.3)
+
+def _calculate_character_similarity(headers1: List[str], headers2: List[str]) -> float:
+    """Calculate character-level similarity between header sets."""
+    
+    # Join all headers into single strings
+    text1 = " ".join(headers1)
+    text2 = " ".join(headers2)
+    
+    # Calculate character-based similarity
+    chars1 = set(text1)
+    chars2 = set(text2)
+    
+    intersection = len(chars1.intersection(chars2))
+    union = len(chars1.union(chars2))
+    
+    return intersection / union if union > 0 else 0.0
+
+def _calculate_phrase_similarity(phrase1: str, phrase2: str) -> float:
+    """Calculate similarity between phrases."""
+    if not phrase1 or not phrase2:
+        return 0.0
+    
+    if phrase1 == phrase2:
+        return 1.0
+    
+    # Simple character-based similarity for phrases
+    common_chars = sum(1 for c in phrase1 if c in phrase2)
+    total_chars = max(len(phrase1), len(phrase2))
+    
+    return common_chars / total_chars if total_chars > 0 else 0.0
+
+def _calculate_similarity_with_smart_splitting(headers1: List[str], headers2: List[str]) -> float:
+    """Calculate similarity when smart column splitting is detected."""
+    
+    # Join headers to compare as phrases
+    h1_joined = " ".join(headers1)
+    h2_joined = " ".join(headers2)
+    
+    # Calculate phrase similarity
+    phrase_similarity = _calculate_phrase_similarity(h1_joined, h2_joined)
+    
+    # Also consider individual word matches
+    words1 = set(h1_joined.split())
+    words2 = set(h2_joined.split())
+    
+    word_intersection = len(words1.intersection(words2))
+    word_union = len(words1.union(words2))
+    word_similarity = word_intersection / word_union if word_union > 0 else 0.0
+    
+    # Combine phrase and word similarity
+    combined_similarity = (phrase_similarity * 0.7) + (word_similarity * 0.3)
+    
+    print(f"   Smart splitting similarity: phrase={phrase_similarity:.3f}, word={word_similarity:.3f}, combined={combined_similarity:.3f}")
+    
+    return combined_similarity
+
+def _calculate_column_count_similarity(headers1: List[str], headers2: List[str]) -> float:
+    """Calculate similarity based on column count."""
+    count1 = len(headers1)
+    count2 = len(headers2)
+    
+    if count1 == count2:
+        return 1.0
+    elif count1 == 0 or count2 == 0:
+        return 0.0
+    else:
+        # Calculate similarity based on difference ratio
+        max_count = max(count1, count2)
+        min_count = min(count1, count2)
+        difference_ratio = (max_count - min_count) / max_count
+        return 1.0 - difference_ratio
+
+def _calculate_row_format_similarity(table1: Dict[str, Any], table2: Dict[str, Any], canonical_header: List[str]) -> float:
+    """Calculate similarity based on row format patterns."""
+    rows1 = table1.get("rows", [])
+    rows2 = table2.get("rows", [])
+    
+    if not rows1 or not rows2:
+        return 0.0
+    
+    # Check row length consistency with canonical header
+    expected_length = len(canonical_header)
+    
+    length_matches1 = sum(1 for row in rows1 if abs(len(row) - expected_length) <= 1)
+    length_matches2 = sum(1 for row in rows2 if abs(len(row) - expected_length) <= 1)
+    
+    format_similarity1 = length_matches1 / len(rows1) if rows1 else 0.0
+    format_similarity2 = length_matches2 / len(rows2) if rows2 else 0.0
+    
+    return (format_similarity1 + format_similarity2) / 2
+
+def _calculate_data_pattern_similarity(table1: Dict[str, Any], table2: Dict[str, Any]) -> float:
+    """Calculate similarity based on data value patterns."""
+    rows1 = table1.get("rows", [])[:3]  # Sample first 3 rows
+    rows2 = table2.get("rows", [])[:3]
+    
+    if not rows1 or not rows2:
+        return 0.0
+    
+    # Analyze column patterns
+    patterns1 = _analyze_column_patterns(rows1)
+    patterns2 = _analyze_column_patterns(rows2)
+    
+    # Compare patterns
+    pattern_matches = 0
+    total_columns = min(len(patterns1), len(patterns2))
+    
+    for i in range(total_columns):
+        if _patterns_are_similar(patterns1[i], patterns2[i]):
+            pattern_matches += 1
+    
+    return pattern_matches / total_columns if total_columns > 0 else 0.0
+
+def _analyze_column_patterns(rows: List[List[str]]) -> List[Dict[str, Any]]:
+    """Analyze data patterns for each column."""
+    if not rows:
+        return []
+    
+    max_cols = max(len(row) for row in rows) if rows else 0
+    patterns = []
+    
+    for col_idx in range(max_cols):
+        column_data = []
+        for row in rows:
+            if col_idx < len(row):
+                column_data.append(str(row[col_idx]).strip())
+        
+        pattern = {
+            'has_numbers': any(_is_numeric(val) for val in column_data),
+            'has_currency': any('$' in val for val in column_data),
+            'has_dates': any(_is_date(val) for val in column_data),
+            'avg_length': sum(len(val) for val in column_data) / len(column_data) if column_data else 0,
+            'has_alpha': any(any(c.isalpha() for c in val) for val in column_data)
+        }
+        patterns.append(pattern)
+    
+    return patterns
+
+def _patterns_are_similar(pattern1: Dict[str, Any], pattern2: Dict[str, Any]) -> bool:
+    """Check if two column patterns are similar."""
+    if not pattern1 or not pattern2:
+        return False
+    
+    matches = 0
+    total_checks = 0
+    
+    for key in ['has_numbers', 'has_currency', 'has_dates', 'has_alpha']:
+        if pattern1.get(key) == pattern2.get(key):
+            matches += 1
+        total_checks += 1
+    
+    # Check length similarity
+    length_diff = abs(pattern1.get('avg_length', 0) - pattern2.get('avg_length', 0))
+    if length_diff <= 5:  # Allow 5 character difference
+        matches += 1
+    total_checks += 1
+    
+    return matches / total_checks >= 0.7 if total_checks > 0 else False
+
+def _calculate_structure_similarity(table1: Dict[str, Any], table2: Dict[str, Any]) -> float:
+    """Calculate similarity based on table structure."""
+    has_headers1 = bool(table1.get("headers"))
+    has_headers2 = bool(table2.get("headers"))
+    has_rows1 = bool(table1.get("rows"))
+    has_rows2 = bool(table2.get("rows"))
+    
+    matches = 0
+    total_checks = 0
+    
+    if has_headers1 == has_headers2:
+        matches += 1
+    total_checks += 1
+    
+    if has_rows1 == has_rows2:
+        matches += 1
+    total_checks += 1
+    
+    # Check row count similarity
+    if has_rows1 and has_rows2:
+        rows1 = table1.get("rows", [])
+        rows2 = table2.get("rows", [])
+        row_count_diff = abs(len(rows1) - len(rows2))
+        max_rows = max(len(rows1), len(rows2))
+        if max_rows > 0 and row_count_diff / max_rows <= 0.5:
+            matches += 1
+        total_checks += 1
+    
+    return matches / total_checks if total_checks > 0 else 0.0
+
+def _merge_table_group(group: List[Dict[str, Any]], canonical_header: List[str]) -> Dict[str, Any]:
+    """Merge a group of similar tables into a single table."""
+    if not group:
+        return {}
+    
+    # Use the first table as base
+    base_table = group[0].copy()
+    all_rows = base_table.get("rows", [])
+    
+    # Add rows from other tables
+    for table in group[1:]:
+        rows = table.get("rows", [])
+        all_rows.extend(rows)
+    
+    # Create merged table
+    merged_table = {
         "headers": canonical_header,
-        "rows": merged_rows,
+        "rows": all_rows,
         "metadata": {
-            "total_tables_merged": len(processed_tables),
-            "total_rows": len(merged_rows),
-            "canonical_header": canonical_header,
-            "header_alignment_stats": {
-                "total_extracted_rows": total_extracted_rows,
-                "total_mapped_rows": total_mapped_rows,
-                "mapping_efficiency": total_mapped_rows / total_extracted_rows if total_extracted_rows > 0 else 0
-            }
+            "total_tables_merged": len(group),
+            "total_rows": len(all_rows),
+            "canonical_header": canonical_header
         }
     }
     
-    print(f"📎 Enhanced stitching completed:")
-    print(f"   - Total tables processed: {len(processed_tables)}")
-    print(f"   - Total rows extracted: {total_extracted_rows}")
-    print(f"   - Total rows mapped: {total_mapped_rows}")
-    print(f"   - Mapping efficiency: {total_mapped_rows / total_extracted_rows * 100:.1f}%" if total_extracted_rows > 0 else "N/A")
-    print(f"   - Final table: {len(canonical_header)} headers, {len(merged_rows)} rows")
-    
-    return [final_table]
+    return merged_table
 
 def log_pipeline_performance(tables: List[Dict[str, Any]], original_tables: List[Dict[str, Any]], filename: str = "unknown"):
     """
@@ -453,19 +794,37 @@ def _compare_column_characteristics(values1: List[str], values2: List[str]) -> f
 
 def _is_numeric(value: str) -> bool:
     """Check if a value is numeric."""
-    import re
-    cleaned = re.sub(r'[$,£€¥₹]', '', value)
-    return bool(re.match(r'^[\d,]+\.?\d*$', cleaned))
+    if not value:
+        return False
+    
+    # Remove common non-numeric characters
+    clean_value = value.replace(',', '').replace('$', '').replace('%', '').strip()
+    
+    # Check if it's a number
+    try:
+        float(clean_value)
+        return True
+    except ValueError:
+        return False
 
 def _is_date(value: str) -> bool:
     """Check if a value looks like a date."""
+    if not value:
+        return False
+    
+    # Simple date pattern detection
     import re
     date_patterns = [
-        r'\d{1,2}/\d{1,2}/\d{2,4}',
-        r'\d{1,2}-\d{1,2}-\d{2,4}',
-        r'\d{4}-\d{2}-\d{2}'
+        r'\d{1,2}/\d{1,2}/\d{2,4}',  # MM/DD/YYYY
+        r'\d{1,2}-\d{1,2}-\d{2,4}',  # MM-DD-YYYY
+        r'\d{4}-\d{1,2}-\d{1,2}',    # YYYY-MM-DD
     ]
-    return any(re.match(pattern, value) for pattern in date_patterns)
+    
+    for pattern in date_patterns:
+        if re.search(pattern, value):
+            return True
+    
+    return False
 
 def _continuation_detection(headers1: List[str], headers2: List[str], rows2: List[List[str]]) -> bool:
     """Detect if table2 is a continuation of table1 (headers only on first page)."""

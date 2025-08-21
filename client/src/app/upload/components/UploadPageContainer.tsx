@@ -25,6 +25,7 @@ export default function UploadPageContainer() {
     showFieldMapper,
     showTableEditor,
     skipped,
+    mappingAutoApplied,
     showRejectModal,
     rejectReason,
     submitting,
@@ -186,6 +187,7 @@ export default function UploadPageContainer() {
         onTablesChange={handleExtractedTablesChange}
         onGoToTableEditor={() => setShowTableEditor(true)}
         onReset={handleReset}
+        mappingAutoApplied={mappingAutoApplied}
       />
     )
   }

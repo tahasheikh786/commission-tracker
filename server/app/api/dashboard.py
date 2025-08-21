@@ -611,6 +611,39 @@ async def update_commission_data(commission_id: UUID, update_data: dict, db: Asy
         if not commission:
             raise HTTPException(status_code=404, detail="Commission record not found")
         
+        # Check for duplicate company name if client_name is being updated
+        if 'client_name' in update_data and update_data['client_name'] != commission.client_name:
+            new_client_name = update_data['client_name'].strip()
+            
+            # Check if another record exists with the same name for this carrier
+            existing_result = await db.execute(
+                select(EarnedCommission).where(
+                    EarnedCommission.carrier_id == commission.carrier_id,
+                    EarnedCommission.client_name == new_client_name,
+                    EarnedCommission.id != commission_id
+                )
+            )
+            existing_commission = existing_result.scalar_one_or_none()
+            
+            if existing_commission:
+                # Return information about the existing record for merge confirmation
+                return {
+                    "requires_merge_confirmation": True,
+                    "existing_record": {
+                        "id": str(existing_commission.id),
+                        "client_name": existing_commission.client_name,
+                        "invoice_total": float(existing_commission.invoice_total) if existing_commission.invoice_total else 0,
+                        "commission_earned": float(existing_commission.commission_earned) if existing_commission.commission_earned else 0,
+                        "statement_count": existing_commission.statement_count or 0,
+                        "last_updated": existing_commission.last_updated.isoformat() if existing_commission.last_updated else None
+                    },
+                    "new_data": {
+                        "client_name": new_client_name,
+                        "invoice_total": update_data.get('invoice_total', 0),
+                        "commission_earned": update_data.get('commission_earned', 0)
+                    }
+                }
+        
         # Update the fields
         if 'client_name' in update_data:
             commission.client_name = update_data['client_name']
@@ -637,5 +670,85 @@ async def update_commission_data(commission_id: UUID, update_data: dict, db: Asy
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=f"Error updating commission data: {str(e)}")
+
+@router.post("/earned-commission/merge")
+async def merge_commission_records(merge_data: dict, db: AsyncSession = Depends(get_db)):
+    """Merge two commission records"""
+    try:
+        source_id = UUID(merge_data['source_id'])
+        target_id = UUID(merge_data['target_id'])
+        
+        # Get both records
+        source_result = await db.execute(select(EarnedCommission).where(EarnedCommission.id == source_id))
+        source_commission = source_result.scalar_one_or_none()
+        
+        target_result = await db.execute(select(EarnedCommission).where(EarnedCommission.id == target_id))
+        target_commission = target_result.scalar_one_or_none()
+        
+        if not source_commission or not target_commission:
+            raise HTTPException(status_code=404, detail="One or both commission records not found")
+        
+        # Merge data into target record
+        # Merge invoice totals
+        if source_commission.invoice_total:
+            target_invoice = float(target_commission.invoice_total) if target_commission.invoice_total else 0
+            source_invoice = float(source_commission.invoice_total)
+            target_commission.invoice_total = target_invoice + source_invoice
+        
+        # Merge commission earned
+        if source_commission.commission_earned:
+            target_commission_val = float(target_commission.commission_earned) if target_commission.commission_earned else 0
+            source_commission_val = float(source_commission.commission_earned)
+            target_commission.commission_earned = target_commission_val + source_commission_val
+        
+        # Merge statement count
+        target_commission.statement_count = (target_commission.statement_count or 0) + (source_commission.statement_count or 0)
+        
+        # Merge upload_ids
+        if source_commission.upload_ids:
+            target_upload_ids = target_commission.upload_ids or []
+            for upload_id in source_commission.upload_ids:
+                if upload_id not in target_upload_ids:
+                    target_upload_ids.append(upload_id)
+            target_commission.upload_ids = target_upload_ids
+        
+        # Merge monthly commissions
+        month_columns = [
+            'jan_commission', 'feb_commission', 'mar_commission', 'apr_commission',
+            'may_commission', 'jun_commission', 'jul_commission', 'aug_commission',
+            'sep_commission', 'oct_commission', 'nov_commission', 'dec_commission'
+        ]
+        
+        for month_col in month_columns:
+            if hasattr(source_commission, month_col) and getattr(source_commission, month_col):
+                target_value = float(getattr(target_commission, month_col) or 0)
+                source_value = float(getattr(source_commission, month_col))
+                setattr(target_commission, month_col, target_value + source_value)
+        
+        # Update target record timestamp
+        target_commission.last_updated = datetime.utcnow()
+        
+        # Delete source record
+        await db.delete(source_commission)
+        
+        await db.commit()
+        await db.refresh(target_commission)
+        
+        return {
+            "success": True,
+            "message": f"Successfully merged records. Source record deleted, target record updated.",
+            "merged_record": {
+                "id": str(target_commission.id),
+                "client_name": target_commission.client_name,
+                "invoice_total": float(target_commission.invoice_total) if target_commission.invoice_total else 0,
+                "commission_earned": float(target_commission.commission_earned) if target_commission.commission_earned else 0,
+                "statement_count": target_commission.statement_count,
+                "last_updated": target_commission.last_updated.isoformat() if target_commission.last_updated else None
+            }
+        }
+        
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error merging commission records: {str(e)}")
 
  
