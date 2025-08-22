@@ -7,15 +7,7 @@ type Props = {
 };
 
 export default function StatementPreviewModal({ statement, onClose }: Props) {
-    // Debug logging to help identify the issue
-    console.log('StatementPreviewModal received statement:', {
-        id: statement.id,
-        hasFinalData: !!statement.final_data,
-        finalDataLength: statement.final_data?.length,
-        hasFieldConfig: !!statement.field_config,
-        fieldConfigLength: statement.field_config?.length,
-        fieldConfig: statement.field_config
-    });
+
 
     return (
         <Modal onClose={onClose}>
