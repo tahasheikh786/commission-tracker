@@ -1,6 +1,7 @@
 'use client'
 import { Pencil } from 'lucide-react'
 import FieldMapper from './FieldMapper'
+import HierarchicalFieldMapper from './HierarchicalFieldMapper'
 import ExtractedTables from './ExtractedTable'
 import Loader from './Loader'
 import { useState } from 'react'
@@ -103,19 +104,39 @@ export default function FieldMapperSection({
                 </div>
                 {tablesToUse[0]?.header && tablesToUse[0].header.length > 0 && company && (
                   <>
-                    <FieldMapper
-                      company={company}
-                      columns={tablesToUse[0].header}
-                      initialPlanTypes={planTypes}
-                      tableData={tablesToUse}
-                      isLoading={savingMapping}
-                      selectedStatementDate={selectedStatementDate}
-                      onSave={onSave}
-                      onSkip={onSkip}
-                      initialFields={fieldConfig.length > 0 ? fieldConfig : databaseFields}
-                      initialMapping={mapping}
-                      mappingAutoApplied={mappingAutoApplied}
-                    />
+                    {/* Check if this is a hierarchical document */}
+                    {tablesToUse.some((table: any) => table.structure_type === 'hierarchical') ? (
+                      <HierarchicalFieldMapper
+                        hierarchicalData={tablesToUse.find((table: any) => table.structure_type === 'hierarchical')?.original_data}
+                        onSave={async (hierarchicalMapping) => {
+                          // For hierarchical documents, we use the auto-mapped data
+                          const standardFields = [
+                            { field: 'company_name', label: 'Company Name' },
+                            { field: 'commission_earned', label: 'Commission Earned' },
+                            { field: 'invoice_total', label: 'Invoice Total' },
+                            { field: 'customer_id', label: 'Customer ID' },
+                            { field: 'section_type', label: 'Section Type' }
+                          ]
+                          await onSave(hierarchicalMapping, standardFields, planTypes, undefined, selectedStatementDate)
+                        }}
+                        onSkip={onSkip}
+                        isLoading={savingMapping}
+                      />
+                    ) : (
+                      <FieldMapper
+                        company={company}
+                        columns={tablesToUse[0].header}
+                        initialPlanTypes={planTypes}
+                        tableData={tablesToUse}
+                        isLoading={savingMapping}
+                        selectedStatementDate={selectedStatementDate}
+                        onSave={onSave}
+                        onSkip={onSkip}
+                        initialFields={fieldConfig.length > 0 ? fieldConfig : databaseFields}
+                        initialMapping={mapping}
+                        mappingAutoApplied={mappingAutoApplied}
+                      />
+                    )}
                   </>
                 )}
               </div>

@@ -25,7 +25,7 @@ import { useRowOperations } from './hooks/useRowOperations'
 import { useSummaryRows } from './hooks/useSummaryRows'
 import { useFormatValidation } from './hooks/useFormatValidation'
 import { useUndoRedo } from './hooks/useUndoRedo'
-import PDFPreview from './components/PDFPreview'
+import DocumentPreview from './components/DocumentPreview'
 import TableHeader from './components/TableHeader'
 import TableControls from './components/TableControls'
 import DateSelectionModal from '../DateSelectionModal'
@@ -836,8 +836,8 @@ export default function TableEditor({
             {/* Date Extraction Button */}
             <button
               onClick={() => {
-                // If dates were already extracted but no date was selected, just reopen the modal
-                if (hasExtractedDates && extractedDates.length > 0) {
+                // If dates were already extracted, just reopen the modal (regardless of whether dates were found)
+                if (hasExtractedDates) {
                   setShowDateModal(true)
                   return
                 }
@@ -899,14 +899,14 @@ export default function TableEditor({
                         toast.success(`Found ${response.dates.length} date(s) in your document`)
                       } else {
                         setExtractedDates([])
-                        setHasExtractedDates(false) // Reset flag when no dates found
+                        setHasExtractedDates(true) // Set to true to indicate extraction was attempted
                         setShowDateModal(true)
                         toast.success('No dates found in the document. You can manually select a date.')
                       }
                     } catch (error: any) {
                       // Always try to show modal for manual selection, even if component is unmounting
                       setExtractedDates([])
-                      setHasExtractedDates(false) // Reset flag on error
+                      setHasExtractedDates(true) // Set to true to indicate extraction was attempted
                       setShowDateModal(true)
                       toast.success('Date extraction failed. You can manually select a date.')
                     } finally {
@@ -920,10 +920,10 @@ export default function TableEditor({
               }}
               disabled={dateExtractionLoading}
               className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2 text-sm"
-              title={hasExtractedDates && extractedDates.length > 0 ? "Reopen date selection modal" : "Extract dates from document"}
+              title={hasExtractedDates ? "Reopen date selection modal" : "Extract dates from document"}
             >
               <Calendar className="w-4 h-4" />
-              {dateExtractionLoading ? 'Extracting...' : (hasExtractedDates && extractedDates.length > 0 ? 'Select Date' : 'Extract Dates')}
+              {dateExtractionLoading ? 'Extracting...' : (hasExtractedDates ? 'Select Date' : 'Extract Dates')}
             </button>
 
             {/* Extract with GPT 5 Button */}
@@ -996,9 +996,9 @@ export default function TableEditor({
 
         {/* Side by Side Content */}
         <div className="flex-1 flex flex-row gap-6 p-6 bg-gradient-to-br from-white via-blue-50 to-purple-50 min-h-0">
-          {/* PDF Preview - Left Side */}
+          {/* Document Preview - Left Side */}
           {uploaded && (
-            <PDFPreview
+            <DocumentPreview
               uploaded={uploaded}
               zoom={zoom}
               onZoomIn={handleZoomIn}

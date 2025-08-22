@@ -52,13 +52,11 @@ export default function DashboardTab() {
 
   // Refresh earned commission stats when component mounts
   useEffect(() => {
-    console.log('🔄 DashboardTab mounted, refreshing earned commission stats...');
     refetchEarnedCommissionStats();
   }, [refetchEarnedCommissionStats]);
 
   // Listen for global refresh events
   useEffect(() => {
-    console.log('🔄 DashboardTab: Global refresh triggered, refreshing all data...');
     refetchStats();
     refetchEarnedCommissionStats();
   }, [refreshTrigger, refetchStats, refetchEarnedCommissionStats]);
@@ -71,7 +69,6 @@ export default function DashboardTab() {
         if (response.ok) {
           const data = await response.json();
           if (data.success && data.progress_data?.selected_statement_date) {
-            console.log('🎯 DashboardTab: Loading selected statement date from progress:', data.progress_data.selected_statement_date);
             setSelectedStatementDate(data.progress_data.selected_statement_date);
           }
         }
@@ -202,7 +199,6 @@ export default function DashboardTab() {
             // Check if this is an auto-fill field (Invoice Total with __AUTO_FILL_ZERO__)
             if (column === '__AUTO_FILL_ZERO__') {
               mappedRow[field] = '$0.00'
-              console.log(`🎯 Auto-filling ${field} with $0.00`)
             } else {
               const colIndex = table.header.indexOf(column);
               if (colIndex !== -1 && row[colIndex] !== undefined) {
@@ -238,7 +234,6 @@ export default function DashboardTab() {
     
     setSubmitting(true);
     try {
-      console.log('🎯 DashboardTab: handleApprove called with selectedStatementDate:', selectedStatementDate);
       
       const requestBody = {
         upload_id: uploaded.upload_id,
@@ -248,7 +243,6 @@ export default function DashboardTab() {
         selected_statement_date: selectedStatementDate,
       };
       
-      console.log('🎯 DashboardTab: Approve request body:', requestBody);
       
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/review/approve/`, {
         method: 'POST',
@@ -259,7 +253,6 @@ export default function DashboardTab() {
       if (response.ok) {
         toast.success('Statement approved successfully!');
         // Refresh earned commission stats after approval
-        console.log('🔄 Statement approved, refreshing earned commission stats...');
         refetchEarnedCommissionStats();
         setTimeout(() => {
           window.location.href = '/?tab=dashboard';
@@ -286,7 +279,6 @@ export default function DashboardTab() {
     
     setSubmitting(true);
     try {
-      console.log('🎯 DashboardTab: handleRejectSubmit called with selectedStatementDate:', selectedStatementDate);
       
       const requestBody = {
         upload_id: uploaded.upload_id,
@@ -297,7 +289,6 @@ export default function DashboardTab() {
         selected_statement_date: selectedStatementDate,
       };
       
-      console.log('🎯 DashboardTab: Reject request body:', requestBody);
       
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/review/reject/`, {
         method: 'POST',
@@ -429,7 +420,6 @@ export default function DashboardTab() {
                   selected_statement_date: selectedDate
                 }
                 
-                console.log('🎯 DashboardTab: Saving tables to backend for format learning:', requestBody)
                 
                 const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/table-editor/save-tables/`, {
                   method: 'POST',
@@ -441,7 +431,6 @@ export default function DashboardTab() {
                   throw new Error(`Failed to save tables: ${response.status}`)
                 }
                 
-                console.log('✅ DashboardTab: Tables saved successfully, format learning triggered')
               }
               
               // Update local state
@@ -502,7 +491,6 @@ export default function DashboardTab() {
                 selected_statement_date: selectedDate,
               }
               
-              console.log('🎯 DashboardTab: Saving mapping to backend for format learning:', config)
               
               const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${company.id}/mapping/`, {
                 method: 'POST',
@@ -514,7 +502,6 @@ export default function DashboardTab() {
                 throw new Error(`Failed to save mapping: ${response.status}`)
               }
               
-              console.log('✅ DashboardTab: Mapping saved successfully, format learning triggered')
               
               // Update local state
               setFieldConfig(fields);
@@ -627,7 +614,7 @@ export default function DashboardTab() {
             </span>
           </h2>
           <p className="text-slate-600 text-lg">
-            Upload new commission statements and process them with AI-powered extraction
+            Upload new commission statements (PDF or Excel) and process them with AI-powered extraction
           </p>
         </div>
 

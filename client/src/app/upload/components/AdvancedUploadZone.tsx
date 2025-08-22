@@ -261,12 +261,23 @@ export default function AdvancedUploadZone({
     if (!acceptedFiles || acceptedFiles.length === 0) return
 
     const file = acceptedFiles[0]
-    if (file.size > 10 * 1024 * 1024) { // Increased to 10MB for advanced processing
-      toast.error("File too large (max 10MB)")
+    if (file.size > 50 * 1024 * 1024) { // Increased to 50MB for Excel files
+      toast.error("File too large (max 50MB)")
       return
     }
-    if (file.type !== "application/pdf") {
-      toast.error("Only PDF files are supported")
+
+    // Check file type and determine extraction endpoint
+    const isExcel = file.type === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" || 
+                   file.type === "application/vnd.ms-excel" ||
+                   file.name.toLowerCase().endsWith('.xlsx') ||
+                   file.name.toLowerCase().endsWith('.xls') ||
+                   file.name.toLowerCase().endsWith('.xlsm') ||
+                   file.name.toLowerCase().endsWith('.xlsb')
+    
+    const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith('.pdf')
+
+    if (!isExcel && !isPdf) {
+      toast.error("Only PDF and Excel files are supported")
       return
     }
 
@@ -276,8 +287,13 @@ export default function AdvancedUploadZone({
     formData.append('company_id', companyId)
 
     try {
-      toast.loading('AI-powered extraction in progress...', { id: 'extracting' })
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/extract-tables-smart/`, {
+      const loadingMessage = isExcel ? 'Excel extraction in progress...' : 'AI-powered extraction in progress...'
+      toast.loading(loadingMessage, { id: 'extracting' })
+      
+      // Choose endpoint based on file type
+      const endpoint = isExcel ? '/extract-tables-excel/' : '/extract-tables-smart/'
+      
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}${endpoint}`, {
         method: 'POST',
         body: formData,
       })
@@ -297,14 +313,15 @@ export default function AdvancedUploadZone({
       if (onParsed) onParsed({
         tables: json.tables || [],
         upload_id: json.upload_id,
-        file_name: json.s3_key || file.name, // Use S3 key if available, fallback to original filename
+        file_name: json.s3_key || json.file_name || file.name, // Use S3 key if available, fallback to file_name, then original filename
         file,
         quality_summary: json.quality_summary,
         extraction_config: json.extraction_config,
         format_learning: json.format_learning // Add format learning data
       })
       
-      toast.success('Extraction completed successfully!')
+      const successMessage = isExcel ? 'Excel extraction completed successfully!' : 'Extraction completed successfully!'
+      toast.success(successMessage)
     } catch (e) {
       setLoading(false)
       toast.dismiss('extracting')
@@ -314,7 +331,13 @@ export default function AdvancedUploadZone({
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    accept: { "application/pdf": [".pdf"] },
+    accept: { 
+      "application/pdf": [".pdf"],
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"],
+      "application/vnd.ms-excel": [".xls"],
+      "application/vnd.ms-excel.sheet.macroEnabled.12": [".xlsm"],
+      "application/vnd.ms-excel.sheet.binary.macroEnabled.12": [".xlsb"]
+    },
     disabled,
   })
 
@@ -345,11 +368,11 @@ export default function AdvancedUploadZone({
       >
         <input {...getInputProps()} />
         <div className="flex flex-col items-center space-y-5">
-          <div className="text-6xl drop-shadow-lg group-hover:animate-bounce transition-all">🚀</div>
-          <div className="text-2xl font-bold tracking-wide">AI-Powered PDF Processing</div>
-          <div className="text-base opacity-80 font-medium">Drop your commission statement PDF here</div>
+          <div className="text-6xl drop-shadow-lg group-hover:animate-bounce transition-all">📊</div>
+          <div className="text-2xl font-bold tracking-wide">AI-Powered Document Processing</div>
+          <div className="text-base opacity-80 font-medium">Drop your commission statement here</div>
           <div className="text-sm opacity-70 italic">
-            Up to <span className="font-semibold">10MB</span> • Automatic quality assessment
+            Supports PDF & Excel • Up to <span className="font-semibold">50MB</span> • Multi-sheet processing
           </div>
         </div>
       </div>

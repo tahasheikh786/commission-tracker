@@ -48,7 +48,7 @@ async def extract_dates(
     logger.info(f"Starting date extraction for {file.filename}")
     
     # Validate file type
-    allowed_extensions = ['.pdf', '.png', '.jpg', '.jpeg', '.tiff', '.tif']
+    allowed_extensions = ['.pdf', '.png', '.jpg', '.jpeg', '.tiff', '.tif', '.xlsx', '.xls', '.xlsm', '.xlsb']
     file_ext = os.path.splitext(file.filename)[1].lower()
     if file_ext not in allowed_extensions:
         raise HTTPException(

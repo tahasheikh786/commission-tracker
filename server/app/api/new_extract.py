@@ -20,6 +20,7 @@ import asyncio
 from typing import Optional, Dict, Any
 from fastapi.responses import JSONResponse
 import uuid
+from app.services.hierarchical_extraction_service import HierarchicalExtractionService
 
 router = APIRouter(tags=["new-extract"])
 logger = logging.getLogger(__name__)
@@ -100,6 +101,7 @@ async def extract_tables_advanced(
 
         # Get the new extraction service
         extraction_service = await get_new_extraction_service_instance()
+        hierarchical_service = HierarchicalExtractionService()
         
         # Extract tables with the new advanced pipeline
         logger.info("Starting advanced table extraction...")
@@ -114,6 +116,37 @@ async def extract_tables_advanced(
             max_tables_per_page=max_tables_per_page,
             output_format=output_format
         )
+        
+        # Check for hierarchical document structure
+        tables = extraction_result.get('tables', [])
+        hierarchical_tables = []
+        standard_tables = []
+        
+        for table in tables:
+            # Analyze table structure to detect hierarchical patterns
+            if hierarchical_service._is_hierarchical_table(table):
+                logger.info(f"Detected hierarchical table structure")
+                hierarchical_result = hierarchical_service.process_hierarchical_statement(table)
+                if hierarchical_result['customer_blocks']:
+                    # Convert to standard format for compatibility
+                    standard_rows = hierarchical_service.convert_to_standard_format(hierarchical_result)
+                    hierarchical_table = {
+                        'headers': ['Company Name', 'Commission Earned', 'Invoice Total', 'Customer ID', 'Section Type'],
+                        'rows': standard_rows,
+                        'structure_type': 'hierarchical',
+                        'original_data': hierarchical_result
+                    }
+                    hierarchical_tables.append(hierarchical_table)
+                else:
+                    standard_tables.append(table)
+            else:
+                standard_tables.append(table)
+        
+        # Combine results
+        final_tables = hierarchical_tables + standard_tables
+        extraction_result['tables'] = final_tables
+        extraction_result['hierarchical_tables_count'] = len(hierarchical_tables)
+        extraction_result['standard_tables_count'] = len(standard_tables)
         
         print(f"✅ API: Advanced extraction pipeline completed")
         
@@ -685,8 +718,43 @@ async def extract_tables_gpt(
         
         logger.info("GPT-4o Vision table extraction completed successfully")
         
-        # Step 3: Transform to client format
+        # Step 3: Check for hierarchical structure and process accordingly
         extracted_tables = extraction_result.get("tables", [])
+        hierarchical_indicators = extraction_result.get("hierarchical_indicators", {})
+        
+        # Initialize hierarchical service
+        hierarchical_service = HierarchicalExtractionService()
+        
+        # Process tables for hierarchical structure
+        processed_tables = []
+        hierarchical_tables = []
+        standard_tables = []
+        
+        for table in extracted_tables:
+            # Check if GPT detected hierarchical structure
+            structure_type = table.get("structure_type", "standard")
+            
+            if structure_type == "hierarchical" or hierarchical_service._is_hierarchical_table(table):
+                logger.info(f"GPT detected hierarchical table structure")
+                hierarchical_result = hierarchical_service.process_hierarchical_statement(table)
+                if hierarchical_result['customer_blocks']:
+                    # Convert to standard format for compatibility
+                    standard_rows = hierarchical_service.convert_to_standard_format(hierarchical_result)
+                    hierarchical_table = {
+                        'headers': ['Company Name', 'Commission Earned', 'Invoice Total', 'Customer ID', 'Section Type'],
+                        'rows': standard_rows,
+                        'structure_type': 'hierarchical',
+                        'original_data': hierarchical_result,
+                        'extractor': 'gpt4o_vision_hierarchical'
+                    }
+                    hierarchical_tables.append(hierarchical_table)
+                else:
+                    standard_tables.append(table)
+            else:
+                standard_tables.append(table)
+        
+        # Combine results
+        final_tables = hierarchical_tables + standard_tables
         
         # Transform tables to the format expected by TableEditor
         frontend_tables = []
@@ -695,7 +763,7 @@ async def extract_tables_gpt(
         all_headers = []
         all_table_data = []
         
-        for i, table in enumerate(extracted_tables):
+        for i, table in enumerate(final_tables):
             rows = table.get("rows", [])
             headers = table.get("header", [])
             
@@ -716,15 +784,22 @@ async def extract_tables_gpt(
                     row_dict[header_key] = value
                 all_table_data.append(row_dict)
             
+            # Determine extractor type and processing notes
+            extractor = table.get("extractor", "gpt4o_vision")
+            processing_notes = "GPT-4o Vision table extraction"
+            if extractor == "gpt4o_vision_hierarchical":
+                processing_notes = "GPT-4o Vision hierarchical extraction"
+            
             table_data = {
                 "name": table.get("name", f"GPT Extracted Table {i + 1}"),
                 "header": headers,
                 "rows": rows,
-                "extractor": "gpt4o_vision",
+                "extractor": extractor,
+                "structure_type": table.get("structure_type", "standard"),
                 "metadata": {
-                    "extraction_method": "gpt4o_vision",
+                    "extraction_method": extractor,
                     "timestamp": datetime.now().isoformat(),
-                    "processing_notes": "GPT-4o Vision table extraction",
+                    "processing_notes": processing_notes,
                     "confidence": 0.95
                 }
             }
@@ -732,6 +807,63 @@ async def extract_tables_gpt(
         
         # Calculate processing time
         processing_time = (datetime.now() - start_time).total_seconds()
+        
+        # Add format learning (same as PDF flow)
+        format_learning_data = None
+        if frontend_tables and len(frontend_tables) > 0:
+            try:
+                from app.services.format_learning_service import FormatLearningService
+                format_learning_service = FormatLearningService()
+                
+                # Get first table for format learning
+                first_table = frontend_tables[0]
+                headers = first_table.get("header", [])
+                
+                # Generate table structure for format learning
+                table_structure = {
+                    "row_count": len(first_table.get("rows", [])),
+                    "column_count": len(headers),
+                    "has_financial_data": any(keyword in ' '.join(headers).lower() for keyword in [
+                        'premium', 'commission', 'billed', 'group', 'client', 'invoice',
+                        'total', 'amount', 'due', 'paid', 'rate', 'percentage', 'period'
+                    ])
+                }
+                
+                # Find matching format
+                learned_format, match_score = await format_learning_service.find_matching_format(
+                    db=db,
+                    company_id=company_id,
+                    headers=headers,
+                    table_structure=table_structure
+                )
+                
+                if learned_format and match_score > 0.5:
+                    logger.info(f"🎯 GPT: Found matching format with score {match_score}")
+                    format_learning_data = {
+                        "found_match": True,
+                        "match_score": match_score,
+                        "learned_format": learned_format,
+                        "suggested_mapping": learned_format.get("field_mapping", {}),
+                        "table_editor_settings": learned_format.get("table_editor_settings")
+                    }
+                else:
+                    format_learning_data = {
+                        "found_match": False,
+                        "match_score": match_score or 0,
+                        "learned_format": None,
+                        "suggested_mapping": {},
+                        "table_editor_settings": None
+                    }
+                    
+            except Exception as e:
+                logger.warning(f"GPT: Format learning failed: {str(e)}")
+                format_learning_data = {
+                    "found_match": False,
+                    "match_score": 0,
+                    "learned_format": None,
+                    "suggested_mapping": {},
+                    "table_editor_settings": None
+                }
         
         # Prepare response in the exact same format as extraction API
         response_data = {
@@ -754,7 +886,10 @@ async def extract_tables_gpt(
             },
             "document_info": {
                 "pdf_type": "commission_statement",
-                "total_tables": len(frontend_tables)
+                "total_tables": len(frontend_tables),
+                "hierarchical_tables_count": len(hierarchical_tables),
+                "standard_tables_count": len(standard_tables),
+                "hierarchical_indicators": hierarchical_indicators
             },
             "quality_summary": {
                 "total_tables": len(frontend_tables),
@@ -762,7 +897,10 @@ async def extract_tables_gpt(
                 "average_quality_score": 95.0,
                 "overall_confidence": "HIGH",
                 "issues_found": [],
-                "recommendations": ["GPT-4o Vision extraction completed successfully"]
+                "recommendations": [
+                    "GPT-4o Vision extraction completed successfully",
+                    f"Hierarchical processing: {len(hierarchical_tables)} tables processed" if hierarchical_tables else "Standard table extraction"
+                ]
             },
             "quality_metrics": {
                 "table_confidence": 0.95,
@@ -790,7 +928,8 @@ async def extract_tables_gpt(
             "s3_key": upload_info.file_name,
             "s3_url": f"https://text-extraction-pdf.s3.us-east-1.amazonaws.com/{upload_info.file_name}",
             "file_name": upload_info.file_name.split('/')[-1] if '/' in upload_info.file_name else upload_info.file_name,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
+            "format_learning": format_learning_data
         }
         
         logger.info(f"GPT extraction completed successfully in {processing_time:.2f} seconds")
@@ -910,6 +1049,63 @@ async def extract_tables_google_docai(
         # Calculate processing time
         processing_time = (datetime.now() - start_time).total_seconds()
         
+        # Add format learning (same as PDF flow)
+        format_learning_data = None
+        if frontend_tables and len(frontend_tables) > 0:
+            try:
+                from app.services.format_learning_service import FormatLearningService
+                format_learning_service = FormatLearningService()
+                
+                # Get first table for format learning
+                first_table = frontend_tables[0]
+                headers = first_table.get("header", [])
+                
+                # Generate table structure for format learning
+                table_structure = {
+                    "row_count": len(first_table.get("rows", [])),
+                    "column_count": len(headers),
+                    "has_financial_data": any(keyword in ' '.join(headers).lower() for keyword in [
+                        'premium', 'commission', 'billed', 'group', 'client', 'invoice',
+                        'total', 'amount', 'due', 'paid', 'rate', 'percentage', 'period'
+                    ])
+                }
+                
+                # Find matching format
+                learned_format, match_score = await format_learning_service.find_matching_format(
+                    db=db,
+                    company_id=company_id,
+                    headers=headers,
+                    table_structure=table_structure
+                )
+                
+                if learned_format and match_score > 0.5:
+                    logger.info(f"🎯 Google DocAI: Found matching format with score {match_score}")
+                    format_learning_data = {
+                        "found_match": True,
+                        "match_score": match_score,
+                        "learned_format": learned_format,
+                        "suggested_mapping": learned_format.get("field_mapping", {}),
+                        "table_editor_settings": learned_format.get("table_editor_settings")
+                    }
+                else:
+                    format_learning_data = {
+                        "found_match": False,
+                        "match_score": match_score or 0,
+                        "learned_format": None,
+                        "suggested_mapping": {},
+                        "table_editor_settings": None
+                    }
+                    
+            except Exception as e:
+                logger.warning(f"Google DocAI: Format learning failed: {str(e)}")
+                format_learning_data = {
+                    "found_match": False,
+                    "match_score": 0,
+                    "learned_format": None,
+                    "suggested_mapping": {},
+                    "table_editor_settings": None
+                }
+        
         # Prepare response in the exact same format as extraction API
         response_data = {
             "status": "success",
@@ -967,7 +1163,8 @@ async def extract_tables_google_docai(
             "s3_key": upload_info.file_name,
             "s3_url": f"https://text-extraction-pdf.s3.us-east-1.amazonaws.com/{upload_info.file_name}",
             "file_name": upload_info.file_name.split('/')[-1] if '/' in upload_info.file_name else upload_info.file_name,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
+            "format_learning": format_learning_data
         }
         
         logger.info(f"Google DOC AI extraction completed successfully in {processing_time:.2f} seconds")

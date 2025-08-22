@@ -41,7 +41,7 @@ export default function UploadInterface({
           <Sparkles className="text-blue-500" size={24} />
         </div>
         <p className="text-lg text-slate-600 max-w-3xl mx-auto leading-relaxed">
-          Upload and process commission statements with AI-powered extraction and quality assessment
+          Upload and process commission statements (PDF or Excel) with AI-powered extraction and quality assessment
         </p>
         
         {/* Date Display */}

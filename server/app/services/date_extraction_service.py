@@ -25,6 +25,9 @@ from pdf2image import convert_from_path
 import numpy as np
 from PIL import Image
 
+# For Excel processing
+import pandas as pd
+
 
 @dataclass
 class ExtractedDate:
@@ -131,6 +134,8 @@ class DateExtractionService:
                 return await self._extract_dates_from_pdf(file_path, max_pages)
             elif file_ext in ['.png', '.jpg', '.jpeg', '.tiff', '.tif']:
                 return await self._extract_dates_from_image(file_path)
+            elif file_ext in ['.xlsx', '.xls', '.xlsm', '.xlsb']:
+                return await self._extract_dates_from_excel(file_path)
             else:
                 return {
                     "success": False,
@@ -627,6 +632,94 @@ class DateExtractionService:
             "date_type": date.date_type
         }
     
+    async def _extract_dates_from_excel(self, file_path: str) -> Dict[str, Any]:
+        """Extract dates from Excel document."""
+        try:
+            import pandas as pd
+            
+            dates = []
+            
+            # Read Excel file
+            excel_file = pd.ExcelFile(file_path)
+            
+            # Process first few sheets (usually the most relevant ones)
+            for sheet_name in excel_file.sheet_names[:3]:  # Limit to first 3 sheets
+                try:
+                    # Read sheet data
+                    df = pd.read_excel(excel_file, sheet_name=sheet_name, header=None)
+                    
+                    if df.empty:
+                        continue
+                    
+                    # Convert all data to string and search for dates
+                    for row_idx, row in df.iterrows():
+                        for col_idx, cell_value in enumerate(row):
+                            if pd.notna(cell_value):
+                                cell_str = str(cell_value).strip()
+                                
+                                # Check if cell contains a date
+                                if self._is_valid_date(cell_str):
+                                    # Look for date labels in nearby cells
+                                    label = self._find_date_label_in_excel(df, row_idx, col_idx)
+                                    
+                                    # Create extracted date
+                                    extracted_date = ExtractedDate(
+                                        date_value=cell_str,
+                                        label=label,
+                                        confidence=0.8,  # High confidence for Excel data
+                                        bbox=[col_idx, row_idx, col_idx + 1, row_idx + 1],  # Excel cell coordinates
+                                        page_number=1,  # Excel doesn't have pages, use 1
+                                        context=f"Sheet: {sheet_name}, Cell: {chr(65 + col_idx)}{row_idx + 1}",
+                                        date_type=self._classify_date_type(label)
+                                    )
+                                    dates.append(extracted_date)
+                    
+                except Exception as e:
+                    self.logger.logger.warning(f"Error processing Excel sheet {sheet_name}: {e}")
+                    continue
+            
+            # Remove duplicates and sort by confidence
+            unique_dates = self._deduplicate_dates(dates)
+            
+            return {
+                "success": True,
+                "dates": [self._date_to_dict(date) for date in unique_dates],
+                "total_dates": len(unique_dates),
+                "extraction_methods": ["excel_text_extraction"],
+                "processing_time": 0.0,
+                "warnings": [],
+                "errors": []
+            }
+            
+        except Exception as e:
+            self.logger.logger.error(f"Excel date extraction failed: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "dates": []
+            }
+    
+    def _find_date_label_in_excel(self, df: pd.DataFrame, row_idx: int, col_idx: int) -> str:
+        """Find date label in nearby Excel cells."""
+        # Check header row (row 0)
+        if row_idx > 0 and col_idx < len(df.columns):
+            header_value = str(df.iloc[0, col_idx]).strip().lower()
+            for date_type, labels in self.date_labels.items():
+                for label in labels:
+                    if label in header_value:
+                        return header_value
+        
+        # Check left column for labels
+        if col_idx > 0 and row_idx < len(df):
+            left_value = str(df.iloc[row_idx, col_idx - 1]).strip().lower()
+            for date_type, labels in self.date_labels.items():
+                for label in labels:
+                    if label in left_value:
+                        return left_value
+        
+        # Default label
+        return "date"
+    
     async def get_extraction_status(self) -> Dict[str, Any]:
         """
         Get the status of the date extraction service.
@@ -645,7 +738,7 @@ class DateExtractionService:
             "config": {
                 "date_patterns_count": len(self.date_patterns),
                 "date_labels_count": sum(len(labels) for labels in self.date_labels.values()),
-                "supported_formats": ["pdf", "png", "jpg", "jpeg", "tiff", "tif"]
+                "supported_formats": ["pdf", "png", "jpg", "jpeg", "tiff", "tif", "xlsx", "xls", "xlsm", "xlsb"]
             }
         }
 

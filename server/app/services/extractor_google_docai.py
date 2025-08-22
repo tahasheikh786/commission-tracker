@@ -19,6 +19,9 @@ except ImportError:
     GOOGLE_DOCAI_AVAILABLE = False
     print("Warning: Google Document AI not available. Install with: pip install google-cloud-documentai google-cloud-storage google-auth")
 
+# Local service imports
+from .company_name_service import CompanyNameDetectionService
+
 # Critical Configuration Parameters
 HEADER_CONFIDENCE_THRESHOLD = 0.3
 CELL_CONFIDENCE_THRESHOLD = 0.2
@@ -198,6 +201,7 @@ class GoogleDocAIExtractor:
         self.project_id = None
         self.location = "us"  # or "eu"
         self.processor_id = None
+        self.company_detector = CompanyNameDetectionService()
         self._initialize_client()
     
     def _initialize_client(self):
@@ -1263,7 +1267,12 @@ class GoogleDocAIExtractor:
                     if key not in table_dict:
                         table_dict[key] = value
                 
-                processed_tables.append(table_dict)
+                # Apply company name detection
+                enhanced_table = self.company_detector.detect_company_names_in_extracted_data(
+                    table_dict, "google_docai"
+                )
+                
+                processed_tables.append(enhanced_table)
                 
             except Exception as e:
                 print(f"Error post-processing table: {e}")

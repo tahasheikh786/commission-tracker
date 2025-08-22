@@ -10,6 +10,7 @@ import io
 import fitz  # PyMuPDF
 from openai import OpenAI
 from .data_formatting_service import DataFormattingService
+from .company_name_service import CompanyNameDetectionService
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +27,7 @@ class GPT4oVisionService:
     def __init__(self):
         self.client = None
         self.data_formatting_service = DataFormattingService()
+        self.company_detector = CompanyNameDetectionService()
         self._initialize_client()
     
     def _initialize_client(self):
@@ -943,8 +945,25 @@ Be precise and only report what you can clearly see in the images."""
             }
 
     def _create_table_extraction_system_prompt(self) -> str:
-        """Create system prompt for table extraction."""
-        return """Extract all tables from the document images. Return ONLY valid JSON:
+        """Create system prompt for table extraction with company name detection focus."""
+        return """You are a vision document analyst specializing in table structure analysis with SPECIAL FOCUS on company name identification.
+
+CRITICAL COMPANY NAME DETECTION REQUIREMENTS:
+
+1. **SCATTERED COMPANY NAMES**: Look for company names that appear randomly between transaction rows, not in dedicated columns
+2. **COMPANY INDICATORS**: Identify text with suffixes like LLC, Inc, Corp, Co, Corporation, Company, Ltd, Limited
+3. **SECTION HEADERS**: Company names often appear as section dividers or transaction group headers
+4. **FORMATTING CLUES**: Company names may be in bold, larger font, or have different formatting
+5. **HIERARCHICAL PATTERNS**: Look for "Customer: 123456" followed by "Customer Name: Company Name"
+
+SPECIAL INSTRUCTIONS FOR COMPANY EXTRACTION:
+- When you see company names scattered in data rows, extract them separately
+- Provide a "detected_companies" field listing all company names found
+- For each company, identify which subsequent rows belong to that company's transactions
+- If company names appear within transaction data, separate them from the financial data
+- Include customer header rows and section headers in the extracted data
+
+Return ONLY valid JSON:
 
 {
     "tables": [
@@ -954,9 +973,28 @@ Be precise and only report what you can clearly see in the images."""
             "rows": [
                 ["Value1", "Value2", "Value3"],
                 ["Value2", "Value2", "Value3"]
-            ]
+            ],
+            "structure_type": "standard" or "hierarchical"
         }
-    ]
+    ],
+    "detected_companies": [
+        {
+            "company_name": "EXACT COMPANY NAME AS SEEN", 
+            "location_context": "description of where found",
+            "associated_rows": "description of related transaction rows"
+        }
+    ],
+    "company_transaction_mapping": {
+        "COMPANY NAME 1": ["row indices or descriptions"],
+        "COMPANY NAME 2": ["row indices or descriptions"]  
+    },
+    "hierarchical_indicators": {
+        "has_customer_headers": true/false,
+        "has_section_headers": true/false,
+        "has_subtotals": true/false,
+        "detected_patterns": ["Customer:", "Customer Name:", "New Business", "Renewal", "Sub-total"]
+    },
+    "overall_notes": "Include company name detection notes and structural observations"
 }
 
 Guidelines:
@@ -964,7 +1002,10 @@ Guidelines:
 - Preserve exact values and formatting
 - Handle merged cells appropriately
 - Ensure all rows match header column count
-- For large tables, prioritize data accuracy over completeness if needed"""
+- For large tables, prioritize data accuracy over completeness if needed
+- IMPORTANT: Include customer header rows and section headers in the extracted data
+- Mark tables as "hierarchical" if you detect customer header patterns
+- Company names in commission statements often appear as section breaks between different client groups"""
 
     def _create_table_extraction_user_prompt(self) -> str:
         """Create user prompt for table extraction."""
@@ -977,7 +1018,7 @@ Guidelines:
 Ensure accurate extraction of headers, data rows, numerical values, dates, and text."""
 
     def _process_extracted_table(self, table: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """Process a single extracted table."""
+        """Process a single extracted table with company name detection."""
         try:
             name = table.get("name", "Extracted Table")
             header = table.get("header", [])
@@ -998,15 +1039,25 @@ Ensure accurate extraction of headers, data rows, numerical values, dates, and t
                     row = row[:len(header)]
                 normalized_rows.append(row)
             
-            return {
+            # Apply company name detection
+            table_data = {
                 "name": name,
                 "header": header,
-                "rows": normalized_rows,
+                "rows": normalized_rows
+            }
+            
+            enhanced_table = self.company_detector.detect_company_names_in_extracted_data(
+                table_data, "gpt4o_vision"
+            )
+            
+            return {
+                **enhanced_table,
                 "extractor": "gpt4o_vision",
                 "metadata": {
                     "extraction_method": "gpt4o_vision",
                     "timestamp": datetime.now().isoformat(),
-                    "confidence": 0.95
+                    "confidence": 0.95,
+                    "company_detection_applied": True
                 }
             }
             

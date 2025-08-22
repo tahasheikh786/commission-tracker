@@ -40,9 +40,15 @@ async def approve_statement(
             plan_types=payload.plan_types,
             selected_statement_date=payload.selected_statement_date,
         )
-        return {"success": True, "review": schemas.StatementReview.from_orm(updated)}
+        
+        if not updated:
+            raise HTTPException(status_code=404, detail=f"Upload with ID {payload.upload_id} not found")
+            
+        return {"success": True, "review": schemas.StatementReview.model_validate(updated)}
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/reject/")
 async def reject_statement(
@@ -60,9 +66,15 @@ async def reject_statement(
             plan_types=payload.plan_types,
             selected_statement_date=payload.selected_statement_date,
         )
-        return {"success": True, "review": schemas.StatementReview.from_orm(updated)}
+        
+        if not updated:
+            raise HTTPException(status_code=404, detail=f"Upload with ID {payload.upload_id} not found")
+            
+        return {"success": True, "review": schemas.StatementReview.model_validate(updated)}
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/all/")
 async def get_all_reviews(db: AsyncSession = Depends(get_db)):
