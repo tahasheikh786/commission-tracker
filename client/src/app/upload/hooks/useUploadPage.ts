@@ -5,13 +5,10 @@ import { toast } from 'react-hot-toast'
 import { useProgressTracking } from '../../hooks/useProgressTracking'
 import { useTableEditorLearning } from './useTableEditorLearning'
 
-console.log('🔍 useUploadPage module loaded')
-
 type FieldConfig = { field: string, label: string }
 type Company = { id: string, name: string } | null
 
 export function useUploadPage() {
-  console.log('🚀 useUploadPage hook called - START')
   
   const [company, setCompany] = useState<Company>(null)
   const [uploaded, setUploaded] = useState<any>(null)
@@ -101,18 +98,8 @@ export function useUploadPage() {
 
   // Fetch saved mapping for the company when tables are available
   useEffect(() => {
-    console.log('🔍 Mapping fetch effect triggered:', {
-      hasTables: !!uploaded?.tables?.length,
-      hasCompany: !!company,
-      notFetching: !fetchingMapping,
-      noMapping: !mapping,
-      fetchMappingRef: fetchMappingRef.current,
-      selectedStatementDate: selectedStatementDate
-    })
-    
     if (uploaded?.tables?.length && company && !fetchingMapping && !mapping) {
       if (!fetchMappingRef.current) {
-        console.log('🚀 Fetching learned field mapping for company:', company.id)
         fetchMappingRef.current = true
         setFetchingMapping(true)
         
@@ -134,13 +121,7 @@ export function useUploadPage() {
         })
         .then(r => r.json())
         .then(learnedData => {
-          console.log('📥 Received learned field mapping response:', learnedData)
-          
           if (learnedData.found_match && learnedData.field_mapping && Object.keys(learnedData.field_mapping).length > 0) {
-            console.log('✅ Found learned field mapping:', learnedData.field_mapping)
-            console.log('✅ Match score:', learnedData.match_score)
-            console.log('✅ Confidence score:', learnedData.confidence_score)
-            
             // Use the learned field mapping
             setMapping(learnedData.field_mapping)
             setMappingAutoApplied(true)
@@ -149,14 +130,12 @@ export function useUploadPage() {
             // Also fetch the general company mapping for field config and plan types
             return fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${company.id}/mapping/`)
           } else {
-            console.log('❌ No learned field mapping found, fetching general company mapping')
             // If no learned mapping, fetch the general company mapping
             return fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${company.id}/mapping/`)
           }
         })
         .then(r => r.json())
         .then(map => {
-          console.log('📥 Received general mapping response:', map)
           let fieldsArr = fieldConfig
           let loadedPlanTypes: string[] | null = null
           let loadedTableNames: string[] | null = null
@@ -176,7 +155,6 @@ export function useUploadPage() {
           
           setFieldConfig(fieldsArr)
           if (loadedPlanTypes) setPlanTypes(loadedPlanTypes)
-          console.log('✅ Field config and plan types loaded')
           setFetchingMapping(false)
         })
         .catch((error) => {
@@ -224,12 +202,10 @@ export function useUploadPage() {
   // Handle URL parameters for resuming files and check for active sessions
   const handleResumeFile = useCallback(async (fileId: string, stepParam?: string | null) => {
     if (resumeFileRef.current) {
-      console.log('🔄 Resume file already in progress, skipping...')
       return
     }
     
     resumeFileRef.current = true
-    console.log('🎯 Starting resume file process for:', fileId)
     
     try {
       const uploadResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/pending/files/single/${fileId}`)
@@ -254,12 +230,8 @@ export function useUploadPage() {
       const currentStep = stepParam || upload.current_step || 'upload'
       
       // Load selected statement date if available
-      console.log('🎯 handleResumeFile: Checking for selected_statement_date in upload:', upload.selected_statement_date)
       if (upload.selected_statement_date) {
         setSelectedStatementDate(upload.selected_statement_date)
-        console.log('🎯 Loaded selected statement date:', upload.selected_statement_date)
-      } else {
-        console.log('🎯 handleResumeFile: No selected_statement_date found in upload data')
       }
       
       if (currentStep === 'table_editor') {
@@ -289,12 +261,6 @@ export function useUploadPage() {
       }
       
       if (upload.company_id && !company) {
-        console.log('🎯 Setting company from upload data:', {
-          company_id: upload.company_id,
-          company_name: upload.company_name,
-          upload: upload
-        })
-        
         if (!upload.company_name) {
           try {
             const companyResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${upload.company_id}`)
@@ -304,7 +270,6 @@ export function useUploadPage() {
                 id: upload.company_id,
                 name: companyData.name || 'Unknown Company'
               })
-              console.log('🎯 Company fetched from backend:', companyData)
             } else {
               setCompany({
                 id: upload.company_id,
@@ -332,7 +297,6 @@ export function useUploadPage() {
       toast.error('Failed to resume file')
     } finally {
       resumeFileRef.current = false
-      console.log('🎯 Resume file process completed')
     }
   }, [company, loadProgress])
 
@@ -366,10 +330,8 @@ export function useUploadPage() {
   // Load selected statement date when FieldMapper is shown
   useEffect(() => {
     if (showFieldMapper && uploaded?.upload_id && !selectedStatementDate) {
-      console.log('🎯 FieldMapper shown, loading selected statement date from progress')
       loadProgress('table_editor').then((data) => {
         if (data && data.selected_statement_date) {
-          console.log('🎯 Loaded selected statement date from progress:', data.selected_statement_date)
           setSelectedStatementDate(data.selected_statement_date)
         }
       })
@@ -452,8 +414,6 @@ export function useUploadPage() {
     
     // Check if format learning was applied by the backend
     if (format_learning?.found_match && format_learning?.match_score > 0.6) {
-      console.log('🎯 Backend applied learned format:', format_learning)
-      
       // Show success message for table editor settings
       if (format_learning.table_editor_settings) {
         toast.success('Applied learned table editor settings!')
@@ -461,19 +421,16 @@ export function useUploadPage() {
       
       // Apply field mappings if available
       if (format_learning.suggested_mapping && Object.keys(format_learning.suggested_mapping).length > 0) {
-        console.log('🎯 Setting learned mapping:', format_learning.suggested_mapping)
         setMapping(format_learning.suggested_mapping)
         setMappingAutoApplied(true)
         toast.success('Field mappings auto-populated from learned format!')
       } else {
-        console.log('🎯 No suggested mapping in format learning data')
         setMapping(null)
         setMappingAutoApplied(false)
       }
       
       // Auto-apply learned table editor settings if available
       if (format_learning.table_editor_settings && tables && tables.length > 0) {
-        console.log('🎯 Auto-applying learned table editor settings')
         try {
           // Apply learned headers and settings to tables
           const updatedTables = [...tables]
@@ -485,12 +442,10 @@ export function useUploadPage() {
             
             // Apply learned headers if they're different
             if (JSON.stringify(learnedHeaders) !== JSON.stringify(currentHeaders)) {
-              console.log('🎯 Applying learned headers:', learnedHeaders)
               mainTable.header = learnedHeaders
               
               // Adjust data rows if column count changed
               if (mainTable.rows && learnedHeaders.length !== currentHeaders.length) {
-                console.log('🎯 Adjusting data rows for header correction')
                 const adjustedRows = []
                 
                 for (const row of mainTable.rows) {
@@ -505,7 +460,6 @@ export function useUploadPage() {
                 }
                 
                 mainTable.rows = adjustedRows
-                console.log('🎯 Adjusted data rows to match learned headers')
               }
               
               // Update the tables state with corrected data
@@ -518,7 +472,6 @@ export function useUploadPage() {
         }
       }
     } else {
-      console.log('🎯 No learned format found or low confidence:', format_learning)
       setMapping(null)
       setMappingAutoApplied(false)
     }
@@ -579,8 +532,6 @@ export function useUploadPage() {
               result.detected_summary_rows.forEach((rowIdx: number) => {
                 tablesWithSummaryRows[tableIdx].summaryRows!.add(rowIdx)
               })
-              
-              console.log(`Auto-detected ${result.detected_summary_rows.length} summary rows in table ${tableIdx + 1}`)
             }
           }
         }
@@ -615,7 +566,6 @@ export function useUploadPage() {
       })
       
       if (response.ok) {
-        console.log('🎯 useUploadPage: Save successful, setting editedTables')
         setEditedTables(tables)
         
         const progressData = {
@@ -760,8 +710,6 @@ export function useUploadPage() {
 
 
   function handleGoToFieldMapping() {
-    console.log('🎯 useUploadPage: handleGoToFieldMapping called')
-    console.log('🎯 useUploadPage: Current selectedStatementDate:', selectedStatementDate)
     setShowTableEditor(false)
     setShowFieldMapper(true)
     
@@ -771,7 +719,6 @@ export function useUploadPage() {
         selected_statement_date: selectedStatementDate
       })
     }
-    console.log('🎯 useUploadPage: Field mapper state set to true')
   }
 
   function handleGoToPreviousExtraction() {
@@ -796,17 +743,12 @@ export function useUploadPage() {
     fieldConfigOverride: FieldConfig[],
     onComplete?: () => void
   ) {
-    console.log('applyMapping called with:', { tables, mapping, fieldConfigOverride })
-    
     const mappedRows = []
     const dashboardHeader = fieldConfigOverride.map(f => f.field)
     
     for (const table of tables) {
-      console.log('Processing table:', table)
       const tableRows = []
       for (const row of table.rows) {
-        console.log('Processing row:', row, 'Type:', typeof row, 'Is Array:', Array.isArray(row))
-        
         if (!Array.isArray(row)) {
           console.error('Row is not an array:', row)
           continue
@@ -820,7 +762,6 @@ export function useUploadPage() {
             // Check if this is an auto-fill field (Invoice Total with __AUTO_FILL_ZERO__)
             if (column === '__AUTO_FILL_ZERO__') {
               mappedRow[field] = '$0.00'
-              console.log(`🎯 Auto-filling ${field} with $0.00`)
             } else {
               const colIndex = table.header.indexOf(column)
               if (colIndex !== -1 && row[colIndex] !== undefined) {
@@ -843,9 +784,7 @@ export function useUploadPage() {
       })
     }
     
-    console.log('Final mapped rows:', mappedRows)
     setFinalTables(mappedRows)
-    console.log('✅ finalTables state updated with', mappedRows.length, 'tables')
     
     if (uploaded?.upload_id) {
       saveProgress('dashboard', {
@@ -861,9 +800,6 @@ export function useUploadPage() {
   }
 
   async function handleApprove() {
-    console.log('🎯 useUploadPage: handleApprove called')
-    console.log('🎯 useUploadPage: selectedStatementDate in approve:', selectedStatementDate)
-    
     if (!company || !uploaded?.upload_id) return
     
     setSubmitting(true)
@@ -875,7 +811,6 @@ export function useUploadPage() {
         plan_types: planTypes,
         selected_statement_date: selectedStatementDate,
       }
-      console.log('🎯 useUploadPage: Approve request body:', requestBody)
       
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/review/approve/`, {
         method: 'POST',
@@ -894,7 +829,6 @@ export function useUploadPage() {
         
         toast.success('Statement approved successfully!')
         setTimeout(() => {
-          console.log('Navigating to dashboard...')
           window.location.href = '/?tab=dashboard'
         }, 1000)
       } else {
@@ -918,8 +852,6 @@ export function useUploadPage() {
     
     setSubmitting(true)
     try {
-      console.log('🎯 useUploadPage: handleRejectSubmit called with selectedStatementDate:', selectedStatementDate);
-      
       const requestBody = {
         upload_id: uploaded.upload_id,
         final_data: finalTables,
@@ -928,8 +860,6 @@ export function useUploadPage() {
         plan_types: planTypes,
         selected_statement_date: selectedStatementDate,
       };
-      
-      console.log('🎯 useUploadPage: Reject request body:', requestBody);
       
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/review/reject/`, {
         method: 'POST',
@@ -949,7 +879,6 @@ export function useUploadPage() {
         
         toast.success('Statement rejected successfully!')
         setTimeout(() => {
-          console.log('Navigating to dashboard...')
           window.location.href = '/?tab=dashboard'
         }, 1000)
       } else {
@@ -1014,8 +943,6 @@ export function useUploadPage() {
 
   // Field mapper save handler
   async function handleFieldMapperSave(map: Record<string, string>, fieldConf: FieldConfig[], selectedPlanTypes: string[], tableNames?: string[], selectedStatementDate?: any) {
-    console.log('🎯 FieldMapper onSave called with:', { map, fieldConf, selectedPlanTypes, selectedStatementDate })
-    
     setSavingMapping(true)
     
     try {
@@ -1040,8 +967,6 @@ export function useUploadPage() {
         throw new Error(`Failed to save mapping: ${response.status}`)
       }
       
-      console.log('✅ Mapping saved successfully')
-      
       setMapping(map)
       setFieldConfig(fieldConf)
       setPlanTypes(selectedPlanTypes)
@@ -1049,12 +974,8 @@ export function useUploadPage() {
       setShowTableEditor(false)
       
       applyMapping(editedTables.length > 0 ? editedTables : uploaded.tables.length > 0 ? uploaded.tables : finalTables, map, fieldConf, () => {
-        console.log('🎯 applyMapping callback executed, hiding FieldMapper')
         setShowFieldMapper(false)
-        console.log('🎯 FieldMapper hidden, transitioning to dashboard')
       })
-      
-      console.log('🎯 All states set, transitioning to dashboard')
       
       if (uploaded?.upload_id) {
         saveProgress('field_mapper', {
@@ -1113,11 +1034,6 @@ export function useUploadPage() {
     }
   }
 
-  // Debug logging for return values
-  console.log('🔍 useUploadPage returning handlers')
-  
-  console.log('🔍 useUploadPage about to return object with handlers')
-  
   return {
     // State
     company,
@@ -1200,5 +1116,3 @@ export function useUploadPage() {
     tableEditorLearning,
   }
 }
-
-console.log('🔍 useUploadPage hook completed')

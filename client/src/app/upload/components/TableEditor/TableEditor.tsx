@@ -73,8 +73,6 @@ export default function TableEditor({
   tableEditorLearning,
 
 }: TableEditorProps) {
-  
-  console.log('🚀 TableEditor component called with props')
   const [currentTableIdx, setCurrentTableIdx] = useState(0)
   const [searchTerm, setSearchTerm] = useState('')
   const [zoom, setZoom] = useState(1)
@@ -99,8 +97,6 @@ export default function TableEditor({
 
   // Extraction handlers
   const handleExtractWithGPT = async () => {
-    console.log('🚀 handleExtractWithGPT function called')
-    
     // Always show loading state
     setIsExtractingWithGPT(true)
     toast.loading('Extracting with GPT-5 Vision...', { id: 'extract-gpt' })
@@ -137,7 +133,6 @@ export default function TableEditor({
       }
 
       const result = await response.json()
-      console.log('📡 GPT extraction result:', result)
       
       if (result.success) {
         // Update tables with new extraction result
@@ -162,8 +157,6 @@ export default function TableEditor({
   }
 
   const handleExtractWithGoogleDocAI = async () => {
-    console.log('🚀 handleExtractWithGoogleDocAI function called')
-    
     // Always show loading state
     setIsExtractingWithGoogleDocAI(true)
     toast.loading('Extracting with Google Document AI...', { id: 'extract-google' })
@@ -200,7 +193,6 @@ export default function TableEditor({
       }
 
       const result = await response.json()
-      console.log('📡 Google DOC AI extraction result:', result)
       
       if (result.success) {
         // Update tables with new extraction result
@@ -227,15 +219,7 @@ export default function TableEditor({
   // Ref to track processed data keys to prevent duplicate extractions
   const processedDataKeysRef = useRef<Set<string>>(new Set())
   
-  // Debug modal state changes
-  useEffect(() => {
-    console.log('🎭 Modal state changed:', {
-      showDateModal,
-      extractedDatesLength: extractedDates.length,
-      dateExtractionLoading,
-      hasExtractedDates
-    })
-  }, [showDateModal, extractedDates.length, dateExtractionLoading, hasExtractedDates])
+
 
   // Click outside handler for menus
   useEffect(() => {
@@ -431,11 +415,9 @@ export default function TableEditor({
     
     // Skip if already processed
     if (processedDataKeysRef.current.has(dataKey)) {
-      console.log('⏭️ Skipping - already processed:', dataKey)
       return
     }
 
-    console.log('🚀 Starting date extraction for:', dataKey)
     processedDataKeysRef.current.add(dataKey)
     
     const extractDates = async () => {
@@ -446,12 +428,6 @@ export default function TableEditor({
       try {
         const response = await dateExtractionService.extractDatesFromFile(uploaded.file, companyId)
         
-        console.log('🎯 Date extraction completed:', {
-          success: response.success,
-          datesCount: response.dates?.length || 0,
-          isUnmounting: isUnmountingRef.current
-        })
-        
         // Always try to show modal if we have a successful response, even if component is unmounting
         if (response.success) {
           setExtractedDates(response.dates || [])
@@ -459,7 +435,6 @@ export default function TableEditor({
             setHasExtractedDates(true) // Mark that dates were extracted
           }
           setShowDateModal(true) // 🎯 This will now work!
-          console.log('✅ Modal should show with', response.dates?.length || 0, 'dates')
           
           if (response.dates && response.dates.length > 0) {
             toast.success(`Found ${response.dates.length} date(s) in your document`)
@@ -486,7 +461,6 @@ export default function TableEditor({
   // Cleanup effect that only runs on unmount
   useEffect(() => {
     return () => {
-      console.log('🧹 Component unmounting - cleaning up extraction state')
       isUnmountingRef.current = true
     }
   }, [])
@@ -862,30 +836,22 @@ export default function TableEditor({
             {/* Date Extraction Button */}
             <button
               onClick={() => {
-                console.log('🔧 Manual extraction button clicked')
-                
                 // If dates were already extracted but no date was selected, just reopen the modal
                 if (hasExtractedDates && extractedDates.length > 0) {
-                  console.log('📅 Reopening modal with existing extracted dates')
                   setShowDateModal(true)
                   return
                 }
                 
                 if (!dateExtractionLoading) {
-                  console.log('🚀 Starting manual extraction')
                   setDateExtractionLoading(true)
                   
                   const performManualDateExtraction = async () => {
-                    console.log('🎯 performManualDateExtraction called')
-                    
                     // Check if component is unmounting
                     if (isUnmountingRef.current) {
-                      console.log('❌ Component unmounting - cancelling manual extraction')
                       return
                     }
                     
                     if (!uploaded?.file || !companyId) {
-                      console.log('❌ Manual extraction - missing file or companyId')
                       setDateExtractionLoading(false)
                       return
                     }
@@ -894,13 +860,9 @@ export default function TableEditor({
                       const fileToUse = uploaded.file
                       let response
                       
-                      console.log('📁 Starting manual API call')
-                      
                       if (fileToUse instanceof File) {
-                        console.log('📄 Manual - Using File object:', fileToUse.name)
                         response = await dateExtractionService.extractDatesFromFile(fileToUse, companyId)
                       } else if (fileToUse && typeof fileToUse === 'object' && fileToUse.url) {
-                        console.log('🌐 Manual - Using file URL:', fileToUse.url)
                         try {
                           const fileResponse = await fetch(fileToUse.url)
                           if (!fileResponse.ok) {
@@ -911,7 +873,6 @@ export default function TableEditor({
                           const file = new File([fileBlob], fileName, { type: fileBlob.type || 'application/pdf' })
                           response = await dateExtractionService.extractDatesFromFile(file, companyId)
                         } catch (fetchError) {
-                          console.log('❌ Manual - File fetch failed:', fetchError)
                           // Always try to show modal, even if component is unmounting
                           setExtractedDates([])
                           setHasExtractedDates(false) // Reset flag on error
@@ -921,7 +882,6 @@ export default function TableEditor({
                           return
                         }
                       } else {
-                        console.log('❌ Manual - No proper file object')
                         // Always try to show modal, even if component is unmounting
                         setExtractedDates([])
                         setHasExtractedDates(false) // Reset flag on error
@@ -931,34 +891,25 @@ export default function TableEditor({
                         return
                       }
                       
-                      console.log('✅ Manual - API response received:', {
-                        success: response.success,
-                        datesCount: response.dates?.length || 0
-                      })
-                      
                       // Always try to show modal, even if component is unmounting
                       if (response.success && response.dates && response.dates.length > 0) {
-                        console.log('✅ Manual - Setting dates:', response.dates.length)
                         setExtractedDates(response.dates)
                         setHasExtractedDates(true) // Mark that dates were extracted
                         setShowDateModal(true)
                         toast.success(`Found ${response.dates.length} date(s) in your document`)
                       } else {
-                        console.log('📋 Manual - No dates found')
                         setExtractedDates([])
                         setHasExtractedDates(false) // Reset flag when no dates found
                         setShowDateModal(true)
                         toast.success('No dates found in the document. You can manually select a date.')
                       }
                     } catch (error: any) {
-                      console.log('❌ Manual - API call failed:', error)
                       // Always try to show modal for manual selection, even if component is unmounting
                       setExtractedDates([])
                       setHasExtractedDates(false) // Reset flag on error
                       setShowDateModal(true)
                       toast.success('Date extraction failed. You can manually select a date.')
                     } finally {
-                      console.log('🏁 Manual - Finishing extraction')
                       // Always reset loading state
                       setDateExtractionLoading(false)
                     }

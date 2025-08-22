@@ -125,15 +125,12 @@ export const useEarnedCommissionStats = (year?: number) => {
     setLoading(true);
     setError(null);
     try {
-      console.log('🔍 Fetching earned commission stats...', year ? `for year ${year}` : '');
       const url = year 
         ? `${process.env.NEXT_PUBLIC_API_URL}/earned-commission/stats?year=${year}`
         : `${process.env.NEXT_PUBLIC_API_URL}/earned-commission/stats`;
       const response = await fetch(url);
-      console.log('📊 Earned commission stats response:', response.status, response.ok);
       if (response.ok) {
         const data = await response.json();
-        console.log('📊 Earned commission stats data:', data);
         setStats(data);
       } else {
         const errorText = await response.text();
@@ -267,12 +264,9 @@ export const useAvailableYears = () => {
     setLoading(true);
     setError(null);
     try {
-      console.log('🔍 Fetching available years...');
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/dashboard/earned-commissions/years`);
-      console.log('📊 Available years response:', response.status, response.ok);
       if (response.ok) {
         const responseData = await response.json();
-        console.log('📊 Available years:', responseData);
         setYears(responseData.years || []);
       } else {
         const errorText = await response.text();
@@ -303,15 +297,12 @@ export const useAllCommissionData = (year?: number) => {
     setLoading(true);
     setError(null);
     try {
-      console.log('🔍 Fetching all commission data...', year ? `for year ${year}` : '');
       const url = year 
         ? `${process.env.NEXT_PUBLIC_API_URL}/dashboard/earned-commissions?year=${year}`
         : `${process.env.NEXT_PUBLIC_API_URL}/dashboard/earned-commissions`;
       const response = await fetch(url);
-      console.log('📊 All commission data response:', response.status, response.ok);
       if (response.ok) {
         const responseData = await response.json();
-        console.log('📊 All commission data:', responseData);
         setData(responseData);
       } else {
         const errorText = await response.text();

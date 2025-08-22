@@ -78,7 +78,7 @@ export default function MergeConfirmationModal({
         <div className="space-y-6">
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
             <p className="text-amber-800 font-medium">
-              A company with the name <span className="font-bold">"{newData.client_name}"</span> already exists for this carrier.
+              A company with the name <span className="font-bold">&ldquo;{newData.client_name}&rdquo;</span> already exists for this carrier.
             </p>
             <p className="text-amber-700 text-sm mt-2">
               Would you like to merge this data with the existing record?

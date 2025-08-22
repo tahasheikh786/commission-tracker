@@ -138,7 +138,7 @@ def adapt_tableblock_to_standard_format(tableblock: Dict[str, Any], page_num: in
         
         # Create standard table format
         table_dict = {
-            "headers": headers,
+            "header": headers,  # Fixed: use "header" to match frontend expectations
             "rows": rows,
             "confidence": confidence,
             "bbox": bbox_dict,
@@ -159,7 +159,7 @@ def adapt_tableblock_to_standard_format(tableblock: Dict[str, Any], page_num: in
     except Exception as e:
         print(f"Error adapting tableBlock to standard format: {e}")
         return {
-            "headers": [],
+            "header": [],  # Fixed: use "header" to match frontend expectations
             "rows": [],
             "confidence": 0.0,
             "bbox": {},
@@ -628,7 +628,7 @@ class GoogleDocAIExtractor:
                             })
             
             if not text_blocks:
-                return {"headers": [], "rows": [], "confidence": 0.0}
+                return {"header": [], "rows": [], "confidence": 0.0}  # Fixed: use "header" to match frontend expectations
             
             # Sort text blocks by vertical position (top to bottom)
             text_blocks.sort(key=lambda x: x['bbox']['y'] if x['bbox'] else 0)
@@ -678,7 +678,7 @@ class GoogleDocAIExtractor:
                 data_rows = normalized_rows
             
             return {
-                "headers": headers,
+                "header": headers,  # Fixed: use "header" to match frontend expectations
                 "rows": data_rows,
                 "confidence": 0.5,  # Lower confidence for fallback method
                 "bbox": {},
@@ -696,7 +696,7 @@ class GoogleDocAIExtractor:
             
         except Exception as e:
             print(f"Error in fallback table extraction: {e}")
-            return {"headers": [], "rows": [], "confidence": 0.0}
+            return {"header": [], "rows": [], "confidence": 0.0}  # Fixed: use "header" to match frontend expectations
     
     def _extract_cell_text_with_confidence(self, cell: Any, document: Any) -> Tuple[str, float]:
         """
@@ -930,16 +930,21 @@ class GoogleDocAIExtractor:
             
             # Filter low-confidence headers and generate alternatives
             if headers and header_confidence_scores:
+                print(f"🔍 Processing {len(headers)} headers with confidence scores: {header_confidence_scores}")
                 filtered_headers = []
                 for i, (header, confidence) in enumerate(zip(headers, header_confidence_scores)):
                     if confidence >= HEADER_CONFIDENCE_THRESHOLD:
                         filtered_headers.append(header)
+                        print(f"✅ Header '{header}' (confidence: {confidence:.2f}) accepted")
                     else:
                         # Generate alternative header for low-confidence cells
                         alt_header = self._generate_header_from_data(rows, i) if rows else f"Column_{i+1}"
-                        filtered_headers.append(alt_header)
-                        print(f"🔄 Low confidence header '{header}' (confidence: {confidence:.2f}) replaced with '{alt_header}'")
+                        filtered_headers.append(header)  # Keep original header even if low confidence
+                        print(f"🔄 Low confidence header '{header}' (confidence: {confidence:.2f}) kept as is")
                 headers = filtered_headers
+                print(f"📋 Final headers: {headers}")
+            else:
+                print(f"⚠️ No headers or confidence scores: headers={len(headers) if headers else 0}, confidence_scores={len(header_confidence_scores) if header_confidence_scores else 0}")
             
             # Ensure all rows have the same number of columns as headers
             if headers:
@@ -971,8 +976,10 @@ class GoogleDocAIExtractor:
                     }
             
             # Create standard table format
+            print(f"📊 Creating table with {len(headers)} headers and {len(rows)} rows")
+            print(f"📋 Headers: {headers}")
             table_dict = {
-                "headers": headers,
+                "header": headers,  # Fixed: use "header" to match frontend expectations
                 "rows": rows,
                 "confidence": confidence,
                 "bbox": bbox,
@@ -987,13 +994,14 @@ class GoogleDocAIExtractor:
                     "source_format": "form_parser_table"
                 }
             }
+            print(f"✅ Table created with header field: {table_dict.get('header', [])}")
             
             return table_dict
             
         except Exception as e:
             print(f"Error converting Form Parser table to standard format: {e}")
             return {
-                "headers": [],
+                "header": [],  # Fixed: use "header" to match frontend expectations
                 "rows": [],
                 "confidence": 0.0,
                 "bbox": {},
@@ -1085,7 +1093,7 @@ class GoogleDocAIExtractor:
                 table_rows.append([cell.get("text", "") for cell in row])
             
             return {
-                "headers": headers,
+                "header": headers,  # Fixed: use "header" to match frontend expectations
                 "rows": table_rows,
                 "confidence": layout.confidence,
                 "bbox": {
@@ -1098,7 +1106,7 @@ class GoogleDocAIExtractor:
             
         except Exception as e:
             print(f"Error analyzing table structure: {e}")
-            return {"headers": [], "rows": [], "confidence": 0.0}
+            return {"header": [], "rows": [], "confidence": 0.0}  # Fixed: use "header" to match frontend expectations
     
     def _cluster_table_elements(self, table_texts: List[Dict], table_bbox: List) -> Tuple[List[List[Dict]], List[List[Dict]]]:
         """
@@ -1218,8 +1226,10 @@ class GoogleDocAIExtractor:
         for table in tables:
             try:
                 # Clean and normalize headers
-                headers = table.get("headers", [])
+                headers = table.get("header", [])  # Fixed: use "header" to match frontend expectations
+                print(f"🔍 Post-processing: Original headers: {headers}")
                 cleaned_headers = [self._clean_text(header) for header in headers]
+                print(f"🔍 Post-processing: Cleaned headers: {cleaned_headers}")
                 
                 # Clean and normalize rows
                 rows = table.get("rows", [])
@@ -1229,11 +1239,14 @@ class GoogleDocAIExtractor:
                     cleaned_rows.append(cleaned_row)
                 
                 # Remove empty rows and columns
+                print(f"🔍 Before removing empty cells: {len(cleaned_headers)} headers, {len(cleaned_rows)} rows")
                 cleaned_headers, cleaned_rows = self._remove_empty_cells(cleaned_headers, cleaned_rows)
+                print(f"🔍 After removing empty cells: {len(cleaned_headers)} headers, {len(cleaned_rows)} rows")
                 
                 # Ensure table dict matches utility requirements
+                print(f"📊 Post-processing: Final headers: {cleaned_headers}")
                 table_dict = {
-                    "headers": cleaned_headers,
+                    "header": cleaned_headers,  # Fixed: use "header" to match frontend expectations
                     "rows": cleaned_rows,
                     "confidence": table.get("confidence", 0.0),
                     "bbox": table.get("bbox", {}),
@@ -1243,6 +1256,7 @@ class GoogleDocAIExtractor:
                     "post_processed": True,
                     "metadata": table.get("metadata", {})
                 }
+                print(f"✅ Post-processing: Table created with header field: {table_dict.get('header', [])}")
                 
                 # Add any additional metadata from the original table
                 for key, value in table.items():
@@ -1261,6 +1275,8 @@ class GoogleDocAIExtractor:
         """Clean and normalize text."""
         if not text:
             return ""
+        
+        original_text = text
         
         # Remove excessive underscores (common in form fields and OCR artifacts)
         # Replace multiple consecutive underscores with a single space
@@ -1286,6 +1302,10 @@ class GoogleDocAIExtractor:
         # If the result is just whitespace or empty, return empty string
         if not cleaned or cleaned.isspace():
             return ""
+        
+        # Debug logging for header cleaning
+        if original_text != cleaned:
+            print(f"🔧 Text cleaned: '{original_text}' -> '{cleaned}'")
         
         return cleaned
     
@@ -1317,9 +1337,13 @@ class GoogleDocAIExtractor:
                     cell_value = row[col_idx] if col_idx < len(row) else ""
                     col_values.append(cell_value)
                 
+                # Debug logging for column analysis
+                print(f"🔍 Column {col_idx}: header='{header_value}', has_content={any(value.strip() for value in col_values)}")
+                
                 # Only remove column if ALL values are empty (including header)
                 if any(value.strip() for value in col_values):
                     non_empty_cols.append(col_idx)
+                    print(f"✅ Keeping column {col_idx} with header '{header_value}'")
                 else:
                     print(f"🗑️ Removing completely empty column {col_idx}")
             
@@ -1330,6 +1354,8 @@ class GoogleDocAIExtractor:
                     new_headers.append(headers[col_idx])
                 else:
                     new_headers.append(f"Column_{col_idx+1}")
+            
+            print(f"🔍 Rebuilt headers: {new_headers}")
             
             new_rows = []
             for row_idx, row in enumerate(rows):
@@ -1445,9 +1471,9 @@ class GoogleDocAIExtractor:
                     "standard_format": table_dict
                 },
                 "validation": {
-                    "headers_count": len(table_dict.get("headers", [])),
+                    "headers_count": len(table_dict.get("header", [])),  # Fixed: use "header" to match frontend expectations
                     "rows_count": len(table_dict.get("rows", [])),
-                    "has_standard_format": "headers" in table_dict and "rows" in table_dict,
+                    "has_standard_format": "header" in table_dict and "rows" in table_dict,  # Fixed: use "header" to match frontend expectations
                     "confidence_preserved": table_dict.get("confidence") == 0.95,
                     "extractor_type": table_dict.get("extractor") == "google_docai_form_parser"
                 }

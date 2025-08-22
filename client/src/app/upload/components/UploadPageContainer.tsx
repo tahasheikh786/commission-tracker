@@ -7,10 +7,7 @@ import FieldMapperSection from './FieldMapperSection'
 import DashboardSection from './DashboardSection'
 import { useUploadPage } from '../hooks/useUploadPage'
 
-console.log('🔍 UploadPageContainer module loaded')
-
 export default function UploadPageContainer() {
-  console.log('🚀 UploadPageContainer component called')
   
   const {
     // State
@@ -93,28 +90,8 @@ export default function UploadPageContainer() {
     tableEditorLearning,
   } = useUploadPage()
 
-  console.log('🔍 UploadPageContainer received from useUploadPage')
-  
-  // Debug logging for current state
-  console.log('🔍 UploadPageContainer current state:', {
-    company: !!company,
-    uploaded: !!uploaded,
-    showTableEditor,
-    uploadedTablesLength: uploaded?.tables?.length
-  })
-  
-  // Debug which component will be rendered
-  console.log('🔍 UploadPageContainer rendering logic:', {
-    condition1: !company || !uploaded,
-    condition2: fetchingMapping && !showFieldMapper,
-    condition3: uploaded?.tables?.length && company && showTableEditor,
-    condition4: (uploaded?.tables?.length || finalTables.length > 0) && company && !fetchingMapping && showFieldMapper,
-    condition5: (mapping && !showFieldMapper) || skipped || (finalTables.length > 0 && !showFieldMapper)
-  })
-
   // 1. Show upload interface if no company selected or no upload yet
   if (!company || !uploaded) {
-    console.log('🔍 UploadPageContainer rendering: UploadInterface')
     return (
       <UploadInterface
         company={company}
@@ -128,7 +105,6 @@ export default function UploadPageContainer() {
   }
 
   if (fetchingMapping && !showFieldMapper) {
-    console.log('🔍 UploadPageContainer rendering: Loader')
     return (
       <div className="w-full flex items-center justify-center py-12">
         <Loader message="Loading saved mapping..." />
@@ -138,7 +114,6 @@ export default function UploadPageContainer() {
 
   // 2. Show Table Editor first (new step)
   if (uploaded?.tables?.length && company && showTableEditor) {
-    console.log('🔍 UploadPageContainer rendering: TableEditorSection')
     return (
       <TableEditorSection
         tables={uploaded.tables}
@@ -168,7 +143,6 @@ export default function UploadPageContainer() {
 
   // 3. Show Field Mapper
   if ((uploaded?.tables?.length || finalTables.length > 0) && company && !fetchingMapping && showFieldMapper) {
-    console.log('🔍 UploadPageContainer rendering: FieldMapperSection')
     return (
       <FieldMapperSection
         company={company}
@@ -194,7 +168,6 @@ export default function UploadPageContainer() {
 
   // 4. Show Dashboard
   if ((mapping && !showFieldMapper) || skipped || (finalTables.length > 0 && !showFieldMapper)) {
-    console.log('🔍 UploadPageContainer rendering: DashboardSection')
     return (
       <DashboardSection
         company={company}
@@ -223,6 +196,5 @@ export default function UploadPageContainer() {
   }
 
   // fallback: shouldn't ever get here
-  console.log('🔍 UploadPageContainer rendering: fallback (null)')
   return null
 }

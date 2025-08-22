@@ -127,14 +127,8 @@ export default function FieldMapper({
   const [learnedMapping, setLearnedMapping] = useState<Record<string, string> | null>(null)
   const [mappingSource, setMappingSource] = useState<'manual' | 'learned' | 'fuzzy'>('manual')
 
-  // Add effect to track mapping changes
-  useEffect(() => {
-    console.log('Mapping state changed:', mapping)
-  }, [mapping])
-
   // Add effect to handle initialMapping changes
   useEffect(() => {
-    console.log('🎯 FieldMapper: initialMapping changed:', initialMapping)
     if (initialMapping && Object.keys(initialMapping).length > 0) {
       // Validate that the mapping has valid field keys
       const validMapping: Record<string, string> = {}
@@ -145,16 +139,12 @@ export default function FieldMapper({
       })
       
       if (Object.keys(validMapping).length > 0) {
-        console.log('🎯 FieldMapper: Setting valid mapping from initialMapping:', validMapping)
         setMapping(validMapping)
         setMappingSource('manual')
       } else {
-        console.log('🎯 FieldMapper: initialMapping provided but no valid mappings found')
         setMapping({})
         setMappingSource('manual')
       }
-    } else {
-      console.log('🎯 FieldMapper: No initialMapping provided or empty')
     }
   }, [initialMapping])
 
@@ -164,10 +154,8 @@ export default function FieldMapper({
       // Validate that all fields have valid field keys
       const validFields = initialFields.filter(f => f && f.field && f.field !== 'undefined')
       if (validFields.length > 0) {
-        console.log('initialFields changed, updating fields state:', validFields)
         setFields(validFields)
       } else {
-        console.log('initialFields provided but no valid fields found, using database fields')
         if (databaseFields.length > 0) {
           setFields(databaseFields)
         }
@@ -228,7 +216,7 @@ export default function FieldMapper({
     }
 
     fetchDatabaseFields()
-  }, [fields.length, initialFields]) // Add missing dependencies
+  }, [fields.length, initialFields])
 
   // Fetch plan types from backend
   useEffect(() => {
@@ -259,19 +247,16 @@ export default function FieldMapper({
     // The backend already provides format_learning data in the upload response
     // This is handled in the parent component (useUploadPage) and passed as initialMapping
     // No need to fetch learned mappings again here
-    console.log('FieldMapper: Using format learning data from backend via initialMapping:', initialMapping)
     
     // If we have a learned mapping, set it as the learned mapping for potential application
     if (initialMapping && Object.keys(initialMapping).length > 0) {
       setLearnedMapping(initialMapping)
-      console.log('FieldMapper: Set learned mapping from initialMapping:', initialMapping)
     }
   }, [initialMapping])
 
   // Ensure fields are always populated from database fields if available
   useEffect(() => {
     if (databaseFields.length > 0 && fields.length === 0 && initialFields.length === 0) {
-      console.log('Force setting fields from database fields:', databaseFields)
       setFields(databaseFields)
     }
   }, [databaseFields, fields.length, initialFields])
@@ -284,14 +269,10 @@ export default function FieldMapper({
       return // Exit early, don't run fuzzy matching
     } else if (learnedMapping && Object.keys(learnedMapping).length > 0 && mappingSource === 'learned') {
       // Keep the learned mapping if it was already set
-      console.log('🎯 FieldMapper: Setting mapping from learnedMapping:', learnedMapping)
       setMapping(learnedMapping)
       return // Exit early, don't run fuzzy matching
     } else if (columns && columns.length > 0 && fields && fields.length > 0) {
       // Enable fuzzy matching for auto-mapping only if no valid mapping exists
-      console.log('🎯 FieldMapper: Running fuzzy matching with columns:', columns)
-      console.log('🎯 FieldMapper: Fields to match:', fields)
-      
       const map: Record<string, string> = {}
       const usedColumns = new Set<string>() // Track used columns to prevent duplicates
       
@@ -306,11 +287,9 @@ export default function FieldMapper({
         if (found) {
           map[f.field] = found
           usedColumns.add(found) // Mark this column as used
-          console.log(`Matched field "${f.field}" to column "${found}"`)
         }
       }
       
-      console.log('Final fuzzy mapping:', map)
       if (Object.keys(map).length > 0) {
         setMapping(map)
         setMappingSource('fuzzy')
@@ -320,23 +299,18 @@ export default function FieldMapper({
   }, [initialMapping, learnedMapping, mappingSource, columns, fields]) // Add columns and fields back to dependencies
 
   function setFieldMap(field: string, col: string) {
-    console.log(`Setting field "${field}" to column "${col}"`)
-    console.log('Current mapping before update:', mapping)
     setMapping(prevMapping => {
       const newMapping = { ...prevMapping, [field]: col }
-      console.log('New mapping after update:', newMapping)
       return newMapping
     })
   }
 
   function resetMapping() {
-    console.log('Resetting mapping state')
     setMapping({})
     setFields([])
   }
 
   function clearMapping() {
-    console.log('Clearing mapping state')
     setMapping({})
   }
 
@@ -399,19 +373,15 @@ export default function FieldMapper({
       
       // If Invoice Total field exists but is not mapped, automatically fill with $0.00
       if (invoiceTotalField && !mapping[invoiceTotalField.field]) {
-        console.log('🎯 Invoice Total field not mapped, will automatically fill with $0.00')
-        
         // Create a new mapping that includes the Invoice Total field with a special value
         const updatedMapping = {
           ...mapping,
           [invoiceTotalField.field]: '__AUTO_FILL_ZERO__' // Special marker for backend to handle
         }
         
-        console.log('🎯 Updated mapping with auto-fill for Invoice Total:', updatedMapping)
         onSave(updatedMapping, fields, planTypes, tableNames, selectedStatementDate)
       } else {
         // Normal save without auto-fill
-        console.log('🎯 Calling onSave with:', { mapping, fields, planTypes, selectedStatementDate })
         onSave(mapping, fields, planTypes, tableNames, selectedStatementDate)
       }
       
@@ -752,7 +722,6 @@ export default function FieldMapper({
           <div className="flex gap-3">
             <button
               onClick={() => {
-                console.log('🎯 Save button clicked!')
                 handleSave()
               }}
               disabled={saving || isLoading}

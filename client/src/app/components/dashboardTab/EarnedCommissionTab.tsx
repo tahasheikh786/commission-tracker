@@ -92,7 +92,6 @@ export default function EarnedCommissionTab() {
 
   // Refresh all data
   const refreshAllData = useCallback(() => {
-    console.log('🔄 Refreshing all earned commission data...');
     refetchStats();
     refetchCarriers();
     refetchAllData();
@@ -102,7 +101,6 @@ export default function EarnedCommissionTab() {
   // Listen for global refresh events only
   useEffect(() => {
     if (refreshTrigger) {
-      console.log('🔄 EarnedCommissionTab: Global refresh triggered, refreshing all data...');
       refreshAllData();
     }
   }, [refreshTrigger, refreshAllData]);
@@ -786,18 +784,20 @@ export default function EarnedCommissionTab() {
       />
 
       {/* Merge Confirmation Modal */}
-      <MergeConfirmationModal
-        isOpen={mergeModalOpen}
-        onClose={() => {
-          setMergeModalOpen(false);
-          setMergeData(null);
-        }}
-        existingRecord={mergeData?.existingRecord!}
-        newData={mergeData?.newData!}
-        onConfirmMerge={handleConfirmMerge}
-        onCancel={handleCancelMerge}
-        loading={mergeLoading}
-      />
+      {mergeData?.existingRecord && mergeData?.newData && (
+        <MergeConfirmationModal
+          isOpen={mergeModalOpen}
+          onClose={() => {
+            setMergeModalOpen(false);
+            setMergeData(null);
+          }}
+          existingRecord={mergeData.existingRecord}
+          newData={mergeData.newData}
+          onConfirmMerge={handleConfirmMerge}
+          onCancel={handleCancelMerge}
+          loading={mergeLoading}
+        />
+      )}
     </div>
   );
 }
