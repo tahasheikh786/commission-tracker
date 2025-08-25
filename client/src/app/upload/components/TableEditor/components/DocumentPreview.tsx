@@ -71,7 +71,7 @@ export default function DocumentPreview({ uploaded, zoom, onZoomIn, onZoomOut }:
     <div className="w-full h-full flex flex-col items-center justify-center min-h-0 min-w-0 p-4">
       <div className="w-full h-full overflow-auto">
         <embed
-          src={pdfDisplayUrl}
+          src={pdfDisplayUrl || undefined}
           type="application/pdf"
           width="100%"
           height="100%"
@@ -82,7 +82,7 @@ export default function DocumentPreview({ uploaded, zoom, onZoomIn, onZoomOut }:
       </div>
       <div className="text-xs text-gray-500 mt-2 px-2 text-center bg-white/80 rounded p-2">
         If the PDF is blank, <b>your browser may block cross-origin (CORS) PDF previews</b>.<br />
-        <a href={pdfDisplayUrl} className="underline" target="_blank" rel="noopener noreferrer">Open PDF in a new tab</a> to view.
+        <a href={pdfDisplayUrl || '#'} className="underline" target="_blank" rel="noopener noreferrer">Open PDF in a new tab</a> to view.
       </div>
     </div>
   )

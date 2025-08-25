@@ -84,7 +84,7 @@ export function useUploadPage() {
         selected_statement_date: dateInfo
       })
     }
-  }, [uploaded?.upload_id])
+  }, [uploaded?.upload_id, saveProgress])
 
   // Helper function to get label from database fields
   const getLabelFromDatabaseFields = useCallback((fieldKey: string) => {
@@ -163,7 +163,7 @@ export function useUploadPage() {
         })
       }
     }
-  }, [uploaded?.tables?.length, company, fetchingMapping, mapping, fieldConfig, databaseFields, getLabelFromDatabaseFields])
+  }, [uploaded?.tables, company, fetchingMapping, mapping, fieldConfig, databaseFields, getLabelFromDatabaseFields])
 
   // Fetch database fields from backend
   useEffect(() => {
@@ -298,7 +298,7 @@ export function useUploadPage() {
     } finally {
       resumeFileRef.current = false
     }
-  }, [company, loadProgress])
+  }, [company])
 
   // Check for active session
   const checkForActiveSession = useCallback(async () => {
@@ -336,7 +336,7 @@ export function useUploadPage() {
         }
       })
     }
-  }, [showFieldMapper, uploaded?.upload_id, selectedStatementDate])
+  }, [showFieldMapper, uploaded?.upload_id, selectedStatementDate, loadProgress])
 
   // Auto-save progress when user navigates away or closes browser
   useEffect(() => {

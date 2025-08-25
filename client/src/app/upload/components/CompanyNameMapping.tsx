@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
-import { Card } from '@/app/components/ui/Card'
-import { Button } from '@/app/components/ui/Button'
-import { Input } from '@/app/components/ui/Input'
+import Card from '@/app/components/ui/Card'
+import Button from '@/app/components/ui/Button'
+import Input from '@/app/components/ui/Input'
 import { CheckCircle, AlertCircle, Edit3, X } from 'lucide-react'
 
 interface CompanyNameMappingProps {

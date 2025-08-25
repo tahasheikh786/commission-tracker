@@ -147,7 +147,7 @@ export const useEarnedCommissionStats = (year?: number) => {
 
   useEffect(() => {
     fetchStats();
-  }, [year]);
+  }, [fetchStats]);
 
   return { stats, loading, error, refetch: fetchStats };
 };
@@ -214,7 +214,7 @@ export const useCarriersWithCommission = () => {
 
   useEffect(() => {
     fetchCarriers();
-  }, []);
+  }, [fetchCarriers]);
 
   return { carriers, loading, error, refetch: fetchCarriers };
 };
@@ -283,7 +283,7 @@ export const useAvailableYears = () => {
 
   useEffect(() => {
     fetchYears();
-  }, []);
+  }, [fetchYears]);
 
   return { years, loading, error, refetch: fetchYears };
 };
@@ -319,7 +319,7 @@ export const useAllCommissionData = (year?: number) => {
 
   useEffect(() => {
     fetchData();
-  }, [year]);
+  }, [fetchData]);
 
   return { data, loading, error, refetch: fetchData };
 }; 

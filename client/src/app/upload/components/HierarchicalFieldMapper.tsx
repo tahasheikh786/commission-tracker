@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react'
-import { Card } from '@/app/components/ui/Card'
-import { Button } from '@/app/components/ui/Button'
-import { Input } from '@/app/components/ui/Input'
-import { CheckCircle, AlertCircle, Info } from 'lucide-react'
+import Card from '@/app/components/ui/Card'
+import Button from '@/app/components/ui/Button'
+import { CheckCircle,Info } from 'lucide-react'
 
 interface HierarchicalFieldMapperProps {
   hierarchicalData: any
@@ -65,8 +64,8 @@ export default function HierarchicalFieldMapper({
             <div>
               <h4 className="font-medium text-blue-800 mb-2">How Hierarchical Extraction Works</h4>
               <ul className="text-sm text-blue-700 space-y-1">
-                <li>• Company names are extracted from "Customer Name:" headers</li>
-                <li>• Commission amounts are calculated from "Paid Amount" columns</li>
+                <li>• Company names are extracted from &ldquo;Customer Name:&rdquo; headers</li>
+                <li>• Commission amounts are calculated from &ldquo;Paid Amount&rdquo; columns</li>
                 <li>• Invoice totals are summed from premium and fee columns</li>
                 <li>• Customer blocks are automatically grouped by section (New Business/Renewal)</li>
               </ul>
