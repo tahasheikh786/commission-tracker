@@ -1,7 +1,8 @@
 """Table extraction for document processing."""
 
 import time
-from typing import Dict, Any, List, Optional
+import re
+from typing import Dict, Any, List, Optional, Tuple
 from itertools import zip_longest
 
 from .table_validator import TableValidator
@@ -48,6 +49,29 @@ class TableExtractor:
         
         return tables
     
+    def _debug_docling_table_structure(self, table, table_index: int):
+        """CRITICAL: See what Docling actually extracts."""
+        self.logger.logger.info(f"🔍 DEBUGGING Table {table_index}:")
+        
+        # Debug available attributes
+        table_attrs = [attr for attr in dir(table) if not attr.startswith('_')]
+        self.logger.logger.info(f"  Available attributes: {table_attrs}")
+        
+        # Debug table_cells
+        if hasattr(table, 'table_cells') and table.table_cells:
+            self.logger.logger.info(f"  table_cells count: {len(table.table_cells)}")
+            for i, cell in enumerate(table.table_cells[:10]):
+                self.logger.logger.info(f"    Cell {i}: '{cell.text}' at row {cell.start_row_offset_idx}")
+        
+        # Debug dataframe export
+        if hasattr(table, 'export_to_dataframe'):
+            try:
+                df = table.export_to_dataframe()
+                if df is not None and not df.empty:
+                    self.logger.logger.info(f"  DataFrame: {df.shape} - {df.columns.tolist()}")
+            except Exception as e:
+                self.logger.logger.error(f"  DataFrame failed: {e}")
+
     def extract_table_data(self, table, table_index: int, pdf_path: str) -> Optional[Dict[str, Any]]:
         """
         Extract data from a single Docling table with robust structure handling.
@@ -61,14 +85,38 @@ class TableExtractor:
             Normalized table dictionary with consistent structure
         """
         try:
-            # Extract headers with robust multi-row handling
-            headers = self._extract_headers(table)
+            # === ADD THIS FIRST ===
+            self._debug_docling_table_structure(table, table_index)
             
-            # Extract rows with consistent column alignment
-            rows = self._extract_rows(table)
+            # Try multiple extraction methods
+            extraction_results = []
+            
+            # Method 1: table_cells (your current approach)
+            headers_1, rows_1 = self._extract_via_table_cells(table)
+            if headers_1 and headers_1 != ['Column_1']:
+                extraction_results.append(("table_cells", headers_1, rows_1))
+            
+            # Method 2: dataframe export  
+            headers_2, rows_2 = self._extract_via_dataframe(table)
+            if headers_2 and rows_2:
+                extraction_results.append(("dataframe", headers_2, rows_2))
+            
+            # Method 3: direct attributes
+            headers_3, rows_3 = self._extract_via_attributes(table) 
+            if headers_3 and rows_3:
+                extraction_results.append(("attributes", headers_3, rows_3))
+            
+            # Use best result
+            if extraction_results:
+                method, headers, rows = max(extraction_results, 
+                    key=lambda x: len(x[1]) + len(x[2]))
+                self.logger.logger.info(f"✅ Using {method}: {len(headers)} headers, {len(rows)} rows")
+            else:
+                self.logger.logger.error("❌ ALL extraction methods failed!")
+                return None
             
             # **NEW: Validate table quality and skip if it's likely metadata/header content**
-            if not self.validator.is_valid_financial_table(headers, rows):
+            if not self.validator.is_valid_financial_table_lenient(headers, rows):
                 self.logger.logger.warning(f"Table {table_index} appears to be metadata/header content, skipping")
                 return None
             
@@ -127,63 +175,40 @@ class TableExtractor:
             }
     
     def _extract_headers(self, table) -> List[str]:
-        """Extract headers with robust multi-row header handling and fallback logic."""
+        """Extract headers with robust multi-row header handling and complex document support."""
         try:
             headers = []
             
             # For Docling v2 table elements, extract from table_cells structure
             if hasattr(table, 'table_cells') and table.table_cells:
-                # Group cells by row using the new Docling v2 structure
                 cells_by_row = self._group_cells_by_row_v2(table.table_cells)
                 
-                # **ADD DEBUG SECTION**
                 self.logger.logger.info(f"🔍 DEBUG: Found {len(cells_by_row)} rows in table, {len(table.table_cells)} total cells")
                 
                 if cells_by_row:
-                    # **IMPROVED: Look for the row with most financial header indicators**
                     best_header_row = None
                     best_score = -1
                     
                     for row_idx, header_cells in cells_by_row.items():
                         row_headers = [self._clean_text(cell.text) for cell in header_cells]
                         
-                        # **DEBUG: Show all rows for analysis**
-                        score = self.validator.score_potential_headers(row_headers) if len(row_headers) >= 2 else 0
+                        # ✅ FIXED: More flexible column requirements for complex documents
+                        if len(row_headers) < 1:  # Changed from 3 to 1
+                            continue
+                        
+                        # ✅ ENHANCED: Multi-tier scoring system
+                        score = self._calculate_enhanced_header_score(row_headers, cells_by_row, row_idx)
+                        
                         self.logger.logger.info(f"🔍 DEBUG: Row {row_idx} ({len(row_headers)} cols): {row_headers[:8]}... Score: {score:.2f}")
                         
-                        # Skip if too few columns - but log why
-                        if len(row_headers) < 3:
-                            self.logger.logger.info(f"🔍 DEBUG: Skipping row {row_idx} - only {len(row_headers)} columns")
-                            continue
-                            
-                        # Score this row based on financial header indicators
                         if score > best_score:
                             best_score = score
                             best_header_row = row_headers
                     
                     if best_header_row:
-                        # **SMART HEADER PROCESSING: Only split headers for non-financial tables**
-                        # Check if this looks like a financial table (commission statement)
-                        is_financial_table = self._is_financial_table(best_header_row)
-                        
-                        if is_financial_table:
-                            # For financial tables, keep headers intact - don't split them
-                            headers = [self._clean_text(header) for header in best_header_row]
-                            self.logger.logger.info(f"🔧 FINANCIAL TABLE: Keeping headers intact: {headers}")
-                        else:
-                            # For non-financial tables, apply compound header splitting
-                            headers = self._split_compound_headers(best_header_row)
-                            self.logger.logger.info(f"🔧 NON-FINANCIAL TABLE: Split headers: {headers}")
-                            if len(headers) != len(best_header_row):
-                                self.logger.logger.info(f"🔧 SPLIT HEADERS: {len(best_header_row)} → {len(headers)} columns")
-                        
-                        return headers
-                    else:
-                        # Fallback to first row if no good headers found
-                        first_row_idx = min(cells_by_row.keys())
-                        header_cells = cells_by_row[first_row_idx]
-                        headers = [self._clean_text(cell.text) for cell in header_cells]
-                        self.logger.logger.info(f"Extracted headers from first row (fallback): {headers}")
+                        # ✅ ENHANCED: Smart header processing for complex docs
+                        headers = self._process_headers_for_complex_docs(best_header_row)
+                        self.logger.logger.info(f"🔧 COMPLEX DOC: Processed headers: {headers}")
                         return headers
             
             # Try to export to dataframe first (most reliable)
@@ -217,6 +242,179 @@ class TableExtractor:
         except Exception as e:
             self.logger.logger.error(f"Error extracting headers: {e}")
             return ["Column_1"]
+
+    def _calculate_enhanced_header_score(self, headers: List[str], all_rows: Dict, row_idx: int) -> float:
+        """Enhanced scoring system for complex documents."""
+        if not headers:
+            return 0.0
+        
+        score = 0.0
+        
+        # Base score from validator (existing logic)
+        base_score = self.validator.score_potential_headers(headers)
+        score += base_score * 0.4
+        
+        # ✅ NEW: Position-based scoring (earlier rows more likely to be headers)
+        position_score = max(0, (10 - row_idx) / 10)  # Higher score for earlier rows
+        score += position_score * 0.2
+        
+        # ✅ NEW: Content diversity scoring
+        diversity_score = self._calculate_content_diversity(headers)
+        score += diversity_score * 0.2
+        
+        # ✅ NEW: Complex document pattern recognition
+        complex_doc_score = self._assess_complex_document_patterns(headers)
+        score += complex_doc_score * 0.2
+        
+        return score
+
+    def _calculate_content_diversity(self, headers: List[str]) -> float:
+        """Calculate content diversity score."""
+        if not headers:
+            return 0.0
+        
+        # Check for diverse content types in headers
+        has_text = any(re.search(r'[a-zA-Z]', str(h)) for h in headers)
+        has_numbers = any(re.search(r'\d', str(h)) for h in headers)
+        has_mixed = len(set(len(str(h).split()) for h in headers)) > 1
+        
+        diversity_indicators = sum([has_text, has_numbers, has_mixed])
+        return diversity_indicators / 3.0
+
+    def _assess_complex_document_patterns(self, headers: List[str]) -> float:
+        """Assess patterns specific to complex documents."""
+        if not headers:
+            return 0.0
+        
+        complex_indicators = 0
+        header_text = ' '.join(str(h).lower() for h in headers)
+        
+        # Look for section indicators
+        section_terms = ['summary', 'detail', 'breakdown', 'analysis', 'report', 'statement']
+        if any(term in header_text for term in section_terms):
+            complex_indicators += 1
+        
+        # Look for multi-level structure indicators
+        if any(len(str(h).split()) > 2 for h in headers):  # Multi-word headers
+            complex_indicators += 1
+        
+        # Look for varied header lengths (indicates structured content)
+        header_lengths = [len(str(h)) for h in headers]
+        if len(set(header_lengths)) > 1:
+            complex_indicators += 1
+        
+        return min(1.0, complex_indicators / 3.0)
+
+    def _process_headers_for_complex_docs(self, headers: List[str]) -> List[str]:
+        """Process headers specifically for complex documents."""
+        processed = []
+        
+        for header in headers:
+            header_str = str(header).strip()
+            if not header_str:
+                header_str = f"Column_{len(processed) + 1}"
+            processed.append(header_str)
+        
+        # ✅ ENHANCED: Ensure minimum headers for complex docs
+        while len(processed) < 2:  # Ensure at least 2 columns
+            processed.append(f"Column_{len(processed) + 1}")
+        
+        return processed
+
+    def _extract_via_table_cells(self, table) -> Tuple[List[str], List[List[str]]]:
+        """Method 1: Extract via table_cells structure."""
+        try:
+            headers = []
+            rows = []
+            
+            if hasattr(table, 'table_cells') and table.table_cells:
+                cells_by_row = self._group_cells_by_row_v2(table.table_cells)
+                
+                if cells_by_row:
+                    # Extract headers from first row
+                    first_row_idx = min(cells_by_row.keys())
+                    header_cells = cells_by_row[first_row_idx]
+                    headers = [self._clean_text(cell.text) for cell in header_cells]
+                    
+                    # Extract data rows (skip first row)
+                    sorted_row_indices = sorted(cells_by_row.keys())
+                    for row_idx in sorted_row_indices[1:]:
+                        row_cells = cells_by_row[row_idx]
+                        row_data = [self._clean_text(cell.text) for cell in row_cells]
+                        rows.append(row_data)
+            
+            self.logger.logger.info(f"  Method 1 (table_cells): {len(headers)} headers, {len(rows)} rows")
+            return headers, rows
+            
+        except Exception as e:
+            self.logger.logger.error(f"Method 1 failed: {e}")
+            return [], []
+
+    def _extract_via_dataframe(self, table) -> Tuple[List[str], List[List[str]]]:
+        """Method 2: Extract via dataframe export."""
+        try:
+            headers = []
+            rows = []
+            
+            if hasattr(table, 'export_to_dataframe'):
+                df = table.export_to_dataframe()
+                if df is not None and not df.empty:
+                    headers = [self._clean_text(str(col).strip()) for col in df.columns]
+                    
+                    for _, row in df.iterrows():
+                        processed_row = [str(cell).strip() if cell else "" for cell in row]
+                        rows.append(processed_row)
+            
+            self.logger.logger.info(f"  Method 2 (dataframe): {len(headers)} headers, {len(rows)} rows")
+            return headers, rows
+            
+        except Exception as e:
+            self.logger.logger.error(f"Method 2 failed: {e}")
+            return [], []
+
+    def _extract_via_attributes(self, table) -> Tuple[List[str], List[List[str]]]:
+        """Method 3: Extract via direct attributes."""
+        try:
+            headers = []
+            rows = []
+            
+            # Try different header extraction methods
+            if hasattr(table, 'headers') and table.headers:
+                headers = [self._clean_text(str(h).strip()) for h in table.headers if h]
+            elif hasattr(table, 'header_rows') and table.header_rows:
+                headers = self._process_multi_row_headers(table.header_rows)
+            elif hasattr(table, 'columns') and table.columns:
+                headers = [self._clean_text(str(col.get('header', f'Column_{i+1}')).strip()) 
+                          for i, col in enumerate(table.columns)]
+            
+            # Try different row extraction methods
+            if hasattr(table, 'data') and table.data:
+                if hasattr(table.data, 'rows') and table.data.rows:
+                    for row in table.data.rows:
+                        processed_row = self._flatten_row_data(row)
+                        rows.append(processed_row)
+                elif hasattr(table.data, '__iter__'):
+                    for row in table.data:
+                        processed_row = self._flatten_row_data(row)
+                        rows.append(processed_row)
+            
+            # Fallback to rows attribute
+            if not rows and hasattr(table, 'rows') and table.rows:
+                for row in table.rows:
+                    processed_row = self._flatten_row_data(row)
+                    rows.append(processed_row)
+            
+            # Final fallback: generate headers based on table width
+            if not headers or all(not h.strip() for h in headers):
+                max_columns = self._get_table_width(table)
+                headers = [f"Column_{i+1}" for i in range(max_columns)]
+            
+            self.logger.logger.info(f"  Method 3 (attributes): {len(headers)} headers, {len(rows)} rows")
+            return headers, rows
+            
+        except Exception as e:
+            self.logger.logger.error(f"Method 3 failed: {e}")
+            return [], []
     
     def _group_cells_by_row_v2(self, table_cells) -> Dict[int, List]:
         """Group Docling v2 table cells by row using the new structure."""

@@ -263,108 +263,189 @@ class ExtractionPipeline:
         processed_doc: ProcessedDocument,
         options: ExtractionOptions
     ) -> List[Dict[str, Any]]:
-        """Extract tables from processed document."""
+        """Enhanced extraction with complex document support."""
         all_tables = []
         
-        # First, check if we already have extracted tables from document processing
         if hasattr(processed_doc, 'extracted_tables') and processed_doc.extracted_tables:
             self.logger.logger.info(f"Using pre-extracted tables: {len(processed_doc.extracted_tables)}")
             
-            # Apply confidence filtering and format the extracted tables
+            # ✅ ENHANCED: Multi-tier confidence strategy for complex docs
             tables_with_scores = []
             for table_data in processed_doc.extracted_tables:
-                # Apply confidence threshold
                 table_confidence = table_data.get('metadata', {}).get('confidence', 1.0)
                 tables_with_scores.append((table_data, table_confidence))
-                
-                if table_confidence >= options.confidence_threshold:
-                    # Format for pipeline output
-                    formatted_table = {
-                        "table_id": table_data.get('table_index', 0),
-                        "headers": table_data.get('headers', []),
-                        "rows": table_data.get('rows', []),
-                        "cells": table_data.get('cells', []),  # Include cells for validation
-                        "columns": table_data.get('columns', []),  # Include columns for validation
-                        "metadata": table_data.get('metadata', {}),
-                        "confidence": table_confidence,
-                        "extraction_method": "docling",
-                        "row_count": table_data.get('row_count', 0),
-                        "column_count": table_data.get('column_count', 0),
-                        "page_number": table_data.get('page_number', 0)  # Ensure page number is included
-                    }
-                    all_tables.append(formatted_table)
-                    
-                    self.logger.logger.info(
-                        f"Added table {table_data.get('table_index', 0)}: {len(table_data.get('rows', []))} rows, confidence: {table_confidence:.2f}"
-                    )
             
-            # If no tables passed the threshold, try progressively lower thresholds
-            if not all_tables and tables_with_scores:
-                self.logger.logger.warning(f"No tables found with confidence threshold {options.confidence_threshold}")
-                self.logger.logger.info("🔍 Trying adaptive threshold strategy...")
-                
-                # Show all detected tables with their confidence scores
-                self.logger.logger.info("📊 All detected tables:")
-                for i, (table_data, confidence) in enumerate(tables_with_scores):
-                    rows_count = len(table_data.get('rows', []))
-                    headers_count = len(table_data.get('headers', []))
-                    self.logger.logger.info(f"  Table {i}: confidence={confidence:.3f}, headers={headers_count}, rows={rows_count}")
-                
-                # Try progressively lower thresholds
-                adaptive_thresholds = [0.5, 0.3, 0.2, 0.1]
-                
-                for threshold in adaptive_thresholds:
-                    candidate_tables = []
-                    for table_data, table_confidence in tables_with_scores:
-                        if table_confidence >= threshold:
-                            # Format for pipeline output
-                            formatted_table = {
-                                "table_id": table_data.get('table_index', 0),
-                                "headers": table_data.get('headers', []),
-                                "rows": table_data.get('rows', []),
-                                "cells": table_data.get('cells', []),  # Include cells for validation
-                                "columns": table_data.get('columns', []),  # Include columns for validation
-                                "metadata": table_data.get('metadata', {}),
-                                "confidence": table_confidence,
-                                "extraction_method": "docling_adaptive",
-                                "adaptive_threshold": threshold,  # Mark for debugging
-                                "row_count": table_data.get('row_count', 0),
-                                "column_count": table_data.get('column_count', 0),
-                                "page_number": table_data.get('page_number', 0)
-                            }
-                            candidate_tables.append(formatted_table)
-                    
-                    if candidate_tables:
-                        all_tables.extend(candidate_tables)
-                        self.logger.logger.info(f"✅ Found {len(candidate_tables)} tables with adaptive threshold {threshold}")
-                        for table in candidate_tables:
-                            self.logger.logger.info(
-                                f"  📋 Table {table['table_id']}: {table['row_count']} rows, confidence: {table['confidence']:.3f}"
-                            )
-                        break
-                
-                if not all_tables:
-                    self.logger.logger.warning("❌ No tables found even with lowest threshold - document may not contain detectable tables")
+            # ✅ NEW: Detect document complexity and adjust strategy
+            document_complexity = self._assess_overall_document_complexity(tables_with_scores)
+            self.logger.logger.info(f"📊 Document complexity assessed as: {document_complexity}")
             
-            return all_tables
+            if document_complexity == 'complex':
+                # Use aggressive extraction for complex documents
+                all_tables = await self._extract_from_complex_document(tables_with_scores, options)
+            else:
+                # Use standard extraction for simple documents
+                all_tables = await self._extract_from_standard_document(tables_with_scores, options)
         
         # Fallback: extract from pages if no pre-extracted tables
-        for page_num in range(processed_doc.num_pages):
-            try:
-                page_tables = await self._extract_tables_from_page(
-                    processed_doc, page_num, options
-                )
-                all_tables.extend(page_tables)
+        if not all_tables:
+            self.logger.logger.info("No pre-extracted tables found, falling back to page-based extraction")
+            for page_num in range(processed_doc.num_pages):
+                try:
+                    page_tables = await self._extract_tables_from_page(
+                        processed_doc, page_num, options
+                    )
+                    all_tables.extend(page_tables)
+                    
+                    self.logger.logger.info(
+                        f"Page {page_num}: extracted {len(page_tables)} tables"
+                    )
+                    
+                except Exception as e:
+                    self.logger.logger.error(
+                        f"Failed to extract tables from page {page_num}: {e}"
+                    )
+                    continue
+        
+        return all_tables
+
+    def _assess_overall_document_complexity(self, tables_with_scores) -> str:
+        """Assess overall document complexity."""
+        if not tables_with_scores:
+            return 'standard'
+        
+        complexity_indicators = 0
+        
+        # Check table count
+        if len(tables_with_scores) > 5:
+            complexity_indicators += 1
+        
+        # Check header diversity
+        all_headers = []
+        for table_data, _ in tables_with_scores:
+            headers = table_data.get('headers', [])
+            all_headers.extend(headers)
+        
+        if len(set(all_headers)) > 15:  # Many unique headers
+            complexity_indicators += 1
+        
+        # Check row count variation
+        row_counts = [len(table_data.get('rows', [])) for table_data, _ in tables_with_scores]
+        if len(set(row_counts)) > 3:  # High variation in table sizes
+            complexity_indicators += 1
+        
+        return 'complex' if complexity_indicators >= 2 else 'standard'
+
+    async def _extract_from_complex_document(self, tables_with_scores, options) -> List[Dict[str, Any]]:
+        """Aggressive extraction strategy for complex documents."""
+        all_tables = []
+        
+        # ✅ PROGRESSIVE: Try multiple threshold strategies
+        progressive_thresholds = [0.7, 0.5, 0.3, 0.1, 0.05]  # Very aggressive
+        
+        for threshold in progressive_thresholds:
+            candidate_tables = []
+            
+            for table_data, confidence in tables_with_scores:
+                if confidence >= threshold:
+                    # ✅ ENHANCED: Additional validation for complex docs
+                    if self._is_meaningful_complex_table(table_data):
+                        formatted_table = self._format_table_for_pipeline(table_data, confidence, threshold)
+                        candidate_tables.append(formatted_table)
+            
+            if candidate_tables:
+                all_tables.extend(candidate_tables)
+                self.logger.logger.info(f"✅ COMPLEX DOC: Found {len(candidate_tables)} tables with threshold {threshold}")
+                break  # Use first successful threshold
+        
+        return all_tables
+
+    def _is_meaningful_complex_table(self, table_data: Dict[str, Any]) -> bool:
+        """Check if table is meaningful for complex documents."""
+        headers = table_data.get('headers', [])
+        rows = table_data.get('rows', [])
+        
+        # Very lenient criteria for complex documents
+        has_content = len(headers) > 0 or len(rows) > 0
+        has_meaningful_size = (len(headers) * len(rows)) >= 1  # At least 1 cell
+        
+        return has_content and has_meaningful_size
+
+    def _format_table_for_pipeline(self, table_data: Dict[str, Any], confidence: float, threshold: float) -> Dict[str, Any]:
+        """Format table data for pipeline output."""
+        return {
+            "table_id": table_data.get('table_index', 0),
+            "headers": table_data.get('headers', []),
+            "rows": table_data.get('rows', []),
+            "cells": table_data.get('cells', []),
+            "columns": table_data.get('columns', []),
+            "metadata": table_data.get('metadata', {}),
+            "confidence": confidence,
+            "extraction_method": "docling_complex",
+            "complex_threshold": threshold,
+            "row_count": table_data.get('row_count', 0),
+            "column_count": table_data.get('column_count', 0),
+            "page_number": table_data.get('page_number', 0)
+        }
+
+    async def _extract_from_standard_document(self, tables_with_scores, options) -> List[Dict[str, Any]]:
+        """Standard extraction strategy (existing logic)."""
+        all_tables = []
+        
+        # Apply confidence filtering and format the extracted tables
+        for table_data, table_confidence in tables_with_scores:
+            if table_confidence >= options.confidence_threshold:
+                # Format for pipeline output
+                formatted_table = {
+                    "table_id": table_data.get('table_index', 0),
+                    "headers": table_data.get('headers', []),
+                    "rows": table_data.get('rows', []),
+                    "cells": table_data.get('cells', []),
+                    "columns": table_data.get('columns', []),
+                    "metadata": table_data.get('metadata', {}),
+                    "confidence": table_confidence,
+                    "extraction_method": "docling",
+                    "row_count": table_data.get('row_count', 0),
+                    "column_count": table_data.get('column_count', 0),
+                    "page_number": table_data.get('page_number', 0)
+                }
+                all_tables.append(formatted_table)
                 
                 self.logger.logger.info(
-                    f"Page {page_num}: extracted {len(page_tables)} tables"
+                    f"Added table {table_data.get('table_index', 0)}: {len(table_data.get('rows', []))} rows, confidence: {table_confidence:.2f}"
                 )
+        
+        # If no tables passed the threshold, try progressively lower thresholds
+        if not all_tables and tables_with_scores:
+            self.logger.logger.warning(f"No tables found with confidence threshold {options.confidence_threshold}")
+            self.logger.logger.info("🔍 Trying adaptive threshold strategy...")
+            
+            # Try progressively lower thresholds
+            adaptive_thresholds = [0.5, 0.3, 0.2, 0.1]
+            
+            for threshold in adaptive_thresholds:
+                candidate_tables = []
+                for table_data, table_confidence in tables_with_scores:
+                    if table_confidence >= threshold:
+                        formatted_table = {
+                            "table_id": table_data.get('table_index', 0),
+                            "headers": table_data.get('headers', []),
+                            "rows": table_data.get('rows', []),
+                            "cells": table_data.get('cells', []),
+                            "columns": table_data.get('columns', []),
+                            "metadata": table_data.get('metadata', {}),
+                            "confidence": table_confidence,
+                            "extraction_method": "docling_adaptive",
+                            "adaptive_threshold": threshold,
+                            "row_count": table_data.get('row_count', 0),
+                            "column_count": table_data.get('column_count', 0),
+                            "page_number": table_data.get('page_number', 0)
+                        }
+                        candidate_tables.append(formatted_table)
                 
-            except Exception as e:
-                self.logger.logger.error(
-                    f"Failed to extract tables from page {page_num}: {e}"
-                )
-                continue
+                if candidate_tables:
+                    all_tables.extend(candidate_tables)
+                    self.logger.logger.info(f"✅ Found {len(candidate_tables)} tables with adaptive threshold {threshold}")
+                    break
         
         return all_tables
     

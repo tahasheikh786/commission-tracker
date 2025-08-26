@@ -43,7 +43,7 @@ python-dateutil>=2.8.0
 openpyxl>=3.1.0,<4.0.0
 xlrd>=2.0.0,<3.0.0
 
-# OpenAI GPT-4o Vision API
+# OpenAI GPT-5 Vision API
 openai>=1.0.0,<2.0.0
 
 # ===== ADVANCED DOCLING SETUP =====

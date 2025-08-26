@@ -446,7 +446,7 @@ async def call_gpt5_for_format_correction(prompt: str, problematic_rows: List[Di
         
         # Make the API call to GPT-5
         response = client.chat.completions.create(
-            model="gpt-4o",  # Using GPT-4o as GPT-5 is not yet available
+            model="GPT-5",  # Using GPT-5 as GPT-5 is not yet available
             messages=[
                 {
                     "role": "system",
@@ -457,8 +457,7 @@ async def call_gpt5_for_format_correction(prompt: str, problematic_rows: List[Di
                     "content": prompt
                 }
             ],
-            temperature=0.1,  # Low temperature for consistent formatting
-            max_tokens=4000,
+            max_completion_tokens=4000,
             response_format={"type": "json_object"}
         )
         
@@ -836,15 +835,15 @@ async def improve_current_extraction(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Improve current table extraction using GPT-4o Vision analysis.
+    Improve current table extraction using GPT-5 Vision analysis.
     
-    This endpoint is strictly GPT-4o response driven - all processing is based on
+    This endpoint is strictly GPT-5 response driven - all processing is based on
     GPT's analysis with no hardcoded patterns or fallback logic.
     
     This endpoint:
     1. Retrieves the current extraction results
     2. Enhances PDF page images (first 4-5 pages)
-    3. Sends enhanced images to GPT-4o Vision for analysis
+    3. Sends enhanced images to GPT-5 Vision for analysis
     4. Processes the vision analysis to improve table structure
     5. Returns improved tables with diagnostic information
     """
@@ -852,11 +851,11 @@ async def improve_current_extraction(
     logger.info(f"Starting extraction improvement for upload_id: {upload_id}")
     
     try:
-        # Check if GPT-4o service is available
+        # Check if GPT-5 service is available
         if not gpt4o_service.is_available():
             raise HTTPException(
                 status_code=503, 
-                detail="GPT-4o Vision service not available. Please check OPENAI_API_KEY configuration."
+                detail="GPT-5 Vision service not available. Please check OPENAI_API_KEY configuration."
             )
         
         # Get upload information
@@ -874,7 +873,7 @@ async def improve_current_extraction(
             )
         
         # Convert to the format expected by the improvement service
-        # This preserves the original structure for GPT-4o analysis
+        # This preserves the original structure for GPT-5 analysis
         current_extraction = []
         for table in current_tables:
             current_extraction.append({
@@ -926,8 +925,8 @@ async def improve_current_extraction(
         
         logger.info(f"Enhanced {len(enhanced_images)} page images")
         
-        # Step 2: Analyze with GPT-4o Vision
-        logger.info("Starting GPT-4o Vision analysis...")
+        # Step 2: Analyze with GPT-5 Vision
+        logger.info("Starting GPT-5 Vision analysis...")
         vision_analysis = gpt4o_service.analyze_table_with_vision(
             enhanced_images=enhanced_images,
             current_extraction=current_extraction,
@@ -940,9 +939,9 @@ async def improve_current_extraction(
                 detail=f"Vision analysis failed: {vision_analysis.get('error', 'Unknown error')}"
             )
         
-        logger.info("GPT-4o Vision analysis completed successfully")
+        logger.info("GPT-5 Vision analysis completed successfully")
         
-        # Step 3: Process improvement results using GPT-4o response driven logic with LLM format enforcement
+        # Step 3: Process improvement results using GPT-5 response driven logic with LLM format enforcement
         improvement_result = gpt4o_service.process_improvement_result(
             vision_analysis=vision_analysis,
             current_tables=current_extraction
@@ -1003,7 +1002,7 @@ async def improve_current_extraction(
                     "diagnostic_info": diagnostic_info,
                     "overall_notes": improvement_result.get("overall_notes", ""),
                     "extraction_method": "gpt4o_vision_with_llm_formatting",  # Add extraction_method for compatibility
-                    "processing_notes": "GPT-4o response driven with LLM format enforcement",
+                    "processing_notes": "GPT-5 response driven with LLM format enforcement",
                     "format_accuracy": format_accuracy
                 }
             }
@@ -1022,7 +1021,7 @@ async def improve_current_extraction(
         response_data = {
             "status": "success",
             "success": True,
-            "message": f"Successfully improved extraction with GPT-4o Vision and LLM format enforcement (≥90% accuracy)",
+            "message": f"Successfully improved extraction with GPT-5 Vision and LLM format enforcement (≥90% accuracy)",
             "job_id": str(uuid.uuid4()),  # Add job_id like extraction API
             "upload_id": upload_id,
             "extraction_id": upload_id,  # Add extraction_id like extraction API
@@ -1041,13 +1040,13 @@ async def improve_current_extraction(
                 "pages_analyzed": len(enhanced_images),
                 "improvements_detected": len(diagnostic_info.get("improvements", [])),
                 "warnings": len(diagnostic_info.get("warnings", [])),
-                "processing_method": "GPT-4o response driven with LLM format enforcement",
+                "processing_method": "GPT-5 response driven with LLM format enforcement",
                 "format_accuracy_target": "≥90%"
             },
             "extraction_metrics": {
                 "total_text_elements": total_cells,
                 "extraction_time": processing_time,
-                "table_confidence": 0.95,  # High confidence for GPT-4o enhanced extraction
+                "table_confidence": 0.95,  # High confidence for GPT-5 enhanced extraction
                 "model_used": "gpt4o_vision_with_llm_formatting",
                 "format_accuracy": format_accuracy
             },
@@ -1070,7 +1069,7 @@ async def improve_current_extraction(
                 "overall_confidence": "HIGH",
                 "issues_found": diagnostic_info.get("warnings", []),
                 "recommendations": [
-                    "GPT-4o Vision enhancement completed successfully with LLM format enforcement",
+                    "GPT-5 Vision enhancement completed successfully with LLM format enforcement",
                     f"Data formatted to match LLM specifications with {format_accuracy} accuracy"
                 ]
             },
@@ -1079,7 +1078,7 @@ async def improve_current_extraction(
                     "extractor": "gpt4o_vision_with_llm_formatting",
                     "pdf_type": "commission_statement",
                     "timestamp": improvement_result.get("enhancement_timestamp"),
-                    "processing_method": "GPT-4o response driven with LLM format enforcement",
+                    "processing_method": "GPT-5 response driven with LLM format enforcement",
                     "format_accuracy": format_accuracy
                 }
             ],
@@ -1087,7 +1086,7 @@ async def improve_current_extraction(
                 "extraction_methods_used": ["gpt4o_vision_with_llm_formatting"],
                 "pdf_type": "commission_statement",
                 "extraction_errors": [],
-                "processing_notes": "GPT-4o response driven with LLM format enforcement",
+                "processing_notes": "GPT-5 response driven with LLM format enforcement",
                 "format_accuracy": format_accuracy
             },
             "s3_key": upload_info.file_name,  # Add s3_key like extraction API
@@ -1096,7 +1095,7 @@ async def improve_current_extraction(
             "timestamp": datetime.now().isoformat()
         }
         
-        logger.info(f"Extraction improvement completed successfully in {processing_time:.2f} seconds (GPT-4o response driven with LLM format enforcement)")
+        logger.info(f"Extraction improvement completed successfully in {processing_time:.2f} seconds (GPT-5 response driven with LLM format enforcement)")
         
         return JSONResponse(response_data)
         

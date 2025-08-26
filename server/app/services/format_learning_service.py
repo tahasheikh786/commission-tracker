@@ -391,6 +391,8 @@ class FormatLearningService:
             print(f"🎯 FormatLearningService: Finding matching format for company {company_id}")
             print(f"🎯 FormatLearningService: Headers: {headers}")
             print(f"🎯 FormatLearningService: Table structure: {table_structure}")
+            print(f"🎯 FormatLearningService: Headers type: {type(headers)}")
+            print(f"🎯 FormatLearningService: Headers length: {len(headers) if headers else 0}")
             
             best_match, score = await with_db_retry(
                 db, 

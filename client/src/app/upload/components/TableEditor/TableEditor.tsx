@@ -156,6 +156,8 @@ export default function TableEditor({
     }
   }
 
+
+
   const handleExtractWithGoogleDocAI = async () => {
     // Always show loading state
     setIsExtractingWithGoogleDocAI(true)
@@ -925,6 +927,8 @@ export default function TableEditor({
               <Calendar className="w-4 h-4" />
               {dateExtractionLoading ? 'Extracting...' : (hasExtractedDates ? 'Select Date' : 'Extract Dates')}
             </button>
+
+
 
             {/* Extract with GPT 5 Button */}
             <button

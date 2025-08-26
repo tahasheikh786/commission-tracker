@@ -10,7 +10,7 @@ class DataFormattingService:
     """
     Service for ensuring extracted data matches the LLM's specified format with ≥90% accuracy.
     
-    This service processes extracted data based on GPT-4o Vision analysis to ensure:
+    This service processes extracted data based on GPT-5 Vision analysis to ensure:
     1. Data types match the LLM's specification (date, currency, percentage, number, text)
     2. Format patterns match the LLM's sample values
     3. Values are properly assigned to the correct columns
@@ -47,7 +47,7 @@ class DataFormattingService:
         
         Args:
             extracted_tables: Current extracted table data
-            llm_analysis: GPT-4o Vision analysis with column specifications
+            llm_analysis: GPT-5 Vision analysis with column specifications
             
         Returns:
             Formatted tables with data matching LLM specifications

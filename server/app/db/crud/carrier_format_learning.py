@@ -96,8 +96,13 @@ async def find_best_matching_format(db: AsyncSession, company_id: UUID, headers:
     """
     Find the best matching format for given headers and structure with improved matching logic.
     """
+    print(f"🎯 CRUD: Finding best matching format for company {company_id}")
+    print(f"🎯 CRUD: Input headers: {headers}")
+    print(f"🎯 CRUD: Input table structure: {table_structure}")
+    
     # Get all formats for this company
     formats = await get_carrier_formats_for_company(db, company_id)
+    print(f"🎯 CRUD: Found {len(formats)} saved formats for company")
     
     best_match = None
     best_score = 0
@@ -110,10 +115,17 @@ async def find_best_matching_format(db: AsyncSession, company_id: UUID, headers:
         # Combined score (weighted average) - header similarity is more important
         total_score = (header_similarity * 0.8) + (structure_similarity * 0.2)
         
+        print(f"🎯 CRUD: Comparing with saved format:")
+        print(f"🎯 CRUD:   Saved headers: {format_record.headers}")
+        print(f"🎯 CRUD:   Header similarity: {header_similarity}")
+        print(f"🎯 CRUD:   Structure similarity: {structure_similarity}")
+        print(f"🎯 CRUD:   Total score: {total_score}")
+        
         # Lower threshold for better matching - 0.5 instead of 0.6
         if total_score > best_score and total_score > 0.5:  # Even more flexible threshold
             best_score = total_score
             best_match = format_record
+            print(f"🎯 CRUD:   -> New best match with score {total_score}")
     
     return best_match, best_score
 

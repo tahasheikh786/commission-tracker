@@ -633,7 +633,7 @@ async def extract_tables_gpt(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Extract tables using GPT-4o Vision analysis.
+    Extract tables using GPT-5 Vision analysis.
     This endpoint uses the same format as the default extraction for consistency.
     """
     start_time = datetime.now()
@@ -659,14 +659,14 @@ async def extract_tables_gpt(
         
         logger.info(f"Processing PDF: {temp_pdf_path} (downloaded from S3)")
         
-        # Use the GPT-4o Vision service for extraction
+        # Use the GPT-5 Vision service for extraction
         from app.services.gpt4o_vision_service import GPT4oVisionService
         gpt4o_service = GPT4oVisionService()
         
         if not gpt4o_service.is_available():
             raise HTTPException(
                 status_code=503, 
-                detail="GPT-4o Vision service not available. Please check OPENAI_API_KEY configuration."
+                detail="GPT-5 Vision service not available. Please check OPENAI_API_KEY configuration."
             )
         
         # Step 1: Determine number of pages and enhance page images
@@ -680,11 +680,11 @@ async def extract_tables_gpt(
         enhanced_images = []
         try:
             for page_num in range(min(num_pages, 5)):  # Limit to first 5 pages or total pages if less
-                logger.info(f"Enhancing page {page_num + 1}")
-                enhanced_image = gpt4o_service.enhance_page_image(temp_pdf_path, page_num, dpi=600)
+                logger.info(f"Enhancing page {page_num + 1} with ultra HD quality")
+                enhanced_image = gpt4o_service.enhance_page_image(temp_pdf_path, page_num, dpi=800)
                 if enhanced_image:
                     enhanced_images.append(enhanced_image)
-                    logger.info(f"Successfully enhanced page {page_num + 1}")
+                    logger.info(f"Successfully enhanced page {page_num + 1} with high quality")
                 else:
                     logger.warning(f"Failed to enhance page {page_num + 1}")
         finally:
@@ -703,58 +703,70 @@ async def extract_tables_gpt(
         
         logger.info(f"Enhanced {len(enhanced_images)} page images")
         
-        # Step 2: Analyze with GPT-4o Vision for table extraction
-        logger.info("Starting GPT-4o Vision table extraction...")
-        extraction_result = gpt4o_service.extract_tables_with_vision(
+        # Step 2: Use ultra HD GPT-5 Vision extraction with smart company detection
+        logger.info("Starting ultra HD GPT-5 Vision table extraction with smart company detection...")
+        extraction_result = gpt4o_service.extract_tables_with_vision_ultra_hd(
             enhanced_images=enhanced_images,
             max_pages=len(enhanced_images)
         )
         
         if not extraction_result.get("success"):
-            raise HTTPException(
-                status_code=500,
-                detail=f"GPT extraction failed: {extraction_result.get('error', 'Unknown error')}"
+            # Log the error but don't fail completely
+            error_msg = extraction_result.get('error', 'Unknown error')
+            logger.warning(f"GPT extraction failed: {error_msg}")
+            
+            # Return a graceful error response instead of throwing an exception
+            return JSONResponse(
+                status_code=422,  # Unprocessable Entity
+                content={
+                    "success": False,
+                    "error": f"GPT extraction failed: {error_msg}",
+                    "message": "The document could not be processed by GPT-5 Vision. This may be due to image quality issues or the document format. Please try with a different document or contact support.",
+                    "upload_id": upload_id,
+                    "timestamp": datetime.now().isoformat()
+                }
             )
         
-        logger.info("GPT-4o Vision table extraction completed successfully")
+        logger.info("GPT-5 Vision table extraction completed successfully")
         
-        # Step 3: Check for hierarchical structure and process accordingly
+        # Step 3: Process extracted tables with company detection
         extracted_tables = extraction_result.get("tables", [])
-        hierarchical_indicators = extraction_result.get("hierarchical_indicators", {})
+        extraction_metadata = extraction_result.get("extraction_metadata", {})
         
-        # Initialize hierarchical service
-        hierarchical_service = HierarchicalExtractionService()
+        # Check if we got any tables
+        if not extracted_tables:
+            logger.warning("No tables extracted from GPT-5 Vision analysis")
+            return JSONResponse(
+                status_code=422,  # Unprocessable Entity
+                content={
+                    "success": False,
+                    "error": "No tables found in document",
+                    "message": "GPT-5 Vision could not identify any tables in the document. This may be due to image quality issues or the document format. Please try with a different document or contact support.",
+                    "upload_id": upload_id,
+                    "timestamp": datetime.now().isoformat()
+                }
+            )
         
-        # Process tables for hierarchical structure
+        # Process tables with company detection
         processed_tables = []
-        hierarchical_tables = []
-        standard_tables = []
         
-        for table in extracted_tables:
-            # Check if GPT detected hierarchical structure
-            structure_type = table.get("structure_type", "standard")
+        logger.info(f"Processing {len(extracted_tables)} extracted tables with company detection")
+        for i, table in enumerate(extracted_tables):
+            logger.info(f"Processing table {i+1} with company detection")
+            # Apply company detection service for all tables
+            from app.services.company_name_service import CompanyNameDetectionService
+            company_detector = CompanyNameDetectionService()
             
-            if structure_type == "hierarchical" or hierarchical_service._is_hierarchical_table(table):
-                logger.info(f"GPT detected hierarchical table structure")
-                hierarchical_result = hierarchical_service.process_hierarchical_statement(table)
-                if hierarchical_result['customer_blocks']:
-                    # Convert to standard format for compatibility
-                    standard_rows = hierarchical_service.convert_to_standard_format(hierarchical_result)
-                    hierarchical_table = {
-                        'headers': ['Company Name', 'Commission Earned', 'Invoice Total', 'Customer ID', 'Section Type'],
-                        'rows': standard_rows,
-                        'structure_type': 'hierarchical',
-                        'original_data': hierarchical_result,
-                        'extractor': 'gpt4o_vision_hierarchical'
-                    }
-                    hierarchical_tables.append(hierarchical_table)
-                else:
-                    standard_tables.append(table)
-            else:
-                standard_tables.append(table)
+            enhanced_table = company_detector.detect_company_names_in_extracted_data(
+                table, "gpt4o_vision"
+            )
+            processed_tables.append(enhanced_table)
         
-        # Combine results
-        final_tables = hierarchical_tables + standard_tables
+        
+        # Step 4: Merge similar tables with identical headers
+        merged_tables = gpt4o_service.merge_similar_tables(processed_tables)
+        
+        final_tables = merged_tables
         
         # Transform tables to the format expected by TableEditor
         frontend_tables = []
@@ -765,7 +777,8 @@ async def extract_tables_gpt(
         
         for i, table in enumerate(final_tables):
             rows = table.get("rows", [])
-            headers = table.get("header", [])
+            # Handle both "header" and "headers" keys for compatibility
+            headers = table.get("headers", table.get("header", []))
             
             # Calculate metrics
             total_rows += len(rows)
@@ -786,9 +799,15 @@ async def extract_tables_gpt(
             
             # Determine extractor type and processing notes
             extractor = table.get("extractor", "gpt4o_vision")
-            processing_notes = "GPT-4o Vision table extraction"
-            if extractor == "gpt4o_vision_hierarchical":
-                processing_notes = "GPT-4o Vision hierarchical extraction"
+            processing_notes = "GPT-5 Vision enhanced extraction with multi-pass analysis and smart pattern detection"
+            if extractor == "gpt4o_vision_enhanced":
+                processing_notes = "GPT-5 Vision enhanced extraction with hierarchical company detection"
+            elif extractor == "gpt4o_vision_hierarchical":
+                processing_notes = "GPT-5 Vision hierarchical extraction"
+            elif extractor == "gpt4o_vision_merged":
+                processing_notes = "GPT-5 Vision merged extraction with similar table consolidation"
+            elif extractor == "enhanced_multi_pass_extraction":
+                processing_notes = "GPT-5 Vision enhanced multi-pass extraction with smart pattern detection and validation"
             
             table_data = {
                 "name": table.get("name", f"GPT Extracted Table {i + 1}"),
@@ -869,7 +888,7 @@ async def extract_tables_gpt(
         response_data = {
             "status": "success",
             "success": True,
-            "message": f"Successfully extracted tables with GPT-4o Vision",
+                            "message": f"Successfully extracted tables with GPT-5 Vision using high quality image processing and intelligent table merging",
             "job_id": str(uuid.uuid4()),
             "upload_id": upload_id,
             "extraction_id": upload_id,
@@ -887,9 +906,9 @@ async def extract_tables_gpt(
             "document_info": {
                 "pdf_type": "commission_statement",
                 "total_tables": len(frontend_tables),
-                "hierarchical_tables_count": len(hierarchical_tables),
-                "standard_tables_count": len(standard_tables),
-                "hierarchical_indicators": hierarchical_indicators
+                "hierarchical_tables_count": len([t for t in final_tables if t.get("structure_type") == "hierarchical_with_company_column"]),
+                "standard_tables_count": len([t for t in final_tables if t.get("structure_type") == "standard"]),
+                "hierarchical_indicators": extraction_metadata.get("hierarchical_structure", {})
             },
             "quality_summary": {
                 "total_tables": len(frontend_tables),
@@ -898,8 +917,8 @@ async def extract_tables_gpt(
                 "overall_confidence": "HIGH",
                 "issues_found": [],
                 "recommendations": [
-                    "GPT-4o Vision extraction completed successfully",
-                    f"Hierarchical processing: {len(hierarchical_tables)} tables processed" if hierarchical_tables else "Standard table extraction"
+                    "GPT-5 Vision extraction completed successfully",
+                    f"Hierarchical processing: {len([t for t in final_tables if t.get('structure_type') == 'hierarchical_with_company_column'])} tables processed" if any(t.get('structure_type') == 'hierarchical_with_company_column' for t in final_tables) else "Standard table extraction"
                 ]
             },
             "quality_metrics": {
@@ -914,7 +933,7 @@ async def extract_tables_gpt(
                     "extractor": "gpt4o_vision",
                     "pdf_type": "commission_statement",
                     "timestamp": datetime.now().isoformat(),
-                    "processing_method": "GPT-4o Vision table extraction",
+                    "processing_method": "GPT-5 Vision table extraction",
                     "format_accuracy": "≥95%"
                 }
             ],
@@ -922,7 +941,7 @@ async def extract_tables_gpt(
                 "extraction_methods_used": ["gpt4o_vision"],
                 "pdf_type": "commission_statement",
                 "extraction_errors": [],
-                "processing_notes": "GPT-4o Vision table extraction",
+                "processing_notes": "GPT-5 Vision table extraction",
                 "format_accuracy": "≥95%"
             },
             "s3_key": upload_info.file_name,
@@ -1179,6 +1198,247 @@ async def extract_tables_google_docai(
             status_code=500,
             detail=f"Google DOC AI extraction failed: {str(e)}"
         )
+
+
+@router.post("/extract-tables-gpt-enhanced/")
+async def extract_tables_gpt_enhanced(
+    upload_id: str = Form(...),
+    company_id: str = Form(...),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Extract tables using enhanced GPT-5 Vision analysis with multi-pass analysis,
+    smart pattern detection, and intelligent validation.
+    This endpoint provides improved accuracy for complex table structures.
+    """
+    start_time = datetime.now()
+    logger.info(f"Starting enhanced GPT extraction for upload_id: {upload_id}")
+    
+    try:
+        # Get upload information
+        upload_info = await crud.get_upload_by_id(db, upload_id)
+        if not upload_info:
+            raise HTTPException(status_code=404, detail="Upload not found")
+        
+        # Get PDF file from S3
+        s3_key = upload_info.file_name
+        logger.info(f"Using S3 key: {s3_key}")
+        
+        # Download PDF from S3 to temporary file
+        temp_pdf_path = download_file_from_s3(s3_key)
+        if not temp_pdf_path:
+            raise HTTPException(
+                status_code=404, 
+                detail=f"Failed to download PDF from S3: {s3_key}"
+            )
+        
+        logger.info(f"Processing PDF: {temp_pdf_path} (downloaded from S3)")
+        
+        # Use the GPT-5 Vision service for enhanced extraction
+        from app.services.gpt4o_vision_service import GPT4oVisionService
+        gpt4o_service = GPT4oVisionService()
+        
+        if not gpt4o_service.is_available():
+            raise HTTPException(
+                status_code=503, 
+                detail="GPT-5 Vision service not available. Please check OPENAI_API_KEY configuration."
+            )
+        
+        # Step 1: Determine number of pages and enhance page images
+        import fitz  # PyMuPDF
+        doc = fitz.open(temp_pdf_path)
+        num_pages = len(doc)
+        doc.close()
+        
+        logger.info(f"PDF has {num_pages} pages")
+        
+        enhanced_images = []
+        try:
+            for page_num in range(min(num_pages, 5)):  # Limit to first 5 pages or total pages if less
+                logger.info(f"Enhancing page {page_num + 1} with ultra HD quality")
+                enhanced_image = gpt4o_service.enhance_page_image(temp_pdf_path, page_num, dpi=600)
+                if enhanced_image:
+                    enhanced_images.append(enhanced_image)
+                    logger.info(f"Successfully enhanced page {page_num + 1} with enhanced processing")
+                else:
+                    logger.warning(f"Failed to enhance page {page_num + 1}")
+        finally:
+            # Clean up temporary file
+            try:
+                os.remove(temp_pdf_path)
+                logger.info(f"Cleaned up temporary file: {temp_pdf_path}")
+            except Exception as e:
+                logger.warning(f"Failed to clean up temporary file {temp_pdf_path}: {e}")
+        
+        if not enhanced_images:
+            raise HTTPException(
+                status_code=500, 
+                detail="Failed to enhance any page images for vision analysis"
+            )
+        
+        logger.info(f"Enhanced {len(enhanced_images)} page images")
+        
+        # Step 2: Use ultra HD GPT-5 Vision extraction with smart company detection
+        logger.info("Starting ultra HD GPT-5 Vision table extraction with smart company detection...")
+        extraction_result = gpt4o_service.extract_tables_with_vision_ultra_hd(
+            enhanced_images=enhanced_images,
+            max_pages=len(enhanced_images)
+        )
+        
+        if not extraction_result.get("success"):
+            raise HTTPException(
+                status_code=500,
+                detail=f"Enhanced GPT extraction failed: {extraction_result.get('error', 'Unknown error')}"
+            )
+        
+        logger.info("GPT-5 Vision table extraction completed successfully")
+        
+        # Step 3: Process extracted tables with company detection
+        extracted_tables = extraction_result.get("tables", [])
+        extraction_metadata = extraction_result.get("extraction_metadata", {})
+        
+        logger.info(f"GPT extraction completed with method: {extraction_metadata.get('method', 'unknown')}")
+        logger.info(f"Pages analyzed: {extraction_metadata.get('pages_analyzed', 0)}")
+        logger.info(f"Confidence: {extraction_metadata.get('confidence', 0.0)}")
+        
+        # Process tables with company detection
+        processed_tables = []
+        
+        for table in extracted_tables:
+            # Apply company detection service for all tables
+            from app.services.company_name_service import CompanyNameDetectionService
+            company_detector = CompanyNameDetectionService()
+            
+            enhanced_table = company_detector.detect_company_names_in_extracted_data(
+                table, "gpt4o_vision_enhanced"
+            )
+            processed_tables.append(enhanced_table)
+        
+        # Step 4: Merge similar tables with identical headers
+        logger.info(f"Processing {len(processed_tables)} tables for merging")
+        merged_tables = gpt4o_service.merge_similar_tables(processed_tables)
+        logger.info(f"After merging: {len(merged_tables)} tables")
+        
+        final_tables = merged_tables
+        
+        # Transform tables to the format expected by TableEditor
+        frontend_tables = []
+        total_rows = 0
+        total_cells = 0
+        all_headers = []
+        all_table_data = []
+        
+        for i, table in enumerate(final_tables):
+            rows = table.get("rows", [])
+            # Handle both "header" and "headers" keys for compatibility
+            headers = table.get("headers", table.get("header", []))
+            
+            # Calculate metrics
+            total_rows += len(rows)
+            total_cells += sum(len(row) for row in rows) if rows else 0
+            
+            # Collect headers (use the most comprehensive set)
+            if len(headers) > len(all_headers):
+                all_headers = headers
+            
+            # Convert rows to table_data format for backward compatibility
+            for row in rows:
+                row_dict = {}
+                for j, header in enumerate(headers):
+                    header_key = header.lower().replace(" ", "_").replace("-", "_")
+                    value = str(row[j]) if j < len(row) else ""
+                    row_dict[header_key] = value
+                all_table_data.append(row_dict)
+            
+            # Enhanced processing notes
+            extractor = table.get("extractor", "gpt4o_vision_enhanced")
+            processing_notes = f"GPT-5 Vision enhanced extraction with multi-pass analysis, quality score: {extraction_metadata.get('confidence', 0.0):.2f}"
+            
+            table_data = {
+                "name": table.get("name", f"Enhanced GPT Extracted Table {i + 1}"),
+                "header": headers,
+                "rows": rows,
+                "extractor": extractor,
+                "structure_type": table.get("structure_type", "standard"),
+                "metadata": {
+                    "extraction_method": extractor,
+                    "timestamp": datetime.now().isoformat(),
+                    "processing_notes": processing_notes,
+                    "confidence": extraction_metadata.get("confidence", 0.0),
+                    "enhanced_features": [
+                        "multi_pass_analysis",
+                        "smart_pattern_detection", 
+                        "intelligent_validation",
+                        "column_alignment_correction"
+                    ]
+                }
+            }
+            frontend_tables.append(table_data)
+        
+        # Calculate processing time
+        processing_time = (datetime.now() - start_time).total_seconds()
+        
+        # Add format learning (same as PDF flow)
+        format_learning_data = None
+        if frontend_tables and len(frontend_tables) > 0:
+            try:
+                from app.services.format_learning_service import FormatLearningService
+                format_learning_service = FormatLearningService()
+                
+                # Use the first table for format learning
+                first_table = frontend_tables[0]
+                format_learning_data = format_learning_service.learn_format_from_table(
+                    first_table, company_id
+                )
+                logger.info("Format learning completed for enhanced GPT extraction")
+            except Exception as e:
+                logger.warning(f"Format learning failed for enhanced GPT extraction: {e}")
+        
+        # Prepare response
+        response_data = {
+            "success": True,
+            "tables": frontend_tables,
+            "table_data": all_table_data,
+            "headers": all_headers,
+            "total_rows": total_rows,
+            "total_cells": total_cells,
+            "processing_time": processing_time,
+            "extraction_method": "gpt4o_vision_enhanced",
+            "quality_score": extraction_metadata.get("confidence", 0.0),
+            "enhanced_features": [
+                "multi_pass_analysis",
+                "smart_pattern_detection",
+                "intelligent_validation", 
+                "column_alignment_correction"
+            ],
+            "format_learning": format_learning_data,
+            "metadata": {
+                "upload_id": upload_id,
+                "company_id": company_id,
+                "extraction_timestamp": datetime.now().isoformat(),
+                "method": extraction_metadata.get("method", "unknown"),
+                "quality_score": extraction_metadata.get("confidence", 0.0),
+                "corrections_applied": extraction_result.get("corrections_applied", False)
+            }
+        }
+        
+        logger.info(f"Enhanced GPT extraction completed successfully in {processing_time:.2f} seconds")
+        logger.info(f"Quality score: {extraction_metadata.get('confidence', 0.0):.2f}")
+        logger.info(f"Total tables: {len(frontend_tables)}, Total rows: {total_rows}")
+        
+        return response_data
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Enhanced GPT extraction error: {str(e)}")
+        # Clean up file on error
+        if 'temp_pdf_path' in locals() and os.path.exists(temp_pdf_path):
+            os.remove(temp_pdf_path)
+        raise HTTPException(status_code=500, detail=f"Enhanced GPT extraction failed: {str(e)}")
+
+
+
 
 
 def transform_new_extraction_response_to_client_format(

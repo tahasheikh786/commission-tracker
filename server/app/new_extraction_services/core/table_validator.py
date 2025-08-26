@@ -13,57 +13,97 @@ class TableValidator:
         self.logger = logger
     
     def is_valid_financial_table(self, headers: List[str], rows: List[List[str]]) -> bool:
-        """
-        Intelligently validate if extracted table contains meaningful financial data.
-        Uses adaptive algorithms instead of hardcoded patterns.
-        """
+        """Enhanced financial table validation for complex documents."""
         try:
-            # Check for minimum table dimensions
-            # Allow single-row tables for commission statements (common case)
-            if len(headers) < 2:
+            # ✅ ADAPTIVE: More flexible requirements
+            if len(headers) < 1:  # Changed from 2 to 1
                 return False
             
-            # For commission statements, even 1 row is valid if it has proper structure
-            if len(rows) < 1:
+            if len(rows) < 0:  # Changed from 1 to 0 (allow header-only sections)
                 return False
             
-            # Special case: Single-row commission tables are valid if they have commission-related headers
-            if len(rows) == 1:
-                return True
+            # ✅ ENHANCED: Context-aware validation
+            document_complexity = self._assess_document_complexity(headers, rows)
             
-            # Intelligent uniqueness assessment
-            if len(headers) == 1:
-                unique_values = set()
-                for row in rows:
-                    if row and len(row) > 0:
-                        unique_values.add(str(row[0]).strip().lower())
-                
-                # Adaptive threshold based on content analysis
-                uniqueness_ratio = len(unique_values) / len(rows)
-                if uniqueness_ratio < 0.3:  # Less than 30% unique values
-                    return False
-            
-            # INTELLIGENT content analysis - NO HARDCODED LISTS
-            content_quality_score = self._assess_table_content_quality(headers, rows)
-            structure_coherence_score = self._assess_table_structure_coherence(headers, rows)
-            semantic_relevance_score = self._assess_semantic_relevance(headers, rows)
-            
-            # Adaptive validation threshold
-            overall_quality = (
-                content_quality_score * 0.4 +
-                structure_coherence_score * 0.3 +
-                semantic_relevance_score * 0.3
-            )
-            
-            # Dynamic threshold based on table characteristics
-            adaptive_threshold = self._calculate_adaptive_validation_threshold(headers, rows)
-            
-            return overall_quality >= adaptive_threshold
+            if document_complexity == 'complex':
+                # More lenient validation for complex documents
+                return self._validate_complex_document_table(headers, rows)
+            else:
+                # Standard validation for simple documents
+                return self._validate_standard_financial_table(headers, rows)
             
         except Exception as e:
-            self.logger.logger.warning(f"Error in intelligent table validation: {e}")
-            # On error, default to including the table
+            self.logger.logger.warning(f"Error in financial table validation: {e}")
+            return True  # Default to accepting when in doubt
+
+    def is_valid_financial_table_lenient(self, headers: List[str], rows: List[List[str]]) -> bool:
+        """Lenient validation for debugging extraction."""
+        has_content = len(headers) > 0 or len(rows) > 0
+        
+        # Flag extraction failures
+        if headers == ['Column_1'] and len(rows) == 0:
+            self.logger.logger.warning("⚠️ Generic structure - extraction failed")
+            return False
+        
+        # Accept anything with real content
+        if has_content:
+            self.logger.logger.info(f"✅ ACCEPTING: {len(headers)} headers, {len(rows)} rows")
             return True
+            
+        return False
+
+    def _assess_document_complexity(self, headers: List[str], rows: List[List[str]]) -> str:
+        """Assess document complexity to adjust validation."""
+        complexity_indicators = 0
+        
+        # Check header complexity
+        if any(len(str(h).split()) > 3 for h in headers):
+            complexity_indicators += 1
+        
+        # Check data variety
+        if len(headers) > 5:
+            complexity_indicators += 1
+        
+        # Check row structure variety
+        if rows:
+            row_lengths = [len(row) for row in rows]
+            if len(set(row_lengths)) > 2:  # Variable row lengths
+                complexity_indicators += 1
+        
+        return 'complex' if complexity_indicators >= 2 else 'standard'
+
+    def _validate_complex_document_table(self, headers: List[str], rows: List[List[str]]) -> bool:
+        """Validation specifically for complex documents."""
+        # Very lenient validation - focus on having some meaningful content
+        has_meaningful_headers = any(len(str(h).strip()) > 2 for h in headers)
+        has_content = len(rows) > 0 or len(headers) > 0
+        
+        return has_meaningful_headers and has_content
+
+    def _validate_standard_financial_table(self, headers: List[str], rows: List[List[str]]) -> bool:
+        """Standard validation for simple financial documents."""
+        # Use existing logic but slightly more lenient
+        if len(headers) < 2:
+            return False
+        
+        if len(rows) < 1:
+            # Allow header-only tables for summary sections
+            return len(headers) >= 2
+        
+        # Apply intelligent content analysis (existing logic)
+        content_quality_score = self._assess_table_content_quality(headers, rows)
+        structure_coherence_score = self._assess_table_structure_coherence(headers, rows) 
+        semantic_relevance_score = self._assess_semantic_relevance(headers, rows)
+        
+        overall_quality = (
+            content_quality_score * 0.4 +
+            structure_coherence_score * 0.3 +
+            semantic_relevance_score * 0.3
+        )
+        
+        # More lenient threshold for complex documents
+        adaptive_threshold = 0.3  # Reduced from higher values
+        return overall_quality >= adaptive_threshold
 
     def _assess_table_content_quality(self, headers: List[str], rows: List[List[str]]) -> float:
         """Assess content quality using intelligent analysis"""
@@ -473,41 +513,40 @@ class TableValidator:
         return min(1.0, categorical_weight)
     
     def is_valid_table_element(self, element) -> bool:
-        """Check if a table element is likely to contain valid financial data."""
+        """Enhanced validation for complex documents."""
         try:
-            # Check if element has cells or data
             if hasattr(element, 'cluster') and hasattr(element.cluster, 'cells'):
                 cells = element.cluster.cells
                 cell_count = len(cells)
                 
-                # **DEBUG**: Log table element details for diagnosis
                 self.logger.logger.info(f"🔍 VALIDATING table element: {cell_count} cells")
                 
-                # **RELAXED**: Lower minimum cell count for documents like UHC
-                if cell_count < 6:  # Was 10, now 6 - more lenient
-                    self.logger.logger.info(f"  ❌ Rejected: too few cells ({cell_count} < 6)")
+                # ✅ ADAPTIVE: Dynamic thresholds based on document complexity
+                min_cells = self._calculate_adaptive_min_cells(cells)
+                if cell_count < min_cells:
+                    self.logger.logger.info(f" ❌ Rejected: too few cells ({cell_count} < {min_cells})")
                     return False
                 
-                # Check for reasonable table dimensions
                 cells_by_row = self._group_cells_by_position(cells)
                 row_count = len(cells_by_row)
                 
-                # **RELAXED**: Lower minimum row count
-                if row_count < 2:  # Was 3, now 2 - more lenient  
-                    self.logger.logger.info(f"  ❌ Rejected: too few rows ({row_count} < 2)")
+                # ✅ ADAPTIVE: Dynamic row requirements
+                min_rows = self._calculate_adaptive_min_rows(cells_by_row)
+                if row_count < min_rows:
+                    self.logger.logger.info(f" ❌ Rejected: too few rows ({row_count} < {min_rows})")
                     return False
                 
-                # Check if any row has multiple columns (good sign)
                 max_cols = max(len(cells) for cells in cells_by_row.values()) if cells_by_row else 0
                 
-                # **RELAXED**: Lower minimum column count
-                if max_cols < 2:  # Was 3, now 2 - more lenient
-                    self.logger.logger.info(f"  ❌ Rejected: too few columns ({max_cols} < 2)")
+                # ✅ ADAPTIVE: Dynamic column requirements  
+                min_cols = self._calculate_adaptive_min_cols(cells_by_row)
+                if max_cols < min_cols:
+                    self.logger.logger.info(f" ❌ Rejected: too few columns ({max_cols} < {min_cols})")
                     return False
                 
-                self.logger.logger.info(f"  ✅ ACCEPTED table: {cell_count} cells, {row_count} rows, {max_cols} max cols")
+                self.logger.logger.info(f" ✅ ACCEPTED table: {cell_count} cells, {row_count} rows, {max_cols} max cols")
                 return True
-                
+            
             # If no cluster, check for other indicators
             if hasattr(element, 'label'):
                 label = str(element.label).lower()
@@ -515,13 +554,48 @@ class TableValidator:
                     self.logger.logger.info(f"  ✅ ACCEPTED element with table label: {element.label}")
                     return True
             
-            # Allow through by default for unknown structures
-            self.logger.logger.info(f"  ✅ ACCEPTED unknown table structure (default allow)")
+            # Fallback acceptance for unknown structures
             return True
             
         except Exception as e:
             self.logger.logger.warning(f"Error validating table element: {e}")
             return True
+
+    def _calculate_adaptive_min_cells(self, cells) -> int:
+        """Calculate adaptive minimum cell requirement."""
+        # Analyze cell distribution
+        if len(cells) <= 10:
+            return 3  # Very lenient for small tables
+        elif len(cells) <= 20:
+            return 6  # Standard requirement
+        else:
+            return max(6, len(cells) // 10)  # Scaled requirement for large tables
+
+    def _calculate_adaptive_min_rows(self, cells_by_row) -> int:
+        """Calculate adaptive minimum row requirement."""
+        if not cells_by_row:
+            return 1
+        
+        # Check for header + data pattern
+        row_sizes = [len(cells) for cells in cells_by_row.values()]
+        if len(row_sizes) == 1:
+            return 1  # Single row tables can be valid (summary data)
+        
+        return 2  # At least header + one data row
+
+    def _calculate_adaptive_min_cols(self, cells_by_row) -> int:
+        """Calculate adaptive minimum column requirement."""
+        if not cells_by_row:
+            return 1
+        
+        # Analyze column consistency
+        col_counts = [len(cells) for cells in cells_by_row.values()]
+        avg_cols = sum(col_counts) / len(col_counts)
+        
+        if avg_cols >= 3:
+            return 2  # Standard multi-column requirement
+        else:
+            return 1  # Accept single column for summary sections
     
     def _group_cells_by_position(self, cells) -> Dict[int, List]:
         """

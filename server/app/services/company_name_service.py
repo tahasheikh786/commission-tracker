@@ -63,7 +63,7 @@ class CompanyNameDetectionService:
                                              extraction_method: str = "unknown") -> Dict[str, Any]:
         """
         Main method to detect company names in extracted table data
-        Works for both GPT and DocAI results
+        Works for both GPT and DocAI results with enhanced hierarchical support
         """
         try:
             headers = table_data.get("header", []) or table_data.get("headers", [])
@@ -73,6 +73,11 @@ class CompanyNameDetectionService:
                 return table_data
             
             logger.info(f"🔍 Company Detection: Processing {len(rows)} rows with {len(headers)} headers")
+            
+            # Check if GPT already provided company column
+            if "Company Name" in headers or any("company" in str(h).lower() for h in headers):
+                logger.info("✅ Company column already detected by GPT")
+                return table_data
             
             # Strategy 1: Look for hierarchical customer patterns
             hierarchical_companies = self._detect_hierarchical_companies(rows, headers)
@@ -89,33 +94,37 @@ class CompanyNameDetectionService:
             all_companies = hierarchical_companies + scattered_companies + ner_companies
             unique_companies = list(set(all_companies))  # Remove duplicates
             
-            # Enhance rows with company information
-            enhanced_rows = self._enhance_rows_with_companies(rows, headers, unique_companies)
+            # Enhanced company mapping for hierarchical structures
+            if hierarchical_companies:
+                enhanced_table = self._create_hierarchical_company_column(rows, headers, unique_companies)
+            else:
+                # Fallback to basic enhancement
+                enhanced_rows = self._enhance_rows_with_companies(rows, headers, unique_companies)
+                enhanced_table = {
+                    **table_data,
+                    "rows": enhanced_rows,
+                    "detected_companies": unique_companies,
+                    "company_detection_metadata": {
+                        "extraction_method": extraction_method,
+                        "companies_count": len(unique_companies),
+                        "hierarchical_companies": len(hierarchical_companies),
+                        "scattered_companies": len(scattered_companies),
+                        "ner_companies": len(ner_companies),
+                        "detection_timestamp": datetime.now().isoformat(),
+                        "enhancement_applied": True,
+                        "hierarchical_structure_detected": bool(hierarchical_companies)
+                    }
+                }
             
             logger.info(f"✅ Company Detection: Found {len(unique_companies)} companies: {unique_companies}")
-            
-            # Return enhanced table with company information
-            return {
-                **table_data,
-                "rows": enhanced_rows,
-                "detected_companies": unique_companies,
-                "company_detection_metadata": {
-                    "extraction_method": extraction_method,
-                    "companies_count": len(unique_companies),
-                    "hierarchical_companies": len(hierarchical_companies),
-                    "scattered_companies": len(scattered_companies),
-                    "ner_companies": len(ner_companies),
-                    "detection_timestamp": datetime.now().isoformat(),
-                    "enhancement_applied": True
-                }
-            }
+            return enhanced_table
             
         except Exception as e:
             logger.error(f"Error in company name detection: {e}")
             return table_data
     
     def _detect_hierarchical_companies(self, rows: List[List[str]], headers: List[str]) -> List[str]:
-        """Detect companies from hierarchical customer patterns"""
+        """Detect companies from hierarchical customer patterns with enhanced detection"""
         companies = []
         current_customer_name = None
         
@@ -131,8 +140,68 @@ class CompanyNameDetectionService:
                         companies.append(customer_name)
                         current_customer_name = customer_name
                         break
+            
+            # Enhanced company detection for standalone company names
+            # Look for rows that contain only or primarily company names
+            if self._is_company_header_row(row, row_text):
+                company_name = self._extract_company_from_header_row(row, row_text)
+                if company_name and company_name not in companies:
+                    companies.append(company_name)
+                    current_customer_name = company_name
         
         return companies
+    
+    def _is_company_header_row(self, row: List[str], row_text: str) -> bool:
+        """Check if a row looks like a company header row"""
+        # Check if row contains company indicators
+        company_indicators = [
+            'LLC', 'Inc', 'Corp', 'Co', 'Corporation', 'Company', 'Ltd', 'Limited',
+            'LOGISTICS', 'DELIVERY', 'SERVICES', 'SOLUTIONS', 'PROTECTION', 'HEATING', 'COOLING'
+        ]
+        
+        # Check for company patterns in the row
+        for indicator in company_indicators:
+            if indicator in row_text.upper():
+                return True
+        
+        # Check if row looks like a standalone company name (not transaction data)
+        # Company headers often have fewer cells or different formatting
+        if len(row) <= 3 and len(row_text.strip()) > 5:
+            # Check if it doesn't contain typical transaction data
+            transaction_indicators = ['$', '%', '/', '\\d{2}/\\d{2}/\\d{4}', 'Med', 'Den', 'Vis']
+            has_transaction_data = any(re.search(indicator, row_text) for indicator in transaction_indicators)
+            if not has_transaction_data:
+                return True
+        
+        return False
+    
+    def _extract_company_from_header_row(self, row: List[str], row_text: str) -> Optional[str]:
+        """Extract company name from a header row"""
+        # Try to extract company name using patterns
+        for pattern in self.company_patterns:
+            try:
+                matches = re.findall(pattern, row_text, re.IGNORECASE)
+                for match in matches:
+                    if match and match.strip() and len(match.strip()) > 3:
+                        return match.strip()
+            except re.error:
+                continue
+        
+        # If no pattern match, try to extract the most likely company name
+        words = row_text.split()
+        for i, word in enumerate(words):
+            # Look for words that might be company names
+            if (len(word) > 3 and 
+                any(indicator in word.upper() for indicator in ['LLC', 'INC', 'CORP', 'CO', 'LOGISTICS', 'DELIVERY'])):
+                # Try to get the full company name
+                if i > 0:
+                    # Include previous word if it looks like part of company name
+                    potential_name = f"{words[i-1]} {word}"
+                    if len(potential_name) > 5:
+                        return potential_name
+                return word
+        
+        return None
     
     def _detect_scattered_companies(self, rows: List[List[str]], headers: List[str]) -> List[str]:
         """Detect companies scattered throughout the data"""
@@ -216,6 +285,90 @@ class CompanyNameDetectionService:
                 enhanced_rows.append(enhanced_row)
         
         return enhanced_rows
+    
+    def _create_hierarchical_company_column(self, rows: List[List[str]], headers: List[str], companies: List[str]) -> Dict[str, Any]:
+        """
+        Create a proper company name column for hierarchical structures.
+        Maps each transaction row to its corresponding company.
+        """
+        try:
+            enhanced_rows = []
+            current_company = ""
+            company_mapping = {}
+            row_company_map = {}
+            
+            # Add Company Name as first column
+            enhanced_headers = ["Company Name"] + headers
+            
+            for row_idx, row in enumerate(rows):
+                row_text = ' '.join(str(cell) for cell in row if cell)
+                
+                # Check if this row contains a company name
+                found_company = None
+                for company in companies:
+                    # Use exact match or partial match for company names
+                    if company in row_text or any(word in row_text for word in company.split()):
+                        found_company = company
+                        current_company = company
+                        break
+                
+                # If we found a company in this row, it's likely a company header row
+                if found_company:
+                    # This is a company header row - use the company name
+                    enhanced_row = [found_company] + row
+                    enhanced_rows.append(enhanced_row)
+                    row_company_map[row_idx] = found_company
+                    
+                    # Initialize company mapping if not exists
+                    if found_company not in company_mapping:
+                        company_mapping[found_company] = []
+                    company_mapping[found_company].append(row_idx)
+                    
+                else:
+                    # This is a transaction row - inherit company from previous
+                    if current_company:
+                        enhanced_row = [current_company] + row
+                        enhanced_rows.append(enhanced_row)
+                        row_company_map[row_idx] = current_company
+                        
+                        # Add to company mapping
+                        if current_company not in company_mapping:
+                            company_mapping[current_company] = []
+                        company_mapping[current_company].append(row_idx)
+                    else:
+                        # No company context yet - add empty company column
+                        enhanced_row = [""] + row
+                        enhanced_rows.append(enhanced_row)
+            
+            return {
+                "header": enhanced_headers,
+                "rows": enhanced_rows,
+                "detected_companies": companies,
+                "company_transaction_mapping": company_mapping,
+                "row_company_map": row_company_map,
+                "company_detection_metadata": {
+                    "extraction_method": "hierarchical_enhanced",
+                    "companies_count": len(companies),
+                    "hierarchical_structure_detected": True,
+                    "company_column_added": True,
+                    "detection_timestamp": datetime.now().isoformat(),
+                    "enhancement_applied": True,
+                    "structure_type": "hierarchical_with_company_column"
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"Error creating hierarchical company column: {e}")
+            return {
+                "header": headers,
+                "rows": rows,
+                "detected_companies": companies,
+                "company_detection_metadata": {
+                    "extraction_method": "hierarchical_fallback",
+                    "error": str(e),
+                    "enhancement_applied": False
+                }
+            }
     
     def create_company_transaction_mapping(self, rows: List[List[str]], companies: List[str]) -> Dict[str, List[int]]:
         """Create mapping between companies and their transaction rows"""

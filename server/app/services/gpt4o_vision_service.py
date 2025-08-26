@@ -5,9 +5,10 @@ import logging
 import re
 from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime
-from PIL import Image
+from PIL import Image, ImageEnhance, ImageFilter
 import io
 import fitz  # PyMuPDF
+import numpy as np
 from openai import OpenAI
 from .data_formatting_service import DataFormattingService
 from .company_name_service import CompanyNameDetectionService
@@ -16,12 +17,8 @@ logger = logging.getLogger(__name__)
 
 class GPT4oVisionService:
     """
-    Service for using GPT-4o Vision to improve table extraction results.
+    Service for using GPT-5 Vision to improve table extraction results.
     Provides high-quality table structure analysis using visual input.
-    
-    This service is strictly GPT-4o response driven - all header processing,
-    column mapping, and data parsing is based on GPT's analysis with no
-    hardcoded patterns or fallback logic.
     """
     
     def __init__(self):
@@ -39,7 +36,7 @@ class GPT4oVisionService:
         
         try:
             self.client = OpenAI(api_key=api_key)
-            logger.info("GPT-4o Vision service initialized successfully")
+            logger.info("GPT-5 Vision service initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize OpenAI client: {e}")
     
@@ -47,17 +44,17 @@ class GPT4oVisionService:
         """Check if the service is available (API key configured)."""
         return self.client is not None
     
-    def enhance_page_image(self, pdf_path: str, page_num: int, dpi: int = 600) -> Optional[str]:
+    def enhance_page_image(self, pdf_path: str, page_num: int, dpi: int = 800) -> Optional[str]:
         """
-        Extract and enhance a single page from PDF for vision analysis.
+        Extract and enhance a single page from PDF for vision analysis with ULTRA HD quality.
         
         Args:
             pdf_path: Path to the PDF file
             page_num: Page number (0-indexed)
-            dpi: Resolution for image extraction
+            dpi: Resolution for image extraction (800 DPI for maximum quality)
             
         Returns:
-            Base64 encoded enhanced image or None if failed
+            Base64 encoded ultra HD enhanced image or None if failed
         """
         try:
             doc = fitz.open(pdf_path)
@@ -67,23 +64,29 @@ class GPT4oVisionService:
             
             page = doc.load_page(page_num)
             
-            # Create high-resolution matrix for better quality
+            # Create ultra high-resolution matrix for supreme quality
+            # Increased to 800 DPI for maximum quality processing
             matrix = fitz.Matrix(dpi/72, dpi/72)  # 72 is the default DPI
             
-            # Get pixmap with high resolution
-            pix = page.get_pixmap(matrix=matrix)
+            # Get pixmap with ultra high resolution and anti-aliasing
+            pix = page.get_pixmap(matrix=matrix, alpha=False)
             
-            # Convert to PIL Image for enhancement
+            # Convert to PIL Image for advanced enhancement
             img_data = pix.tobytes("png")
             img = Image.open(io.BytesIO(img_data))
             
-            # Basic image enhancement
-            img = self._enhance_image(img)
+            # Apply ultra HD commission statement image processing
+            img = self._enhance_commission_statement_image_ultra_hd(img)
             
-            # Convert to base64
+            # Convert to base64 with maximum quality - use PNG for lossless compression
             buffer = io.BytesIO()
-            img.save(buffer, format='PNG', optimize=True)
+            img.save(buffer, format='PNG', optimize=False)
             img_str = base64.b64encode(buffer.getvalue()).decode()
+            
+            # Log image details for debugging
+            img_size = len(img_str)
+            logger.info(f"Successfully created ultra HD image for page {page_num + 1} at {dpi} DPI")
+            logger.info(f"Image size: {img_size} characters, dimensions: {img.size}")
             
             doc.close()
             return img_str
@@ -92,75 +95,54 @@ class GPT4oVisionService:
             logger.error(f"Error enhancing page {page_num}: {e}")
             return None
     
-    def _enhance_image(self, img: Image.Image) -> Image.Image:
+    def _enhance_commission_statement_image_ultra_hd(self, img: Image.Image) -> Image.Image:
         """
-        Apply basic image enhancement for better OCR results.
-        
-        Args:
-            img: PIL Image object
-            
-        Returns:
-            Enhanced PIL Image
+        Ultra HD image processing for commission statements with advanced enhancement.
+        Focuses on maximum readability and detail preservation for table extraction.
         """
         try:
-            # Convert to RGB if necessary
+            # Convert to RGB if needed
             if img.mode != 'RGB':
                 img = img.convert('RGB')
             
-            # Basic contrast enhancement
-            from PIL import ImageEnhance
-            
-            # Enhance contrast slightly
+            # 1. Advanced contrast enhancement for better text visibility
             enhancer = ImageEnhance.Contrast(img)
-            img = enhancer.enhance(1.2)
+            img = enhancer.enhance(1.5)  # Increased from 1.3 to 1.5
             
-            # Enhance sharpness
+            # 2. Enhanced sharpening for crisp text and table borders
             enhancer = ImageEnhance.Sharpness(img)
-            img = enhancer.enhance(1.1)
+            img = enhancer.enhance(1.4)  # Increased from 1.2 to 1.4
+            
+            # 3. Optimal brightness adjustment for better visibility
+            enhancer = ImageEnhance.Brightness(img)
+            img = enhancer.enhance(1.15)  # Increased from 1.1 to 1.15
+            
+            # 4. Color enhancement for better distinction between elements
+            enhancer = ImageEnhance.Color(img)
+            img = enhancer.enhance(1.1)  # Slight color enhancement
+            
+            # 5. Apply unsharp mask for additional detail enhancement
+            img = img.filter(ImageFilter.UnsharpMask(radius=1, percent=150, threshold=3))
+            
+            # 6. Apply edge enhancement for table borders
+            img = img.filter(ImageFilter.EDGE_ENHANCE_MORE)
             
             return img
             
         except Exception as e:
-            logger.warning(f"Image enhancement failed: {e}")
+            logger.warning(f"Ultra HD image processing failed: {e}")
             return img
-    
-    def extract_table_regions(self, pdf_path: str, page_num: int) -> List[Tuple[float, float, float, float]]:
-        """
-        Extract potential table regions from a page.
-        This is a simplified approach - in production you might want more sophisticated table detection.
-        
-        Args:
-            pdf_path: Path to the PDF file
-            page_num: Page number (0-indexed)
-            
-        Returns:
-            List of bounding boxes (x0, y0, x1, y1) for potential table regions
-        """
-        try:
-            doc = fitz.open(pdf_path)
-            page = doc.load_page(page_num)
-            
-            # Get page dimensions
-            rect = page.rect
-            width, height = rect.width, rect.height
-            
-            # For now, return the full page as a potential table region
-            # In a more sophisticated implementation, you'd use table detection algorithms
-            table_regions = [(0, 0, width, height)]
-            
-            doc.close()
-            return table_regions
-            
-        except Exception as e:
-            logger.error(f"Error extracting table regions from page {page_num}: {e}")
-            return []
-    
+
+    # ============================================================================
+    # IMPROVEMENT FUNCTIONS (used by improve_extraction.py)
+    # ============================================================================
+
     def analyze_table_with_vision(self, 
                                  enhanced_images: List[str], 
                                  current_extraction: List[Dict[str, Any]],
                                  max_pages: int = 5) -> Dict[str, Any]:
         """
-        Use GPT-4o Vision to analyze table structure and improve extraction.
+        Use GPT-5 Vision to analyze table structure and improve extraction.
         
         Args:
             enhanced_images: List of base64 encoded enhanced page images
@@ -171,13 +153,13 @@ class GPT4oVisionService:
             Dictionary with improved table structure and analysis
         """
         if not self.is_available():
-            return {"error": "GPT-4o Vision service not available"}
+            return {"error": "GPT-5 Vision service not available"}
         
         try:
             # Limit to max_pages
             images_to_analyze = enhanced_images[:max_pages]
             
-            # Prepare the prompt for GPT-4o
+            # Prepare the prompt for GPT-5
             system_prompt = self._create_system_prompt()
             user_prompt_parts = self._create_user_prompt(current_extraction)
             
@@ -196,35 +178,25 @@ class GPT4oVisionService:
                     }
                 })
             
-            # Call GPT-4o Vision API
-            logger.info(f"Calling GPT-4o Vision API for {len(images_to_analyze)} pages")
-            logger.info(f"Message structure: {len(messages)} messages")
-            logger.info(f"User message content parts: {len(messages[1]['content'])} parts")
+            # Call GPT-5 Vision API
+            logger.info(f"Calling GPT-5 Vision API for {len(images_to_analyze)} pages")
             
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5",
                 messages=messages,
-                max_tokens=8000,  # Increased for table structure analysis
-                temperature=0.1  # Low temperature for consistent, precise analysis
+                max_completion_tokens=8000  # Increased for table structure analysis
             )
-            
-            logger.info(f"Response structure: {type(response)}")
-            logger.info(f"Response choices: {len(response.choices) if response.choices else 0}")
             
             # Parse the response
             if not response.choices or len(response.choices) == 0:
                 logger.error("No choices in response")
                 return {
                     "success": False,
-                    "error": "No response choices from GPT-4o"
+                    "error": "No response choices from GPT-5"
                 }
             
             content = response.choices[0].message.content
-            logger.info("GPT-4o Vision API call completed successfully")
-            logger.info(f"Message structure: {type(response.choices[0].message)}")
-            logger.info(f"Content type: {type(content)}")
-            logger.info(f"Raw response content length: {len(content) if content else 0}")
-            logger.info(f"Raw response content preview: {content[:500] if content else 'None'}")
+            logger.info("GPT-5 Vision API call completed successfully")
             
             # Try to parse JSON from the response
             try:
@@ -238,10 +210,8 @@ class GPT4oVisionService:
                     cleaned_content = cleaned_content[:-3]  # Remove ```
                 cleaned_content = cleaned_content.strip()
                 
-                logger.info(f"Cleaned content preview: {cleaned_content[:200]}...")
-                
                 result = json.loads(cleaned_content)
-                logger.info(f"Full GPT-4o analysis result: {json.dumps(result, indent=2)}")
+                logger.info(f"Full GPT-5 analysis result: {json.dumps(result, indent=2)}")
                 return {
                     "success": True,
                     "analysis": result,
@@ -253,19 +223,19 @@ class GPT4oVisionService:
                 logger.error(f"Response content: {content}")
                 return {
                     "success": False,
-                    "error": "Failed to parse GPT-4o response",
+                    "error": "Failed to parse GPT-5 response",
                     "raw_response": content
                 }
                 
         except Exception as e:
-            logger.error(f"Error in GPT-4o Vision analysis: {e}")
+            logger.error(f"Error in GPT-5 Vision analysis: {e}")
             return {
                 "success": False,
-                "error": f"GPT-4o Vision analysis failed: {str(e)}"
+                "error": f"GPT-5 Vision analysis failed: {str(e)}"
             }
     
     def _create_system_prompt(self) -> str:
-        """Create the system prompt for GPT-4o Vision analysis."""
+        """Create the system prompt for GPT-5 Vision analysis."""
         return """You are a vision document analyst specializing in table structure analysis. Your task is to analyze PDF page images and extract precise table information.
 
 CRITICAL REQUIREMENTS:
@@ -287,7 +257,7 @@ CRITICAL REQUIREMENTS:
     - "ACCOUNT | POLICY NAME" + "NUMBER | EXPLANATION" should become "ACCOUNT NUMBER", "POLICY NAME OR EXPLANATION"
     - Percentage symbols should be attached to their related headers, not standalone
 
-This analysis is strictly GPT-4o response driven - all processing must be based on what is visible in the images with no hardcoded patterns or assumptions.
+This analysis is strictly GPT-5 response driven - all processing must be based on what is visible in the images with no hardcoded patterns or assumptions.
 
 OUTPUT FORMAT:
 Return a structured JSON with this exact format:
@@ -312,7 +282,7 @@ Return a structured JSON with this exact format:
     "overall_notes": "Describe header repetition, column changes between pages, or structural patterns"
 }
 
-Remember: Precision over interpretation. Show exactly what you see. This is a strictly GPT-4o response driven analysis."""
+Remember: Precision over interpretation. Show exactly what you see. This is a strictly GPT-5 response driven analysis."""
     
     def _create_user_prompt(self, current_extraction: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Create the user prompt with current extraction context."""
@@ -346,7 +316,7 @@ SMART HEADER PROCESSING:
 
 CRITICAL: For each column in the headers, provide sample values that show how the combined data should be parsed and assigned to the correct columns. The sample values should demonstrate the intelligent parsing logic.
 
-This analysis is strictly GPT-4o response driven - all processing must be based on what is visible in the images with no hardcoded patterns or assumptions.
+This analysis is strictly GPT-5 response driven - all processing must be based on what is visible in the images with no hardcoded patterns or assumptions.
 
 Be precise and only report what you can clearly see in the images."""
         
@@ -356,13 +326,13 @@ Be precise and only report what you can clearly see in the images."""
                                  vision_analysis: Dict[str, Any], 
                                  current_tables: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
-        Process the GPT-4o Vision analysis to improve current table extraction.
+        Process the GPT-5 Vision analysis to improve current table extraction.
         
-        This function is strictly GPT-4o response driven - all processing
+        This function is strictly GPT-5 response driven - all processing
         is based on GPT's analysis with no hardcoded patterns or fallback logic.
         
         Args:
-            vision_analysis: Result from GPT-4o Vision analysis
+            vision_analysis: Result from GPT-5 Vision analysis
             current_tables: Current table extraction results
             
         Returns:
@@ -405,7 +375,7 @@ Be precise and only report what you can clearly see in the images."""
                     "gpt_headers": headers,
                     "column_count": len(headers),
                     "structure_notes": structure_notes,
-                    "processing_method": "GPT-4o response driven with LLM pattern enforcement",
+                    "processing_method": "GPT-5 response driven with LLM pattern enforcement",
                     "format_accuracy_target": "≥90%",
                     "llm_patterns_generated": len(columns) > 0
                 })
@@ -422,7 +392,7 @@ Be precise and only report what you can clearly see in the images."""
                     **table.get("metadata", {}),
                     "enhancement_method": "gpt4o_vision_with_llm_pattern_enforcement",
                     "format_accuracy": "≥90%",
-                    "processing_notes": "GPT-4o response driven with LLM pattern enforcement",
+                    "processing_notes": "GPT-5 response driven with LLM pattern enforcement",
                     "upgrade_version": "2.0"
                 }
             
@@ -442,383 +412,35 @@ Be precise and only report what you can clearly see in the images."""
                 "success": False,
                 "error": f"Failed to process improvement result: {str(e)}"
             }
-    
-    def _process_rows_with_gpt_analysis(self, 
-                                     original_rows: List[List[str]], 
-                                     gpt_headers: List[str],
-                                     column_analysis: List[Dict[str, Any]]) -> List[List[str]]:
-        """
-        Process original rows using GPT-4o column analysis to properly parse combined data.
-        
-        This function is strictly GPT-4o response driven - all column mapping and
-        data parsing is based on GPT's analysis with no hardcoded patterns.
-        
-        Args:
-            original_rows: Original table rows
-            gpt_headers: Headers from GPT-4o analysis
-            column_analysis: GPT-4o column analysis with sample values and data types
-            
-        Returns:
-            Processed rows with data properly assigned to columns based on GPT analysis
-        """
-        improved_rows = []
-        
-        # Create a mapping from header names to column analysis
-        column_mapping = {}
-        for col_analysis in column_analysis:
-            header_text = col_analysis.get("header_text", "")
-            if header_text in gpt_headers:
-                column_mapping[header_text] = col_analysis
-        
-        for row in original_rows:
-            if not row or len(row) == 0:
-                continue
-            
-            # If we have a single cell with combined data, parse it using GPT analysis
-            if len(row) == 1 and isinstance(row[0], str):
-                combined_data = row[0]
-                parsed_row = self._parse_combined_data_with_gpt_analysis(combined_data, gpt_headers, column_mapping)
-                if parsed_row and self._validate_row_with_gpt_analysis(parsed_row, column_mapping):
-                    improved_rows.append(parsed_row)
-                else:
-                    # If parsing fails or validation fails, create empty row
-                    improved_rows.append([""] * len(gpt_headers))
-            else:
-                # Multiple cells - need to parse each cell that might contain combined data
-                parsed_row = self._parse_multi_cell_row_with_gpt_analysis(row, gpt_headers, column_mapping)
-                if parsed_row and self._validate_row_with_gpt_analysis(parsed_row, column_mapping):
-                    improved_rows.append(parsed_row)
-                else:
-                    # If parsing fails or validation fails, try to align with GPT headers
-                    aligned_row = self._align_row_with_gpt_headers(row, gpt_headers)
-                    improved_rows.append(aligned_row)
-        
-        return improved_rows
-    
-    def _parse_combined_data_with_gpt_analysis(self, 
-                                             combined_data: str, 
-                                             gpt_headers: List[str],
-                                             column_mapping: Dict[str, Dict[str, Any]]) -> Optional[List[str]]:
-        """
-        Parse combined data using GPT's column analysis to properly assign values to correct columns.
-        
-        This function is strictly GPT-4o response driven - all pattern matching and
-        column assignment is based on GPT's analysis with no hardcoded patterns.
-        
-        Args:
-            combined_data: String containing combined data
-            gpt_headers: Headers from GPT-4o analysis
-            column_mapping: Mapping of header names to GPT column analysis
-            
-        Returns:
-            Parsed row with values assigned to correct columns, or None if parsing fails
-        """
-        try:
-            # Initialize result array with empty strings
-            result = [""] * len(gpt_headers)
-            
-            # Split the combined data by spaces
-            parts = combined_data.split()
-            
-            # Create a mapping of header indices
-            header_indices = {header: i for i, header in enumerate(gpt_headers)}
-            
-            # Process each part and assign to the most appropriate column based on GPT analysis
-            for part in parts:
-                best_match = None
-                best_score = 0
-                
-                for header, col_analysis in column_mapping.items():
-                    if header not in header_indices:
-                        continue
-                    
-                    data_type = col_analysis.get("data_type", "")
-                    sample_values = col_analysis.get("sample_values", [])
-                    value_patterns = col_analysis.get("value_patterns", [])
-                    
-                    # Score based on data type and sample values from GPT analysis
-                    score = self._calculate_column_match_score(part, data_type, sample_values, value_patterns)
-                    
-                    if score > best_score:
-                        best_score = score
-                        best_match = header
-                
-                # Assign the part to the best matching column
-                if best_match and best_score > 0:
-                    col_index = header_indices[best_match]
-                    result[col_index] = part
-                else:
-                    # If no good match, assign to the next available empty column
-                    for i, val in enumerate(result):
-                        if not val:
-                            result[i] = part
-                            break
-            
-            return result
-            
-        except Exception as e:
-            logger.error(f"Error parsing combined data with GPT analysis '{combined_data}': {e}")
-            return None
-    
-    def _parse_multi_cell_row_with_gpt_analysis(self, 
-                                              row: List[str], 
-                                              gpt_headers: List[str],
-                                              column_mapping: Dict[str, Dict[str, Any]]) -> Optional[List[str]]:
-        """
-        Parse a multi-cell row that might contain combined data in individual cells.
-        
-        This function is strictly GPT-4o response driven - all pattern matching and
-        column assignment is based on GPT's analysis with no hardcoded patterns.
-        
-        Args:
-            row: List of cell values
-            gpt_headers: Headers from GPT-4o analysis
-            column_mapping: Mapping of header names to GPT column analysis
-            
-        Returns:
-            Parsed row with values properly assigned to columns, or None if parsing fails
-        """
-        try:
-            # Initialize result array with empty strings
-            result = [""] * len(gpt_headers)
-            
-            # Create a mapping of header indices
-            header_indices = {header: i for i, header in enumerate(gpt_headers)}
-            
-            # Process each cell in the row
-            for cell_value in row:
-                if not cell_value or cell_value.strip() == "":
-                    continue
-                
-                # Check if this cell contains combined data that needs to be split
-                cell_parts = cell_value.split()
-                
-                # If cell has multiple parts, try to assign each part to the appropriate column
-                if len(cell_parts) > 1:
-                    for part in cell_parts:
-                        best_match = None
-                        best_score = 0
-                        
-                        for header, col_analysis in column_mapping.items():
-                            if header not in header_indices:
-                                continue
-                            
-                            data_type = col_analysis.get("data_type", "")
-                            sample_values = col_analysis.get("sample_values", [])
-                            value_patterns = col_analysis.get("value_patterns", [])
-                            
-                            # Score based on data type and sample values from GPT analysis
-                            score = self._calculate_column_match_score(part, data_type, sample_values, value_patterns)
-                            
-                            if score > best_score:
-                                best_score = score
-                                best_match = header
-                        
-                        # Assign the part to the best matching column
-                        if best_match and best_score > 0:
-                            col_index = header_indices[best_match]
-                            # If the column is already filled, append to it
-                            if result[col_index]:
-                                result[col_index] += " " + part
-                            else:
-                                result[col_index] = part
-                        else:
-                            # If no good match, assign to the next available empty column
-                            for i, val in enumerate(result):
-                                if not val:
-                                    result[i] = part
-                                    break
-                else:
-                    # Single part - assign to the appropriate column based on GPT analysis
-                    part = cell_parts[0]
-                    
-                    best_match = None
-                    best_score = 0
-                    
-                    for header, col_analysis in column_mapping.items():
-                        if header not in header_indices:
-                            continue
-                        
-                        data_type = col_analysis.get("data_type", "")
-                        sample_values = col_analysis.get("sample_values", [])
-                        value_patterns = col_analysis.get("value_patterns", [])
-                        
-                        # Score based on data type and sample values from GPT analysis
-                        score = self._calculate_column_match_score(part, data_type, sample_values, value_patterns)
-                        
-                        if score > best_score:
-                            best_score = score
-                            best_match = header
-                    
-                    # Assign the part to the best matching column
-                    if best_match and best_score > 0:
-                        col_index = header_indices[best_match]
-                        result[col_index] = part
-                    else:
-                        # If no good match, assign to the next available empty column
-                        for i, val in enumerate(result):
-                            if not val:
-                                result[i] = part
-                                break
-            
-            return result
-            
-        except Exception as e:
-            logger.error(f"Error parsing multi-cell row with GPT analysis: {e}")
-            return None
-    
-    def _calculate_column_match_score(self, 
-                                    value: str, 
-                                    data_type: str, 
-                                    sample_values: List[str], 
-                                    value_patterns: List[str]) -> int:
-        """
-        Calculate a score for how well a value matches a column based on GPT's analysis.
-        
-        This function is strictly GPT-4o response driven - all pattern matching is
-        based on GPT's data_type, sample_values, and value_patterns with no hardcoded logic.
-        
-        Args:
-            value: The value to score
-            data_type: Data type from GPT analysis
-            sample_values: Sample values from GPT analysis
-            value_patterns: Value patterns from GPT analysis
-            
-        Returns:
-            Score indicating how well the value matches the column
-        """
-        score = 0
-        
-        # Score based on data type from GPT analysis
-        if data_type == "text" and value.isalpha():
-            score += 10
-        elif data_type == "date" and self._matches_date_pattern(value):
-            score += 20
-        elif data_type == "currency" and (value.startswith('$') or value.startswith('(')):
-            score += 20
-        elif data_type == "percentage" and value.endswith('%'):
-            score += 20
-        elif data_type == "number" and self._matches_number_pattern(value):
-            score += 15
-        
-        # Score based on sample values from GPT analysis
-        for sample in sample_values:
-            if value.lower() in sample.lower() or sample.lower() in value.lower():
-                score += 30
-                break
-        
-        # Score based on value patterns from GPT analysis
-        for pattern in value_patterns:
-            try:
-                if re.match(pattern, value):
-                    score += 25
-                    break
-            except re.error:
-                # If pattern is invalid regex, skip it
-                continue
-        
-        return score
-    
-    def _matches_date_pattern(self, value: str) -> bool:
-        """Check if a value matches common date patterns."""
-        date_patterns = [
-            r'\d{1,2}[/-]\d{1,2}[/-]\d{2,4}',
-            r'\d{4}-\d{2}-\d{2}',
-            r'\d{1,2}/\d{1,2}/\d{2,4}'
-        ]
-        return any(re.match(pattern, value) for pattern in date_patterns)
-    
-    def _matches_number_pattern(self, value: str) -> bool:
-        """Check if a value matches number patterns."""
-        return bool(re.match(r'^-?\d+\.?\d*$', value))
-    
-    def _validate_row_with_gpt_analysis(self, 
-                                      row: List[str], 
-                                      column_mapping: Dict[str, Dict[str, Any]]) -> bool:
-        """
-        Validate a row against GPT's column analysis to ensure ≥90% validity.
-        
-        This function is strictly GPT-4o response driven - all validation is
-        based on GPT's analysis with no hardcoded patterns or fallback logic.
-        
-        Args:
-            row: Row to validate
-            column_mapping: Mapping of header names to GPT column analysis
-            
-        Returns:
-            True if row is valid (≥90% of cells match their column patterns), False otherwise
-        """
-        if not row or len(row) == 0:
-            return False
-        
-        valid_cells = 0
-        total_cells = len(row)
-        
-        for i, value in enumerate(row):
-            if not value or value.strip() == "":
-                # Empty cells are considered valid
-                valid_cells += 1
-                continue
-            
-            # Find the corresponding column analysis
-            for header, col_analysis in column_mapping.items():
-                data_type = col_analysis.get("data_type", "")
-                sample_values = col_analysis.get("sample_values", [])
-                value_patterns = col_analysis.get("value_patterns", [])
-                
-                # Check if value matches the column pattern
-                score = self._calculate_column_match_score(value, data_type, sample_values, value_patterns)
-                if score > 0:
-                    valid_cells += 1
-                    break
-        
-        # Return True if ≥90% of cells are valid
-        return (valid_cells / total_cells) >= 0.9
-    
-    def _align_row_with_gpt_headers(self, row: List[str], gpt_headers: List[str]) -> List[str]:
-        """
-        Align a row with GPT headers, padding or truncating as needed.
-        
-        Args:
-            row: Original row data
-            gpt_headers: Headers from GPT-4o analysis
-            
-        Returns:
-            Aligned row
-        """
-        aligned_row = []
-        
-        for i in range(len(gpt_headers)):
-            if i < len(row):
-                aligned_row.append(str(row[i]))
-            else:
-                aligned_row.append("")
-        
-        return aligned_row 
 
-    def extract_tables_with_vision(self, 
-                                  enhanced_images: List[str], 
-                                  max_pages: int = 5) -> Dict[str, Any]:
+    # ============================================================================
+    # ULTRA HD EXTRACTION FUNCTIONS (latest and most advanced)
+    # ============================================================================
+
+    def extract_tables_with_vision_ultra_hd(self, 
+                                          enhanced_images: List[str], 
+                                          max_pages: int = 5) -> Dict[str, Any]:
         """
-        Extract tables from scratch using GPT-4o Vision analysis.
+        Extract tables from scratch using GPT-5 Vision analysis with ULTRA HD processing
+        and smart company detection from summary rows.
         
         Args:
-            enhanced_images: List of base64 encoded enhanced page images
+            enhanced_images: List of base64 encoded ultra HD enhanced page images
             max_pages: Maximum number of pages to analyze
             
         Returns:
             Dictionary with extracted tables and metadata
         """
         if not self.is_available():
-            return {"success": False, "error": "GPT-4o Vision service not available"}
+            return {"success": False, "error": "GPT-5 Vision service not available"}
         
         try:
             # Limit to max_pages
             images_to_analyze = enhanced_images[:max_pages]
             
-            # Prepare the prompt for table extraction
-            system_prompt = self._create_table_extraction_system_prompt()
-            user_prompt = self._create_table_extraction_user_prompt()
+            # Prepare the prompt for ultra HD table extraction with company detection
+            system_prompt = self._create_ultra_hd_table_extraction_system_prompt()
+            user_prompt = self._create_ultra_hd_table_extraction_user_prompt()
             
             # Prepare messages for the API call
             messages = [
@@ -828,7 +450,7 @@ Be precise and only report what you can clearly see in the images."""
                 ]}
             ]
             
-            # Add images to the user message content
+            # Add ultra HD images to the user message content
             for i, image_base64 in enumerate(images_to_analyze):
                 messages[1]["content"].append({
                     "type": "image_url",
@@ -837,14 +459,14 @@ Be precise and only report what you can clearly see in the images."""
                     }
                 })
             
-            # Call GPT-4o Vision API
-            logger.info(f"Calling GPT-4o Vision API for table extraction from {len(images_to_analyze)} pages")
+            # Call GPT-5 Vision API with increased tokens for comprehensive extraction
+            logger.info(f"Calling GPT-5 Vision API for ultra HD table extraction from {len(images_to_analyze)} pages")
+            logger.info(f"Total image data size: {sum(len(img) for img in images_to_analyze)} characters")
             
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-5",
                 messages=messages,
-                max_tokens=16000,  # Increased to handle large table data
-                temperature=0.1
+                max_completion_tokens=20000  # Increased to handle large table data with company names
             )
             
             # Extract the response content
@@ -853,12 +475,41 @@ Be precise and only report what you can clearly see in the images."""
             # Check if response was truncated
             finish_reason = response.choices[0].finish_reason
             if finish_reason == "length":
-                logger.warning("GPT-4o response was truncated due to token limit")
+                logger.warning("GPT-5 response was truncated due to token limit")
             
-            # Parse the JSON response - handle markdown code blocks
+            # Log the raw response for debugging
+            logger.info(f"GPT-5 ultra HD raw response length: {len(response_content)}")
+            logger.info(f"GPT-5 ultra HD response preview: {response_content[:1000]}...")
+            if len(response_content) > 1000:
+                logger.info(f"GPT-5 ultra HD response end: ...{response_content[-500:]}")
+            
+            # Parse the JSON response - handle markdown code blocks and non-JSON responses
             try:
-                # Remove markdown code blocks if present
+                # Check if response is actually JSON or just text
                 cleaned_content = response_content.strip()
+                
+                # If response doesn't start with { or [, it's likely not JSON
+                if not (cleaned_content.startswith('{') or cleaned_content.startswith('[')):
+                    logger.warning("GPT-5 response is not JSON format - attempting to extract JSON from text")
+                    
+                    # Try to find JSON in the response
+                    json_start = cleaned_content.find('{')
+                    if json_start == -1:
+                        json_start = cleaned_content.find('[')
+                    
+                    if json_start != -1:
+                        cleaned_content = cleaned_content[json_start:]
+                        logger.info("Found JSON content in text response")
+                    else:
+                        # No JSON found, return error with helpful message
+                        logger.error("No JSON content found in GPT-5 response")
+                        return {
+                            "success": False,
+                            "error": "GPT-5 response does not contain valid JSON. The model may not be able to read the images clearly enough. Please try with a higher quality PDF or different document.",
+                            "raw_response": response_content[:1000]
+                        }
+                
+                # Remove markdown code blocks if present
                 if cleaned_content.startswith('```json'):
                     cleaned_content = cleaned_content[7:]  # Remove ```json
                 if cleaned_content.startswith('```'):
@@ -867,200 +518,566 @@ Be precise and only report what you can clearly see in the images."""
                     cleaned_content = cleaned_content[:-3]  # Remove ```
                 
                 cleaned_content = cleaned_content.strip()
+                logger.info(f"Ultra HD cleaned content preview: {cleaned_content[:500]}...")
                 
                 # Check if response might be truncated
                 if not cleaned_content.endswith('}'):
-                    logger.warning("Response appears to be truncated, attempting to fix...")
+                    logger.warning("Ultra HD response appears to be truncated, attempting to fix...")
                     # Try to find the last complete JSON object
                     last_brace = cleaned_content.rfind('}')
                     if last_brace > 0:
                         cleaned_content = cleaned_content[:last_brace + 1]
-                        logger.info("Attempting to parse truncated response")
+                        logger.info("Attempting to parse truncated ultra HD response")
                 
                 extraction_result = json.loads(cleaned_content)
+                logger.info(f"Successfully parsed ultra HD JSON with keys: {list(extraction_result.keys())}")
+                if "tables" in extraction_result:
+                    logger.info(f"Found {len(extraction_result['tables'])} tables in ultra HD response")
+                    for i, table in enumerate(extraction_result['tables']):
+                        headers = table.get('headers', [])
+                        rows = table.get('rows', [])
+                        logger.info(f"Ultra HD Table {i+1}: {len(headers)} headers, {len(rows)} rows")
+                        logger.info(f"  Headers: {headers[:5]}{'...' if len(headers) > 5 else ''}")
+                        
+                        # Check if Client Names column is present
+                        if "Client Names" in headers:
+                            logger.info(f"  ✅ Client Names column detected in table {i+1}")
+                        else:
+                            logger.info(f"  ⚠️  Client Names column NOT detected in table {i+1}")
             except json.JSONDecodeError as e:
-                logger.error(f"Failed to parse GPT-4o response as JSON: {e}")
-                logger.error(f"Response content length: {len(response_content)}")
-                logger.error(f"Response content preview: {response_content[:500]}...")
+                logger.error(f"Failed to parse ultra HD GPT-5 response as JSON: {e}")
+                logger.error(f"Ultra HD response content length: {len(response_content)}")
+                logger.error(f"Ultra HD response content preview: {response_content[:500]}...")
                 if len(response_content) > 500:
-                    logger.error(f"Response content end: ...{response_content[-500:]}")
+                    logger.error(f"Ultra HD response content end: ...{response_content[-500:]}")
                 
-                # Try to extract partial data if possible
-                try:
-                    # Look for any valid JSON structure
-                    import re
-                    json_match = re.search(r'\{.*\}', response_content, re.DOTALL)
-                    if json_match:
-                        partial_json = json_match.group(0)
-                        logger.info("Attempting to parse partial JSON")
-                        extraction_result = json.loads(partial_json)
-                        logger.warning("Successfully parsed partial JSON - some data may be missing")
-                    else:
-                        raise ValueError("No valid JSON structure found")
-                except Exception as partial_error:
-                    logger.error(f"Failed to parse partial JSON: {partial_error}")
-                    return {
-                        "success": False,
-                        "error": "Failed to parse GPT-4o response as JSON"
-                    }
-            
-            # Validate the response structure
-            if not extraction_result.get("tables"):
-                logger.warning("No tables found in GPT-4o response")
                 return {
-                    "success": True,
-                    "tables": [],
-                    "extraction_metadata": {
-                        "method": "gpt4o_vision",
-                        "pages_analyzed": len(images_to_analyze),
-                        "timestamp": datetime.now().isoformat(),
-                        "confidence": 0.0,
-                        "note": "No tables detected in the document"
-                    }
+                    "success": False,
+                    "error": f"Failed to parse GPT-5 ultra HD response as JSON. The model may not be able to read the images clearly enough. Please try with a higher quality PDF or different document.",
+                    "raw_response": response_content[:1000]
                 }
             
             # Process the extracted tables
             processed_tables = []
-            for table in extraction_result.get("tables", []):
-                processed_table = self._process_extracted_table(table)
-                if processed_table:
-                    processed_tables.append(processed_table)
+            if "tables" in extraction_result:
+                for i, table in enumerate(extraction_result["tables"]):
+                    # Add metadata to each table
+                    table["extractor"] = "gpt4o_vision_ultra_hd"
+                    table["processing_notes"] = "Ultra HD extraction with smart company detection from summary rows"
+                    
+                    # Validate extraction completeness
+                    rows = table.get("rows", [])
+                    headers = table.get("headers", [])
+                    if rows and headers:
+                        logger.info(f"Table {i+1}: Extracted {len(rows)} rows with {len(headers)} headers")
+                        if len(rows) < 5 and "Client Names" in headers:
+                            logger.warning(f"Table {i+1}: Only {len(rows)} rows extracted - may be incomplete")
+                    
+                    processed_tables.append(table)
             
             return {
                 "success": True,
                 "tables": processed_tables,
                 "extraction_metadata": {
-                    "method": "gpt4o_vision",
+                    "method": "gpt4o_vision_ultra_hd",
                     "pages_analyzed": len(images_to_analyze),
                     "timestamp": datetime.now().isoformat(),
-                    "confidence": 0.95
+                    "confidence": 0.98,  # Higher confidence for ultra HD processing
+                    "dpi": 800,
+                    "enhancement": "ultra_hd_with_company_detection"
                 }
             }
             
         except Exception as e:
-            logger.error(f"Error in table extraction with GPT-4o Vision: {e}")
+            logger.error(f"Error in ultra HD table extraction with GPT-5 Vision: {e}")
+            
+            # Try fallback extraction with simpler prompt
+            logger.info("Attempting fallback extraction with simplified prompt...")
+            try:
+                fallback_result = self._extract_tables_fallback(enhanced_images, max_pages)
+                if fallback_result.get("success"):
+                    logger.info("Fallback extraction successful")
+                    return fallback_result
+            except Exception as fallback_error:
+                logger.error(f"Fallback extraction also failed: {fallback_error}")
+            
             return {
                 "success": False,
-                "error": f"Table extraction failed: {str(e)}"
+                "error": f"Ultra HD table extraction failed: {str(e)}"
             }
 
-    def _create_table_extraction_system_prompt(self) -> str:
-        """Create system prompt for table extraction with company name detection focus."""
-        return """You are a vision document analyst specializing in table structure analysis with SPECIAL FOCUS on company name identification.
+    def _create_ultra_hd_table_extraction_system_prompt(self) -> str:
+        """Ultra HD commission statement extraction with advanced company detection from summary rows."""
+        return """You are an expert document analyst specializing in commission statement table extraction with ULTRA HD image analysis and advanced pattern recognition.
 
-CRITICAL COMPANY NAME DETECTION REQUIREMENTS:
+**CRITICAL: YOU MUST EXTRACT EVERY SINGLE ROW - NO EXCEPTIONS. BE EXTREMELY THOROUGH.**
 
-1. **SCATTERED COMPANY NAMES**: Look for company names that appear randomly between transaction rows, not in dedicated columns
-2. **COMPANY INDICATORS**: Identify text with suffixes like LLC, Inc, Corp, Co, Corporation, Company, Ltd, Limited
-3. **SECTION HEADERS**: Company names often appear as section dividers or transaction group headers
-4. **FORMATTING CLUES**: Company names may be in bold, larger font, or have different formatting
-5. **HIERARCHICAL PATTERNS**: Look for "Customer: 123456" followed by "Customer Name: Company Name"
+EXTRACTION REQUIREMENTS:
 
-SPECIAL INSTRUCTIONS FOR COMPANY EXTRACTION:
-- When you see company names scattered in data rows, extract them separately
-- Provide a "detected_companies" field listing all company names found
-- For each company, identify which subsequent rows belong to that company's transactions
-- If company names appear within transaction data, separate them from the financial data
-- Include customer header rows and section headers in the extracted data
+1. **EXTRACT ALL TABLES COMPLETELY**: Look for ANY structured data, organized information, or tabular layouts - NO ROWS SHOULD BE MISSED
+2. **COMPLETE DATA EXTRACTION**: Extract EVERY SINGLE ROW and column you can see - be thorough and comprehensive
+3. **ACCURATE HEADERS**: Transcribe column headers exactly as they appear
+4. **ADVANCED COMPANY DETECTION**: Identify company names in summary rows and create a "Client Names" column
+5. **DATA PRESERVATION**: Keep all original values, dates, amounts, and formatting exactly as they appear
+6. **HIERARCHICAL STRUCTURE**: Pay attention to customer groupings and summary rows
+7. **ULTRA HD DETAIL**: With 800 DPI images, you should see every detail clearly
+8. **COMPLETE COVERAGE**: Scan the ENTIRE image from top to bottom, left to right - do not skip any rows
+9. **BOTTOM OF PAGE**: Pay special attention to rows at the bottom of the page - they are just as important as rows at the top
+10. **NO ROW LEFT BEHIND**: If you see any structured data that looks like a table row, extract it
 
-Return ONLY valid JSON:
+**CRITICAL: YOU MUST RETURN VALID JSON ONLY. DO NOT PROVIDE EXPLANATIONS OR TEXT OUTSIDE OF THE JSON STRUCTURE.**
 
+**IMPORTANT: If you see ANY structured data, organized information, or tabular layouts, you MUST extract them. Do not be overly cautious about image quality.**
+
+COMMISSION STATEMENT SPECIFIC PATTERNS:
+- Look for "Base Commission and Service Fee Detail" or similar titles
+- Extract "New Business" and "Renewal" sections separately
+- Look for "Writing Agent" information
+- **CRITICAL**: Look for customer information in summary rows like:
+  * "Customer: 1536194"
+  * "Customer Name: IMPACT HEATING AND COOLING"
+  * "Orig Eff Date: 11/01/2017"
+  * "Legacy Cust: 07X9851"
+- Extract coverage types: Med, Den, Vis, etc.
+- Extract billing dates, premium amounts, rates, and percentages
+- Look for state codes (FL, NJ, MO, WI, CO, etc.)
+- Extract method codes (PEPM, POP, FLAT)
+- Look for business types (Comm, Fee, Leve)
+- Extract producer information tables
+- Extract compensation period details
+- Extract adjustment tables
+- Extract "Business on Hold" tables
+
+ADVANCED COMPANY NAME EXTRACTION:
+- When you see customer information in summary rows (like "Customer: 1536194" followed by "Customer Name: IMPACT HEATING AND COOLING")
+- Create a "Client Names" column as the FIRST column in your table
+- Populate it with the company name for all subsequent data rows
+- Continue using that company name until you see a new customer summary
+- This ensures each row has the correct company association
+- Handle cases where company names appear in summary rows rather than separate columns
+
+**MANDATORY OUTPUT FORMAT - RETURN ONLY THIS JSON STRUCTURE:**
+
+```json
 {
-    "tables": [
-        {
-            "name": "Table Name",
-            "header": ["Column1", "Column2", "Column3"],
-            "rows": [
-                ["Value1", "Value2", "Value3"],
-                ["Value2", "Value2", "Value3"]
-            ],
-            "structure_type": "standard" or "hierarchical"
-        }
-    ],
-    "detected_companies": [
-        {
-            "company_name": "EXACT COMPANY NAME AS SEEN", 
-            "location_context": "description of where found",
-            "associated_rows": "description of related transaction rows"
-        }
-    ],
-    "company_transaction_mapping": {
-        "COMPANY NAME 1": ["row indices or descriptions"],
-        "COMPANY NAME 2": ["row indices or descriptions"]  
-    },
-    "hierarchical_indicators": {
-        "has_customer_headers": true/false,
-        "has_section_headers": true/false,
-        "has_subtotals": true/false,
-        "detected_patterns": ["Customer:", "Customer Name:", "New Business", "Renewal", "Sub-total"]
-    },
-    "overall_notes": "Include company name detection notes and structural observations"
+  "tables": [
+    {
+      "headers": ["Client Names", "Cov Type", "Bill Eff Date", "Billed Premium", "Paid Premium", "Sub count", "Adj Typ", "Iss St", "Method", "Rate", "Split %", "Comp Typ", "Bus Type", "Billed Fee Amount", "Customer Paid Fee", "Paid Amount"],
+      "rows": [
+        ["D2logistics llc", "Med", "02/01/2025", "($216.00)", "($216.00)", "9", "V", "MD", "PEPM", "$24.00", "100%", "Fee", "Comm", "$216.00", "$216.00", "$216.00"],
+        ["B & B Lightning Protection", "Med", "02/01/2025", "$3,844.84", "$3,844.84", "3", "V", "NJ", "PEPM", "$56.00", "100%", "Comm", "Comm", "", "", "$168.00"],
+        ["2C LOGISTICS", "Med", "11/01/2024", "$458.84", "$458.84", "1", "V", "VA", "PEPM", "$20.00", "100%", "Comm", "Comm", "", "", "$20.00"],
+        ["2C LOGISTICS", "Med", "12/01/2024", "$458.84", "$458.84", "1", "V", "VA", "PEPM", "$20.00", "100%", "Comm", "Comm", "", "", "$20.00"],
+        ["2C LOGISTICS", "Med", "01/01/2025", "$786.57", "$786.57", "4", "V", "VA", "PEPM", "$20.00", "100%", "Comm", "Comm", "", "", "$80.00"],
+        ["2C LOGISTICS", "Den", "12/01/2024", "($31.00)", "($31.00)", "-1", "V", "VA", "POP", "10.00%", "100%", "Comm", "Comm", "", "", "($3.10)"],
+        ["2C LOGISTICS", "Den", "01/01/2025", "($92.99)", "($92.99)", "-2", "V", "VA", "POP", "10.00%", "100%", "Comm", "Comm", "", "", "($9.30)"],
+        ["H6 LOGISTICS LLC", "Med", "09/01/2024", "$5,606.35", "$5,606.35", "9", "V", "FL", "PEPM", "$34.00", "100%", "Comm", "Comm", "", "", "$306.00"],
+        ["H6 LOGISTICS LLC", "Med", "09/01/2024", "$377.33", "$377.33", "1", "V", "FL", "PEPM", "$34.00", "100%", "Comm", "Comm", "", "", "$34.00"],
+        ["H6 LOGISTICS LLC", "Med", "10/01/2024", "$5,229.02", "$5,229.02", "8", "V", "FL", "PEPM", "$34.00", "100%", "Comm", "Comm", "", "", "$272.00"],
+        ["H6 LOGISTICS LLC", "Med", "10/01/2024", "$377.33", "$377.33", "1", "V", "FL", "PEPM", "$34.00", "100%", "Comm", "Comm", "", "", "$34.00"],
+        ["H6 LOGISTICS LLC", "Med", "11/01/2024", "$5,606.35", "$5,606.35", "9", "V", "FL", "PEPM", "$34.00", "100%", "Comm", "Comm", "", "", "$306.00"],
+        ["H6 LOGISTICS LLC", "Med", "12/01/2024", "$5,606.35", "$558.59", "9", "V", "FL", "PEPM", "$34.00", "100%", "Comm", "Comm", "", "", "$306.00"],
+        ["H6 LOGISTICS LLC", "Den", "09/01/2024", "$100.72", "$100.72", "2", "V", "FL", "POP", "10.00%", "100%", "Comm", "Comm", "", "", "$10.07"],
+        ["H6 LOGISTICS LLC", "Den", "09/01/2024", "($100.72)", "($100.72)", "-2", "V", "FL", "POP", "10.00%", "100%", "Comm", "Comm", "", "", "($10.07)"],
+        ["H6 LOGISTICS LLC", "Vis", "09/01/2024", "$22.99", "$22.99", "2", "V", "FL", "POP", "10.00%", "100%", "Comm", "Comm", "", "", "$2.30"],
+        ["H6 LOGISTICS LLC", "Vis", "09/01/2024", "($22.99)", "($22.99)", "-2", "V", "FL", "POP", "10.00%", "100%", "Comm", "Comm", "", "", "($2.30)"]
+      ]
+    }
+  ]
 }
+```
 
-Guidelines:
-- Extract ALL tables with accurate headers and data
-- Preserve exact values and formatting
-- Handle merged cells appropriately
-- Ensure all rows match header column count
-- For large tables, prioritize data accuracy over completeness if needed
-- IMPORTANT: Include customer header rows and section headers in the extracted data
-- Mark tables as "hierarchical" if you detect customer header patterns
-- Company names in commission statements often appear as section breaks between different client groups"""
+**CRITICAL: The example above shows ALL rows that should be extracted from a typical commission statement table. Make sure you extract EVERY row you can see, including all the rows at the bottom of the table.**
 
-    def _create_table_extraction_user_prompt(self) -> str:
-        """Create user prompt for table extraction."""
-        return """Extract all tables from these document images. Focus on:
-- Commission/earnings tables
-- Policy/transaction tables  
-- Summary tables
-- Any structured data
+**ONLY RETURN THE ERROR JSON IF THE IMAGES ARE COMPLETELY UNREADABLE OR BLANK:**
 
-Ensure accurate extraction of headers, data rows, numerical values, dates, and text."""
+```json
+{
+  "tables": [],
+  "error": "Images completely unreadable or blank"
+}
+```
 
-    def _process_extracted_table(self, table: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """Process a single extracted table with company name detection."""
+**DO NOT PROVIDE ANY TEXT EXPLANATIONS OUTSIDE OF THE JSON STRUCTURE.**
+
+```json
+{
+  "tables": [
+    {
+      "headers": ["Client Names", "Cov Type", "Bill Eff Date", "Billed Premium", "Paid Premium", "Sub Adj count", "Typ", "Iss St", "Method", "Rate", "Split %", "Comp Typ", "Bus Type", "Billed Fee Amount", "Customer Paid Fee", "Paid Amount"],
+      "rows": [
+        ["IMPACT HEATING AND COOLING", "Den", "10/01/2024", "($82.49)", "($82.49)", "-1", "V", "CO", "POP", "10.00%", "100%", "Comm", "Comm", "", "", "($8.25)"],
+        ["IMPACT HEATING AND COOLING", "Den", "11/01/2024", "$219.32", "$219.32", "3", "V", "CO", "POP", "10.00%", "100%", "Comm", "Comm", "", "", "$21.93"],
+        ["IMPACT HEATING AND COOLING", "Den", "11/01/2024", "$305.15", "$305.15", "4", "V", "CO", "POP", "10.00%", "100%", "Comm", "Comm", "", "", "$30.52"],
+        ["IMPACT HEATING AND COOLING", "Vis", "10/01/2024", "($11.25)", "($11.25)", "-1", "V", "CO", "POP", "10.00%", "100%", "Comm", "Comm", "", "", "($1.13)"],
+        ["IMPACT HEATING AND COOLING", "Vis", "11/01/2024", "$31.00", "$31.00", "4", "V", "CO", "POP", "10.00%", "100%", "Comm", "Comm", "", "", "$3.10"],
+        ["IMPACT HEATING AND COOLING", "Vis", "11/01/2024", "$19.71", "$19.71", "3", "V", "CO", "POP", "10.00%", "100%", "Comm", "Comm", "", "", "$1.97"]
+      ]
+    }
+  ]
+}
+```
+
+ULTRA HD EXTRACTION GUIDELINES:
+- With the ultra HD image quality (600 DPI), you should be able to see EVERY detail clearly
+- Look for small text, fine print, and any data that might be in corners or margins
+- Pay special attention to summary rows that contain customer information
+- Extract ALL rows including those that might appear to be subtotals or summaries
+- If you see any structured data, extract it - better to extract too much than miss important information
+- Look for patterns in the data structure and ensure consistency
+- The ultra HD quality should eliminate any missing rows due to poor image quality
+
+COMPLETE EXTRACTION CHECKLIST:
+- [ ] All customer summary rows identified and processed
+- [ ] All data rows extracted with proper company association
+- [ ] All headers captured accurately
+- [ ] All financial amounts preserved with exact formatting
+- [ ] All dates captured in correct format
+- [ ] All coverage types, methods, and codes extracted
+- [ ] No rows missed or skipped
+- [ ] Company names properly associated with their data rows
+- [ ] "Client Names" column created and populated correctly
+
+Focus on COMPLETE and ACCURATE extraction - with ultra HD images, you should miss nothing."""
+
+    def _create_ultra_hd_table_extraction_user_prompt(self) -> str:
+        """Create user prompt for ultra HD commission statement extraction with advanced company detection."""
+        return """Extract ALL tables from these ULTRA HD (800 DPI) commission statement document images with complete accuracy and smart company detection.
+
+CRITICAL REQUIREMENTS:
+
+1. **FIND ALL TABLES COMPLETELY**: Look for ANY structured data, tables, or organized information - NO ROWS SHOULD BE MISSED
+2. **EXTRACT COMPLETE DATA**: Get EVERY SINGLE ROW and column you can see - be thorough and comprehensive
+3. **PRESERVE ACCURACY**: Keep exact values, headers, and formatting exactly as they appear
+4. **ADVANCED COMPANY DETECTION**: Identify company names in summary rows and create a "Client Names" column
+5. **HANDLE MULTIPLE TABLES**: If you see more than one table, extract each separately
+6. **HIERARCHICAL STRUCTURE**: Pay attention to customer groupings and summary rows
+7. **ULTRA HD DETAIL**: With 800 DPI images, you should see every detail clearly
+8. **COMPLETE COVERAGE**: Scan the ENTIRE image systematically - do not skip any rows
+9. **BOTTOM ROWS MATTER**: Pay special attention to rows at the bottom of tables - they contain important data
+10. **COUNT EVERY ROW**: Make sure you extract every single data row you can see
+
+WHAT TO LOOK FOR:
+- Commission/earnings tables with "Base Commission and Service Fee Detail" title
+- "New Business" and "Renewal" sections
+- Writing Agent information
+- Producer information tables
+- Compensation period details
+- Adjustment tables
+- "Business on Hold" tables
+- **CRITICAL**: Customer information in summary rows like:
+  * "Customer: 1536194"
+  * "Customer Name: IMPACT HEATING AND COOLING"
+  * "Orig Eff Date: 11/01/2017"
+  * "Legacy Cust: 07X9851"
+- Coverage types (Med, Den, Vis)
+- Financial amounts with proper formatting (including parentheses for negative amounts)
+- Dates in MM/DD/YYYY format
+- State codes (FL, NJ, MO, WI, CO, MD, GA, MA, NV, WA)
+- Method codes (PEPM, POP, FLAT)
+- Business types (Comm, Fee, Leve)
+- Any structured information with headers and rows
+- Adjustment type descriptions
+- Hold reasons and legal entities
+
+ADVANCED COMPANY NAME EXTRACTION:
+- When you see customer information in summary rows, create a "Client Names" column as the FIRST column
+- Populate it with the company name for all subsequent data rows
+- Continue using that company name until you see a new customer summary
+- This ensures each row has the correct company association
+- Handle cases where company names appear in summary rows rather than separate columns
+
+ULTRA HD EXTRACTION GUIDELINES:
+- With the ultra HD image quality (800 DPI), you should be able to see EVERY detail clearly
+- Look for small text, fine print, and any data that might be in corners or margins
+- Pay special attention to summary rows that contain customer information
+- Extract ALL rows including those that might appear to be subtotals or summaries
+- If you're unsure, include it anyway
+- Better to extract too much than to miss important information
+- Look for the main commission statement table with all the financial data
+- Extract producer information, compensation details, and adjustment tables
+- Look for "Business on Hold" sections with customer details
+- **CRITICAL**: Pay special attention to the bottom of each page - scan every row systematically
+- **CRITICAL**: Do not stop extracting until you reach the very end of each table
+- **CRITICAL**: Count the rows as you extract them to ensure you don't miss any
+- **CRITICAL**: If you see any structured data that looks like a table row, extract it
+
+The images are enhanced to maximum quality (800 DPI). Look carefully for any structured data or tables. Be aggressive about extraction - if you see organized information, extract it. **MOST IMPORTANT: Extract every single row you can see, especially at the bottom of tables.**"""
+
+    def _extract_tables_fallback(self, enhanced_images: List[str], max_pages: int = 5) -> Dict[str, Any]:
+        """
+        Fallback extraction method with simplified prompt for when the main extraction fails.
+        """
+        if not self.is_available():
+            return {"success": False, "error": "GPT-5 Vision service not available"}
+        
         try:
-            name = table.get("name", "Extracted Table")
-            header = table.get("header", [])
-            rows = table.get("rows", [])
+            # Limit to max_pages
+            images_to_analyze = enhanced_images[:max_pages]
             
-            # Validate table structure
-            if not header or not rows:
-                return None
+            # Simplified system prompt
+            system_prompt = """You are a document table extractor. Extract ALL tables you can see in the images. Return ONLY valid JSON with this structure:
+
+```json
+{
+  "tables": [
+    {
+      "headers": ["column1", "column2", "column3"],
+      "rows": [
+        ["value1", "value2", "value3"],
+        ["value4", "value5", "value6"]
+      ]
+    }
+  ]
+}
+```
+
+If you see ANY structured data, extract it. Be aggressive about finding tables."""
             
-            # Ensure all rows have the same length as header
-            normalized_rows = []
-            for row in rows:
-                if len(row) < len(header):
-                    # Pad with empty strings
-                    row = row + [""] * (len(header) - len(row))
-                elif len(row) > len(header):
-                    # Truncate to header length
-                    row = row[:len(header)]
-                normalized_rows.append(row)
+            # Simplified user prompt
+            user_prompt = """Extract ALL tables from these document images. Look for any structured data, organized information, or tabular layouts. Extract everything you can see."""
             
-            # Apply company name detection
-            table_data = {
-                "name": name,
-                "header": header,
-                "rows": normalized_rows
-            }
+            # Prepare messages
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": [
+                    {"type": "text", "text": user_prompt}
+                ]}
+            ]
             
-            enhanced_table = self.company_detector.detect_company_names_in_extracted_data(
-                table_data, "gpt4o_vision"
+            # Add images
+            for image_base64 in images_to_analyze:
+                messages[1]["content"].append({
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:image/png;base64,{image_base64}"
+                    }
+                })
+            
+            logger.info("Attempting fallback extraction with simplified prompt...")
+            
+            response = self.client.chat.completions.create(
+                model="gpt-5",
+                messages=messages,
+                max_completion_tokens=15000
             )
             
-            return {
-                **enhanced_table,
-                "extractor": "gpt4o_vision",
-                "metadata": {
-                    "extraction_method": "gpt4o_vision",
-                    "timestamp": datetime.now().isoformat(),
-                    "confidence": 0.95,
-                    "company_detection_applied": True
+            response_content = response.choices[0].message.content
+            
+            # Parse response
+            try:
+                cleaned_content = response_content.strip()
+                if cleaned_content.startswith('```json'):
+                    cleaned_content = cleaned_content[7:]
+                if cleaned_content.startswith('```'):
+                    cleaned_content = cleaned_content[3:]
+                if cleaned_content.endswith('```'):
+                    cleaned_content = cleaned_content[:-3]
+                
+                cleaned_content = cleaned_content.strip()
+                extraction_result = json.loads(cleaned_content)
+                
+                # Process tables
+                processed_tables = []
+                if "tables" in extraction_result:
+                    for table in extraction_result["tables"]:
+                        table["extractor"] = "gpt4o_vision_fallback"
+                        table["processing_notes"] = "Fallback extraction with simplified prompt"
+                        processed_tables.append(table)
+                
+                return {
+                    "success": True,
+                    "tables": processed_tables,
+                    "extraction_metadata": {
+                        "method": "gpt4o_vision_fallback",
+                        "pages_analyzed": len(images_to_analyze),
+                        "timestamp": datetime.now().isoformat(),
+                        "confidence": 0.85,
+                        "dpi": 800,
+                        "enhancement": "fallback_extraction"
+                    }
                 }
+                
+            except json.JSONDecodeError as e:
+                logger.error(f"Fallback extraction failed to parse JSON: {e}")
+                return {
+                    "success": False,
+                    "error": f"Fallback extraction failed: {str(e)}"
+                }
+                
+        except Exception as e:
+            logger.error(f"Error in fallback extraction: {e}")
+            return {
+                "success": False,
+                "error": f"Fallback extraction failed: {str(e)}"
             }
+
+    # ============================================================================
+    # UTILITY FUNCTIONS
+    # ============================================================================
+
+    def merge_similar_tables(self, tables: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Merge tables with similar structure, accounting for smart validation header expansion.
+        This helps combine related data that was split across multiple sections.
+        """
+        if not tables or len(tables) <= 1:
+            return tables
+        
+        try:
+            logger.info(f"🔗 Starting table merging for {len(tables)} tables")
+            
+            # Group tables by their mergeability
+            table_groups = []
+            processed_tables = set()
+            
+            for i, table in enumerate(tables):
+                if i in processed_tables:
+                    continue
+                
+                header = table.get("header", [])
+                if not header:
+                    continue
+                
+                # Start a new group with this table
+                current_group = [table]
+                processed_tables.add(i)
+                
+                # Find other tables that can be merged with this one
+                for j, other_table in enumerate(tables):
+                    if j in processed_tables:
+                        continue
+                    
+                    if self._are_tables_mergeable(table, other_table):
+                        current_group.append(other_table)
+                        processed_tables.add(j)
+                
+                table_groups.append(current_group)
+            
+            merged_tables = []
+            
+            for group in table_groups:
+                if len(group) == 1:
+                    # Single table, no merging needed
+                    merged_tables.append(group[0])
+                    table_name = group[0].get('name', 'Unknown')
+                    headers = group[0].get('header', [])
+                    logger.info(f"📋 Single table (no merging): {table_name} with {len(headers)} headers")
+                else:
+                    # Multiple tables with similar structure, merge them
+                    table_names = [t.get('name', 'Unknown') for t in group]
+                    headers = group[0].get('header', [])
+                    logger.info(f"🔄 Merging {len(group)} tables with similar structure: {', '.join(table_names)}")
+                    logger.info(f"   Headers: {headers[:5]}{'...' if len(headers) > 5 else ''}")
+                    
+                    # Use the first table as base
+                    base_table = group[0]
+                    merged_rows = base_table.get("rows", [])
+                    merged_names = [base_table.get("name", "Table")]
+                    
+                    # Add rows from other tables
+                    for i, table in enumerate(group[1:], 1):
+                        table_rows = table.get("rows", [])
+                        merged_rows.extend(table_rows)
+                        merged_names.append(table.get("name", f"Table {i+1}"))
+                    
+                    # Create merged table
+                    merged_table = {
+                        "name": f"Merged: {' + '.join(merged_names)}",
+                        "header": base_table.get("header", []),
+                        "rows": merged_rows,
+                        "extractor": "gpt4o_vision_merged",
+                        "structure_type": base_table.get("structure_type", "standard"),
+                        "metadata": {
+                            "extraction_method": "gpt4o_vision_merged",
+                            "timestamp": datetime.now().isoformat(),
+                            "confidence": 0.95,
+                            "merged_from": len(group),
+                            "original_tables": merged_names,
+                            "company_detection_applied": True
+                        }
+                    }
+                    
+                    # Apply company detection to merged table
+                    enhanced_merged_table = self.company_detector.detect_company_names_in_extracted_data(
+                        merged_table, "gpt4o_vision_merged"
+                    )
+                    
+                    merged_tables.append(enhanced_merged_table)
+                    logger.info(f"✅ Successfully merged {len(group)} tables into one with {len(merged_rows)} total rows")
+            
+            logger.info(f"🎯 Final merged tables: {len(merged_tables)}")
+            return merged_tables
             
         except Exception as e:
-            logger.error(f"Error processing extracted table: {e}")
-            return None
+            logger.error(f"Error merging similar tables: {e}")
+            return tables
+
+    def _is_main_data_table(self, headers: List[str], rows: List[List[str]]) -> bool:
+        """Determine if a table is a main data table vs summary table."""
+        
+        # Check for main data table indicators
+        main_data_indicators = [
+            "Cov Type", "Bill Eff Date", "Paid Premium", "Method", "Rate", "Split %",
+            "Customer", "Company", "Iss St", "Comp Typ", "Bus Type"
+        ]
+        
+        # Check for summary table indicators
+        summary_indicators = [
+            "Total", "Payment", "Balance", "Compensation", "Statement Total",
+            "Detail Total", "Ending Balance", "Current Compensation", "YTD Compensation"
+        ]
+        
+        header_text = " ".join(headers).lower()
+        
+        # Count indicators
+        main_data_count = sum(1 for indicator in main_data_indicators if indicator.lower() in header_text)
+        summary_count = sum(1 for indicator in summary_indicators if indicator.lower() in header_text)
+        
+        # Check row count (main data tables typically have more rows)
+        row_count = len(rows)
+        
+        # Determine table type
+        if main_data_count > summary_count and row_count > 5:
+            return True  # Main data table
+        elif summary_count > main_data_count or row_count <= 3:
+            return False  # Summary table
+        else:
+            # Default to main data table if unclear
+            return True
+
+    def _are_tables_mergeable(self, table1: Dict[str, Any], table2: Dict[str, Any]) -> bool:
+        """Check if two tables can be merged based on their structure."""
+        
+        headers1 = table1.get("header", [])
+        headers2 = table2.get("header", [])
+        
+        # Check if both are main data tables
+        is_main1 = self._is_main_data_table(headers1, table1.get("rows", []))
+        is_main2 = self._is_main_data_table(headers2, table2.get("rows", []))
+        
+        if not (is_main1 and is_main2):
+            return False  # Only merge main data tables
+        
+        # For commission statement tables, merge tables with identical headers
+        if len(headers1) == len(headers2):
+            # Check if all headers match exactly
+            if headers1 == headers2:
+                logger.info(f"🔗 Found tables with identical headers: {headers1[:5]}...")
+                return True
+            else:
+                # Log the differences for debugging
+                logger.info(f"🔍 Headers don't match exactly:")
+                logger.info(f"   Table 1 headers: {headers1}")
+                logger.info(f"   Table 2 headers: {headers2}")
+                logger.info(f"   Match: {headers1 == headers2}")
+        
+        # Fallback: Check for core header similarity (first 10 headers)
+        core_headers1 = headers1[:10]
+        core_headers2 = headers2[:10]
+        
+        # Count matching core headers
+        matching_headers = sum(1 for h1, h2 in zip(core_headers1, core_headers2) if h1 == h2)
+        
+        # If at least 70% of core headers match, consider them mergeable
+        return matching_headers >= 7

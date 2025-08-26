@@ -44,7 +44,7 @@ export function useUploadPage() {
   // Track if another extraction method has been used
   const [hasUsedAnotherExtraction, setHasUsedAnotherExtraction] = useState(false)
 
-  // GPT-4o Vision improvement functionality
+  // GPT-5 Vision improvement functionality
   const [isImprovingExtraction, setIsImprovingExtraction] = useState(false)
 
 
@@ -646,7 +646,7 @@ export function useUploadPage() {
 
     try {
       setIsImprovingExtraction(true)
-      toast.loading('Improving extraction with GPT-4o Vision and LLM format enforcement...', { id: 'improve-extraction' })
+      toast.loading('Improving extraction with GPT-5 Vision and LLM format enforcement...', { id: 'improve-extraction' })
 
       const formData = new FormData()
       formData.append('upload_id', uploaded.upload_id)

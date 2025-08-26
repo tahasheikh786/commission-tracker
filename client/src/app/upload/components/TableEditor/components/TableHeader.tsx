@@ -65,13 +65,13 @@ export default function TableHeader({
           </button>
         </div>
         
-        {/* GPT-4o Vision Improvement Button */}
+        {/* GPT-5 Vision Improvement Button */}
         {onImproveExtraction && (
           <button
             onClick={onImproveExtraction}
             disabled={loading || isUsingAnotherExtraction || isImprovingExtraction}
             className="px-3 py-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2 text-sm"
-            title="Use GPT-4o Vision to improve table extraction accuracy"
+            title="Use GPT-5 Vision to improve table extraction accuracy"
           >
             {isImprovingExtraction ? (
               <>
@@ -81,7 +81,7 @@ export default function TableHeader({
             ) : (
               <>
                 <Sparkles className="w-3 h-3" />
-                Improve with GPT-4o
+                Improve with GPT-5
               </>
             )}
           </button>
