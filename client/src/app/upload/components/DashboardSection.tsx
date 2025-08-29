@@ -2,8 +2,9 @@
 import Modal from '../../components/Modal'
 import DashboardTable from './DashboardTable'
 import ProgressBar from './ProgressBar'
-import Loader from './Loader'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { ApprovalLoader } from '../../components/ui/FullScreenLoader'
+import toast from 'react-hot-toast'
 
 type FieldConfig = { field: string, label: string }
 type Company = { id: string, name: string } | null
@@ -26,6 +27,7 @@ interface DashboardSectionProps {
   onTableChange: (tables: any[]) => void
   onSendToPending: () => void
   selectedStatementDate?: any // Add selected statement date prop
+  approvalProgress?: { totalRows: number; processedRows: number }
 }
 
 export default function DashboardSection({
@@ -45,18 +47,35 @@ export default function DashboardSection({
   onCloseRejectModal,
   onTableChange,
   onSendToPending,
-  selectedStatementDate
+  selectedStatementDate,
+  approvalProgress = { totalRows: 0, processedRows: 0 }
 }: DashboardSectionProps) {
   console.log('🚀 DashboardSection component rendered')
+  console.log('📊 Submitting state:', submitting)
+  console.log('📈 Approval progress:', approvalProgress)
+  console.log('📋 Final tables:', finalTables)
+  
+  const calculatedProgress = approvalProgress.totalRows > 0 ? Math.round((approvalProgress.processedRows / approvalProgress.totalRows) * 100) : 0
+  console.log('📊 Calculated progress:', calculatedProgress)
   
   const [showCarriersModal, setShowCarriersModal] = useState(false)
+  
+  // Monitor state changes
+  useEffect(() => {
+    console.log('🔄 DashboardSection state changed:', { submitting, approvalProgress, calculatedProgress })
+  }, [submitting, approvalProgress, calculatedProgress])
   return (
     <>
-      {submitting && (
-        <div className="fixed inset-0 bg-black bg-opacity-20 flex items-center justify-center z-50">
-          <Loader message="Submitting..." />
-        </div>
-      )}
+      <ApprovalLoader 
+        isVisible={submitting}
+        progress={calculatedProgress}
+        totalRows={approvalProgress.totalRows}
+        processedRows={approvalProgress.processedRows}
+        onCancel={() => {
+          // Note: Approval process cannot be cancelled as it's a server-side process
+          toast.error("Approval process is already in progress and cannot be cancelled");
+        }}
+      />
       
       <div className="h-screen flex flex-col overflow-hidden">
         {/* Progress Bar */}
@@ -100,7 +119,10 @@ export default function DashboardSection({
             <div className="flex justify-center gap-6">
               <button
                 className="bg-green-600 text-white px-8 py-3 rounded-xl font-semibold shadow hover:bg-green-700 transition text-lg"
-                onClick={onApprove}
+                onClick={() => {
+                  console.log('🔘 Approve button clicked')
+                  onApprove()
+                }}
               >
                 Approve
               </button>

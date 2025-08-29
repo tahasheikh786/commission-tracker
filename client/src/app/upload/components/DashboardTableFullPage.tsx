@@ -2,7 +2,9 @@
 import { useState, useEffect } from 'react'
 import { Pencil, Trash2, X, Check } from 'lucide-react'
 import clsx from 'clsx'
+import { toast } from 'react-hot-toast'
 import ProgressBar from './ProgressBar'
+import { ApprovalLoader } from '../../components/ui/FullScreenLoader'
 
 type TableData = {
   header: string[]
@@ -32,7 +34,8 @@ type DashboardTableFullPageProps = {
   onRejectReasonChange?: (reason: string) => void,
   onRejectSubmit?: () => void,
   onCloseRejectModal?: () => void,
-  selectedStatementDate?: any
+  selectedStatementDate?: any,
+  approvalProgress?: { totalRows: number; processedRows: number }
 }
 
 function fixPercent(val: string): string {
@@ -92,7 +95,8 @@ export default function DashboardTableFullPage({
   onRejectReasonChange,
   onRejectSubmit,
   onCloseRejectModal,
-  selectedStatementDate
+  selectedStatementDate,
+  approvalProgress = { totalRows: 0, processedRows: 0 }
 }: DashboardTableFullPageProps) {
 
   
@@ -267,7 +271,18 @@ export default function DashboardTableFullPage({
   }
 
   return (
-    <div className="fixed inset-0 bg-white z-50 flex flex-col overflow-hidden">
+    <>
+      <ApprovalLoader 
+        isVisible={submitting}
+        progress={approvalProgress.totalRows > 0 ? Math.round((approvalProgress.processedRows / approvalProgress.totalRows) * 100) : 0}
+        totalRows={approvalProgress.totalRows}
+        processedRows={approvalProgress.processedRows}
+        onCancel={() => {
+          // Note: Approval process cannot be cancelled as it's a server-side process
+          toast.error("Approval process is already in progress and cannot be cancelled");
+        }}
+      />
+      <div className="fixed inset-0 bg-white z-50 flex flex-col overflow-hidden">
       {/* Progress Bar at the very top */}
       <ProgressBar currentStep="dashboard" />
 
@@ -527,6 +542,7 @@ export default function DashboardTableFullPage({
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   )
 }

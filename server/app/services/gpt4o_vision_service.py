@@ -44,6 +44,38 @@ class GPT4oVisionService:
         """Check if the service is available (API key configured)."""
         return self.client is not None
     
+    def calculate_optimal_dpi(self, num_pages: int, document_type: str = "commission_statement") -> Tuple[int, str]:
+        """
+        Calculate optimal DPI based on document characteristics to prevent image size issues.
+        
+        Args:
+            num_pages: Number of pages in the document
+            document_type: Type of document for optimization
+            
+        Returns:
+            Tuple of (dpi, quality_label)
+        """
+        # Adaptive DPI selection based on number of pages to prevent image size issues
+        # For larger documents, use lower DPI to stay within GPT-5 Vision limits
+        if num_pages <= 2:
+            dpi = 600  # Reduced from 800 for better performance
+            quality_label = "high quality"
+        elif num_pages <= 3:
+            dpi = 500  # Reduced from 600 for better performance
+            quality_label = "balanced quality"
+        elif num_pages <= 4:
+            dpi = 400  # Reduced from 500 for better performance
+            quality_label = "standard quality"
+        elif num_pages <= 6:
+            dpi = 350  # Reduced from 400 for better performance
+            quality_label = "lower quality"
+        else:
+            dpi = 300  # Minimal quality for very large documents
+            quality_label = "minimal quality"
+        
+        logger.info(f"Calculated optimal DPI: {dpi} ({quality_label}) for {num_pages} page document")
+        return dpi, quality_label
+    
     def enhance_page_image(self, pdf_path: str, page_num: int, dpi: int = 800) -> Optional[str]:
         """
         Extract and enhance a single page from PDF for vision analysis with ULTRA HD quality.
@@ -75,8 +107,15 @@ class GPT4oVisionService:
             img_data = pix.tobytes("png")
             img = Image.open(io.BytesIO(img_data))
             
-            # Apply ultra HD commission statement image processing
-            img = self._enhance_commission_statement_image_ultra_hd(img)
+            # Apply image processing based on DPI level
+            if dpi >= 500:
+                # Use moderate enhancement for high DPI (reduced from 600 for performance)
+                logger.info(f"Using moderate image enhancement for {dpi} DPI")
+                img = self._enhance_commission_statement_image_moderate(img)
+            else:
+                # Use conservative enhancement for lower DPI to avoid distortion
+                logger.info(f"Using conservative image enhancement for {dpi} DPI")
+                img = self._enhance_commission_statement_image_conservative(img)
             
             # Convert to base64 with maximum quality - use PNG for lossless compression
             buffer = io.BytesIO()
@@ -87,6 +126,16 @@ class GPT4oVisionService:
             img_size = len(img_str)
             logger.info(f"Successfully created ultra HD image for page {page_num + 1} at {dpi} DPI")
             logger.info(f"Image size: {img_size} characters, dimensions: {img.size}")
+            
+            # Warn if image is getting too large (approaching GPT-5 Vision limits)
+            if img_size > 4000000:  # 4MB base64 string
+                logger.warning(f"Large image detected: {img_size} characters. Consider reducing DPI for better reliability.")
+            elif img_size > 3000000:  # 3MB base64 string
+                logger.info(f"Moderate image size: {img_size} characters. Should be within GPT-5 Vision limits.")
+            elif img_size > 2000000:  # 2MB base64 string
+                logger.info(f"Good image size: {img_size} characters. Well within GPT-5 Vision limits.")
+            else:
+                logger.info(f"Small image size: {img_size} characters. Very safe for GPT-5 Vision.")
             
             doc.close()
             return img_str
@@ -131,6 +180,70 @@ class GPT4oVisionService:
             
         except Exception as e:
             logger.warning(f"Ultra HD image processing failed: {e}")
+            return img
+    
+    def _enhance_commission_statement_image_moderate(self, img: Image.Image) -> Image.Image:
+        """
+        Moderate image processing for commission statements.
+        Balanced enhancement for good readability without excessive processing.
+        """
+        try:
+            # Convert to RGB if needed
+            if img.mode != 'RGB':
+                img = img.convert('RGB')
+            
+            # 1. Moderate contrast enhancement for better text visibility
+            enhancer = ImageEnhance.Contrast(img)
+            img = enhancer.enhance(1.3)  # Moderate contrast enhancement
+            
+            # 2. Moderate sharpening for text clarity
+            enhancer = ImageEnhance.Sharpness(img)
+            img = enhancer.enhance(1.2)  # Moderate sharpening
+            
+            # 3. Light brightness adjustment
+            enhancer = ImageEnhance.Brightness(img)
+            img = enhancer.enhance(1.1)  # Light brightness adjustment
+            
+            # 4. No color enhancement to avoid distortion
+            # 5. No unsharp mask to avoid artifacts
+            # 6. No edge enhancement to avoid noise
+            
+            return img
+            
+        except Exception as e:
+            logger.warning(f"Moderate image processing failed: {e}")
+            return img
+    
+    def _enhance_commission_statement_image_conservative(self, img: Image.Image) -> Image.Image:
+        """
+        Conservative image processing for commission statements.
+        Uses minimal enhancement to avoid distortion while maintaining readability.
+        """
+        try:
+            # Convert to RGB if needed
+            if img.mode != 'RGB':
+                img = img.convert('RGB')
+            
+            # 1. Light contrast enhancement for better text visibility
+            enhancer = ImageEnhance.Contrast(img)
+            img = enhancer.enhance(1.2)  # Conservative contrast enhancement
+            
+            # 2. Light sharpening for text clarity
+            enhancer = ImageEnhance.Sharpness(img)
+            img = enhancer.enhance(1.1)  # Conservative sharpening
+            
+            # 3. Minimal brightness adjustment
+            enhancer = ImageEnhance.Brightness(img)
+            img = enhancer.enhance(1.05)  # Very light brightness adjustment
+            
+            # 4. No color enhancement to avoid distortion
+            # 5. No unsharp mask to avoid artifacts
+            # 6. No edge enhancement to avoid noise
+            
+            return img
+            
+        except Exception as e:
+            logger.warning(f"Conservative image processing failed: {e}")
             return img
 
     # ============================================================================
@@ -184,7 +297,8 @@ class GPT4oVisionService:
             response = self.client.chat.completions.create(
                 model="gpt-5",
                 messages=messages,
-                max_completion_tokens=8000  # Increased for table structure analysis
+                max_completion_tokens=12000,  # Increased for comprehensive table extraction
+                temperature=0.1  # Lower temperature for more consistent extraction
             )
             
             # Parse the response
@@ -531,6 +645,17 @@ Be precise and only report what you can clearly see in the images."""
                 
                 extraction_result = json.loads(cleaned_content)
                 logger.info(f"Successfully parsed ultra HD JSON with keys: {list(extraction_result.keys())}")
+                
+                # Check if GPT returned an error response
+                if "error" in extraction_result:
+                    error_msg = extraction_result.get("error", "Unknown error")
+                    logger.error(f"GPT-5 Vision returned an error: {error_msg}")
+                    return {
+                        "success": False,
+                        "error": error_msg,
+                        "tables": []
+                    }
+                
                 if "tables" in extraction_result:
                     logger.info(f"Found {len(extraction_result['tables'])} tables in ultra HD response")
                     for i, table in enumerate(extraction_result['tables']):
@@ -544,6 +669,13 @@ Be precise and only report what you can clearly see in the images."""
                             logger.info(f"  ✅ Client Names column detected in table {i+1}")
                         else:
                             logger.info(f"  ⚠️  Client Names column NOT detected in table {i+1}")
+                else:
+                    logger.warning("No 'tables' key found in GPT response")
+                    return {
+                        "success": False,
+                        "error": "No tables found in GPT response",
+                        "tables": []
+                    }
             except json.JSONDecodeError as e:
                 logger.error(f"Failed to parse ultra HD GPT-5 response as JSON: {e}")
                 logger.error(f"Ultra HD response content length: {len(response_content)}")
@@ -620,10 +752,15 @@ EXTRACTION REQUIREMENTS:
 4. **ADVANCED COMPANY DETECTION**: Identify company names in summary rows and create a "Client Names" column
 5. **DATA PRESERVATION**: Keep all original values, dates, amounts, and formatting exactly as they appear
 6. **HIERARCHICAL STRUCTURE**: Pay attention to customer groupings and summary rows
-7. **ULTRA HD DETAIL**: With 800 DPI images, you should see every detail clearly
+7. **HIGH DETAIL**: With high-resolution images, you should see every detail clearly
 8. **COMPLETE COVERAGE**: Scan the ENTIRE image from top to bottom, left to right - do not skip any rows
 9. **BOTTOM OF PAGE**: Pay special attention to rows at the bottom of the page - they are just as important as rows at the top
 10. **NO ROW LEFT BEHIND**: If you see any structured data that looks like a table row, extract it
+11. **MULTI-PAGE COVERAGE**: Extract data from ALL pages - do not stop at the first table
+12. **CONTINUOUS EXTRACTION**: If a table continues across multiple pages, extract ALL rows from ALL pages
+13. **SUMMARY ROWS**: Include summary rows, subtotals, and totals in your extraction
+14. **CUSTOMER BLOCKS**: Extract each customer's data block completely before moving to the next
+15. **SECTION BREAKS**: Pay attention to section headers like "Renewal", "New Business", etc.
 
 **CRITICAL: YOU MUST RETURN VALID JSON ONLY. DO NOT PROVIDE EXPLANATIONS OR TEXT OUTSIDE OF THE JSON STRUCTURE.**
 
@@ -647,6 +784,11 @@ COMMISSION STATEMENT SPECIFIC PATTERNS:
 - Extract compensation period details
 - Extract adjustment tables
 - Extract "Business on Hold" tables
+- **MULTI-PAGE EXTRACTION**: Extract ALL customer data blocks from ALL pages
+- **CUSTOMER BLOCKS**: Each customer should have their own data rows with the customer name repeated
+- **CONTINUOUS DATA**: If a customer has data across multiple pages, extract ALL rows
+- **SUMMARY ROWS**: Include subtotals and totals for each customer
+- **SECTION HEADERS**: Pay attention to "Key Accounts", "Small Business", "Renewal", "New Business" sections
 
 ADVANCED COMPANY NAME EXTRACTION:
 - When you see customer information in summary rows (like "Customer: 1536194" followed by "Customer Name: IMPACT HEATING AND COOLING")
@@ -664,20 +806,20 @@ ADVANCED COMPANY NAME EXTRACTION:
     {
       "headers": ["Client Names", "Cov Type", "Bill Eff Date", "Billed Premium", "Paid Premium", "Sub count", "Adj Typ", "Iss St", "Method", "Rate", "Split %", "Comp Typ", "Bus Type", "Billed Fee Amount", "Customer Paid Fee", "Paid Amount"],
       "rows": [
-        ["D2logistics llc", "Med", "02/01/2025", "($216.00)", "($216.00)", "9", "V", "MD", "PEPM", "$24.00", "100%", "Fee", "Comm", "$216.00", "$216.00", "$216.00"],
-        ["B & B Lightning Protection", "Med", "02/01/2025", "$3,844.84", "$3,844.84", "3", "V", "NJ", "PEPM", "$56.00", "100%", "Comm", "Comm", "", "", "$168.00"],
-        ["2C LOGISTICS", "Med", "11/01/2024", "$458.84", "$458.84", "1", "V", "VA", "PEPM", "$20.00", "100%", "Comm", "Comm", "", "", "$20.00"],
-        ["2C LOGISTICS", "Med", "12/01/2024", "$458.84", "$458.84", "1", "V", "VA", "PEPM", "$20.00", "100%", "Comm", "Comm", "", "", "$20.00"],
-        ["2C LOGISTICS", "Med", "01/01/2025", "$786.57", "$786.57", "4", "V", "VA", "PEPM", "$20.00", "100%", "Comm", "Comm", "", "", "$80.00"],
-        ["2C LOGISTICS", "Den", "12/01/2024", "($31.00)", "($31.00)", "-1", "V", "VA", "POP", "10.00%", "100%", "Comm", "Comm", "", "", "($3.10)"],
-        ["2C LOGISTICS", "Den", "01/01/2025", "($92.99)", "($92.99)", "-2", "V", "VA", "POP", "10.00%", "100%", "Comm", "Comm", "", "", "($9.30)"],
-        ["H6 LOGISTICS LLC", "Med", "09/01/2024", "$5,606.35", "$5,606.35", "9", "V", "FL", "PEPM", "$34.00", "100%", "Comm", "Comm", "", "", "$306.00"],
-        ["H6 LOGISTICS LLC", "Med", "09/01/2024", "$377.33", "$377.33", "1", "V", "FL", "PEPM", "$34.00", "100%", "Comm", "Comm", "", "", "$34.00"],
-        ["H6 LOGISTICS LLC", "Med", "10/01/2024", "$5,229.02", "$5,229.02", "8", "V", "FL", "PEPM", "$34.00", "100%", "Comm", "Comm", "", "", "$272.00"],
-        ["H6 LOGISTICS LLC", "Med", "10/01/2024", "$377.33", "$377.33", "1", "V", "FL", "PEPM", "$34.00", "100%", "Comm", "Comm", "", "", "$34.00"],
-        ["H6 LOGISTICS LLC", "Med", "11/01/2024", "$5,606.35", "$5,606.35", "9", "V", "FL", "PEPM", "$34.00", "100%", "Comm", "Comm", "", "", "$306.00"],
-        ["H6 LOGISTICS LLC", "Med", "12/01/2024", "$5,606.35", "$558.59", "9", "V", "FL", "PEPM", "$34.00", "100%", "Comm", "Comm", "", "", "$306.00"],
-        ["H6 LOGISTICS LLC", "Den", "09/01/2024", "$100.72", "$100.72", "2", "V", "FL", "POP", "10.00%", "100%", "Comm", "Comm", "", "", "$10.07"],
+        ["LOGIC STICKS LLC", "Med", "12/01/2024", "$1,672.65", "$1,672.65", "1", "V", "MI", "PEPM", "$34.00", "100%", "Comm", "Comm", "", "", "$34.00"],
+        ["LOGIC STICKS LLC", "Med", "12/01/2024", "$2,070.06", "$2,070.06", "1", "V", "MI", "PEPM", "$34.00", "100%", "Comm", "Comm", "", "", "$34.00"],
+        ["LOGIC STICKS LLC", "Med", "12/01/2024", "$3,742.71", "$3,742.71", "1", "V", "MI", "PEPM", "$34.00", "100%", "Comm", "Comm", "", "", "$34.00"],
+        ["The Total Package Logistics", "Med", "04/01/2024", "($637.01)", "($637.01)", "-1", "V", "WA", "PEPM", "$34.00", "100%", "Comm", "Comm", "", "", "($34.00)"],
+        ["The Total Package Logistics", "Med", "05/01/2024", "$3,817.68", "$3,817.68", "8", "V", "WA", "PEPM", "$34.00", "100%", "Comm", "Comm", "", "", "$272.00"],
+        ["The Total Package Logistics", "Den", "04/01/2024", "($31.85)", "($31.85)", "-1", "V", "WA", "POP", "10.00%", "100%", "Comm", "Comm", "", "", "($3.19)"],
+        ["The Total Package Logistics", "Den", "05/01/2024", "$318.50", "$318.50", "1", "V", "WA", "POP", "10.00%", "100%", "Comm", "Comm", "", "", "$31.85"],
+        ["Linden Logistics LLC", "Med", "12/01/2024", "$3,115.69", "$3,115.69", "1", "V", "MI", "PEPM", "$2.00", "100%", "Comm", "Comm", "", "", "$2.00"],
+        ["MAMMOTH DELIVERY LLC", "Med", "10/01/2024", "$3,817.68", "$3,817.68", "8", "V", "WA", "PEPM", "$30.00", "100%", "Comm", "Comm", "", "", "$240.00"],
+        ["MAMMOTH DELIVERY LLC", "Med", "11/01/2024", "$3,817.68", "$3,817.68", "8", "V", "WA", "PEPM", "$30.00", "100%", "Comm", "Comm", "", "", "$240.00"],
+        ["MAMMOTH DELIVERY LLC", "Med", "12/01/2024", "$3,817.68", "$3,817.68", "8", "V", "WA", "PEPM", "$30.00", "100%", "Comm", "Comm", "", "", "$240.00"],
+        ["MAMMOTH DELIVERY LLC", "Den", "10/01/2024", "$318.50", "$318.50", "1", "V", "WA", "POP", "10.00%", "100%", "Comm", "Comm", "", "", "$31.85"],
+        ["MAMMOTH DELIVERY LLC", "Den", "11/01/2024", "$318.50", "$318.50", "1", "V", "WA", "POP", "10.00%", "100%", "Comm", "Comm", "", "", "$31.85"],
+        ["MAMMOTH DELIVERY LLC", "Den", "12/01/2024", "$318.50", "$318.50", "1", "V", "WA", "POP", "10.00%", "100%", "Comm", "Comm", "", "", "$31.85"],
         ["H6 LOGISTICS LLC", "Den", "09/01/2024", "($100.72)", "($100.72)", "-2", "V", "FL", "POP", "10.00%", "100%", "Comm", "Comm", "", "", "($10.07)"],
         ["H6 LOGISTICS LLC", "Vis", "09/01/2024", "$22.99", "$22.99", "2", "V", "FL", "POP", "10.00%", "100%", "Comm", "Comm", "", "", "$2.30"],
         ["H6 LOGISTICS LLC", "Vis", "09/01/2024", "($22.99)", "($22.99)", "-2", "V", "FL", "POP", "10.00%", "100%", "Comm", "Comm", "", "", "($2.30)"]

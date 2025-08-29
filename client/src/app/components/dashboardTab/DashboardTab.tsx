@@ -13,6 +13,7 @@ import TableEditor from "../../upload/components/TableEditor/TableEditor";
 import FieldMapper from "../../upload/components/FieldMapper";
 import toast from 'react-hot-toast';
 import { useSubmission } from "@/context/SubmissionContext";
+import { ApprovalLoader } from "../../components/ui/FullScreenLoader";
 
 type FieldConfig = { field: string, label: string }
 
@@ -47,6 +48,7 @@ export default function DashboardTab() {
   const [formatLearning, setFormatLearning] = useState<any>(null);
   const [currentStep, setCurrentStep] = useState('upload');
   const [selectedStatementDate, setSelectedStatementDate] = useState<any>(null);
+  const [approvalProgress, setApprovalProgress] = useState({ totalRows: 0, processedRows: 0 });
 
   const fetchMappingRef = useRef(false);
 
@@ -232,9 +234,15 @@ export default function DashboardTab() {
   async function handleApprove() {
     if (!company || !uploaded?.upload_id) return;
     
+    // Calculate total rows for progress tracking
+    const totalRows = finalTables.reduce((total, table) => {
+      return total + (table.rows ? table.rows.length : 0);
+    }, 0);
+    
+    setApprovalProgress({ totalRows, processedRows: 0 });
     setSubmitting(true);
+    
     try {
-      
       const requestBody = {
         upload_id: uploaded.upload_id,
         final_data: finalTables,
@@ -243,7 +251,6 @@ export default function DashboardTab() {
         selected_statement_date: selectedStatementDate,
       };
       
-      
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/review/approve/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -251,6 +258,22 @@ export default function DashboardTab() {
       });
       
       if (response.ok) {
+        // Simulate progress updates during processing
+        const progressInterval = setInterval(() => {
+          setApprovalProgress(prev => {
+            if (prev.processedRows < prev.totalRows) {
+              return { ...prev, processedRows: Math.min(prev.processedRows + Math.ceil(prev.totalRows / 10), prev.totalRows) };
+            }
+            return prev;
+          });
+        }, 200);
+        
+        // Clear interval after a delay to simulate completion
+        setTimeout(() => {
+          clearInterval(progressInterval);
+          setApprovalProgress({ totalRows, processedRows: totalRows });
+        }, 2000);
+        
         toast.success('Statement approved successfully!');
         // Refresh earned commission stats after approval
         refetchEarnedCommissionStats();
@@ -266,6 +289,7 @@ export default function DashboardTab() {
       toast.error('Failed to approve statement');
     } finally {
       setSubmitting(false);
+      setApprovalProgress({ totalRows: 0, processedRows: 0 });
     }
   }
 
@@ -566,7 +590,18 @@ export default function DashboardTab() {
   }
 
   return (
-    <div className="w-full space-y-8">
+    <>
+      <ApprovalLoader 
+        isVisible={submitting}
+        progress={approvalProgress.totalRows > 0 ? Math.round((approvalProgress.processedRows / approvalProgress.totalRows) * 100) : 0}
+        totalRows={approvalProgress.totalRows}
+        processedRows={approvalProgress.processedRows}
+        onCancel={() => {
+          // Note: Approval process cannot be cancelled as it's a server-side process
+          toast.error("Approval process is already in progress and cannot be cancelled");
+        }}
+      />
+      <div className="w-full space-y-8">
       {/* Enhanced Header */}
       <div className="text-center space-y-4">
         <div className="flex items-center justify-center gap-3">
@@ -750,6 +785,7 @@ export default function DashboardTab() {
         carriers={carriers}
         loading={carriersLoading}
       />
-    </div>
+      </div>
+    </>
   );
 }

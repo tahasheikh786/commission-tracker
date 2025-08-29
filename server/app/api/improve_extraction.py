@@ -19,6 +19,10 @@ from pydantic import BaseModel
 from app.db.crud import save_edited_tables, get_edited_tables, update_upload_tables
 from app.db.models import EditedTable, StatementUpload as StatementUploadModel
 import openai
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -243,12 +247,12 @@ class FixRowFormatsResponse(BaseModel):
 @router.post("/fix-row-formats/")
 async def fix_row_formats_with_gpt(request: FixRowFormatsRequest):
     """
-    Fix row formats using GPT-5 by comparing problematic rows with a reference row.
+    Fix row formats using GPT by comparing problematic rows with a reference row.
     """
     try:
-        logger.info(f"Fixing row formats with GPT-5 for {len(request.problematic_rows)} rows")
+        logger.info(f"Fixing row formats with GPT for {len(request.problematic_rows)} rows")
         
-        # Prepare the prompt for GPT-5
+        # Prepare the prompt for GPT
         prompt = create_format_correction_prompt(
             request.reference_row,
             request.problematic_rows,
@@ -258,104 +262,68 @@ async def fix_row_formats_with_gpt(request: FixRowFormatsRequest):
         # Call GPT-5 API
         corrected_rows = await call_gpt5_for_format_correction(prompt, request.problematic_rows, request.reference_row, request.table_headers)
         
-        logger.info(f"Successfully corrected {len(corrected_rows)} rows with GPT-5")
+        logger.info(f"Successfully corrected {len(corrected_rows)} rows with GPT")
         
         return JSONResponse({
             "success": True,
             "corrected_rows": corrected_rows,
-            "message": f"Successfully corrected {len(corrected_rows)} rows with GPT-5"
+            "message": f"Successfully corrected {len(corrected_rows)} rows with GPT"
         })
         
     except Exception as e:
-        logger.error(f"Error fixing row formats with GPT-5: {str(e)}")
+        logger.error(f"Error fixing row formats with GPT: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to fix row formats: {str(e)}")
 
 
 def create_format_correction_prompt(reference_row: List[str], problematic_rows: List[Dict], table_headers: List[str]) -> str:
     """
-    Create a detailed prompt for GPT to align data columns with specific examples and clear instructions.
+    Create a concise prompt for GPT to align data columns with specific examples and clear instructions.
     """
     
-    # Create column type mapping based on reference row
+    # Create simplified column type mapping based on reference row
     column_types = []
     for i, (header, ref_value) in enumerate(zip(table_headers, reference_row)):
         if ref_value.strip():
             if re.match(r'^[A-Z]+\d+$', ref_value):  # Group No. pattern like L210316
-                column_types.append(f"Column {i+1} ({header}): Group/ID codes like '{ref_value}'")
+                column_types.append(f"{i+1}: Group codes")
             elif re.match(r'^\d+/\d+/\d+$', ref_value):  # Date pattern
-                column_types.append(f"Column {i+1} ({header}): Dates like '{ref_value}'")
+                column_types.append(f"{i+1}: Dates")
             elif re.match(r'^\$[\d,]+\.?\d*$', ref_value):  # Currency pattern
-                column_types.append(f"Column {i+1} ({header}): Currency amounts like '{ref_value}'")
+                column_types.append(f"{i+1}: Currency")
             elif re.match(r'^\d+%$', ref_value):  # Percentage pattern
-                column_types.append(f"Column {i+1} ({header}): Percentages like '{ref_value}'")
+                column_types.append(f"{i+1}: Percentages")
             elif re.match(r'^\d+$', ref_value):  # Number pattern
-                column_types.append(f"Column {i+1} ({header}): Numbers like '{ref_value}'")
+                column_types.append(f"{i+1}: Numbers")
             else:
-                column_types.append(f"Column {i+1} ({header}): Text like '{ref_value}'")
+                column_types.append(f"{i+1}: Text")
         else:
-            column_types.append(f"Column {i+1} ({header}): Empty or flexible")
+            column_types.append(f"{i+1}: Flexible")
     
-    column_guide = "\n".join(column_types)
+    column_guide = ", ".join(column_types)
     
-    # Create specific examples from the actual problematic data
-    specific_examples = []
-    for problem in problematic_rows[:3]:  # Use first 3 problematic rows as examples
+    # Process all problematic rows but in a more concise format
+    logger.info(f"Processing {len(problematic_rows)} problematic rows for GPT correction")
+    rows_text = ""
+    for problem in problematic_rows:
         row_data = problem['row']
-        issues = problem['issues']
-        
-        # Find combined values that need splitting
+        row_idx = problem['rowIdx']
+        # Show only the problematic cells that need fixing
+        problematic_cells = []
         for i, cell in enumerate(row_data):
-            if cell.strip() and ' ' in cell and any(char.isdigit() for char in cell):
-                # This looks like a combined value
-                specific_examples.append(f"Row {problem['rowIdx']}: '{cell}' in column {i+1} needs splitting")
+            if cell.strip() and (' ' in cell or any(char.isdigit() for char in cell)):
+                problematic_cells.append(f"{i+1}:'{cell}'")
+        if problematic_cells:
+            rows_text += f"Row {row_idx}: {', '.join(problematic_cells)}\n"
     
-    examples_text = "\n".join(specific_examples[:5]) if specific_examples else "No specific examples found"
-    
-    prompt = f"""
-You are a data alignment specialist. Your task is to reorganize table rows to match the reference row format by moving existing values to their correct column positions.
+    prompt = f"""Fix table rows to match reference format. Move/split existing values only.
 
-REFERENCE ROW FORMAT (this shows the correct column order):
-{', '.join(reference_row)}
+REFERENCE: {', '.join(reference_row)}
+COLUMNS: {column_guide}
 
-TABLE HEADERS:
-{', '.join(table_headers)}
+ROWS TO FIX:
+{rows_text}
 
-COLUMN TYPE GUIDE:
-{column_guide}
-
-SPECIFIC EXAMPLES OF COMBINED VALUES TO SPLIT:
-{examples_text}
-
-CRITICAL INSTRUCTIONS:
-1. MOVE existing values to the correct column positions based on the reference row
-2. SPLIT combined values (like "L221372 $282.27") into separate columns
-3. DO NOT create new values or fill empty cells
-4. DO NOT modify any existing values - keep them exactly as they appear
-5. Leave empty cells empty if no appropriate value exists
-6. Each corrected row must have exactly {len(reference_row)} columns
-
-SPLITTING RULES:
-- "L221372 $282.27" → "L221372" (Group No.) + "$282.27" (currency column)
-- "1/1/2025 $2,504.58" → "1/1/2025" (date column) + "$2,504.58" (currency column)
-- "$70.57 L221372" → "L221372" (Group No.) + "$70.57" (currency column)
-
-PROBLEMATIC ROWS TO CORRECT:
-{format_problematic_rows_for_prompt(problematic_rows)}
-
-RESPONSE FORMAT:
-Return a JSON object with this exact structure:
-{{
-  "corrected_rows": [
-    {{
-      "row_idx": <original_row_index>,
-      "corrected_row": ["value1", "value2", "value3", ...]
-    }},
-    ...
-  ]
-}}
-
-Each corrected_row array must have exactly {len(reference_row)} elements, with values moved to match the reference row format.
-"""
+Return JSON: {{"corrected_rows": [{{"row_idx": N, "corrected_row": ["v1","v2",...]}}]}}"""
     
     return prompt
 
@@ -415,23 +383,18 @@ def format_problematic_rows_for_prompt(problematic_rows: List[Dict]) -> str:
             if cell.strip() and ' ' in cell and any(char.isdigit() for char in cell):
                 combined_values.append(f"Column {j+1}: '{cell}' (needs splitting)")
         
-        formatted += f"""
-Row {problem['rowIdx']}:
-- Original Data: {row_data}
-- Issues: {', '.join(issues)}
-- Combined Values to Split: {', '.join(combined_values) if combined_values else 'None'}
-- Expected Format: {len(row_data)} columns matching reference row structure
-"""
+        formatted += f"Row {problem['rowIdx']}: {row_data} | Issues: {', '.join(issues)} | Split: {', '.join(combined_values) if combined_values else 'None'}\n"
     return formatted
 
 
 async def call_gpt5_for_format_correction(prompt: str, problematic_rows: List[Dict], reference_row: List[str] = None, headers: List[str] = None) -> List[Dict]:
     """
-    Call GPT-5 API to correct row formats.
+    Call GPT API to correct row formats.
     """
     try:
         # Get OpenAI API key from environment
         api_key = os.getenv('OPENAI_API_KEY')
+        logger.info(f"OpenAI API key found: {'YES' if api_key else 'NO'}")
         if not api_key:
             logger.error("OPENAI_API_KEY not found in environment variables")
             raise Exception("OpenAI API key not configured")
@@ -439,27 +402,49 @@ async def call_gpt5_for_format_correction(prompt: str, problematic_rows: List[Di
         # Configure OpenAI client
         client = openai.OpenAI(api_key=api_key)
         
-        logger.info(f"Calling GPT-5 API to correct {len(problematic_rows)} rows")
+        logger.info(f"Calling GPT API to correct {len(problematic_rows)} rows")
         
         # Log the prompt for debugging (first 500 characters)
         logger.info(f"Prompt preview: {prompt[:500]}...")
         
-        # Make the API call to GPT-5
-        response = client.chat.completions.create(
-            model="GPT-5",  # Using GPT-5 as GPT-5 is not yet available
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are a data alignment specialist. Your task is to move existing values to the correct column positions to match the reference row format. SPLIT combined values (like 'L221372 $282.27') and place each part in the appropriate column. DO NOT create new values, DO NOT fill empty cells, DO NOT delete or modify any existing data. Simply shift and split existing data to align with the reference row structure. IMPORTANT: You MUST return a JSON object with the exact structure specified in the user prompt, using 'row_idx' and 'corrected_row' as the key names."
-                },
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ],
-            max_completion_tokens=4000,
-            response_format={"type": "json_object"}
-        )
+        # Make the API call to GPT
+        logger.info(f"Making GPT API call with {len(problematic_rows)} problematic rows")
+        
+        # Use gpt-4o instead of gpt-5 as it's more reliable
+        try:
+            response = client.chat.completions.create(
+                model="gpt-5",  # Using GPT-4o for format correction (more reliable than gpt-5)
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a data alignment specialist. Move existing values to correct column positions and split combined values. Do NOT create new values or modify existing ones. Return JSON with 'row_idx' and 'corrected_row' keys."
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                max_completion_tokens=20000,
+                response_format={"type": "json_object"}
+            )
+        except Exception as model_error:
+            logger.warning(f"GPT-4o failed, trying gpt-4: {model_error}")
+            # Fallback to gpt-4 if gpt-4o fails
+            response = client.chat.completions.create(
+                model="gpt-5",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a data alignment specialist. Move existing values to correct column positions and split combined values. Do NOT create new values or modify existing ones. Return JSON with 'row_idx' and 'corrected_row' keys."
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                max_completion_tokens=20000,
+                response_format={"type": "json_object"}
+            )
         
         # Parse the response
         response_content = response.choices[0].message.content
@@ -467,16 +452,28 @@ async def call_gpt5_for_format_correction(prompt: str, problematic_rows: List[Di
         # Log the response for debugging (first 500 characters)
         logger.info(f"GPT response preview: {response_content[:500]}...")
         
+        # Check if response is empty
+        if not response_content or response_content.strip() == "":
+            logger.error("GPT returned empty response")
+            raise Exception("GPT returned empty response")
+        
+        # Log full response for debugging
+        logger.info(f"Full GPT response: {response_content}")
+        
         try:
             response_data = json.loads(response_content)
             corrected_rows = response_data.get("corrected_rows", [])
             
             # Validate the response format
             if not isinstance(corrected_rows, list):
-                logger.error("Invalid response format from GPT-5")
-                raise Exception("Invalid response format from GPT-5")
+                logger.error(f"Invalid response format from GPT. Expected list, got {type(corrected_rows)}")
+                logger.error(f"Response data: {response_data}")
+                raise Exception("Invalid response format from GPT")
             
-            logger.info(f"Successfully parsed {len(corrected_rows)} corrected rows from GPT-5")
+            logger.info(f"Successfully parsed {len(corrected_rows)} corrected rows from GPT (expected {len(problematic_rows)})")
+            if len(corrected_rows) < len(problematic_rows):
+                logger.warning(f"GPT only returned {len(corrected_rows)} rows out of {len(problematic_rows)} problematic rows")
+            logger.info(f"Corrected rows: {json.dumps(corrected_rows, indent=2)}")
             
             # Convert the response to the expected format
             formatted_corrected_rows = []
@@ -508,16 +505,20 @@ async def call_gpt5_for_format_correction(prompt: str, problematic_rows: List[Di
             # Validate that all original values are preserved
             validated_rows = validate_preserved_values(formatted_corrected_rows, problematic_rows, reference_row, headers)
             
+            logger.info(f"Final validated rows: {len(validated_rows)} out of {len(formatted_corrected_rows)}")
+            
             return validated_rows
             
         except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse GPT-5 response as JSON: {e}")
+            logger.error(f"Failed to parse GPT response as JSON: {e}")
             logger.error(f"Response content: {response_content}")
             # Fallback to parse malformed response
+            logger.warning("Attempting to parse malformed GPT response")
             return parse_malformed_response(response_content, problematic_rows, reference_row)
         
     except Exception as e:
-        logger.error(f"Error calling GPT-5: {str(e)}")
+        logger.error(f"Error calling GPT: {str(e)}")
+        logger.error(f"Error type: {type(e).__name__}")
         # Fallback to rule-based correction
         logger.info("Falling back to rule-based correction")
         return apply_fallback_corrections(problematic_rows, reference_row, headers)
@@ -618,14 +619,17 @@ def validate_preserved_values(corrected_rows: List[Dict], problematic_rows: List
         # Extract all non-empty values from corrected row
         corrected_values = [val.strip() for val in corrected_data if val.strip()]
         
-        # Check if all original values are present in corrected row
+        # Check if all original values are present in corrected row (more lenient)
         missing_values = []
         for orig_val in original_values:
             if orig_val not in corrected_values:
-                # Check if the value was split
+                # Check if the value was split or modified
                 found_split = False
                 for corr_val in corrected_values:
-                    if orig_val in corr_val or corr_val in orig_val:
+                    # More lenient matching - check for partial matches
+                    if (orig_val in corr_val or corr_val in orig_val or 
+                        orig_val.replace('$', '').replace(',', '') in corr_val.replace('$', '').replace(',', '') or
+                        corr_val.replace('$', '').replace(',', '') in orig_val.replace('$', '').replace(',', '')):
                         found_split = True
                         break
                 if not found_split:

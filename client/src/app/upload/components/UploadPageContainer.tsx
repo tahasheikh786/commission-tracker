@@ -38,6 +38,7 @@ export default function UploadPageContainer() {
     isImprovingExtraction,
 
     selectedStatementDate,
+    approvalProgress,
 
     // Actions
     setCompany,
@@ -191,6 +192,7 @@ export default function UploadPageContainer() {
         onTableChange={setFinalTables}
         onSendToPending={handleSendToPending}
         selectedStatementDate={selectedStatementDate}
+        approvalProgress={approvalProgress}
       />
     )
   }

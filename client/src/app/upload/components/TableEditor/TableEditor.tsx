@@ -30,6 +30,7 @@ import TableHeader from './components/TableHeader'
 import TableControls from './components/TableControls'
 import DateSelectionModal from '../DateSelectionModal'
 import { dateExtractionService, ExtractedDate } from '../../services/dateExtractionService'
+import { GPTCorrectionLoader } from '../../../components/ui/FullScreenLoader'
 
 import ProgressBar from '../ProgressBar'
 
@@ -308,6 +309,7 @@ export default function TableEditor({
   const {
     rightFormatRow,
     formatValidationResults,
+    isGPTCorrecting,
     markAsRightFormatRow,
     validateAllRowsFormat,
     clearFormatValidation,
@@ -779,7 +781,7 @@ export default function TableEditor({
     <>
       <style dangerouslySetInnerHTML={{ __html: scrollbarStyles }} />
       <div className="fixed inset-0 bg-gradient-to-br from-gray-50 to-blue-50 z-50">
-      {/* Full-screen loader overlay */}
+      {/* Full-screen loader overlays */}
       {isUsingAnotherExtraction && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-8 shadow-xl flex flex-col items-center gap-4">
@@ -791,6 +793,17 @@ export default function TableEditor({
           </div>
         </div>
       )}
+
+      {/* GPT Correction Full-Screen Loader */}
+      <GPTCorrectionLoader 
+        isVisible={isGPTCorrecting}
+        progress={isGPTCorrecting ? 75 : 0}
+        onCancel={() => {
+          // Note: GPT correction cannot be easily cancelled as it's a server-side process
+          // This would require implementing a cancellation mechanism on the backend
+          toast.error("GPT correction is already in progress and cannot be cancelled");
+        }}
+      />
       
       {/* Main Content - Side by Side Layout */}
       <div className="flex flex-col h-full">

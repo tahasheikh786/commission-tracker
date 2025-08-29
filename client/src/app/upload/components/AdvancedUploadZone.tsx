@@ -3,8 +3,8 @@ import { useDropzone } from 'react-dropzone'
 import toast from 'react-hot-toast'
 import { useCallback, useState } from 'react'
 import clsx from 'clsx'
-import Loader from './Loader'
 import { Calendar } from 'lucide-react' // Added import for Calendar icon
+import { ExtractionLoader } from '../../components/ui/FullScreenLoader'
 
 type TableData = {
   header: string[]
@@ -343,7 +343,14 @@ export default function AdvancedUploadZone({
 
   return (
     <div className="relative">
-      {loading && <Loader message="AI-powered extraction in progress…" />}
+      <ExtractionLoader 
+        isVisible={loading} 
+        progress={loading ? 50 : 0}
+        onCancel={() => {
+          setLoading(false);
+          toast.error("Extraction cancelled");
+        }}
+      />
 
       {/* Date Display */}
       {selectedStatementDate && (

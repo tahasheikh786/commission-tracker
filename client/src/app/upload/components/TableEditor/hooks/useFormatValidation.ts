@@ -10,6 +10,7 @@ export const useFormatValidation = (
 ) => {
   const [rightFormatRow, setRightFormatRow] = useState<RightFormatRow>(null)
   const [formatValidationResults, setFormatValidationResults] = useState<FormatValidationResults>({})
+  const [isGPTCorrecting, setIsGPTCorrecting] = useState(false)
 
   const markAsRightFormatRow = (tableIdx: number, rowIdx: number) => {
     setRightFormatRow({ tableIdx, rowIdx })
@@ -135,22 +136,33 @@ export const useFormatValidation = (
     }
 
     try {
+      setIsGPTCorrecting(true)
       toast.loading('Fixing row formats with GPT-5...', { id: 'gpt-correction' })
+      
+      const requestBody = {
+        reference_row: referenceRow,
+        problematic_rows: problematicRows,
+        table_headers: currentTable.header
+      }
+      
+      console.log('Sending to API:', {
+        problematicRowsCount: problematicRows.length,
+        referenceRow,
+        tableHeaders: currentTable.header
+      })
       
       const response = await fetch('/api/improve-extraction/fix-row-formats/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          reference_row: referenceRow,
-          problematic_rows: problematicRows,
-          table_headers: currentTable.header
-        })
+        body: JSON.stringify(requestBody)
       })
 
       if (response.ok) {
         const result = await response.json()
+        
+        console.log('API Response:', result)
         
         if (result.corrected_rows && result.corrected_rows.length > 0) {
           saveToUndoStack()
@@ -169,17 +181,22 @@ export const useFormatValidation = (
           toast.error('No corrections were made by GPT-5', { id: 'gpt-correction' })
         }
       } else {
-        toast.error('Failed to fix row formats with GPT-5', { id: 'gpt-correction' })
+        const errorText = await response.text()
+        console.error('API Error:', errorText)
+        toast.error(`Failed to fix row formats: ${response.status}`, { id: 'gpt-correction' })
       }
     } catch (error) {
       console.error('Error fixing row formats with GPT-5:', error)
       toast.error('Failed to fix row formats with GPT-5', { id: 'gpt-correction' })
+    } finally {
+      setIsGPTCorrecting(false)
     }
   }
 
   return {
     rightFormatRow,
     formatValidationResults,
+    isGPTCorrecting,
     markAsRightFormatRow,
     validateAllRowsFormat,
     clearFormatValidation,

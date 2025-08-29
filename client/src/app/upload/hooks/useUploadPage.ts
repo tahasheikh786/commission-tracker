@@ -47,7 +47,13 @@ export function useUploadPage() {
   // GPT-5 Vision improvement functionality
   const [isImprovingExtraction, setIsImprovingExtraction] = useState(false)
 
-
+  // Approval progress tracking
+  const [approvalProgress, setApprovalProgress] = useState({ totalRows: 0, processedRows: 0 })
+  
+  // Debug state changes
+  useEffect(() => {
+    console.log('🔄 useUploadPage state changed:', { submitting, approvalProgress })
+  }, [submitting, approvalProgress])
 
   // Date extraction state
   const [selectedStatementDate, setSelectedStatementDate] = useState<any>(null)
@@ -800,9 +806,39 @@ export function useUploadPage() {
   }
 
   async function handleApprove() {
-    if (!company || !uploaded?.upload_id) return
+    console.log('🚀 handleApprove called')
+    console.log('📊 Company:', company)
+    console.log('📄 Upload ID:', uploaded?.upload_id)
+    console.log('📋 Final tables:', finalTables)
     
-    setSubmitting(true)
+    if (!company || !uploaded?.upload_id) {
+      console.log('❌ Missing company or upload_id, returning early')
+      return
+    }
+    
+    // Calculate total rows for progress tracking
+    const totalRows = finalTables.reduce((total, table) => {
+      return total + (table.rows ? table.rows.length : 0);
+    }, 0);
+    
+    console.log('📊 Total rows calculated:', totalRows)
+    console.log('🔄 Setting approval progress and submitting state')
+    
+    setApprovalProgress({ totalRows, processedRows: 0 });
+    setSubmitting(true);
+    
+    console.log('✅ States set - should trigger ApprovalLoader')
+    
+    // Start progress simulation immediately
+    const progressInterval = setInterval(() => {
+      setApprovalProgress(prev => {
+        if (prev.processedRows < prev.totalRows) {
+          return { ...prev, processedRows: Math.min(prev.processedRows + Math.ceil(prev.totalRows / 10), prev.totalRows) };
+        }
+        return prev;
+      });
+    }, 200);
+    
     try {
       const requestBody = {
         upload_id: uploaded.upload_id,
@@ -819,6 +855,10 @@ export function useUploadPage() {
       })
       
       if (response.ok) {
+        // Clear interval and set to 100% completion
+        clearInterval(progressInterval);
+        setApprovalProgress({ totalRows, processedRows: totalRows });
+        
         saveProgress('completed', {
           status: 'approved',
           final_data: finalTables,
@@ -839,7 +879,9 @@ export function useUploadPage() {
       console.error('Error approving statement:', error)
       toast.error('Failed to approve statement')
     } finally {
+      clearInterval(progressInterval);
       setSubmitting(false)
+      setApprovalProgress({ totalRows: 0, processedRows: 0 });
     }
   }
 
@@ -1114,5 +1156,6 @@ export function useUploadPage() {
 
     // Table Editor Learning
     tableEditorLearning,
+    approvalProgress,
   }
 }
