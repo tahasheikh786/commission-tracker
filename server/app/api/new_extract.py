@@ -1679,6 +1679,10 @@ def transform_new_extraction_response_to_client_format(
         if not validation.get("is_valid", True):
             all_valid = False
     
+    # **ENHANCED LOGGING: Track transformation results**
+    print(f"✅ Transformation completed: {len(tables)} backend tables → {len(frontend_tables)} frontend tables")
+    print(f"📊 Total rows: {total_rows}, Total cells: {total_cells}")
+    
     # Calculate quality metrics
     confidence = 1.0 if all_valid else 0.5
     quality_score = 100.0 if all_valid else 50.0

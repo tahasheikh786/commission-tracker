@@ -639,12 +639,115 @@ class ExtractionPipeline:
                     merged_tables.append(current_table_group[0])
                     self.logger.logger.info(f"📋 Added single table from page {current_table_group[0].get('page_number', 0)} (final)")
             
-            self.logger.logger.info(f"📊 SEQUENTIAL MERGING: {len(tables)} → {len(merged_tables)} tables")
-            return merged_tables
+            # **NEW: Final consolidation step - merge tables with identical headers**
+            self.logger.logger.info(f"🔗 Starting final consolidation of {len(merged_tables)} tables")
+            final_tables = await self._consolidate_identical_headers(merged_tables)
+            
+            # **HOTFIX: Force merge tables with identical headers regardless of metadata issues**
+            if len(final_tables) > 1:
+                self.logger.logger.info(f"🔗 HOTFIX: Checking for tables with identical headers (metadata-agnostic)")
+                header_groups = {}
+                for table in final_tables:
+                    headers = table.get('headers', [])
+                    if headers:
+                        key = "|".join(sorted([h.lower().strip() for h in headers if h.strip()]))
+                        if key not in header_groups:
+                            header_groups[key] = []
+                        header_groups[key].append(table)
+                
+                # Merge groups with multiple tables (identical headers)
+                truly_final = []
+                for group in header_groups.values():
+                    if len(group) > 1:
+                        self.logger.logger.info(f"🔗 HOTFIX: Merging {len(group)} tables with identical headers")
+                        merged = await self._merge_table_group(group)
+                        merged['name'] = f"HOTFIX Merged Table ({len(group)} sources)"
+                        truly_final.append(merged)
+                    else:
+                        truly_final.extend(group)
+                
+                final_tables = truly_final
+                self.logger.logger.info(f"🔗 HOTFIX: Final consolidation completed: {len(merged_tables)} → {len(final_tables)} tables")
+            
+            self.logger.logger.info(f"📊 SEQUENTIAL MERGING + CONSOLIDATION: {len(tables)} → {len(final_tables)} tables")
+            return final_tables
             
         except Exception as e:
             self.logger.logger.error(f"Error in sequential table merging: {e}")
             return tables
+    
+    async def _consolidate_identical_headers(self, tables: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Final consolidation step: merge tables with identical headers."""
+        if len(tables) <= 1:
+            return tables
+        
+        try:
+            self.logger.logger.info(f"🔗 Consolidating {len(tables)} tables with identical headers")
+            
+            # Group tables by header similarity - more robust approach
+            header_groups = {}
+            
+            for table in tables:
+                headers = table.get('headers', [])
+                if not headers:
+                    continue
+                
+                # **IMPROVED: More robust header key creation**
+                # Normalize headers: lowercase, strip whitespace, remove empty strings, sort
+                normalized_headers = [h.lower().strip() for h in headers if h.strip()]
+                if not normalized_headers:
+                    continue
+                
+                # Create a normalized header key that's metadata-agnostic
+                header_key = "|".join(sorted(normalized_headers))
+                
+                if header_key not in header_groups:
+                    header_groups[header_key] = []
+                header_groups[header_key].append(table)
+            
+            # Log header grouping results
+            self.logger.logger.info(f"🔗 Header grouping results:")
+            for header_key, group in header_groups.items():
+                header_sample = header_key.split("|")[:3]  # Show first 3 headers
+                self.logger.logger.info(f"   Group '{'|'.join(header_sample)}...': {len(group)} tables")
+            
+            # Merge tables within each header group
+            consolidated_tables = []
+            
+            for header_key, table_group in header_groups.items():
+                if len(table_group) == 1:
+                    # Single table, no merging needed
+                    consolidated_tables.append(table_group[0])
+                    header_sample = header_key.split("|")[:3]
+                    self.logger.logger.info(f"📋 Single table with headers: {'|'.join(header_sample)}... ({len(table_group[0].get('headers', []))} columns)")
+                else:
+                    # Multiple tables with identical headers, merge them
+                    header_sample = header_key.split("|")[:3]
+                    self.logger.logger.info(f"🔗 Consolidating {len(table_group)} tables with identical headers: {'|'.join(header_sample)}...")
+                    merged_table = await self._merge_table_group(table_group)
+                    merged_table['name'] = f"Consolidated Table ({len(table_group)} sources)"
+                    consolidated_tables.append(merged_table)
+            
+            self.logger.logger.info(f"🔗 Consolidation completed: {len(tables)} → {len(consolidated_tables)} tables")
+            return consolidated_tables
+            
+        except Exception as e:
+            self.logger.logger.error(f"Error in header consolidation: {e}")
+            return tables
+    
+    def _normalize_header_key(self, headers: List[str]) -> str:
+        """Create a normalized key for header comparison."""
+        if not headers:
+            return ""
+        
+        # Normalize headers: lowercase, strip whitespace, remove empty strings
+        normalized = [str(h).lower().strip() for h in headers if str(h).strip()]
+        
+        # Sort to ensure consistent ordering regardless of original order
+        normalized.sort()
+        
+        # Join with a separator to create a unique key
+        return "|".join(normalized)
     
     async def _is_sequential_continuation(
         self, 
@@ -659,38 +762,98 @@ class ExtractionPipeline:
         # Get the last table in the current group
         last_table = current_group[-1]
         
-        # Check page sequence
+        # **IMPROVED: Handle missing/invalid metadata gracefully**
         last_page = last_table.get('page_number', 0)
         candidate_page = candidate_table.get('page_number', 0)
         
-        # Must be on the same page or the next page
-        if candidate_page > last_page + 1:
-            self.logger.logger.info(f"❌ Page gap too large: {last_page} → {candidate_page}")
-            return False
-        
-        # Check header similarity
+        # Check header similarity first (most important indicator)
         last_headers = last_table.get('headers', [])
         candidate_headers = candidate_table.get('headers', [])
         
-        # **IMPROVED: Check if candidate headers look like data (strongest continuation indicator)**
+        # **NEW: Check for identical headers first (strongest continuation indicator)**
+        if self._headers_are_identical(last_headers, candidate_headers):
+            self.logger.logger.info(f"✅ Identical headers detected - strong continuation indicator")
+            # For identical headers, be very permissive with page gaps
+            if last_page == 0 and candidate_page == 0:
+                # Both tables have invalid metadata, but identical headers - likely continuation
+                self.logger.logger.info(f"✅ Both tables have invalid metadata but identical headers - treating as continuation")
+                return True
+            elif last_page == 0 or candidate_page == 0:
+                # One table has invalid metadata, but identical headers - likely continuation
+                self.logger.logger.info(f"✅ One table has invalid metadata but identical headers - treating as continuation")
+                return True
+            else:
+                # Both have valid metadata, allow larger page gaps for identical headers
+                page_gap = candidate_page - last_page
+                if page_gap <= 3:  # Allow up to 3 page gap for identical headers
+                    return True
+                else:
+                    self.logger.logger.info(f"⚠️ Page gap too large even for identical headers: {page_gap} pages")
+                    return False
+        
+        # **FALLBACK: If metadata is invalid, rely heavily on header similarity**
+        if last_page == 0 or candidate_page == 0:
+            self.logger.logger.info(f"⚠️ Invalid metadata detected - relying on header similarity")
+            similarity = self._calculate_header_similarity(last_headers, candidate_headers)
+            if similarity >= 0.9:  # Very high similarity threshold for invalid metadata
+                self.logger.logger.info(f"✅ High header similarity ({similarity:.3f}) with invalid metadata - treating as continuation")
+                return True
+        
+        # **STANDARD: Check page sequence for valid metadata**
+        page_gap = candidate_page - last_page
+        if page_gap < 0:
+            self.logger.logger.info(f"❌ Page regression: {last_page} → {candidate_page}")
+            return False
+        
+        # **IMPROVED: Check if candidate headers look like data (strong continuation indicator)**
         if self._headers_look_like_data(candidate_headers, last_headers):
             self.logger.logger.info(f"✅ Candidate headers look like data - likely continuation")
-            return True
+            # For data-like headers, be more restrictive with page gaps
+            if page_gap <= 1:
+                return True
+            else:
+                self.logger.logger.info(f"⚠️ Page gap too large for data-like headers: {page_gap} pages")
+                return False
         
-        # Check header similarity
+        # Check header similarity for non-identical headers
         similarity = self._calculate_header_similarity(last_headers, candidate_headers)
         
         if similarity >= 0.8:  # High similarity
             self.logger.logger.info(f"✅ High header similarity ({similarity:.3f}) - likely continuation")
-            return True
+            # For high similarity, allow moderate page gaps
+            if page_gap <= 2:
+                return True
+            else:
+                self.logger.logger.info(f"⚠️ Page gap too large for high similarity: {page_gap} pages")
+                return False
         elif similarity >= 0.6:  # Medium similarity
             # Additional checks for medium similarity
             if self._has_similar_structure(last_table, candidate_table):
                 self.logger.logger.info(f"✅ Medium similarity with similar structure - likely continuation")
-                return True
+                # For medium similarity, be more restrictive
+                if page_gap <= 1:
+                    return True
+                else:
+                    self.logger.logger.info(f"⚠️ Page gap too large for medium similarity: {page_gap} pages")
+                    return False
         
-        self.logger.logger.info(f"❌ Not a continuation (similarity: {similarity:.3f})")
+        self.logger.logger.info(f"❌ Not a continuation (similarity: {similarity:.3f}, page gap: {page_gap})")
         return False
+    
+    def _headers_are_identical(self, headers1: List[str], headers2: List[str]) -> bool:
+        """Check if two header lists are identical (case-insensitive, ignoring whitespace)."""
+        if not headers1 or not headers2:
+            return False
+        
+        if len(headers1) != len(headers2):
+            return False
+        
+        # Normalize headers for comparison
+        normalized1 = [str(h).lower().strip() for h in headers1 if str(h).strip()]
+        normalized2 = [str(h).lower().strip() for h in headers2 if str(h).strip()]
+        
+        # Check if all headers match exactly
+        return normalized1 == normalized2
     
     def _has_similar_structure(self, table1: Dict[str, Any], table2: Dict[str, Any]) -> bool:
         """Check if two tables have similar structure."""

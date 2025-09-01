@@ -68,6 +68,13 @@ class MultiPageTableHandler:
                     merged_table = await self._merge_table_group(group)
                     merged_tables.append(merged_table)
             
+            # **NEW: Final consolidation step - merge tables with similar headers**
+            if len(merged_tables) > 1:
+                self.logger.logger.info(f"🔗 Final consolidation: checking {len(merged_tables)} tables for similar headers")
+                consolidated_tables = await self._consolidate_similar_headers(merged_tables)
+                self.logger.logger.info(f"🔗 Final consolidation: {len(merged_tables)} → {len(consolidated_tables)} tables")
+                merged_tables = consolidated_tables
+            
             self.logger.logger.info(f"🔗 Linked {len(page_tables)} pages into {len(merged_tables)} tables")
             return merged_tables
             
@@ -150,10 +157,10 @@ class MultiPageTableHandler:
         
         # More flexible threshold for table merging
         # If similarity is high enough, merge even with some header differences
-        if similarity_score >= 0.7:
+        if similarity_score >= 0.5:  # **CHANGED: Lowered from 0.7 to 0.5**
             self.logger.logger.info(f"📋 High comprehensive similarity ({similarity_score:.3f}) - merging tables")
             return False
-        elif similarity_score >= 0.5:
+        elif similarity_score >= 0.3:  # **CHANGED: Lowered from 0.5 to 0.3**
             # Check additional structural criteria for moderate similarity
             if await self._has_similar_structure(table, current_headers):
                 self.logger.logger.info(f"📋 Moderate similarity with similar structure - merging tables")
@@ -1174,3 +1181,58 @@ class MultiPageTableHandler:
         ) / max(len(row), len(expected_headers))
         
         return similarity > 0.7
+
+    async def _consolidate_similar_headers(self, tables: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Final consolidation step: merge tables with similar headers."""
+        if len(tables) <= 1:
+            return tables
+        
+        try:
+            self.logger.logger.info(f"🔗 Consolidating {len(tables)} tables with similar headers")
+            
+            # Group tables by header similarity
+            header_groups = {}
+            
+            for table in tables:
+                headers = table.get('headers', [])
+                if not headers:
+                    continue
+                
+                # **IMPROVED: More robust header normalization**
+                # Handle cases like ['Adj.', 'Period'] vs ['Adj. Period']
+                normalized_headers = []
+                for header in headers:
+                    if header:
+                        # Split combined headers and normalize
+                        parts = header.replace('.', ' ').split()
+                        normalized_headers.extend([part.lower().strip() for part in parts if part.strip()])
+                
+                # Create a key for grouping
+                if normalized_headers:
+                    key = "|".join(sorted(normalized_headers))
+                    if key not in header_groups:
+                        header_groups[key] = []
+                    header_groups[key].append(table)
+            
+            # Log grouping results
+            self.logger.logger.info(f"🔗 Header grouping results:")
+            for key, group in header_groups.items():
+                self.logger.logger.info(f"   Group '{key[:50]}...': {len(group)} tables")
+            
+            # Merge groups with multiple tables (similar headers)
+            consolidated = []
+            for group in header_groups.values():
+                if len(group) > 1:
+                    self.logger.logger.info(f"🔗 Merging {len(group)} tables with similar headers")
+                    # Merge the tables in this group
+                    merged_table = await self._merge_table_group(group)
+                    consolidated.append(merged_table)
+                else:
+                    consolidated.extend(group)
+            
+            self.logger.logger.info(f"🔗 Consolidation completed: {len(tables)} → {len(consolidated)} tables")
+            return consolidated
+            
+        except Exception as e:
+            self.logger.logger.error(f"Header consolidation failed: {e}")
+            return tables
