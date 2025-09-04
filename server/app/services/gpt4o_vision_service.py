@@ -2,13 +2,11 @@ import os
 import json
 import base64
 import logging
-import re
+import fitz  # PyMuPDF
 from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime
 from PIL import Image, ImageEnhance, ImageFilter
 import io
-import fitz  # PyMuPDF
-import numpy as np
 from openai import OpenAI
 from .data_formatting_service import DataFormattingService
 from .company_name_service import CompanyNameDetectionService
@@ -17,8 +15,8 @@ logger = logging.getLogger(__name__)
 
 class GPT4oVisionService:
     """
-    Service for using GPT-5 Vision to improve table extraction results.
-    Provides high-quality table structure analysis using visual input.
+    Intelligent GPT-5 Vision service for commission statement extraction.
+    Automatically detects digital vs scanned PDFs and optimizes processing accordingly.
     """
     
     def __init__(self):
@@ -44,431 +42,589 @@ class GPT4oVisionService:
         """Check if the service is available (API key configured)."""
         return self.client is not None
     
-    def calculate_optimal_dpi(self, num_pages: int, document_type: str = "commission_statement") -> Tuple[int, str]:
+    def is_digital_pdf(self, pdf_path: str) -> bool:
         """
-        Calculate optimal DPI based on document characteristics to prevent image size issues.
-        
-        Args:
-            num_pages: Number of pages in the document
-            document_type: Type of document for optimization
-            
-        Returns:
-            Tuple of (dpi, quality_label)
-        """
-        # Adaptive DPI selection based on number of pages to prevent image size issues
-        # For larger documents, use lower DPI to stay within GPT-5 Vision limits
-        if num_pages <= 2:
-            dpi = 600  # Reduced from 800 for better performance
-            quality_label = "high quality"
-        elif num_pages <= 3:
-            dpi = 500  # Reduced from 600 for better performance
-            quality_label = "balanced quality"
-        elif num_pages <= 4:
-            dpi = 400  # Reduced from 500 for better performance
-            quality_label = "standard quality"
-        elif num_pages <= 6:
-            dpi = 350  # Reduced from 400 for better performance
-            quality_label = "lower quality"
-        else:
-            dpi = 300  # Minimal quality for very large documents
-            quality_label = "minimal quality"
-        
-        logger.info(f"Calculated optimal DPI: {dpi} ({quality_label}) for {num_pages} page document")
-        return dpi, quality_label
-    
-    def enhance_page_image(self, pdf_path: str, page_num: int, dpi: int = 800) -> Optional[str]:
-        """
-        Extract and enhance a single page from PDF for vision analysis with ULTRA HD quality.
+        Intelligently detect if PDF is digital (text-based) or scanned (image-based).
         
         Args:
             pdf_path: Path to the PDF file
-            page_num: Page number (0-indexed)
-            dpi: Resolution for image extraction (800 DPI for maximum quality)
             
         Returns:
-            Base64 encoded ultra HD enhanced image or None if failed
+            True if digital PDF, False if scanned
         """
         try:
             doc = fitz.open(pdf_path)
-            if page_num >= len(doc):
-                logger.error(f"Page {page_num} does not exist in PDF")
-                return None
+            text_content = ""
             
+            # Sample first 3 pages for text content analysis
+            sample_pages = min(3, len(doc))
+            for page_num in range(sample_pages):
+                page = doc.load_page(page_num)
+                text_content += page.get_text()
+            
+            doc.close()
+            
+            # Analyze text characteristics
+            text_length = len(text_content.strip())
+            has_selectable_text = text_length > 100  # Significant text content
+            has_structured_data = any(keyword in text_content.upper() for keyword in 
+                                   ["COMMISSION", "PREMIUM", "COVERAGE", "POLICY", "CUSTOMER"])
+            
+            is_digital = has_selectable_text and has_structured_data
+            
+            logger.info(f"PDF Analysis: {text_length} chars, structured: {has_structured_data}, digital: {is_digital}")
+            return is_digital
+            
+        except Exception as e:
+            logger.error(f"Error analyzing PDF type: {e}")
+            return False  # Default to scanned if analysis fails
+    
+    def extract_from_digital_pdf(self, pdf_path: str) -> Dict[str, Any]:
+        """
+        Extract data directly from digital PDF using text extraction and GPT-5.
+        More efficient than image conversion for text-based PDFs.
+        """
+        if not self.is_available():
+            return {"success": False, "error": "GPT-5 Vision service not available"}
+        
+        try:
+            # Extract text from PDF using PyMuPDF
+            doc = fitz.open(pdf_path)
+            text_content = ""
+            
+            # Extract text from all pages
+            for page_num in range(len(doc)):
+                page = doc.load_page(page_num)
+                text_content += page.get_text()
+            
+            doc.close()
+            
+            if not text_content.strip():
+                logger.warning("Digital PDF contains no extractable text")
+                return {"success": False, "error": "PDF contains no extractable text"}
+            
+            # Create system prompt for digital PDF extraction
+            system_prompt = self._create_digital_pdf_system_prompt()
+            
+            # Prepare messages with text content
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Extract ONLY the data that is VISIBLY PRESENT in this digital PDF. DO NOT invent, infer, or guess any values. DO NOT create headers that don't exist. DO NOT fill empty cells. Extract the ACTUAL table structure as it appears in the document. If you cannot see something clearly, do not extract it.\n\nText content:\n\n{text_content[:50000]}"}  # Limit text length
+            ]
+            
+            # Call GPT-5 with text content
+            response = self.client.chat.completions.create(
+                model="gpt-5",
+                messages=messages,
+                max_completion_tokens=15000
+            )
+            
+            # Parse response
+            content = response.choices[0].message.content
+            return self._parse_extraction_response(content, "digital_pdf")
+            
+        except Exception as e:
+            logger.error(f"Error extracting from digital PDF: {e}")
+            return {"success": False, "error": f"Digital PDF extraction failed: {str(e)}"}
+    
+    def extract_from_scanned_pdf(self, pdf_path: str, max_pages: int = 30) -> Dict[str, Any]:
+        """
+        Extract data from scanned PDF by converting to optimized images.
+        Handles large files efficiently with smart page sampling.
+        """
+        if not self.is_available():
+            return {"success": False, "error": "GPT-5 Vision service not available"}
+        
+        try:
+            doc = fitz.open(pdf_path)
+            total_pages = len(doc)
+            
+            # Smart page selection for large documents
+            if total_pages > max_pages:
+                logger.info(f"Large document detected ({total_pages} pages). Using intelligent sampling.")
+                selected_pages = self._select_representative_pages(total_pages, max_pages)
+            else:
+                selected_pages = list(range(total_pages))
+            
+            # Convert selected pages to optimized images
+            enhanced_images = []
+            for page_num in selected_pages:
+                image = self._convert_page_to_optimized_image(doc, page_num)
+                if image:
+                    enhanced_images.append(image)
+            
+            doc.close()
+            
+            if not enhanced_images:
+                return {"success": False, "error": "Failed to convert any pages to images"}
+            
+            # Extract tables using vision analysis
+            return self._extract_tables_with_vision(enhanced_images, selected_pages)
+            
+        except Exception as e:
+            logger.error(f"Error extracting from scanned PDF: {e}")
+            return {"success": False, "error": f"Scanned PDF extraction failed: {str(e)}"}
+    
+    def _select_representative_pages(self, total_pages: int, max_pages: int) -> List[int]:
+        """
+        Intelligently select representative pages from large documents.
+        Prioritizes first few pages, last few pages, and evenly distributed middle pages.
+        """
+        if total_pages <= max_pages:
+            return list(range(total_pages))
+        
+        # Always include first and last few pages
+        first_pages = list(range(min(3, total_pages // 4)))
+        last_pages = list(range(max(0, total_pages - 3), total_pages))
+        
+        # Calculate remaining pages to sample
+        remaining_slots = max_pages - len(first_pages) - len(last_pages)
+        
+        # Sample middle pages evenly
+        if remaining_slots > 0:
+            middle_start = len(first_pages)
+            middle_end = total_pages - len(last_pages)
+            step = max(1, (middle_end - middle_start) // remaining_slots)
+            middle_pages = list(range(middle_start, middle_end, step))[:remaining_slots]
+        else:
+            middle_pages = []
+        
+        selected = first_pages + middle_pages + last_pages
+        selected.sort()
+        
+        logger.info(f"Selected {len(selected)} representative pages from {total_pages} total pages")
+        return selected
+    
+    def _convert_page_to_optimized_image(self, doc: fitz.Document, page_num: int) -> Optional[str]:
+        """
+        Convert PDF page to optimized image with adaptive quality settings.
+        Balances image quality with file size for optimal GPT-5 Vision processing.
+        """
+        try:
             page = doc.load_page(page_num)
             
-            # Create ultra high-resolution matrix for supreme quality
-            # Increased to 800 DPI for maximum quality processing
-            matrix = fitz.Matrix(dpi/72, dpi/72)  # 72 is the default DPI
+            # Adaptive DPI based on page content complexity
+            dpi = self._calculate_adaptive_dpi(page)
             
-            # Get pixmap with ultra high resolution and anti-aliasing
+            # Create high-quality matrix
+            matrix = fitz.Matrix(dpi/72, dpi/72)
             pix = page.get_pixmap(matrix=matrix, alpha=False)
             
-            # Convert to PIL Image for advanced enhancement
+            # Convert to PIL Image for enhancement
             img_data = pix.tobytes("png")
             img = Image.open(io.BytesIO(img_data))
             
-            # Apply image processing based on DPI level
-            if dpi >= 500:
-                # Use moderate enhancement for high DPI (reduced from 600 for performance)
-                logger.info(f"Using moderate image enhancement for {dpi} DPI")
-                img = self._enhance_commission_statement_image_moderate(img)
-            else:
-                # Use conservative enhancement for lower DPI to avoid distortion
-                logger.info(f"Using conservative image enhancement for {dpi} DPI")
-                img = self._enhance_commission_statement_image_conservative(img)
+            # Apply intelligent enhancement
+            enhanced_img = self._enhance_image_intelligently(img, dpi)
             
-            # Convert to base64 with maximum quality - use PNG for lossless compression
+            # Convert to base64 with size optimization
             buffer = io.BytesIO()
-            img.save(buffer, format='PNG', optimize=False)
+            enhanced_img.save(buffer, format='PNG', optimize=True)
             img_str = base64.b64encode(buffer.getvalue()).decode()
             
-            # Log image details for debugging
+            # Log image details
             img_size = len(img_str)
-            logger.info(f"Successfully created ultra HD image for page {page_num + 1} at {dpi} DPI")
-            logger.info(f"Image size: {img_size} characters, dimensions: {img.size}")
+            logger.info(f"Page {page_num + 1}: {dpi} DPI, {img_size} chars, {enhanced_img.size}")
             
-            # Warn if image is getting too large (approaching GPT-5 Vision limits)
-            if img_size > 4000000:  # 4MB base64 string
-                logger.warning(f"Large image detected: {img_size} characters. Consider reducing DPI for better reliability.")
-            elif img_size > 3000000:  # 3MB base64 string
-                logger.info(f"Moderate image size: {img_size} characters. Should be within GPT-5 Vision limits.")
-            elif img_size > 2000000:  # 2MB base64 string
-                logger.info(f"Good image size: {img_size} characters. Well within GPT-5 Vision limits.")
-            else:
-                logger.info(f"Small image size: {img_size} characters. Very safe for GPT-5 Vision.")
-            
-            doc.close()
             return img_str
             
         except Exception as e:
-            logger.error(f"Error enhancing page {page_num}: {e}")
+            logger.error(f"Error converting page {page_num}: {e}")
             return None
     
-    def _enhance_commission_statement_image_ultra_hd(self, img: Image.Image) -> Image.Image:
+    def _calculate_adaptive_dpi(self, page: fitz.Page) -> int:
         """
-        Ultra HD image processing for commission statements with advanced enhancement.
-        Focuses on maximum readability and detail preservation for table extraction.
+        Calculate optimal DPI based on page content and complexity.
+        """
+        # Analyze page content
+        text_length = len(page.get_text())
+        image_count = len(page.get_images())
+        
+        # Base DPI on content complexity
+        if text_length > 1000 or image_count > 5:
+            return 400  # High complexity
+        elif text_length > 500 or image_count > 2:
+            return 500  # Medium complexity
+        else:
+            return 600  # Low complexity
+    
+    def _enhance_image_intelligently(self, img: Image.Image, dpi: int) -> Image.Image:
+        """
+        Apply intelligent image enhancement based on DPI and content type.
         """
         try:
-            # Convert to RGB if needed
             if img.mode != 'RGB':
                 img = img.convert('RGB')
             
-            # 1. Advanced contrast enhancement for better text visibility
-            enhancer = ImageEnhance.Contrast(img)
-            img = enhancer.enhance(1.5)  # Increased from 1.3 to 1.5
-            
-            # 2. Enhanced sharpening for crisp text and table borders
-            enhancer = ImageEnhance.Sharpness(img)
-            img = enhancer.enhance(1.4)  # Increased from 1.2 to 1.4
-            
-            # 3. Optimal brightness adjustment for better visibility
-            enhancer = ImageEnhance.Brightness(img)
-            img = enhancer.enhance(1.15)  # Increased from 1.1 to 1.15
-            
-            # 4. Color enhancement for better distinction between elements
-            enhancer = ImageEnhance.Color(img)
-            img = enhancer.enhance(1.1)  # Slight color enhancement
-            
-            # 5. Apply unsharp mask for additional detail enhancement
-            img = img.filter(ImageFilter.UnsharpMask(radius=1, percent=150, threshold=3))
-            
-            # 6. Apply edge enhancement for table borders
-            img = img.filter(ImageFilter.EDGE_ENHANCE_MORE)
+            # Adaptive enhancement based on DPI
+            if dpi >= 500:
+                # High DPI: moderate enhancement
+                enhancer = ImageEnhance.Contrast(img)
+                img = enhancer.enhance(1.3)
+                enhancer = ImageEnhance.Sharpness(img)
+                img = enhancer.enhance(1.2)
+            else:
+                # Lower DPI: conservative enhancement
+                enhancer = ImageEnhance.Contrast(img)
+                img = enhancer.enhance(1.2)
+                enhancer = ImageEnhance.Sharpness(img)
+                img = enhancer.enhance(1.1)
             
             return img
             
         except Exception as e:
-            logger.warning(f"Ultra HD image processing failed: {e}")
+            logger.warning(f"Image enhancement failed: {e}")
             return img
     
-    def _enhance_commission_statement_image_moderate(self, img: Image.Image) -> Image.Image:
+    def _extract_tables_with_vision(self, enhanced_images: List[str], page_numbers: List[int]) -> Dict[str, Any]:
         """
-        Moderate image processing for commission statements.
-        Balanced enhancement for good readability without excessive processing.
-        """
-        try:
-            # Convert to RGB if needed
-            if img.mode != 'RGB':
-                img = img.convert('RGB')
-            
-            # 1. Moderate contrast enhancement for better text visibility
-            enhancer = ImageEnhance.Contrast(img)
-            img = enhancer.enhance(1.3)  # Moderate contrast enhancement
-            
-            # 2. Moderate sharpening for text clarity
-            enhancer = ImageEnhance.Sharpness(img)
-            img = enhancer.enhance(1.2)  # Moderate sharpening
-            
-            # 3. Light brightness adjustment
-            enhancer = ImageEnhance.Brightness(img)
-            img = enhancer.enhance(1.1)  # Light brightness adjustment
-            
-            # 4. No color enhancement to avoid distortion
-            # 5. No unsharp mask to avoid artifacts
-            # 6. No edge enhancement to avoid noise
-            
-            return img
-            
-        except Exception as e:
-            logger.warning(f"Moderate image processing failed: {e}")
-            return img
-    
-    def _enhance_commission_statement_image_conservative(self, img: Image.Image) -> Image.Image:
-        """
-        Conservative image processing for commission statements.
-        Uses minimal enhancement to avoid distortion while maintaining readability.
+        Extract tables using GPT-5 Vision with optimized prompts.
         """
         try:
-            # Convert to RGB if needed
-            if img.mode != 'RGB':
-                img = img.convert('RGB')
+            # Create intelligent system prompt
+            system_prompt = self._create_vision_system_prompt()
+            user_prompt = self._create_vision_user_prompt(len(enhanced_images))
             
-            # 1. Light contrast enhancement for better text visibility
-            enhancer = ImageEnhance.Contrast(img)
-            img = enhancer.enhance(1.2)  # Conservative contrast enhancement
-            
-            # 2. Light sharpening for text clarity
-            enhancer = ImageEnhance.Sharpness(img)
-            img = enhancer.enhance(1.1)  # Conservative sharpening
-            
-            # 3. Minimal brightness adjustment
-            enhancer = ImageEnhance.Brightness(img)
-            img = enhancer.enhance(1.05)  # Very light brightness adjustment
-            
-            # 4. No color enhancement to avoid distortion
-            # 5. No unsharp mask to avoid artifacts
-            # 6. No edge enhancement to avoid noise
-            
-            return img
-            
-        except Exception as e:
-            logger.warning(f"Conservative image processing failed: {e}")
-            return img
-
-    # ============================================================================
-    # IMPROVEMENT FUNCTIONS (used by improve_extraction.py)
-    # ============================================================================
-
-    def analyze_table_with_vision(self, 
-                                 enhanced_images: List[str], 
-                                 current_extraction: List[Dict[str, Any]],
-                                 max_pages: int = 5) -> Dict[str, Any]:
-        """
-        Use GPT-5 Vision to analyze table structure and improve extraction.
-        
-        Args:
-            enhanced_images: List of base64 encoded enhanced page images
-            current_extraction: Current table extraction results
-            max_pages: Maximum number of pages to analyze
-            
-        Returns:
-            Dictionary with improved table structure and analysis
-        """
-        if not self.is_available():
-            return {"error": "GPT-5 Vision service not available"}
-        
-        try:
-            # Limit to max_pages
-            images_to_analyze = enhanced_images[:max_pages]
-            
-            # Prepare the prompt for GPT-5
-            system_prompt = self._create_system_prompt()
-            user_prompt_parts = self._create_user_prompt(current_extraction)
-            
-            # Prepare messages for the API call
+            # Prepare messages
             messages = [
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt_parts}
+                {"role": "user", "content": user_prompt}
             ]
             
-            # Add images to the user message content
-            for i, image_base64 in enumerate(images_to_analyze):
+            # Add images
+            for image_base64 in enhanced_images:
                 messages[1]["content"].append({
                     "type": "image_url",
-                    "image_url": {
-                        "url": f"data:image/png;base64,{image_base64}"
-                    }
+                    "image_url": {"url": f"data:image/png;base64,{image_base64}"}
                 })
             
             # Call GPT-5 Vision API
-            logger.info(f"Calling GPT-5 Vision API for {len(images_to_analyze)} pages")
+            logger.info(f"Calling GPT-5 Vision API for {len(enhanced_images)} pages")
             
             response = self.client.chat.completions.create(
                 model="gpt-5",
                 messages=messages,
-                max_completion_tokens=12000,  # Increased for comprehensive table extraction
-                temperature=0.1  # Lower temperature for more consistent extraction
+                max_completion_tokens=15000
             )
             
-            # Parse the response
-            if not response.choices or len(response.choices) == 0:
-                logger.error("No choices in response")
-                return {
-                    "success": False,
-                    "error": "No response choices from GPT-5"
-                }
-            
             content = response.choices[0].message.content
-            logger.info("GPT-5 Vision API call completed successfully")
+            return self._parse_extraction_response(content, "vision_analysis")
             
-            # Try to parse JSON from the response
-            try:
-                # Clean the response content - remove markdown code blocks if present
-                cleaned_content = content.strip()
-                if cleaned_content.startswith('```json'):
-                    cleaned_content = cleaned_content[7:]  # Remove ```json
-                if cleaned_content.startswith('```'):
-                    cleaned_content = cleaned_content[3:]  # Remove ```
-                if cleaned_content.endswith('```'):
-                    cleaned_content = cleaned_content[:-3]  # Remove ```
-                cleaned_content = cleaned_content.strip()
-                
-                result = json.loads(cleaned_content)
-                logger.info(f"Full GPT-5 analysis result: {json.dumps(result, indent=2)}")
-                return {
-                    "success": True,
-                    "analysis": result,
-                    "raw_response": content,
-                    "timestamp": datetime.now().isoformat()
-                }
-            except json.JSONDecodeError as e:
-                logger.error(f"Failed to parse JSON response: {e}")
-                logger.error(f"Response content: {content}")
-                return {
-                    "success": False,
-                    "error": "Failed to parse GPT-5 response",
-                    "raw_response": content
-                }
-                
         except Exception as e:
-            logger.error(f"Error in GPT-5 Vision analysis: {e}")
-            return {
-                "success": False,
-                "error": f"GPT-5 Vision analysis failed: {str(e)}"
-            }
+            logger.error(f"Error in vision analysis: {e}")
+            return {"success": False, "error": f"Vision analysis failed: {str(e)}"}
     
-    def _create_system_prompt(self) -> str:
-        """Create the system prompt for GPT-5 Vision analysis."""
-        return """You are a vision document analyst specializing in table structure analysis. Your task is to analyze PDF page images and extract precise table information.
+    def _create_digital_pdf_system_prompt(self) -> str:
+        """Strict system prompt for digital PDF extraction - NO INFERENCE ALLOWED."""
+        return """You are a commission statement data extractor. Your ONLY job is to extract EXACTLY what you see in the document - NO INFERENCE, NO GUESSING, NO INVENTING DATA.
 
-CRITICAL REQUIREMENTS:
-1. Transcribe table headers EXACTLY as seen - do not normalize, interpret, or guess
-2. For multi-line, multi-row, or complex headers, output the complete header block with all text and alignment
-3. IMPORTANT: When headers are separated by pipes (|), split them into individual column headers
-4. For multi-line headers, combine corresponding columns intelligently (e.g., "ACCOUNT | POLICY NAME" + "NUMBER | EXPLANATION" = "ACCOUNT NUMBER", "POLICY NAME OR EXPLANATION")
-5. CRITICAL DATA ASSIGNMENT: When you see combined data in a single cell, intelligently parse and assign values to the correct columns based on:
-   - Header names and their semantic meaning
-   - Data patterns (dates, company names, product codes, amounts, percentages)
-   - Financial statement context
-   - NEVER invent or guess data - only parse what's actually visible
-6. List 1-2 example cell values per column exactly as visible (do not invent)
-7. Infer column data types from visible values
-8. Note any merged cells, split columns, or structural ambiguity
-9. Never create headers or data that are not exactly visible in the images
-10. SMART HEADER PROCESSING: Handle patterns intelligently:
-    - "RATE | (%)" should become "RATE (%)" (not separate columns)
-    - "ACCOUNT | POLICY NAME" + "NUMBER | EXPLANATION" should become "ACCOUNT NUMBER", "POLICY NAME OR EXPLANATION"
-    - Percentage symbols should be attached to their related headers, not standalone
+CRITICAL RULES - VIOLATION MEANS FAILURE:
+1. **ONLY extract data that is VISIBLY PRESENT** in the document
+2. **NEVER invent, infer, or guess any values**
+3. **NEVER create headers that don't exist** in the document
+4. **NEVER fill empty cells** with assumed values
+5. **If a cell is empty, leave it empty** - do not populate it
+6. **Extract the ACTUAL table structure** as it appears, not a template
+7. **Copy headers EXACTLY as written** - do not normalize or interpret
+8. **Copy values EXACTLY as written** - do not reformat or calculate
 
-This analysis is strictly GPT-5 response driven - all processing must be based on what is visible in the images with no hardcoded patterns or assumptions.
+EXTRACTION PROCESS:
+1. Look at the document and identify the ACTUAL table structure
+2. Extract ONLY the headers that are visibly present
+3. Extract ONLY the data that is visibly present
+4. Leave empty cells completely empty
+5. Do not add any columns or rows that don't exist
 
 OUTPUT FORMAT:
-Return a structured JSON with this exact format:
+Return ONLY valid JSON with the ACTUAL structure found:
 {
-    "pages": [
-        {
-            "page_number": 1,
-            "headers": ["individual column header 1", "individual column header 2", ...],
-            "header_alignment": "multi-line" or "single row" or "blank",
-            "columns": [
-                {
-                    "header_text": "exact header as seen",
-                    "sample_values": ["exact value 1", "exact value 2"],
-                    "data_type": "number" or "date" or "text" or "currency" or "percentage",
-                    "value_patterns": ["regex pattern 1", "regex pattern 2"] (optional)
-                }
-            ],
-            "structure_notes": "Describe any merged cells, ambiguity, or structural issues",
-            "header_coordinates": [[x0, y0, x1, y1], ...] (optional)
-        }
-    ],
-    "overall_notes": "Describe header repetition, column changes between pages, or structural patterns"
+  "tables": [
+    {
+      "headers": ["ACTUAL_HEADER_1", "ACTUAL_HEADER_2", "ACTUAL_HEADER_3"],
+      "rows": [
+        ["ACTUAL_VALUE_1", "ACTUAL_VALUE_2", ""],  // Empty cell stays empty
+        ["ACTUAL_VALUE_4", "", "ACTUAL_VALUE_6"]   // Empty cell stays empty
+      ]
+    }
+  ]
 }
 
-Remember: Precision over interpretation. Show exactly what you see. This is a strictly GPT-5 response driven analysis."""
+REMEMBER: If you cannot see it clearly in the document, DO NOT EXTRACT IT. Better to have incomplete data than fake data."""
     
-    def _create_user_prompt(self, current_extraction: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Create the user prompt with current extraction context."""
-        context = f"""
-Current extraction has {len(current_extraction)} tables with the following structure:
-"""
+    def _create_vision_system_prompt(self) -> str:
+        """Strict system prompt for vision analysis - NO INFERENCE ALLOWED."""
+        return """You are a commission statement data extractor. Your ONLY job is to extract EXACTLY what you see in the images - NO INFERENCE, NO GUESSING, NO INVENTING DATA.
+
+CRITICAL RULES - VIOLATION MEANS FAILURE:
+1. **ONLY extract data that is VISIBLY PRESENT** in the images
+2. **NEVER invent, infer, or guess any values**
+3. **NEVER create headers that don't exist** in the document
+4. **NEVER fill empty cells** with assumed values
+5. **If a cell is empty, leave it empty** - do not populate it
+6. **Extract the ACTUAL table structure** as it appears, not a template
+7. **Copy headers EXACTLY as written** - do not normalize or interpret
+8. **Copy values EXACTLY as written** - do not reformat or calculate
+9. **Do NOT create a "Client Names" column** unless it actually exists in the document
+
+EXTRACTION PROCESS:
+1. Look at the images and identify the ACTUAL table structure
+2. Extract ONLY the headers that are visibly present
+3. Extract ONLY the data that is visibly present
+4. Leave empty cells completely empty
+5. Do not add any columns or rows that don't exist
+6. Do not apply patterns from other documents
+
+OUTPUT FORMAT:
+Return ONLY valid JSON with the ACTUAL structure found:
+{
+  "tables": [
+    {
+      "headers": ["ACTUAL_HEADER_1", "ACTUAL_HEADER_2", "ACTUAL_HEADER_3"],
+      "rows": [
+        ["ACTUAL_VALUE_1", "ACTUAL_VALUE_2", ""],  // Empty cell stays empty
+        ["ACTUAL_VALUE_4", "", "ACTUAL_VALUE_6"]   // Empty cell stays empty
+      ]
+    }
+  ]
+}
+
+REMEMBER: If you cannot see it clearly in the images, DO NOT EXTRACT IT. Better to have incomplete data than fake data."""
+    
+    def _create_vision_user_prompt(self, num_pages: int) -> List[Dict[str, Any]]:
+        """Create strict user prompt for vision analysis - NO INFERENCE ALLOWED."""
+        return [
+            {"type": "text", "text": f"Extract ONLY the data that is VISIBLY PRESENT in these {num_pages} page images. DO NOT invent, infer, or guess any values. DO NOT create headers that don't exist. DO NOT fill empty cells. Extract the ACTUAL table structure as it appears in the document. If you cannot see something clearly, do not extract it. Better to have incomplete data than fake data."}
+        ]
+    
+    def _parse_extraction_response(self, content: str, method: str) -> Dict[str, Any]:
+        """
+        Parse and validate extraction response from GPT with strict validation.
+        """
+        try:
+            # Clean response content
+            cleaned_content = content.strip()
+            if cleaned_content.startswith('```json'):
+                cleaned_content = cleaned_content[7:]
+            if cleaned_content.startswith('```'):
+                cleaned_content = cleaned_content[3:]
+            if cleaned_content.endswith('```'):
+                cleaned_content = cleaned_content[:-3]
+            
+            cleaned_content = cleaned_content.strip()
+            
+            # Parse JSON
+            result = json.loads(cleaned_content)
+            
+            # Validate structure
+            if "tables" not in result or not result["tables"]:
+                return {"success": False, "error": "No tables found in response"}
+            
+            # Process tables with strict validation
+            processed_tables = []
+            for table in result["tables"]:
+                if "headers" in table and "rows" in table:
+                    # Validate that headers are not template headers
+                    headers = table.get("headers", [])
+                    if self._contains_template_headers(headers):
+                        logger.warning(f"Template headers detected in {method} extraction - possible inference")
+                        return {"success": False, "error": "Template headers detected - extraction may contain inferred data"}
+                    
+                    table["extractor"] = f"gpt4o_vision_{method}"
+                    table["processing_notes"] = f"Extracted using {method} method with strict validation"
+                    processed_tables.append(table)
+            
+            return {
+                "success": True,
+                "tables": processed_tables,
+                "extraction_metadata": {
+                    "method": method,
+                    "timestamp": datetime.now().isoformat(),
+                    "confidence": 0.90,  # Lower confidence due to strict validation
+                    "validation": "strict_no_inference"
+                }
+            }
+            
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse response: {e}")
+            return {"success": False, "error": "Failed to parse GPT response"}
+    
+    def _contains_template_headers(self, headers: List[str]) -> bool:
+        """
+        Check if headers contain template/inferred values that shouldn't exist.
+        """
+        template_indicators = [
+            "Bill Eff Date", "Billed Premium", "Paid Premium", "Adj Typ", "Iss St", 
+            "Split %", "Comp Typ", "Bus Type", "Billed Fee Amount", "Customer Paid Fee"
+        ]
         
-        for i, table in enumerate(current_extraction):
-            headers = table.get('header', [])
-            context += f"\nTable {i+1}: Headers: {headers[:5]}{'...' if len(headers) > 5 else ''}"
+        # Check if any template headers are present
+        for template_header in template_indicators:
+            if any(template_header.lower() in header.lower() for header in headers):
+                logger.warning(f"Template header detected: {template_header}")
+                return True
         
-        context += """
-
-Please analyze the provided page images and provide the structured JSON response as specified in the system prompt. Focus on:
-1. Exact header transcription with smart pattern recognition
-2. Intelligent data parsing and assignment to correct columns
-3. Sample data values for each column showing how combined data should be parsed
-4. Column data types (text, number, date, currency, percentage)
-5. Structural issues or ambiguity
-6. Header repetition patterns across pages
-
-CRITICAL DATA PARSING EXAMPLES:
-When you see combined data, parse it intelligently based on the column headers and data patterns visible in the image. Provide sample values that demonstrate how the combined data should be parsed and assigned to the correct columns.
-
-SMART HEADER PROCESSING:
-- "ACCOUNT | POLICY NAME | NUMBER | EXPLANATION" should be processed as:
-  * "ACCOUNT NUMBER" (combined)
-  * "POLICY NAME OR EXPLANATION" (combined)
-- "RATE | (%)" should become "RATE (%)" (not separate columns)
-- Percentage symbols should be attached to their related headers
-
-CRITICAL: For each column in the headers, provide sample values that show how the combined data should be parsed and assigned to the correct columns. The sample values should demonstrate the intelligent parsing logic.
-
-This analysis is strictly GPT-5 response driven - all processing must be based on what is visible in the images with no hardcoded patterns or assumptions.
-
-Be precise and only report what you can clearly see in the images."""
+        return False
+    
+    def extract_commission_data(self, pdf_path: str, max_pages: int = 30) -> Dict[str, Any]:
+        """
+        Main extraction method that intelligently chooses between digital and scanned PDF processing.
         
-        return [{"type": "text", "text": context}]
+        Args:
+            pdf_path: Path to the PDF file
+            max_pages: Maximum number of pages to process for large documents
+            
+        Returns:
+            Dictionary with extracted tables and metadata
+        """
+        if not self.is_available():
+            return {"success": False, "error": "GPT-4 Vision service not available"}
+        
+        try:
+            logger.info(f"Starting commission data extraction from: {pdf_path}")
+            
+            # Detect PDF type
+            is_digital = self.is_digital_pdf(pdf_path)
+            
+            if is_digital:
+                logger.info("Digital PDF detected - using direct file extraction")
+                result = self.extract_from_digital_pdf(pdf_path)
+            else:
+                logger.info("Scanned PDF detected - using image-based extraction")
+                result = self.extract_from_scanned_pdf(pdf_path, max_pages)
+            
+            # Apply company detection if extraction was successful
+            if result.get("success") and result.get("tables"):
+                enhanced_tables = []
+                for table in result["tables"]:
+                    enhanced_table = self.company_detector.detect_company_names_in_extracted_data(
+                        table, "gpt4o_vision_enhanced"
+                    )
+                    enhanced_tables.append(enhanced_table)
+                
+                result["tables"] = enhanced_tables
+                result["company_detection_applied"] = True
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error in commission data extraction: {e}")
+            return {"success": False, "error": f"Extraction failed: {str(e)}"}
+    
+    def merge_similar_tables(self, tables: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Merge tables with similar structure for better data organization.
+        """
+        if not tables or len(tables) <= 1:
+            return tables
+        
+        try:
+            logger.info(f"Starting table merging for {len(tables)} tables")
+            
+            # Group tables by structure similarity
+            table_groups = []
+            processed = set()
+            
+            for i, table in enumerate(tables):
+                if i in processed:
+                    continue
+                
+                current_group = [table]
+                processed.add(i)
+                
+                # Find similar tables
+                for j, other_table in enumerate(tables):
+                    if j in processed:
+                        continue
+                    
+                    if self._are_tables_mergeable(table, other_table):
+                        current_group.append(other_table)
+                        processed.add(j)
+                
+                table_groups.append(current_group)
+            
+            # Merge groups
+            merged_tables = []
+            for group in table_groups:
+                if len(group) == 1:
+                    merged_tables.append(group[0])
+                else:
+                    merged_table = self._merge_table_group(group)
+                    merged_tables.append(merged_table)
+            
+            logger.info(f"Successfully merged into {len(merged_tables)} tables")
+            return merged_tables
+            
+        except Exception as e:
+            logger.error(f"Error merging tables: {e}")
+            return tables
+    
+    def _are_tables_mergeable(self, table1: Dict[str, Any], table2: Dict[str, Any]) -> bool:
+        """Check if two tables can be merged based on structure similarity."""
+        headers1 = table1.get("headers", [])
+        headers2 = table2.get("headers", [])
+        
+        # Check for identical headers
+        if headers1 == headers2:
+            return True
+        
+        # Check for core header similarity
+        if len(headers1) == len(headers2):
+            core_headers1 = headers1[:min(10, len(headers1))]
+            core_headers2 = headers2[:min(10, len(headers2))]
+            matching = sum(1 for h1, h2 in zip(core_headers1, core_headers2) if h1 == h2)
+            return matching >= len(core_headers1) * 0.7
+        
+        return False
+    
+    def _merge_table_group(self, group: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Merge a group of similar tables into one."""
+        base_table = group[0]
+        merged_rows = base_table.get("rows", [])
+        
+        # Add rows from other tables
+        for table in group[1:]:
+            merged_rows.extend(table.get("rows", []))
+        
+        return {
+            "name": f"Merged: {' + '.join(t.get('name', 'Table') for t in group)}",
+            "headers": base_table.get("headers", []),
+            "rows": merged_rows,
+            "extractor": "gpt4o_vision_merged",
+            "metadata": {
+                "merged_from": len(group),
+                "timestamp": datetime.now().isoformat()
+            }
+        }
     
     def process_improvement_result(self, 
                                  vision_analysis: Dict[str, Any], 
                                  current_tables: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
-        Process the GPT-5 Vision analysis to improve current table extraction.
-        
-        This function is strictly GPT-5 response driven - all processing
-        is based on GPT's analysis with no hardcoded patterns or fallback logic.
+        Process the GPT analysis to improve current table extraction.
         
         Args:
-            vision_analysis: Result from GPT-5 Vision analysis
+            vision_analysis: Result from GPT analysis
             current_tables: Current table extraction results
             
         Returns:
-            Improved table structure and metadata with ≥90% format accuracy
+            Improved table structure and metadata
         """
         if not vision_analysis.get("success"):
             return {
                 "success": False,
-                "error": vision_analysis.get("error", "Vision analysis failed")
+                "error": vision_analysis.get("error", "Analysis failed")
             }
         
         try:
             analysis = vision_analysis.get("analysis", {})
-            pages = analysis.get("pages", [])
+            tables = analysis.get("tables", [])
             
-            # Use the upgraded data formatting service to ensure ≥90% format accuracy
-            # with LLM-driven pattern enforcement
+            # Use the data formatting service to ensure format accuracy
             formatted_tables = self.data_formatting_service.format_data_with_llm_analysis(
                 current_tables, vision_analysis
             )
             
-            # Process each page's analysis for additional metadata
+            # Process each table for additional metadata
             diagnostic_info = {
                 "vision_analysis": analysis,
                 "improvements": [],
@@ -477,28 +633,18 @@ Be precise and only report what you can clearly see in the images."""
                 "processing_method": "LLM-driven pattern enforcement"
             }
             
-            for page in pages:
-                page_num = page.get("page_number", 1)
-                headers = page.get("headers", [])
-                columns = page.get("columns", [])
-                structure_notes = page.get("structure_notes", "")
+            for table in tables:
+                headers = table.get("headers", [])
+                rows = table.get("rows", [])
                 
                 # Add diagnostic information
                 diagnostic_info["improvements"].append({
-                    "page": page_num,
                     "gpt_headers": headers,
                     "column_count": len(headers),
-                    "structure_notes": structure_notes,
+                    "row_count": len(rows),
                     "processing_method": "GPT-5 response driven with LLM pattern enforcement",
-                    "format_accuracy_target": "≥90%",
-                    "llm_patterns_generated": len(columns) > 0
+                    "format_accuracy_target": "≥90%"
                 })
-                
-                if structure_notes:
-                    diagnostic_info["warnings"].append({
-                        "page": page_num,
-                        "issue": structure_notes
-                    })
             
             # Update table metadata to reflect the upgraded formatting
             for table in formatted_tables:
@@ -514,7 +660,6 @@ Be precise and only report what you can clearly see in the images."""
                 "success": True,
                 "improved_tables": formatted_tables,
                 "diagnostic_info": diagnostic_info,
-                "overall_notes": f"{analysis.get('overall_notes', '')} - Data formatted to match LLM specifications with ≥90% accuracy using dynamic pattern enforcement",
                 "enhancement_timestamp": datetime.now().isoformat(),
                 "format_accuracy": "≥90%",
                 "upgrade_version": "2.0"
@@ -526,700 +671,3 @@ Be precise and only report what you can clearly see in the images."""
                 "success": False,
                 "error": f"Failed to process improvement result: {str(e)}"
             }
-
-    # ============================================================================
-    # ULTRA HD EXTRACTION FUNCTIONS (latest and most advanced)
-    # ============================================================================
-
-    def extract_tables_with_vision_ultra_hd(self, 
-                                          enhanced_images: List[str], 
-                                          max_pages: int = 5) -> Dict[str, Any]:
-        """
-        Extract tables from scratch using GPT-5 Vision analysis with ULTRA HD processing
-        and smart company detection from summary rows.
-        
-        Args:
-            enhanced_images: List of base64 encoded ultra HD enhanced page images
-            max_pages: Maximum number of pages to analyze
-            
-        Returns:
-            Dictionary with extracted tables and metadata
-        """
-        if not self.is_available():
-            return {"success": False, "error": "GPT-5 Vision service not available"}
-        
-        try:
-            # Limit to max_pages
-            images_to_analyze = enhanced_images[:max_pages]
-            
-            # Prepare the prompt for ultra HD table extraction with company detection
-            system_prompt = self._create_ultra_hd_table_extraction_system_prompt()
-            user_prompt = self._create_ultra_hd_table_extraction_user_prompt()
-            
-            # Prepare messages for the API call
-            messages = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": [
-                    {"type": "text", "text": user_prompt}
-                ]}
-            ]
-            
-            # Add ultra HD images to the user message content
-            for i, image_base64 in enumerate(images_to_analyze):
-                messages[1]["content"].append({
-                    "type": "image_url",
-                    "image_url": {
-                        "url": f"data:image/png;base64,{image_base64}"
-                    }
-                })
-            
-            # Call GPT-5 Vision API with increased tokens for comprehensive extraction
-            logger.info(f"Calling GPT-5 Vision API for ultra HD table extraction from {len(images_to_analyze)} pages")
-            logger.info(f"Total image data size: {sum(len(img) for img in images_to_analyze)} characters")
-            
-            response = self.client.chat.completions.create(
-                model="gpt-5",
-                messages=messages,
-                max_completion_tokens=20000  # Increased to handle large table data with company names
-            )
-            
-            # Extract the response content
-            response_content = response.choices[0].message.content
-            
-            # Check if response was truncated
-            finish_reason = response.choices[0].finish_reason
-            if finish_reason == "length":
-                logger.warning("GPT-5 response was truncated due to token limit")
-            
-            # Log the raw response for debugging
-            logger.info(f"GPT-5 ultra HD raw response length: {len(response_content)}")
-            logger.info(f"GPT-5 ultra HD response preview: {response_content[:1000]}...")
-            if len(response_content) > 1000:
-                logger.info(f"GPT-5 ultra HD response end: ...{response_content[-500:]}")
-            
-            # Parse the JSON response - handle markdown code blocks and non-JSON responses
-            try:
-                # Check if response is actually JSON or just text
-                cleaned_content = response_content.strip()
-                
-                # If response doesn't start with { or [, it's likely not JSON
-                if not (cleaned_content.startswith('{') or cleaned_content.startswith('[')):
-                    logger.warning("GPT-5 response is not JSON format - attempting to extract JSON from text")
-                    
-                    # Try to find JSON in the response
-                    json_start = cleaned_content.find('{')
-                    if json_start == -1:
-                        json_start = cleaned_content.find('[')
-                    
-                    if json_start != -1:
-                        cleaned_content = cleaned_content[json_start:]
-                        logger.info("Found JSON content in text response")
-                    else:
-                        # No JSON found, return error with helpful message
-                        logger.error("No JSON content found in GPT-5 response")
-                        return {
-                            "success": False,
-                            "error": "GPT-5 response does not contain valid JSON. The model may not be able to read the images clearly enough. Please try with a higher quality PDF or different document.",
-                            "raw_response": response_content[:1000]
-                        }
-                
-                # Remove markdown code blocks if present
-                if cleaned_content.startswith('```json'):
-                    cleaned_content = cleaned_content[7:]  # Remove ```json
-                if cleaned_content.startswith('```'):
-                    cleaned_content = cleaned_content[3:]  # Remove ```
-                if cleaned_content.endswith('```'):
-                    cleaned_content = cleaned_content[:-3]  # Remove ```
-                
-                cleaned_content = cleaned_content.strip()
-                logger.info(f"Ultra HD cleaned content preview: {cleaned_content[:500]}...")
-                
-                # Check if response might be truncated
-                if not cleaned_content.endswith('}'):
-                    logger.warning("Ultra HD response appears to be truncated, attempting to fix...")
-                    # Try to find the last complete JSON object
-                    last_brace = cleaned_content.rfind('}')
-                    if last_brace > 0:
-                        cleaned_content = cleaned_content[:last_brace + 1]
-                        logger.info("Attempting to parse truncated ultra HD response")
-                
-                extraction_result = json.loads(cleaned_content)
-                logger.info(f"Successfully parsed ultra HD JSON with keys: {list(extraction_result.keys())}")
-                
-                # Check if GPT returned an error response
-                if "error" in extraction_result:
-                    error_msg = extraction_result.get("error", "Unknown error")
-                    logger.error(f"GPT-5 Vision returned an error: {error_msg}")
-                    return {
-                        "success": False,
-                        "error": error_msg,
-                        "tables": []
-                    }
-                
-                if "tables" in extraction_result:
-                    logger.info(f"Found {len(extraction_result['tables'])} tables in ultra HD response")
-                    for i, table in enumerate(extraction_result['tables']):
-                        headers = table.get('headers', [])
-                        rows = table.get('rows', [])
-                        logger.info(f"Ultra HD Table {i+1}: {len(headers)} headers, {len(rows)} rows")
-                        logger.info(f"  Headers: {headers[:5]}{'...' if len(headers) > 5 else ''}")
-                        
-                        # Check if Client Names column is present
-                        if "Client Names" in headers:
-                            logger.info(f"  ✅ Client Names column detected in table {i+1}")
-                        else:
-                            logger.info(f"  ⚠️  Client Names column NOT detected in table {i+1}")
-                else:
-                    logger.warning("No 'tables' key found in GPT response")
-                    return {
-                        "success": False,
-                        "error": "No tables found in GPT response",
-                        "tables": []
-                    }
-            except json.JSONDecodeError as e:
-                logger.error(f"Failed to parse ultra HD GPT-5 response as JSON: {e}")
-                logger.error(f"Ultra HD response content length: {len(response_content)}")
-                logger.error(f"Ultra HD response content preview: {response_content[:500]}...")
-                if len(response_content) > 500:
-                    logger.error(f"Ultra HD response content end: ...{response_content[-500:]}")
-                
-                return {
-                    "success": False,
-                    "error": f"Failed to parse GPT-5 ultra HD response as JSON. The model may not be able to read the images clearly enough. Please try with a higher quality PDF or different document.",
-                    "raw_response": response_content[:1000]
-                }
-            
-            # Process the extracted tables
-            processed_tables = []
-            if "tables" in extraction_result:
-                for i, table in enumerate(extraction_result["tables"]):
-                    # Add metadata to each table
-                    table["extractor"] = "gpt4o_vision_ultra_hd"
-                    table["processing_notes"] = "Ultra HD extraction with smart company detection from summary rows"
-                    
-                    # Validate extraction completeness
-                    rows = table.get("rows", [])
-                    headers = table.get("headers", [])
-                    if rows and headers:
-                        logger.info(f"Table {i+1}: Extracted {len(rows)} rows with {len(headers)} headers")
-                        if len(rows) < 5 and "Client Names" in headers:
-                            logger.warning(f"Table {i+1}: Only {len(rows)} rows extracted - may be incomplete")
-                    
-                    processed_tables.append(table)
-            
-            return {
-                "success": True,
-                "tables": processed_tables,
-                "extraction_metadata": {
-                    "method": "gpt4o_vision_ultra_hd",
-                    "pages_analyzed": len(images_to_analyze),
-                    "timestamp": datetime.now().isoformat(),
-                    "confidence": 0.98,  # Higher confidence for ultra HD processing
-                    "dpi": 800,
-                    "enhancement": "ultra_hd_with_company_detection"
-                }
-            }
-            
-        except Exception as e:
-            logger.error(f"Error in ultra HD table extraction with GPT-5 Vision: {e}")
-            
-            # Try fallback extraction with simpler prompt
-            logger.info("Attempting fallback extraction with simplified prompt...")
-            try:
-                fallback_result = self._extract_tables_fallback(enhanced_images, max_pages)
-                if fallback_result.get("success"):
-                    logger.info("Fallback extraction successful")
-                    return fallback_result
-            except Exception as fallback_error:
-                logger.error(f"Fallback extraction also failed: {fallback_error}")
-            
-            return {
-                "success": False,
-                "error": f"Ultra HD table extraction failed: {str(e)}"
-            }
-
-    def _create_ultra_hd_table_extraction_system_prompt(self) -> str:
-        """Ultra HD commission statement extraction with advanced company detection from summary rows."""
-        return """You are an expert document analyst specializing in commission statement table extraction with ULTRA HD image analysis and advanced pattern recognition.
-
-**CRITICAL: YOU MUST EXTRACT EVERY SINGLE ROW - NO EXCEPTIONS. BE EXTREMELY THOROUGH.**
-
-EXTRACTION REQUIREMENTS:
-
-1. **EXTRACT ALL TABLES COMPLETELY**: Look for ANY structured data, organized information, or tabular layouts - NO ROWS SHOULD BE MISSED
-2. **COMPLETE DATA EXTRACTION**: Extract EVERY SINGLE ROW and column you can see - be thorough and comprehensive
-3. **ACCURATE HEADERS**: Transcribe column headers exactly as they appear
-4. **ADVANCED COMPANY DETECTION**: Identify company names in summary rows and create a "Client Names" column
-5. **DATA PRESERVATION**: Keep all original values, dates, amounts, and formatting exactly as they appear
-6. **HIERARCHICAL STRUCTURE**: Pay attention to customer groupings and summary rows
-7. **HIGH DETAIL**: With high-resolution images, you should see every detail clearly
-8. **COMPLETE COVERAGE**: Scan the ENTIRE image from top to bottom, left to right - do not skip any rows
-9. **BOTTOM OF PAGE**: Pay special attention to rows at the bottom of the page - they are just as important as rows at the top
-10. **NO ROW LEFT BEHIND**: If you see any structured data that looks like a table row, extract it
-11. **MULTI-PAGE COVERAGE**: Extract data from ALL pages - do not stop at the first table
-12. **CONTINUOUS EXTRACTION**: If a table continues across multiple pages, extract ALL rows from ALL pages
-13. **SUMMARY ROWS**: Include summary rows, subtotals, and totals in your extraction
-14. **CUSTOMER BLOCKS**: Extract each customer's data block completely before moving to the next
-15. **SECTION BREAKS**: Pay attention to section headers like "Renewal", "New Business", etc.
-
-**CRITICAL: YOU MUST RETURN VALID JSON ONLY. DO NOT PROVIDE EXPLANATIONS OR TEXT OUTSIDE OF THE JSON STRUCTURE.**
-
-**IMPORTANT: If you see ANY structured data, organized information, or tabular layouts, you MUST extract them. Do not be overly cautious about image quality.**
-
-COMMISSION STATEMENT SPECIFIC PATTERNS:
-- Look for "Base Commission and Service Fee Detail" or similar titles
-- Extract "New Business" and "Renewal" sections separately
-- Look for "Writing Agent" information
-- **CRITICAL**: Look for customer information in summary rows like:
-  * "Customer: 1536194"
-  * "Customer Name: IMPACT HEATING AND COOLING"
-  * "Orig Eff Date: 11/01/2017"
-  * "Legacy Cust: 07X9851"
-- Extract coverage types: Med, Den, Vis, etc.
-- Extract billing dates, premium amounts, rates, and percentages
-- Look for state codes (FL, NJ, MO, WI, CO, etc.)
-- Extract method codes (PEPM, POP, FLAT)
-- Look for business types (Comm, Fee, Leve)
-- Extract producer information tables
-- Extract compensation period details
-- Extract adjustment tables
-- Extract "Business on Hold" tables
-- **MULTI-PAGE EXTRACTION**: Extract ALL customer data blocks from ALL pages
-- **CUSTOMER BLOCKS**: Each customer should have their own data rows with the customer name repeated
-- **CONTINUOUS DATA**: If a customer has data across multiple pages, extract ALL rows
-- **SUMMARY ROWS**: Include subtotals and totals for each customer
-- **SECTION HEADERS**: Pay attention to "Key Accounts", "Small Business", "Renewal", "New Business" sections
-
-ADVANCED COMPANY NAME EXTRACTION:
-- When you see customer information in summary rows (like "Customer: 1536194" followed by "Customer Name: IMPACT HEATING AND COOLING")
-- Create a "Client Names" column as the FIRST column in your table
-- Populate it with the company name for all subsequent data rows
-- Continue using that company name until you see a new customer summary
-- This ensures each row has the correct company association
-- Handle cases where company names appear in summary rows rather than separate columns
-
-**MANDATORY OUTPUT FORMAT - RETURN ONLY THIS JSON STRUCTURE:**
-
-```json
-{
-  "tables": [
-    {
-      "headers": ["Client Names", "Cov Type", "Bill Eff Date", "Billed Premium", "Paid Premium", "Sub count", "Adj Typ", "Iss St", "Method", "Rate", "Split %", "Comp Typ", "Bus Type", "Billed Fee Amount", "Customer Paid Fee", "Paid Amount"],
-      "rows": [
-        ["LOGIC STICKS LLC", "Med", "12/01/2024", "$1,672.65", "$1,672.65", "1", "V", "MI", "PEPM", "$34.00", "100%", "Comm", "Comm", "", "", "$34.00"],
-        ["LOGIC STICKS LLC", "Med", "12/01/2024", "$2,070.06", "$2,070.06", "1", "V", "MI", "PEPM", "$34.00", "100%", "Comm", "Comm", "", "", "$34.00"],
-        ["LOGIC STICKS LLC", "Med", "12/01/2024", "$3,742.71", "$3,742.71", "1", "V", "MI", "PEPM", "$34.00", "100%", "Comm", "Comm", "", "", "$34.00"],
-        ["The Total Package Logistics", "Med", "04/01/2024", "($637.01)", "($637.01)", "-1", "V", "WA", "PEPM", "$34.00", "100%", "Comm", "Comm", "", "", "($34.00)"],
-        ["The Total Package Logistics", "Med", "05/01/2024", "$3,817.68", "$3,817.68", "8", "V", "WA", "PEPM", "$34.00", "100%", "Comm", "Comm", "", "", "$272.00"],
-        ["The Total Package Logistics", "Den", "04/01/2024", "($31.85)", "($31.85)", "-1", "V", "WA", "POP", "10.00%", "100%", "Comm", "Comm", "", "", "($3.19)"],
-        ["The Total Package Logistics", "Den", "05/01/2024", "$318.50", "$318.50", "1", "V", "WA", "POP", "10.00%", "100%", "Comm", "Comm", "", "", "$31.85"],
-        ["Linden Logistics LLC", "Med", "12/01/2024", "$3,115.69", "$3,115.69", "1", "V", "MI", "PEPM", "$2.00", "100%", "Comm", "Comm", "", "", "$2.00"],
-        ["MAMMOTH DELIVERY LLC", "Med", "10/01/2024", "$3,817.68", "$3,817.68", "8", "V", "WA", "PEPM", "$30.00", "100%", "Comm", "Comm", "", "", "$240.00"],
-        ["MAMMOTH DELIVERY LLC", "Med", "11/01/2024", "$3,817.68", "$3,817.68", "8", "V", "WA", "PEPM", "$30.00", "100%", "Comm", "Comm", "", "", "$240.00"],
-        ["MAMMOTH DELIVERY LLC", "Med", "12/01/2024", "$3,817.68", "$3,817.68", "8", "V", "WA", "PEPM", "$30.00", "100%", "Comm", "Comm", "", "", "$240.00"],
-        ["MAMMOTH DELIVERY LLC", "Den", "10/01/2024", "$318.50", "$318.50", "1", "V", "WA", "POP", "10.00%", "100%", "Comm", "Comm", "", "", "$31.85"],
-        ["MAMMOTH DELIVERY LLC", "Den", "11/01/2024", "$318.50", "$318.50", "1", "V", "WA", "POP", "10.00%", "100%", "Comm", "Comm", "", "", "$31.85"],
-        ["MAMMOTH DELIVERY LLC", "Den", "12/01/2024", "$318.50", "$318.50", "1", "V", "WA", "POP", "10.00%", "100%", "Comm", "Comm", "", "", "$31.85"],
-        ["H6 LOGISTICS LLC", "Den", "09/01/2024", "($100.72)", "($100.72)", "-2", "V", "FL", "POP", "10.00%", "100%", "Comm", "Comm", "", "", "($10.07)"],
-        ["H6 LOGISTICS LLC", "Vis", "09/01/2024", "$22.99", "$22.99", "2", "V", "FL", "POP", "10.00%", "100%", "Comm", "Comm", "", "", "$2.30"],
-        ["H6 LOGISTICS LLC", "Vis", "09/01/2024", "($22.99)", "($22.99)", "-2", "V", "FL", "POP", "10.00%", "100%", "Comm", "Comm", "", "", "($2.30)"]
-      ]
-    }
-  ]
-}
-```
-
-**CRITICAL: The example above shows ALL rows that should be extracted from a typical commission statement table. Make sure you extract EVERY row you can see, including all the rows at the bottom of the table.**
-
-**ONLY RETURN THE ERROR JSON IF THE IMAGES ARE COMPLETELY UNREADABLE OR BLANK:**
-
-```json
-{
-  "tables": [],
-  "error": "Images completely unreadable or blank"
-}
-```
-
-**DO NOT PROVIDE ANY TEXT EXPLANATIONS OUTSIDE OF THE JSON STRUCTURE.**
-
-```json
-{
-  "tables": [
-    {
-      "headers": ["Client Names", "Cov Type", "Bill Eff Date", "Billed Premium", "Paid Premium", "Sub Adj count", "Typ", "Iss St", "Method", "Rate", "Split %", "Comp Typ", "Bus Type", "Billed Fee Amount", "Customer Paid Fee", "Paid Amount"],
-      "rows": [
-        ["IMPACT HEATING AND COOLING", "Den", "10/01/2024", "($82.49)", "($82.49)", "-1", "V", "CO", "POP", "10.00%", "100%", "Comm", "Comm", "", "", "($8.25)"],
-        ["IMPACT HEATING AND COOLING", "Den", "11/01/2024", "$219.32", "$219.32", "3", "V", "CO", "POP", "10.00%", "100%", "Comm", "Comm", "", "", "$21.93"],
-        ["IMPACT HEATING AND COOLING", "Den", "11/01/2024", "$305.15", "$305.15", "4", "V", "CO", "POP", "10.00%", "100%", "Comm", "Comm", "", "", "$30.52"],
-        ["IMPACT HEATING AND COOLING", "Vis", "10/01/2024", "($11.25)", "($11.25)", "-1", "V", "CO", "POP", "10.00%", "100%", "Comm", "Comm", "", "", "($1.13)"],
-        ["IMPACT HEATING AND COOLING", "Vis", "11/01/2024", "$31.00", "$31.00", "4", "V", "CO", "POP", "10.00%", "100%", "Comm", "Comm", "", "", "$3.10"],
-        ["IMPACT HEATING AND COOLING", "Vis", "11/01/2024", "$19.71", "$19.71", "3", "V", "CO", "POP", "10.00%", "100%", "Comm", "Comm", "", "", "$1.97"]
-      ]
-    }
-  ]
-}
-```
-
-ULTRA HD EXTRACTION GUIDELINES:
-- With the ultra HD image quality (600 DPI), you should be able to see EVERY detail clearly
-- Look for small text, fine print, and any data that might be in corners or margins
-- Pay special attention to summary rows that contain customer information
-- Extract ALL rows including those that might appear to be subtotals or summaries
-- If you see any structured data, extract it - better to extract too much than miss important information
-- Look for patterns in the data structure and ensure consistency
-- The ultra HD quality should eliminate any missing rows due to poor image quality
-
-COMPLETE EXTRACTION CHECKLIST:
-- [ ] All customer summary rows identified and processed
-- [ ] All data rows extracted with proper company association
-- [ ] All headers captured accurately
-- [ ] All financial amounts preserved with exact formatting
-- [ ] All dates captured in correct format
-- [ ] All coverage types, methods, and codes extracted
-- [ ] No rows missed or skipped
-- [ ] Company names properly associated with their data rows
-- [ ] "Client Names" column created and populated correctly
-
-Focus on COMPLETE and ACCURATE extraction - with ultra HD images, you should miss nothing."""
-
-    def _create_ultra_hd_table_extraction_user_prompt(self) -> str:
-        """Create user prompt for ultra HD commission statement extraction with advanced company detection."""
-        return """Extract ALL tables from these ULTRA HD (800 DPI) commission statement document images with complete accuracy and smart company detection.
-
-CRITICAL REQUIREMENTS:
-
-1. **FIND ALL TABLES COMPLETELY**: Look for ANY structured data, tables, or organized information - NO ROWS SHOULD BE MISSED
-2. **EXTRACT COMPLETE DATA**: Get EVERY SINGLE ROW and column you can see - be thorough and comprehensive
-3. **PRESERVE ACCURACY**: Keep exact values, headers, and formatting exactly as they appear
-4. **ADVANCED COMPANY DETECTION**: Identify company names in summary rows and create a "Client Names" column
-5. **HANDLE MULTIPLE TABLES**: If you see more than one table, extract each separately
-6. **HIERARCHICAL STRUCTURE**: Pay attention to customer groupings and summary rows
-7. **ULTRA HD DETAIL**: With 800 DPI images, you should see every detail clearly
-8. **COMPLETE COVERAGE**: Scan the ENTIRE image systematically - do not skip any rows
-9. **BOTTOM ROWS MATTER**: Pay special attention to rows at the bottom of tables - they contain important data
-10. **COUNT EVERY ROW**: Make sure you extract every single data row you can see
-
-WHAT TO LOOK FOR:
-- Commission/earnings tables with "Base Commission and Service Fee Detail" title
-- "New Business" and "Renewal" sections
-- Writing Agent information
-- Producer information tables
-- Compensation period details
-- Adjustment tables
-- "Business on Hold" tables
-- **CRITICAL**: Customer information in summary rows like:
-  * "Customer: 1536194"
-  * "Customer Name: IMPACT HEATING AND COOLING"
-  * "Orig Eff Date: 11/01/2017"
-  * "Legacy Cust: 07X9851"
-- Coverage types (Med, Den, Vis)
-- Financial amounts with proper formatting (including parentheses for negative amounts)
-- Dates in MM/DD/YYYY format
-- State codes (FL, NJ, MO, WI, CO, MD, GA, MA, NV, WA)
-- Method codes (PEPM, POP, FLAT)
-- Business types (Comm, Fee, Leve)
-- Any structured information with headers and rows
-- Adjustment type descriptions
-- Hold reasons and legal entities
-
-ADVANCED COMPANY NAME EXTRACTION:
-- When you see customer information in summary rows, create a "Client Names" column as the FIRST column
-- Populate it with the company name for all subsequent data rows
-- Continue using that company name until you see a new customer summary
-- This ensures each row has the correct company association
-- Handle cases where company names appear in summary rows rather than separate columns
-
-ULTRA HD EXTRACTION GUIDELINES:
-- With the ultra HD image quality (800 DPI), you should be able to see EVERY detail clearly
-- Look for small text, fine print, and any data that might be in corners or margins
-- Pay special attention to summary rows that contain customer information
-- Extract ALL rows including those that might appear to be subtotals or summaries
-- If you're unsure, include it anyway
-- Better to extract too much than to miss important information
-- Look for the main commission statement table with all the financial data
-- Extract producer information, compensation details, and adjustment tables
-- Look for "Business on Hold" sections with customer details
-- **CRITICAL**: Pay special attention to the bottom of each page - scan every row systematically
-- **CRITICAL**: Do not stop extracting until you reach the very end of each table
-- **CRITICAL**: Count the rows as you extract them to ensure you don't miss any
-- **CRITICAL**: If you see any structured data that looks like a table row, extract it
-
-The images are enhanced to maximum quality (800 DPI). Look carefully for any structured data or tables. Be aggressive about extraction - if you see organized information, extract it. **MOST IMPORTANT: Extract every single row you can see, especially at the bottom of tables.**"""
-
-    def _extract_tables_fallback(self, enhanced_images: List[str], max_pages: int = 5) -> Dict[str, Any]:
-        """
-        Fallback extraction method with simplified prompt for when the main extraction fails.
-        """
-        if not self.is_available():
-            return {"success": False, "error": "GPT-5 Vision service not available"}
-        
-        try:
-            # Limit to max_pages
-            images_to_analyze = enhanced_images[:max_pages]
-            
-            # Simplified system prompt
-            system_prompt = """You are a document table extractor. Extract ALL tables you can see in the images. Return ONLY valid JSON with this structure:
-
-```json
-{
-  "tables": [
-    {
-      "headers": ["column1", "column2", "column3"],
-      "rows": [
-        ["value1", "value2", "value3"],
-        ["value4", "value5", "value6"]
-      ]
-    }
-  ]
-}
-```
-
-If you see ANY structured data, extract it. Be aggressive about finding tables."""
-            
-            # Simplified user prompt
-            user_prompt = """Extract ALL tables from these document images. Look for any structured data, organized information, or tabular layouts. Extract everything you can see."""
-            
-            # Prepare messages
-            messages = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": [
-                    {"type": "text", "text": user_prompt}
-                ]}
-            ]
-            
-            # Add images
-            for image_base64 in images_to_analyze:
-                messages[1]["content"].append({
-                    "type": "image_url",
-                    "image_url": {
-                        "url": f"data:image/png;base64,{image_base64}"
-                    }
-                })
-            
-            logger.info("Attempting fallback extraction with simplified prompt...")
-            
-            response = self.client.chat.completions.create(
-                model="gpt-5",
-                messages=messages,
-                max_completion_tokens=15000
-            )
-            
-            response_content = response.choices[0].message.content
-            
-            # Parse response
-            try:
-                cleaned_content = response_content.strip()
-                if cleaned_content.startswith('```json'):
-                    cleaned_content = cleaned_content[7:]
-                if cleaned_content.startswith('```'):
-                    cleaned_content = cleaned_content[3:]
-                if cleaned_content.endswith('```'):
-                    cleaned_content = cleaned_content[:-3]
-                
-                cleaned_content = cleaned_content.strip()
-                extraction_result = json.loads(cleaned_content)
-                
-                # Process tables
-                processed_tables = []
-                if "tables" in extraction_result:
-                    for table in extraction_result["tables"]:
-                        table["extractor"] = "gpt4o_vision_fallback"
-                        table["processing_notes"] = "Fallback extraction with simplified prompt"
-                        processed_tables.append(table)
-                
-                return {
-                    "success": True,
-                    "tables": processed_tables,
-                    "extraction_metadata": {
-                        "method": "gpt4o_vision_fallback",
-                        "pages_analyzed": len(images_to_analyze),
-                        "timestamp": datetime.now().isoformat(),
-                        "confidence": 0.85,
-                        "dpi": 800,
-                        "enhancement": "fallback_extraction"
-                    }
-                }
-                
-            except json.JSONDecodeError as e:
-                logger.error(f"Fallback extraction failed to parse JSON: {e}")
-                return {
-                    "success": False,
-                    "error": f"Fallback extraction failed: {str(e)}"
-                }
-                
-        except Exception as e:
-            logger.error(f"Error in fallback extraction: {e}")
-            return {
-                "success": False,
-                "error": f"Fallback extraction failed: {str(e)}"
-            }
-
-    # ============================================================================
-    # UTILITY FUNCTIONS
-    # ============================================================================
-
-    def merge_similar_tables(self, tables: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """
-        Merge tables with similar structure, accounting for smart validation header expansion.
-        This helps combine related data that was split across multiple sections.
-        """
-        if not tables or len(tables) <= 1:
-            return tables
-        
-        try:
-            logger.info(f"🔗 Starting table merging for {len(tables)} tables")
-            
-            # Group tables by their mergeability
-            table_groups = []
-            processed_tables = set()
-            
-            for i, table in enumerate(tables):
-                if i in processed_tables:
-                    continue
-                
-                header = table.get("header", [])
-                if not header:
-                    continue
-                
-                # Start a new group with this table
-                current_group = [table]
-                processed_tables.add(i)
-                
-                # Find other tables that can be merged with this one
-                for j, other_table in enumerate(tables):
-                    if j in processed_tables:
-                        continue
-                    
-                    if self._are_tables_mergeable(table, other_table):
-                        current_group.append(other_table)
-                        processed_tables.add(j)
-                
-                table_groups.append(current_group)
-            
-            merged_tables = []
-            
-            for group in table_groups:
-                if len(group) == 1:
-                    # Single table, no merging needed
-                    merged_tables.append(group[0])
-                    table_name = group[0].get('name', 'Unknown')
-                    headers = group[0].get('header', [])
-                    logger.info(f"📋 Single table (no merging): {table_name} with {len(headers)} headers")
-                else:
-                    # Multiple tables with similar structure, merge them
-                    table_names = [t.get('name', 'Unknown') for t in group]
-                    headers = group[0].get('header', [])
-                    logger.info(f"🔄 Merging {len(group)} tables with similar structure: {', '.join(table_names)}")
-                    logger.info(f"   Headers: {headers[:5]}{'...' if len(headers) > 5 else ''}")
-                    
-                    # Use the first table as base
-                    base_table = group[0]
-                    merged_rows = base_table.get("rows", [])
-                    merged_names = [base_table.get("name", "Table")]
-                    
-                    # Add rows from other tables
-                    for i, table in enumerate(group[1:], 1):
-                        table_rows = table.get("rows", [])
-                        merged_rows.extend(table_rows)
-                        merged_names.append(table.get("name", f"Table {i+1}"))
-                    
-                    # Create merged table
-                    merged_table = {
-                        "name": f"Merged: {' + '.join(merged_names)}",
-                        "header": base_table.get("header", []),
-                        "rows": merged_rows,
-                        "extractor": "gpt4o_vision_merged",
-                        "structure_type": base_table.get("structure_type", "standard"),
-                        "metadata": {
-                            "extraction_method": "gpt4o_vision_merged",
-                            "timestamp": datetime.now().isoformat(),
-                            "confidence": 0.95,
-                            "merged_from": len(group),
-                            "original_tables": merged_names,
-                            "company_detection_applied": True
-                        }
-                    }
-                    
-                    # Apply company detection to merged table
-                    enhanced_merged_table = self.company_detector.detect_company_names_in_extracted_data(
-                        merged_table, "gpt4o_vision_merged"
-                    )
-                    
-                    merged_tables.append(enhanced_merged_table)
-                    logger.info(f"✅ Successfully merged {len(group)} tables into one with {len(merged_rows)} total rows")
-            
-            logger.info(f"🎯 Final merged tables: {len(merged_tables)}")
-            return merged_tables
-            
-        except Exception as e:
-            logger.error(f"Error merging similar tables: {e}")
-            return tables
-
-    def _is_main_data_table(self, headers: List[str], rows: List[List[str]]) -> bool:
-        """Determine if a table is a main data table vs summary table."""
-        
-        # Check for main data table indicators
-        main_data_indicators = [
-            "Cov Type", "Bill Eff Date", "Paid Premium", "Method", "Rate", "Split %",
-            "Customer", "Company", "Iss St", "Comp Typ", "Bus Type"
-        ]
-        
-        # Check for summary table indicators
-        summary_indicators = [
-            "Total", "Payment", "Balance", "Compensation", "Statement Total",
-            "Detail Total", "Ending Balance", "Current Compensation", "YTD Compensation"
-        ]
-        
-        header_text = " ".join(headers).lower()
-        
-        # Count indicators
-        main_data_count = sum(1 for indicator in main_data_indicators if indicator.lower() in header_text)
-        summary_count = sum(1 for indicator in summary_indicators if indicator.lower() in header_text)
-        
-        # Check row count (main data tables typically have more rows)
-        row_count = len(rows)
-        
-        # Determine table type
-        if main_data_count > summary_count and row_count > 5:
-            return True  # Main data table
-        elif summary_count > main_data_count or row_count <= 3:
-            return False  # Summary table
-        else:
-            # Default to main data table if unclear
-            return True
-
-    def _are_tables_mergeable(self, table1: Dict[str, Any], table2: Dict[str, Any]) -> bool:
-        """Check if two tables can be merged based on their structure."""
-        
-        headers1 = table1.get("header", [])
-        headers2 = table2.get("header", [])
-        
-        # Check if both are main data tables
-        is_main1 = self._is_main_data_table(headers1, table1.get("rows", []))
-        is_main2 = self._is_main_data_table(headers2, table2.get("rows", []))
-        
-        if not (is_main1 and is_main2):
-            return False  # Only merge main data tables
-        
-        # For commission statement tables, merge tables with identical headers
-        if len(headers1) == len(headers2):
-            # Check if all headers match exactly
-            if headers1 == headers2:
-                logger.info(f"🔗 Found tables with identical headers: {headers1[:5]}...")
-                return True
-            else:
-                # Log the differences for debugging
-                logger.info(f"🔍 Headers don't match exactly:")
-                logger.info(f"   Table 1 headers: {headers1}")
-                logger.info(f"   Table 2 headers: {headers2}")
-                logger.info(f"   Match: {headers1 == headers2}")
-        
-        # Fallback: Check for core header similarity (first 10 headers)
-        core_headers1 = headers1[:10]
-        core_headers2 = headers2[:10]
-        
-        # Count matching core headers
-        matching_headers = sum(1 for h1, h2 in zip(core_headers1, core_headers2) if h1 == h2)
-        
-        # If at least 70% of core headers match, consider them mergeable
-        return matching_headers >= 7

@@ -93,17 +93,17 @@ class TableExtractor:
             
             # Method 1: table_cells (your current approach)
             headers_1, rows_1 = self._extract_via_table_cells(table)
-            if headers_1 and headers_1 != ['Column_1']:
+            if headers_1 and len(headers_1) > 0:
                 extraction_results.append(("table_cells", headers_1, rows_1))
             
             # Method 2: dataframe export  
             headers_2, rows_2 = self._extract_via_dataframe(table)
-            if headers_2 and rows_2:
+            if headers_2 and len(headers_2) > 0:
                 extraction_results.append(("dataframe", headers_2, rows_2))
             
             # Method 3: direct attributes
             headers_3, rows_3 = self._extract_via_attributes(table) 
-            if headers_3 and rows_3:
+            if headers_3 and len(headers_3) > 0:
                 extraction_results.append(("attributes", headers_3, rows_3))
             
             # Use best result
@@ -112,8 +112,18 @@ class TableExtractor:
                     key=lambda x: len(x[1]) + len(x[2]))
                 self.logger.logger.info(f"✅ Using {method}: {len(headers)} headers, {len(rows)} rows")
             else:
-                self.logger.logger.error("❌ ALL extraction methods failed!")
-                return None
+                # Try complex table structure extraction as fallback
+                self.logger.logger.info("🔄 Trying complex table structure extraction as fallback...")
+                headers, rows = self._extract_complex_table_structure(table)
+                if headers and rows:
+                    self.logger.logger.info(f"✅ Complex extraction succeeded: {len(headers)} headers, {len(rows)} rows")
+                else:
+                    self.logger.logger.error("❌ ALL extraction methods failed!")
+                    # Debug: log what we got from each method
+                    self.logger.logger.error(f"🔍 DEBUG: table_cells result: {self._extract_via_table_cells(table)}")
+                    self.logger.logger.error(f"🔍 DEBUG: dataframe result: {self._extract_via_dataframe(table)}")
+                    self.logger.logger.error(f"🔍 DEBUG: attributes result: {self._extract_via_attributes(table)}")
+                    return None
             
             # **NEW: Validate table quality and skip if it's likely metadata/header content**
             if not self.validator.is_valid_financial_table_lenient(headers, rows):
@@ -328,13 +338,16 @@ class TableExtractor:
             rows = []
             
             if hasattr(table, 'table_cells') and table.table_cells:
+                self.logger.logger.info(f"🔍 DEBUG: Found table_cells: {len(table.table_cells)} cells")
                 cells_by_row = self._group_cells_by_row_v2(table.table_cells)
+                self.logger.logger.info(f"🔍 DEBUG: Grouped into {len(cells_by_row)} rows")
                 
                 if cells_by_row:
                     # Extract headers from first row
                     first_row_idx = min(cells_by_row.keys())
                     header_cells = cells_by_row[first_row_idx]
                     headers = [self._clean_text(cell.text) for cell in header_cells]
+                    self.logger.logger.info(f"🔍 DEBUG: Extracted headers: {headers}")
                     
                     # Extract data rows (skip first row)
                     sorted_row_indices = sorted(cells_by_row.keys())
@@ -342,6 +355,12 @@ class TableExtractor:
                         row_cells = cells_by_row[row_idx]
                         row_data = [self._clean_text(cell.text) for cell in row_cells]
                         rows.append(row_data)
+                    
+                    self.logger.logger.info(f"🔍 DEBUG: Extracted {len(rows)} data rows")
+                else:
+                    self.logger.logger.warning("🔍 DEBUG: No cells_by_row found")
+            else:
+                self.logger.logger.warning("🔍 DEBUG: No table_cells attribute found")
             
             self.logger.logger.info(f"  Method 1 (table_cells): {len(headers)} headers, {len(rows)} rows")
             return headers, rows
@@ -421,6 +440,8 @@ class TableExtractor:
         cells_by_row = {}
         
         try:
+            self.logger.logger.info(f"🔍 DEBUG: Grouping {len(table_cells)} cells by row")
+            
             for cell in table_cells:
                 # Use start_row_offset_idx for row grouping
                 row_idx = cell.start_row_offset_idx
@@ -428,9 +449,12 @@ class TableExtractor:
                     cells_by_row[row_idx] = []
                 cells_by_row[row_idx].append(cell)
             
+            self.logger.logger.info(f"🔍 DEBUG: Found {len(cells_by_row)} unique rows")
+            
             # Sort cells within each row by column position
             for row_idx in cells_by_row:
                 cells_by_row[row_idx].sort(key=lambda cell: cell.start_col_offset_idx)
+                self.logger.logger.info(f"🔍 DEBUG: Row {row_idx}: {len(cells_by_row[row_idx])} cells")
             
             return cells_by_row
             
@@ -800,3 +824,69 @@ class TableExtractor:
             self.logger.logger.info(f"🧹 DEDUPLICATED: '{text[:50]}...' → '{result_text[:50]}...'")
         
         return result_text.strip()
+
+    def _extract_complex_table_structure(self, table) -> Tuple[List[str], List[List[str]]]:
+        """Advanced method for extracting complex table structures that other methods fail on."""
+        try:
+            headers = []
+            rows = []
+            
+            # Try to get raw table structure
+            if hasattr(table, 'table_cells') and table.table_cells:
+                # Analyze the raw cell structure
+                raw_cells = []
+                for cell in table.table_cells:
+                    # Extract all available attributes
+                    cell_info = {
+                        'text': getattr(cell, 'text', ''),
+                        'row': getattr(cell, 'start_row_offset_idx', 0),
+                        'col': getattr(cell, 'start_col_offset_idx', 0),
+                        'row_span': getattr(cell, 'row_span', 1),
+                        'col_span': getattr(cell, 'col_span', 1),
+                        'bbox': getattr(cell, 'bbox', None)
+                    }
+                    raw_cells.append(cell_info)
+                
+                if raw_cells:
+                    # Find the structure by analyzing cell positions
+                    max_row = max(cell['row'] for cell in raw_cells)
+                    max_col = max(cell['col'] + cell['col_span'] for cell in raw_cells)
+                    
+                    # Create a grid representation
+                    grid = [[None for _ in range(max_col)] for _ in range(max_row + 1)]
+                    
+                    # Place cells in the grid
+                    for cell_info in raw_cells:
+                        row, col = cell_info['row'], cell_info['col']
+                        row_span, col_span = cell_info['row_span'], cell_info['col_span']
+                        
+                        # Place the main cell
+                        if row < len(grid) and col < len(grid[row]):
+                            grid[row][col] = cell_info['text']
+                        
+                        # Expand merged cells
+                        for r in range(row, min(row + row_span, len(grid))):
+                            for c in range(col, min(col + col_span, len(grid[r]))):
+                                if r < len(grid) and c < len(grid[r]) and grid[r][c] is None:
+                                    grid[r][c] = cell_info['text']
+                    
+                    # Extract headers from first row
+                    if grid and len(grid) > 0:
+                        headers = [str(cell) if cell is not None else f"Column_{i+1}" 
+                                 for i, cell in enumerate(grid[0])]
+                    
+                    # Extract data rows
+                    for row_idx in range(1, len(grid)):
+                        row_data = [str(cell) if cell is not None else "" 
+                                   for cell in grid[row_idx]]
+                        if any(cell.strip() for cell in row_data):  # Only add non-empty rows
+                            rows.append(row_data)
+                    
+                    self.logger.logger.info(f"🔍 Complex structure extracted: {len(headers)} headers, {len(rows)} rows")
+                    return headers, rows
+            
+            return [], []
+            
+        except Exception as e:
+            self.logger.logger.error(f"Error extracting complex table structure: {e}")
+            return [], []

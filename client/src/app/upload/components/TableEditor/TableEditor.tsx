@@ -481,6 +481,89 @@ export default function TableEditor({
     toast.success(`Selected statement date: ${selectedDate}`)
   }
 
+  const handleCloseDateModalWithoutSelection = () => {
+    console.log('Modal closed without selection:', { extractedDates: extractedDates.length, hasExtractedDates })
+    // Always reset the state when modal is closed without selection to allow retry
+    console.log('Resetting state for retry')
+    setHasExtractedDates(false)
+    setExtractedDates([])
+    // Always reset loading state when modal is closed
+    setDateExtractionLoading(false)
+  }
+
+  const performDateExtraction = useCallback(async () => {
+    console.log('Starting date extraction')
+    setDateExtractionLoading(true)
+    
+    // Check if component is unmounting
+    if (isUnmountingRef.current) {
+      return
+    }
+    
+    if (!uploaded?.file || !companyId) {
+      setDateExtractionLoading(false)
+      return
+    }
+    
+    try {
+      const fileToUse = uploaded.file
+      let response
+      
+      if (fileToUse instanceof File) {
+        response = await dateExtractionService.extractDatesFromFile(fileToUse, companyId)
+      } else if (fileToUse && typeof fileToUse === 'object' && fileToUse.url) {
+        try {
+          const fileResponse = await fetch(fileToUse.url)
+          if (!fileResponse.ok) {
+            throw new Error(`Failed to fetch file from URL: ${fileResponse.status}`)
+          }
+          const fileBlob = await fileResponse.blob()
+          const fileName = uploaded.file_name || 'document.pdf'
+          const file = new File([fileBlob], fileName, { type: fileBlob.type || 'application/pdf' })
+          response = await dateExtractionService.extractDatesFromFile(file, companyId)
+        } catch (fetchError) {
+          // Always try to show modal, even if component is unmounting
+          setExtractedDates([])
+          setHasExtractedDates(true) // Reset flag on error
+          setShowDateModal(true)
+          toast.success('Could not access the file for date extraction. You can manually select a date.')
+          setDateExtractionLoading(false)
+          return
+        }
+      } else {
+        // Always try to show modal, even if component is unmounting
+        setExtractedDates([])
+        setHasExtractedDates(false) // Reset flag on error
+        setShowDateModal(true)
+        toast.success('Date extraction not available. You can manually select a date.')
+        setDateExtractionLoading(false)
+        return
+      }
+      
+      // Always try to show modal, even if component is unmounting
+      if (response.success && response.dates && response.dates.length > 0) {
+        setExtractedDates(response.dates)
+        setHasExtractedDates(true) // Mark that dates were extracted
+        setShowDateModal(true)
+        toast.success(`Found ${response.dates.length} date(s) in your document`)
+      } else {
+        setExtractedDates([])
+        setHasExtractedDates(true) // Set to true to indicate extraction was attempted
+        setShowDateModal(true)
+        toast.success('No dates found in the document. You can manually select a date.')
+      }
+    } catch (error: any) {
+      // Always try to show modal for manual selection, even if component is unmounting
+      setExtractedDates([])
+      setHasExtractedDates(true) // Set to true to indicate extraction was attempted
+      setShowDateModal(true)
+      toast.success('Date extraction failed. You can manually select a date.')
+    } finally {
+      // Always reset loading state
+      setDateExtractionLoading(false)
+    }
+  }, [uploaded?.file, uploaded?.file_name, companyId])
+
   // Close menus when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -509,6 +592,13 @@ export default function TableEditor({
       document.removeEventListener('mousedown', handleClickOutside)
     }
   }, [showRowMenu, showColumnMenu, showHeaderActions, showRowActions])
+
+  // Reset loading state when modal closes
+  useEffect(() => {
+    if (!showDateModal && dateExtractionLoading) {
+      setDateExtractionLoading(false)
+    }
+  }, [showDateModal, dateExtractionLoading])
 
   // Save changes
   const handleSave = () => {
@@ -848,97 +938,30 @@ export default function TableEditor({
           </div>
           
           <div className="flex items-center gap-3">
-            {/* Date Extraction Button */}
+                        {/* Date Extraction Button */}
             <button
               onClick={() => {
-                // If dates were already extracted, just reopen the modal (regardless of whether dates were found)
-                if (hasExtractedDates) {
+                console.log('Extract dates button clicked:', { hasExtractedDates, extractedDates: extractedDates.length, dateExtractionLoading })
+                
+                // If dates were already extracted and we have dates, just reopen the modal
+                if (hasExtractedDates && extractedDates.length > 0) {
+                  console.log('Reopening modal with existing dates')
                   setShowDateModal(true)
                   return
                 }
                 
+                // If not loading, perform extraction (this will handle both initial extraction and retry)
                 if (!dateExtractionLoading) {
-                  setDateExtractionLoading(true)
-                  
-                  const performManualDateExtraction = async () => {
-                    // Check if component is unmounting
-                    if (isUnmountingRef.current) {
-                      return
-                    }
-                    
-                    if (!uploaded?.file || !companyId) {
-                      setDateExtractionLoading(false)
-                      return
-                    }
-                    
-                    try {
-                      const fileToUse = uploaded.file
-                      let response
-                      
-                      if (fileToUse instanceof File) {
-                        response = await dateExtractionService.extractDatesFromFile(fileToUse, companyId)
-                      } else if (fileToUse && typeof fileToUse === 'object' && fileToUse.url) {
-                        try {
-                          const fileResponse = await fetch(fileToUse.url)
-                          if (!fileResponse.ok) {
-                            throw new Error(`Failed to fetch file from URL: ${fileResponse.status}`)
-                          }
-                          const fileBlob = await fileResponse.blob()
-                          const fileName = uploaded.file_name || 'document.pdf'
-                          const file = new File([fileBlob], fileName, { type: fileBlob.type || 'application/pdf' })
-                          response = await dateExtractionService.extractDatesFromFile(file, companyId)
-                        } catch (fetchError) {
-                          // Always try to show modal, even if component is unmounting
-                          setExtractedDates([])
-                          setHasExtractedDates(false) // Reset flag on error
-                          setShowDateModal(true)
-                          toast.success('Could not access the file for date extraction. You can manually select a date.')
-                          setDateExtractionLoading(false)
-                          return
-                        }
-                      } else {
-                        // Always try to show modal, even if component is unmounting
-                        setExtractedDates([])
-                        setHasExtractedDates(false) // Reset flag on error
-                        setShowDateModal(true)
-                        toast.success('Date extraction not available. You can manually select a date.')
-                        setDateExtractionLoading(false)
-                        return
-                      }
-                      
-                      // Always try to show modal, even if component is unmounting
-                      if (response.success && response.dates && response.dates.length > 0) {
-                        setExtractedDates(response.dates)
-                        setHasExtractedDates(true) // Mark that dates were extracted
-                        setShowDateModal(true)
-                        toast.success(`Found ${response.dates.length} date(s) in your document`)
-                      } else {
-                        setExtractedDates([])
-                        setHasExtractedDates(true) // Set to true to indicate extraction was attempted
-                        setShowDateModal(true)
-                        toast.success('No dates found in the document. You can manually select a date.')
-                      }
-                    } catch (error: any) {
-                      // Always try to show modal for manual selection, even if component is unmounting
-                      setExtractedDates([])
-                      setHasExtractedDates(true) // Set to true to indicate extraction was attempted
-                      setShowDateModal(true)
-                      toast.success('Date extraction failed. You can manually select a date.')
-                    } finally {
-                      // Always reset loading state
-                      setDateExtractionLoading(false)
-                    }
-                  }
-                  
-                  performManualDateExtraction()
+                  console.log('Starting date extraction')
+                  performDateExtraction()
                 }
               }}
               disabled={dateExtractionLoading}
               className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2 text-sm"
-              title={hasExtractedDates ? "Reopen date selection modal" : "Extract dates from document"}
+              title={hasExtractedDates && extractedDates.length > 0 ? "Reopen date selection modal" : "Extract dates from document"}
             >
               <Calendar className="w-4 h-4" />
-              {dateExtractionLoading ? 'Extracting...' : (hasExtractedDates ? 'Select Date' : 'Extract Dates')}
+              {dateExtractionLoading ? 'Extracting...' : (hasExtractedDates && extractedDates.length > 0 ? 'Select Date' : 'Extract Dates')}
             </button>
 
 
@@ -1432,8 +1455,12 @@ export default function TableEditor({
         {/* Date Selection Modal */}
         <DateSelectionModal
           isOpen={showDateModal}
-          onClose={() => setShowDateModal(false)}
+          onClose={() => {
+            console.log('Modal closed normally')
+            setShowDateModal(false)
+          }}
           onDateSelect={handleDateSelect}
+          onCloseWithoutSelection={handleCloseDateModalWithoutSelection}
           extractedDates={extractedDates}
           fileName={uploaded?.file_name || 'Unknown file'}
           loading={dateExtractionLoading}

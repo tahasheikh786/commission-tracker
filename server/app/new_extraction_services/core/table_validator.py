@@ -37,19 +37,50 @@ class TableValidator:
             return True  # Default to accepting when in doubt
 
     def is_valid_financial_table_lenient(self, headers: List[str], rows: List[List[str]]) -> bool:
-        """Lenient validation for debugging extraction."""
+        """Lenient validation for debugging extraction with improved complex table support."""
+        self.logger.logger.info(f"🔍 VALIDATION: Starting validation for {len(headers)} headers, {len(rows)} rows")
+        self.logger.logger.info(f"🔍 VALIDATION: Headers: {headers}")
+        
         has_content = len(headers) > 0 or len(rows) > 0
         
-        # Flag extraction failures
+        # Flag extraction failures - but be more specific
         if headers == ['Column_1'] and len(rows) == 0:
             self.logger.logger.warning("⚠️ Generic structure - extraction failed")
             return False
         
-        # Accept anything with real content
-        if has_content:
-            self.logger.logger.info(f"✅ ACCEPTING: {len(headers)} headers, {len(rows)} rows")
-            return True
+        # Check if this is a complex table structure
+        is_complex = self._is_complex_table_structure(headers, rows)
+        self.logger.logger.info(f"🔍 VALIDATION: Is complex table: {is_complex}")
+        
+        if is_complex:
+            # More lenient validation for complex tables
+            self.logger.logger.info(f"🔍 Complex table detected - applying lenient validation")
             
+            # For complex tables, accept if we have reasonable headers and some content
+            has_meaningful_headers = any(len(str(h).strip()) > 2 for h in headers)
+            has_reasonable_structure = len(headers) >= 3  # Complex tables should have multiple columns
+            
+            if has_meaningful_headers and has_reasonable_structure:
+                self.logger.logger.info(f"✅ ACCEPTING complex table: {len(headers)} headers, {len(rows)} rows")
+                return True
+            else:
+                self.logger.logger.warning(f"⚠️ Complex table validation failed: meaningful_headers={has_meaningful_headers}, structure={has_reasonable_structure}")
+                return False
+        
+        # Enhanced validation for standard tables
+        if has_content:
+            # Check if this looks like a real table vs. extraction failure
+            if len(headers) >= 2:  # At least 2 columns
+                self.logger.logger.info(f"✅ ACCEPTING standard table: {len(headers)} headers, {len(rows)} rows")
+                return True
+            elif len(headers) == 1 and len(rows) > 0:  # Single column with data
+                self.logger.logger.info(f"✅ ACCEPTING single-column table: {len(headers)} headers, {len(rows)} rows")
+                return True
+            else:
+                self.logger.logger.warning(f"⚠️ Questionable table structure: {len(headers)} headers, {len(rows)} rows")
+                return False
+            
+        self.logger.logger.warning(f"❌ VALIDATION: Rejected table - no content detected")
         return False
 
     def _assess_document_complexity(self, headers: List[str], rows: List[List[str]]) -> str:
@@ -79,6 +110,79 @@ class TableValidator:
         has_content = len(rows) > 0 or len(headers) > 0
         
         return has_meaningful_headers and has_content
+
+    def _is_complex_table_structure(self, headers: List[str], rows: List[List[str]]) -> bool:
+        """Determine if a table has a complex structure that requires special handling."""
+        try:
+            # Check for complex table indicators
+            complexity_indicators = 0
+            
+            # Multiple columns (complex tables typically have many columns)
+            if len(headers) >= 6:
+                complexity_indicators += 1
+                self.logger.logger.info(f"🔍 Complexity: 6+ columns detected ({len(headers)})")
+            
+            # Multiple rows with data
+            if len(rows) >= 5:
+                complexity_indicators += 1
+                self.logger.logger.info(f"🔍 Complexity: 5+ rows detected ({len(rows)})")
+            
+            # Check for financial patterns in headers
+            financial_keywords = ['invoice', 'amount', 'commission', 'rate', 'group', 'id', 'name']
+            financial_headers = sum(1 for h in headers if any(keyword in str(h).lower() for keyword in financial_keywords))
+            if financial_headers >= 3:
+                complexity_indicators += 1
+                self.logger.logger.info(f"🔍 Complexity: Financial patterns detected ({financial_headers} headers)")
+            
+            # Check for mixed data types (numbers, text, dates)
+            if rows:
+                data_variety = self._assess_data_variety(rows)
+                if data_variety >= 2:
+                    complexity_indicators += 1
+                    self.logger.logger.info(f"🔍 Complexity: Mixed data types detected ({data_variety} types)")
+            
+            self.logger.logger.info(f"🔍 Complexity assessment: {complexity_indicators} indicators out of 4")
+            
+            # Consider complex if we have multiple indicators
+            return complexity_indicators >= 2
+            
+        except Exception as e:
+            self.logger.logger.warning(f"Error assessing table complexity: {e}")
+            # Default to simple structure on error
+            return False
+
+    def _assess_data_variety(self, rows: List[List[str]]) -> int:
+        """Assess the variety of data types in table rows."""
+        try:
+            data_types = set()
+            
+            for row in rows[:10]:  # Sample first 10 rows
+                for cell in row:
+                    cell_str = str(cell).strip()
+                    if not cell_str:
+                        continue
+                    
+                    # Check for currency
+                    if re.match(r'^\$[\d,]+\.?\d*$', cell_str):
+                        data_types.add('currency')
+                    # Check for percentages
+                    elif re.match(r'^\d+\.?\d*\s*%$', cell_str):
+                        data_types.add('percentage')
+                    # Check for dates
+                    elif re.match(r'^\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4}$', cell_str):
+                        data_types.add('date')
+                    # Check for numbers
+                    elif re.match(r'^\d+\.?\d*$', cell_str):
+                        data_types.add('number')
+                    # Check for text
+                    elif len(cell_str) > 3:
+                        data_types.add('text')
+            
+            return len(data_types)
+            
+        except Exception as e:
+            self.logger.logger.warning(f"Error assessing data variety: {e}")
+            return 1
 
     def _validate_standard_financial_table(self, headers: List[str], rows: List[List[str]]) -> bool:
         """Standard validation for simple financial documents."""

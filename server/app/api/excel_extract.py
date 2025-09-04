@@ -163,6 +163,84 @@ async def extract_tables_excel(
                 
                 if learned_format and match_score > 0.5:
                     logger.info(f"🎯 Excel: Found matching format with score {match_score}")
+                    
+                    # Apply table editor settings if available (same logic as PDF flow)
+                    if learned_format.get("table_editor_settings"):
+                        table_editor_settings = learned_format["table_editor_settings"]
+                        logger.info(f"🎯 Excel: Applying table editor settings: {table_editor_settings}")
+                        
+                        # Apply learned headers with intelligent matching
+                        if table_editor_settings.get("headers"):
+                            learned_headers = table_editor_settings["headers"]
+                            current_headers = first_table.get("header", [])
+                            
+                            logger.info(f"🎯 Excel: Learned headers: {learned_headers}")
+                            logger.info(f"🎯 Excel: Current headers: {current_headers}")
+                            logger.info(f"🎯 Excel: Learned count: {len(learned_headers)}, Current count: {len(current_headers)}")
+                            
+                            # For financial tables, the learned headers are usually correct
+                            # Check if this looks like a financial table that needs header correction
+                            is_financial_table = any(keyword in ' '.join(current_headers).lower() for keyword in [
+                                'premium', 'commission', 'billed', 'group', 'client', 'invoice',
+                                'total', 'amount', 'due', 'paid', 'rate', 'percentage', 'period'
+                            ])
+                            
+                            if is_financial_table and match_score > 0.5:
+                                # For financial tables with good match score, apply learned headers
+                                # and adjust the data rows accordingly
+                                logger.info(f"🎯 Excel: Financial table detected - applying learned headers")
+                                
+                                # Apply learned headers
+                                first_table["header"] = learned_headers
+                                logger.info(f"🎯 Excel: Applied learned headers: {learned_headers}")
+                                
+                                # Adjust data rows if column count changed
+                                current_rows = first_table.get("rows", [])
+                                if current_rows and len(learned_headers) != len(current_headers):
+                                    logger.info(f"🎯 Excel: Adjusting data rows for header correction")
+                                    adjusted_rows = []
+                                    
+                                    for row in current_rows:
+                                        if len(learned_headers) > len(current_headers):
+                                            # Add empty columns if learned has more columns
+                                            adjusted_row = row + [""] * (len(learned_headers) - len(current_headers))
+                                        else:
+                                            # Truncate row if learned has fewer columns
+                                            adjusted_row = row[:len(learned_headers)]
+                                        
+                                        adjusted_rows.append(adjusted_row)
+                                    
+                                    first_table["rows"] = adjusted_rows
+                                    logger.info(f"🎯 Excel: Adjusted {len(adjusted_rows)} rows to match {len(learned_headers)} columns")
+                                
+                            else:
+                                # For non-financial tables or low confidence, use length-based matching
+                                if len(learned_headers) == len(current_headers):
+                                    # Apply headers directly if count matches
+                                    first_table["header"] = learned_headers
+                                    logger.info(f"🎯 Excel: Applied learned headers (length match): {learned_headers}")
+                                elif len(learned_headers) > len(current_headers):
+                                    # Pad current headers if learned has more columns
+                                    padded_headers = current_headers + [f"Column_{i+1}" for i in range(len(current_headers), len(learned_headers))]
+                                    first_table["header"] = learned_headers[:len(padded_headers)]
+                                    logger.info(f"🎯 Excel: Applied learned headers with padding: {learned_headers[:len(padded_headers)]}")
+                                else:
+                                    # Truncate learned headers if current has more columns
+                                    first_table["header"] = learned_headers + [f"Column_{i+1}" for i in range(len(learned_headers), len(current_headers))]
+                                    logger.info(f"🎯 Excel: Applied learned headers with truncation: {first_table['header']}")
+                        else:
+                            logger.info(f"🎯 Excel: No learned headers to apply")
+                        
+                        # Apply learned summary rows
+                        if table_editor_settings.get("summary_rows"):
+                            summary_rows_set = set(table_editor_settings["summary_rows"])
+                            first_table["summaryRows"] = summary_rows_set
+                            logger.info(f"🎯 Excel: Applied learned summary rows: {list(summary_rows_set)}")
+                        else:
+                            logger.info(f"🎯 Excel: No summary rows to apply")
+                    else:
+                        logger.info(f"🎯 Excel: No table editor settings found in learned format")
+                    
                     format_learning_data = {
                         "found_match": True,
                         "match_score": match_score,
@@ -171,6 +249,7 @@ async def extract_tables_excel(
                         "table_editor_settings": learned_format.get("table_editor_settings")
                     }
                 else:
+                    logger.info(f"🎯 Excel: No matching format found (score: {match_score})")
                     format_learning_data = {
                         "found_match": False,
                         "match_score": match_score or 0,
@@ -331,6 +410,84 @@ async def extract_tables_excel_bytes(
                     
                     if learned_format and match_score > 0.5:
                         logger.info(f"🎯 Excel Bytes: Found matching format with score {match_score}")
+                        
+                        # Apply table editor settings if available (same logic as PDF flow)
+                        if learned_format.get("table_editor_settings"):
+                            table_editor_settings = learned_format["table_editor_settings"]
+                            logger.info(f"🎯 Excel Bytes: Applying table editor settings: {table_editor_settings}")
+                            
+                            # Apply learned headers with intelligent matching
+                            if table_editor_settings.get("headers"):
+                                learned_headers = table_editor_settings["headers"]
+                                current_headers = first_table.get("header", [])
+                                
+                                logger.info(f"🎯 Excel Bytes: Learned headers: {learned_headers}")
+                                logger.info(f"🎯 Excel Bytes: Current headers: {current_headers}")
+                                logger.info(f"🎯 Excel Bytes: Learned count: {len(learned_headers)}, Current count: {len(current_headers)}")
+                                
+                                # For financial tables, the learned headers are usually correct
+                                # Check if this looks like a financial table that needs header correction
+                                is_financial_table = any(keyword in ' '.join(current_headers).lower() for keyword in [
+                                    'premium', 'commission', 'billed', 'group', 'client', 'invoice',
+                                    'total', 'amount', 'due', 'paid', 'rate', 'percentage', 'period'
+                                ])
+                                
+                                if is_financial_table and match_score > 0.5:
+                                    # For financial tables with good match score, apply learned headers
+                                    # and adjust the data rows accordingly
+                                    logger.info(f"🎯 Excel Bytes: Financial table detected - applying learned headers")
+                                    
+                                    # Apply learned headers
+                                    first_table["header"] = learned_headers
+                                    logger.info(f"🎯 Excel Bytes: Applied learned headers: {learned_headers}")
+                                    
+                                    # Adjust data rows if column count changed
+                                    current_rows = first_table.get("rows", [])
+                                    if current_rows and len(learned_headers) != len(current_headers):
+                                        logger.info(f"🎯 Excel Bytes: Adjusting data rows for header correction")
+                                        adjusted_rows = []
+                                        
+                                        for row in current_rows:
+                                            if len(learned_headers) > len(current_headers):
+                                                # Add empty columns if learned has more columns
+                                                adjusted_row = row + [""] * (len(learned_headers) - len(current_headers))
+                                            else:
+                                                # Truncate row if learned has fewer columns
+                                                adjusted_row = row[:len(learned_headers)]
+                                            
+                                            adjusted_rows.append(adjusted_row)
+                                        
+                                        first_table["rows"] = adjusted_rows
+                                        logger.info(f"🎯 Excel Bytes: Adjusted {len(adjusted_rows)} rows to match {len(learned_headers)} columns")
+                                    
+                                else:
+                                    # For non-financial tables or low confidence, use length-based matching
+                                    if len(learned_headers) == len(current_headers):
+                                        # Apply headers directly if count matches
+                                        first_table["header"] = learned_headers
+                                        logger.info(f"🎯 Excel Bytes: Applied learned headers (length match): {learned_headers}")
+                                    elif len(learned_headers) > len(current_headers):
+                                        # Pad current headers if learned has more columns
+                                        padded_headers = current_headers + [f"Column_{i+1}" for i in range(len(current_headers), len(learned_headers))]
+                                        first_table["header"] = learned_headers[:len(padded_headers)]
+                                        logger.info(f"🎯 Excel Bytes: Applied learned headers with padding: {learned_headers[:len(padded_headers)]}")
+                                    else:
+                                        # Truncate learned headers if current has more columns
+                                        first_table["header"] = learned_headers + [f"Column_{i+1}" for i in range(len(learned_headers), len(current_headers))]
+                                        logger.info(f"🎯 Excel Bytes: Applied learned headers with truncation: {first_table['header']}")
+                            else:
+                                logger.info(f"🎯 Excel Bytes: No learned headers to apply")
+                            
+                            # Apply learned summary rows
+                            if table_editor_settings.get("summary_rows"):
+                                summary_rows_set = set(table_editor_settings["summary_rows"])
+                                first_table["summaryRows"] = summary_rows_set
+                                logger.info(f"🎯 Excel Bytes: Applied learned summary rows: {list(summary_rows_set)}")
+                            else:
+                                logger.info(f"🎯 Excel Bytes: No summary rows to apply")
+                        else:
+                            logger.info(f"🎯 Excel Bytes: No table editor settings found in learned format")
+                        
                         format_learning_data = {
                             "found_match": True,
                             "match_score": match_score,
@@ -339,6 +496,7 @@ async def extract_tables_excel_bytes(
                             "table_editor_settings": learned_format.get("table_editor_settings")
                         }
                     else:
+                        logger.info(f"🎯 Excel Bytes: No matching format found (score: {match_score})")
                         format_learning_data = {
                             "found_match": False,
                             "match_score": match_score or 0,
@@ -549,6 +707,84 @@ async def extract_tables_excel_s3(
                     
                     if learned_format and match_score > 0.5:
                         logger.info(f"🎯 Excel S3: Found matching format with score {match_score}")
+                        
+                        # Apply table editor settings if available (same logic as PDF flow)
+                        if learned_format.get("table_editor_settings"):
+                            table_editor_settings = learned_format["table_editor_settings"]
+                            logger.info(f"🎯 Excel S3: Applying table editor settings: {table_editor_settings}")
+                            
+                            # Apply learned headers with intelligent matching
+                            if table_editor_settings.get("headers"):
+                                learned_headers = table_editor_settings["headers"]
+                                current_headers = first_table.get("header", [])
+                                
+                                logger.info(f"🎯 Excel S3: Learned headers: {learned_headers}")
+                                logger.info(f"🎯 Excel S3: Current headers: {current_headers}")
+                                logger.info(f"🎯 Excel S3: Learned count: {len(learned_headers)}, Current count: {len(current_headers)}")
+                                
+                                # For financial tables, the learned headers are usually correct
+                                # Check if this looks like a financial table that needs header correction
+                                is_financial_table = any(keyword in ' '.join(current_headers).lower() for keyword in [
+                                    'premium', 'commission', 'billed', 'group', 'client', 'invoice',
+                                    'total', 'amount', 'due', 'paid', 'rate', 'percentage', 'period'
+                                ])
+                                
+                                if is_financial_table and match_score > 0.5:
+                                    # For financial tables with good match score, apply learned headers
+                                    # and adjust the data rows accordingly
+                                    logger.info(f"🎯 Excel S3: Financial table detected - applying learned headers")
+                                    
+                                    # Apply learned headers
+                                    first_table["header"] = learned_headers
+                                    logger.info(f"🎯 Excel S3: Applied learned headers: {learned_headers}")
+                                    
+                                    # Adjust data rows if column count changed
+                                    current_rows = first_table.get("rows", [])
+                                    if current_rows and len(learned_headers) != len(current_headers):
+                                        logger.info(f"🎯 Excel S3: Adjusting data rows for header correction")
+                                        adjusted_rows = []
+                                        
+                                        for row in current_rows:
+                                            if len(learned_headers) > len(current_headers):
+                                                # Add empty columns if learned has more columns
+                                                adjusted_row = row + [""] * (len(learned_headers) - len(current_headers))
+                                            else:
+                                                # Truncate row if learned has fewer columns
+                                                adjusted_row = row[:len(learned_headers)]
+                                            
+                                            adjusted_rows.append(adjusted_row)
+                                        
+                                        first_table["rows"] = adjusted_rows
+                                        logger.info(f"🎯 Excel S3: Adjusted {len(adjusted_rows)} rows to match {len(learned_headers)} columns")
+                                    
+                                else:
+                                    # For non-financial tables or low confidence, use length-based matching
+                                    if len(learned_headers) == len(current_headers):
+                                        # Apply headers directly if count matches
+                                        first_table["header"] = learned_headers
+                                        logger.info(f"🎯 Excel S3: Applied learned headers (length match): {learned_headers}")
+                                    elif len(learned_headers) > len(current_headers):
+                                        # Pad current headers if learned has more columns
+                                        padded_headers = current_headers + [f"Column_{i+1}" for i in range(len(current_headers), len(learned_headers))]
+                                        first_table["header"] = learned_headers[:len(padded_headers)]
+                                        logger.info(f"🎯 Excel S3: Applied learned headers with padding: {learned_headers[:len(padded_headers)]}")
+                                    else:
+                                        # Truncate learned headers if current has more columns
+                                        first_table["header"] = learned_headers + [f"Column_{i+1}" for i in range(len(learned_headers), len(current_headers))]
+                                        logger.info(f"🎯 Excel S3: Applied learned headers with truncation: {first_table['header']}")
+                            else:
+                                logger.info(f"🎯 Excel S3: No learned headers to apply")
+                            
+                            # Apply learned summary rows
+                            if table_editor_settings.get("summary_rows"):
+                                summary_rows_set = set(table_editor_settings["summary_rows"])
+                                first_table["summaryRows"] = summary_rows_set
+                                logger.info(f"🎯 Excel S3: Applied learned summary rows: {list(summary_rows_set)}")
+                            else:
+                                logger.info(f"🎯 Excel S3: No summary rows to apply")
+                        else:
+                            logger.info(f"🎯 Excel S3: No table editor settings found in learned format")
+                        
                         format_learning_data = {
                             "found_match": True,
                             "match_score": match_score,
@@ -557,6 +793,7 @@ async def extract_tables_excel_s3(
                             "table_editor_settings": learned_format.get("table_editor_settings")
                         }
                     else:
+                        logger.info(f"🎯 Excel S3: No matching format found (score: {match_score})")
                         format_learning_data = {
                             "found_match": False,
                             "match_score": match_score or 0,

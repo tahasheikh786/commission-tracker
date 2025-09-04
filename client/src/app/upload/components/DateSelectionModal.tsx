@@ -17,6 +17,7 @@ interface DateSelectionModalProps {
   isOpen: boolean
   onClose: () => void
   onDateSelect: (selectedDate: string, dateType: string) => void
+  onCloseWithoutSelection?: () => void
   extractedDates: ExtractedDate[]
   fileName: string
   loading?: boolean
@@ -26,6 +27,7 @@ export default function DateSelectionModal({
   isOpen,
   onClose,
   onDateSelect,
+  onCloseWithoutSelection,
   extractedDates,
   fileName,
   loading = false
@@ -71,6 +73,9 @@ export default function DateSelectionModal({
   }
 
   const handleSkip = () => {
+    if (onCloseWithoutSelection) {
+      onCloseWithoutSelection()
+    }
     onClose()
   }
 
@@ -102,7 +107,12 @@ export default function DateSelectionModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={() => {
+        if (onCloseWithoutSelection) {
+          onCloseWithoutSelection()
+        }
+        onClose()
+      }} />
       
       {/* Modal */}
       <div className="relative bg-white rounded-2xl shadow-2xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-hidden">
@@ -118,7 +128,12 @@ export default function DateSelectionModal({
             </div>
           </div>
           <button
-            onClick={onClose}
+            onClick={() => {
+              if (onCloseWithoutSelection) {
+                onCloseWithoutSelection()
+              }
+              onClose()
+            }}
             className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
           >
             <X className="w-5 h-5" />

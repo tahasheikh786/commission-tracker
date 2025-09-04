@@ -902,39 +902,41 @@ async def improve_current_extraction(
         
         logger.info(f"Processing PDF: {temp_pdf_path} (downloaded from S3)")
         
-        # Step 1: Enhance page images
-        enhanced_images = []
-        try:
-            for page_num in range(min(max_pages, 5)):  # Limit to first 5 pages
-                logger.info(f"Enhancing page {page_num + 1}")
-                enhanced_image = gpt4o_service.enhance_page_image(temp_pdf_path, page_num, dpi=600)
-                if enhanced_image:
-                    enhanced_images.append(enhanced_image)
-                    logger.info(f"Successfully enhanced page {page_num + 1}")
-                else:
-                    logger.warning(f"Failed to enhance page {page_num + 1}")
-        finally:
-            # Clean up temporary file
-            try:
-                os.remove(temp_pdf_path)
-                logger.info(f"Cleaned up temporary file: {temp_pdf_path}")
-            except Exception as e:
-                logger.warning(f"Failed to clean up temporary file {temp_pdf_path}: {e}")
+        # Step 1: Use the new intelligent extraction method for improvement
+        logger.info("Starting intelligent GPT extraction for improvement...")
+        extraction_result = gpt4o_service.extract_commission_data(
+            pdf_path=temp_pdf_path,
+            max_pages=min(max_pages, 5)  # Limit to first 5 pages
+        )
         
-        if not enhanced_images:
+        # Clean up temporary file
+        try:
+            os.remove(temp_pdf_path)
+            logger.info(f"Cleaned up temporary file: {temp_pdf_path}")
+        except Exception as e:
+            logger.warning(f"Failed to clean up temporary file {temp_pdf_path}: {e}")
+        
+        if not extraction_result.get("success"):
             raise HTTPException(
-                status_code=500, 
-                detail="Failed to enhance any page images for vision analysis"
+                status_code=500,
+                detail=f"GPT extraction failed: {extraction_result.get('error', 'Unknown error')}"
             )
         
-        logger.info(f"Enhanced {len(enhanced_images)} page images")
+        # Get extracted tables for improvement
+        extracted_tables = extraction_result.get("tables", [])
+        if not extracted_tables:
+            raise HTTPException(
+                status_code=500,
+                detail="No tables extracted for improvement"
+            )
         
-        # Step 2: Analyze with GPT-5 Vision
-        logger.info("Starting GPT-5 Vision analysis...")
-        vision_analysis = gpt4o_service.analyze_table_with_vision(
-            enhanced_images=enhanced_images,
-            current_extraction=current_extraction,
-            max_pages=max_pages
+        logger.info(f"Extracted {len(extracted_tables)} tables for improvement")
+        
+        # Step 2: Process improvement results using the new service
+        logger.info("Starting table improvement processing...")
+        improvement_result = gpt4o_service.process_improvement_result(
+            vision_analysis={"success": True, "analysis": {"tables": extracted_tables}},
+            current_tables=current_extraction
         )
         
         if not vision_analysis.get("success"):

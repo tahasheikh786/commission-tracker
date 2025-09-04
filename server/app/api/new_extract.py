@@ -677,154 +677,61 @@ async def extract_tables_gpt(
         
         logger.info(f"PDF has {num_pages} pages")
         
-        # Use the service to calculate optimal DPI based on document characteristics
-        # This prevents the "Images completely unreadable or blank" error that occurs
-        # when images are too large for GPT-5 Vision to process
-        dpi, quality_label = gpt4o_service.calculate_optimal_dpi(num_pages)
-        
-        enhanced_images = []
-        try:
-            for page_num in range(min(num_pages, 5)):  # Limit to first 5 pages or total pages if less
-                logger.info(f"Enhancing page {page_num + 1} with {quality_label}")
-                enhanced_image = gpt4o_service.enhance_page_image(temp_pdf_path, page_num, dpi=dpi)
-                if enhanced_image:
-                    enhanced_images.append(enhanced_image)
-                    logger.info(f"Successfully enhanced page {page_num + 1} with {quality_label}")
-                else:
-                    logger.warning(f"Failed to enhance page {page_num + 1}")
-        finally:
-            # Clean up temporary file
-            try:
-                os.remove(temp_pdf_path)
-                logger.info(f"Cleaned up temporary file: {temp_pdf_path}")
-            except Exception as e:
-                logger.warning(f"Failed to clean up temporary file {temp_pdf_path}: {e}")
-        
-        if not enhanced_images:
-            raise HTTPException(
-                status_code=500, 
-                detail="Failed to enhance any page images for vision analysis"
-            )
-        
-        logger.info(f"Enhanced {len(enhanced_images)} page images")
-        
-        # Step 2: Use ultra HD GPT-5 Vision extraction with smart company detection
-        logger.info("Starting ultra HD GPT-5 Vision table extraction with smart company detection...")
-        extraction_result = gpt4o_service.extract_tables_with_vision_ultra_hd(
-            enhanced_images=enhanced_images,
-            max_pages=len(enhanced_images)
+                # Use the new intelligent extraction method that automatically handles PDF type and optimization
+        logger.info("Starting intelligent GPT extraction with automatic PDF type detection...")
+        extraction_result = gpt4o_service.extract_commission_data(
+            pdf_path=temp_pdf_path,
+            max_pages=min(num_pages, 5)  # Limit to first 5 pages or total pages if less
         )
         
-        # Check if extraction failed or returned no tables
-        extracted_tables = extraction_result.get("tables", [])
-        if not extraction_result.get("success") or not extracted_tables:
-            # Log the error but don't fail completely
-            error_msg = extraction_result.get('error', 'No tables found')
-            logger.warning(f"GPT extraction failed or returned no tables: {error_msg}")
-            
-            # Check if it's an image size issue and retry with lower DPI
-            logger.info(f"Checking error message for fallback trigger: '{error_msg}'")
-            logger.info(f"Extracted tables count: {len(extracted_tables)}")
-            if "unreadable" in error_msg.lower() or "blank" in error_msg.lower() or not extracted_tables:
-                logger.info("✅ Detected image size issue, retrying with lower DPI...")
-                
-                # Retry with progressively lower DPI levels
-                fallback_dpis = [400, 300, 250]  # Try multiple fallback levels
-                logger.info(f"Will try fallback DPIs: {fallback_dpis}")
-                
-                for fallback_dpi in fallback_dpis:
-                    logger.info(f"Trying fallback DPI: {fallback_dpi}")
-                
-                # Try multiple fallback DPI levels
-                fallback_success = False
-                
-                for fallback_dpi in fallback_dpis:
-                    logger.info(f"Trying fallback DPI: {fallback_dpi}")
-                    
-                    # Re-download and re-enhance images with lower DPI
-                    enhanced_images_fallback = []
-                    try:
-                        # Re-download the file for fallback processing
-                        temp_pdf_path_fallback = download_file_from_s3(s3_key)
-                        if temp_pdf_path_fallback:
-                            for page_num in range(min(num_pages, 5)):
-                                logger.info(f"Re-enhancing page {page_num + 1} with fallback DPI {fallback_dpi}")
-                                enhanced_image = gpt4o_service.enhance_page_image(temp_pdf_path_fallback, page_num, dpi=fallback_dpi)
-                                if enhanced_image:
-                                    enhanced_images_fallback.append(enhanced_image)
-                                    logger.info(f"Successfully re-enhanced page {page_num + 1}")
-                                else:
-                                    logger.warning(f"Failed to re-enhance page {page_num + 1}")
-                            
-                            # Clean up fallback file
-                            try:
-                                os.remove(temp_pdf_path_fallback)
-                            except Exception as e:
-                                logger.warning(f"Failed to clean up fallback file: {e}")
-                        else:
-                            logger.error("Failed to re-download file for fallback processing")
-                            continue
-                    except Exception as e:
-                        logger.error(f"Error during fallback image enhancement: {e}")
-                        continue
-                    
-                    if enhanced_images_fallback:
-                        # Retry extraction with lower DPI images
-                        logger.info(f"Retrying GPT extraction with fallback DPI {fallback_dpi}...")
-                        extraction_result = gpt4o_service.extract_tables_with_vision_ultra_hd(
-                            enhanced_images=enhanced_images_fallback,
-                            max_pages=len(enhanced_images_fallback)
-                        )
-                        
-                        if extraction_result.get("success"):
-                            logger.info(f"✅ Fallback extraction succeeded with DPI {fallback_dpi}!")
-                            fallback_success = True
-                            break
-                        else:
-                            fallback_error = extraction_result.get('error', 'Unknown error')
-                            logger.warning(f"Fallback extraction failed with DPI {fallback_dpi}: {fallback_error}")
-                            # Continue to next DPI level
-                    else:
-                        logger.warning(f"No enhanced images created with DPI {fallback_dpi}")
-                
-                if not fallback_success:
-                    logger.error("All fallback DPI levels failed")
-            
-            # If still failed, return error response
-            final_extracted_tables = extraction_result.get("tables", [])
-            if not extraction_result.get("success") or not final_extracted_tables:
-                final_error = extraction_result.get('error', error_msg)
-                logger.error(f"Final extraction failed after all attempts: {final_error}")
-                return JSONResponse(
-                    status_code=422,  # Unprocessable Entity
-                    content={
-                        "success": False,
-                        "error": f"GPT extraction failed: {final_error}",
-                        "message": "The document could not be processed by GPT-5 Vision. This may be due to image quality issues or the document format. Please try with a different document or contact support.",
-                        "upload_id": upload_id,
-                        "timestamp": datetime.now().isoformat()
-                    }
-                )
+        # Clean up temporary file
+        try:
+            os.remove(temp_pdf_path)
+            logger.info(f"Cleaned up temporary file: {temp_pdf_path}")
+        except Exception as e:
+            logger.warning(f"Failed to clean up temporary file {temp_pdf_path}: {e}")
         
-        logger.info("GPT-5 Vision table extraction completed successfully")
+        if not extraction_result.get("success"):
+            raise HTTPException(
+                status_code=500, 
+                detail=f"GPT extraction failed: {extraction_result.get('error', 'Unknown error')}"
+            )
         
-        # Step 3: Process extracted tables with company detection
+        logger.info(f"GPT extraction completed successfully")
+        
+        # Check if extraction was successful
+        if not extraction_result.get("success"):
+            error_msg = extraction_result.get('error', 'Unknown error')
+            logger.error(f"GPT extraction failed: {error_msg}")
+            return JSONResponse(
+                status_code=422,  # Unprocessable Entity
+                content={
+                    "success": False,
+                    "error": f"GPT extraction failed: {error_msg}",
+                    "message": "The document could not be processed by GPT. This may be due to document format or content issues. Please try with a different document or contact support.",
+                    "upload_id": upload_id,
+                    "timestamp": datetime.now().isoformat()
+                }
+            )
+        
+        # Get extracted tables
         extracted_tables = extraction_result.get("tables", [])
         extraction_metadata = extraction_result.get("extraction_metadata", {})
         
-        # Check if we got any tables (this should not happen if fallback worked)
         if not extracted_tables:
-            logger.warning("No tables extracted from GPT-5 Vision analysis")
+            logger.warning("No tables extracted from GPT analysis")
             return JSONResponse(
                 status_code=422,  # Unprocessable Entity
                 content={
                     "success": False,
                     "error": "No tables found in document",
-                    "message": "GPT-5 Vision could not identify any tables in the document. This may be due to image quality issues or the document format. Please try with a different document or contact support.",
+                    "message": "GPT could not identify any tables in the document. This may be due to document format or content issues. Please try with a different document or contact support.",
                     "upload_id": upload_id,
                     "timestamp": datetime.now().isoformat()
                 }
             )
+        
+        logger.info("GPT extraction completed successfully")
         
         # Process tables with company detection
         processed_tables = []
@@ -1334,102 +1241,27 @@ async def extract_tables_gpt_enhanced(
         
         logger.info(f"PDF has {num_pages} pages")
         
-        # Use the service to calculate optimal DPI for enhanced endpoint (slightly lower than standard)
-        dpi, quality_label = gpt4o_service.calculate_optimal_dpi(num_pages)
-        # For enhanced endpoint, use slightly lower DPI for better reliability
-        if dpi > 400:
-            dpi = max(400, dpi - 100)
-            quality_label = f"enhanced {quality_label}"
-        
-        enhanced_images = []
-        try:
-            for page_num in range(min(num_pages, 5)):  # Limit to first 5 pages or total pages if less
-                logger.info(f"Enhancing page {page_num + 1} with {quality_label}")
-                enhanced_image = gpt4o_service.enhance_page_image(temp_pdf_path, page_num, dpi=dpi)
-                if enhanced_image:
-                    enhanced_images.append(enhanced_image)
-                    logger.info(f"Successfully enhanced page {page_num + 1} with {quality_label}")
-                else:
-                    logger.warning(f"Failed to enhance page {page_num + 1}")
-        finally:
-            # Clean up temporary file
-            try:
-                os.remove(temp_pdf_path)
-                logger.info(f"Cleaned up temporary file: {temp_pdf_path}")
-            except Exception as e:
-                logger.warning(f"Failed to clean up temporary file {temp_pdf_path}: {e}")
-        
-        if not enhanced_images:
-            raise HTTPException(
-                status_code=500, 
-                detail="Failed to enhance any page images for vision analysis"
-            )
-        
-        logger.info(f"Enhanced {len(enhanced_images)} page images")
-        
-        # Step 2: Use ultra HD GPT-5 Vision extraction with smart company detection
-        logger.info("Starting ultra HD GPT-5 Vision table extraction with smart company detection...")
-        extraction_result = gpt4o_service.extract_tables_with_vision_ultra_hd(
-            enhanced_images=enhanced_images,
-            max_pages=len(enhanced_images)
+        # Use the new intelligent extraction method for enhanced endpoint
+        logger.info("Starting enhanced intelligent GPT extraction with automatic PDF type detection...")
+        extraction_result = gpt4o_service.extract_commission_data(
+            pdf_path=temp_pdf_path,
+            max_pages=min(num_pages, 5)  # Limit to first 5 pages or total pages if less
         )
         
-        if not extraction_result.get("success"):
-            # Check if it's an image size issue and retry with lower DPI
-            error_msg = extraction_result.get('error', 'Unknown error')
-            if "unreadable" in error_msg.lower() or "blank" in error_msg.lower():
-                logger.info("Enhanced endpoint: Detected image size issue, retrying with lower DPI...")
-                
-                # Retry with lower DPI
-                fallback_dpi = max(300, dpi - 200)  # Reduce DPI by 200, minimum 300
-                logger.info(f"Enhanced endpoint: Retrying with fallback DPI: {fallback_dpi}")
-                
-                # Re-download and re-enhance images with lower DPI
-                enhanced_images_fallback = []
-                try:
-                    # Re-download the file for fallback processing
-                    temp_pdf_path_fallback = download_file_from_s3(s3_key)
-                    if temp_pdf_path_fallback:
-                        for page_num in range(min(num_pages, 5)):
-                            logger.info(f"Enhanced endpoint: Re-enhancing page {page_num + 1} with fallback DPI {fallback_dpi}")
-                            enhanced_image = gpt4o_service.enhance_page_image(temp_pdf_path_fallback, page_num, dpi=fallback_dpi)
-                            if enhanced_image:
-                                enhanced_images_fallback.append(enhanced_image)
-                                logger.info(f"Enhanced endpoint: Successfully re-enhanced page {page_num + 1}")
-                            else:
-                                logger.warning(f"Enhanced endpoint: Failed to re-enhance page {page_num + 1}")
-                        
-                        # Clean up fallback file
-                        try:
-                            os.remove(temp_pdf_path_fallback)
-                        except Exception as e:
-                            logger.warning(f"Enhanced endpoint: Failed to clean up fallback file: {e}")
-                    else:
-                        logger.error("Enhanced endpoint: Failed to re-download file for fallback processing")
-                except Exception as e:
-                    logger.error(f"Enhanced endpoint: Error during fallback image enhancement: {e}")
-                
-                if enhanced_images_fallback:
-                    # Retry extraction with lower DPI images
-                    logger.info("Enhanced endpoint: Retrying GPT extraction with fallback images...")
-                    extraction_result = gpt4o_service.extract_tables_with_vision_ultra_hd(
-                        enhanced_images=enhanced_images_fallback,
-                        max_pages=len(enhanced_images_fallback)
-                    )
-                    
-                    if extraction_result.get("success"):
-                        logger.info("Enhanced endpoint: Fallback extraction succeeded!")
-                    else:
-                        logger.warning(f"Enhanced endpoint: Fallback extraction also failed: {extraction_result.get('error', 'Unknown error')}")
-            
-            # If still failed, raise exception
-            if not extraction_result.get("success"):
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Enhanced GPT extraction failed: {extraction_result.get('error', 'Unknown error')}"
-                )
+        # Clean up temporary file
+        try:
+            os.remove(temp_pdf_path)
+            logger.info(f"Cleaned up temporary file: {temp_pdf_path}")
+        except Exception as e:
+            logger.warning(f"Failed to clean up temporary file {temp_pdf_path}: {e}")
         
-        logger.info("GPT-5 Vision table extraction completed successfully")
+        if not extraction_result.get("success"):
+            raise HTTPException(
+                status_code=500,
+                detail=f"Enhanced GPT extraction failed: {extraction_result.get('error', 'Unknown error')}"
+            )
+        
+        logger.info("Enhanced GPT extraction completed successfully")
         
         # Step 3: Process extracted tables with company detection
         extracted_tables = extraction_result.get("tables", [])

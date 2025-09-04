@@ -1749,3 +1749,80 @@ class ExtractionPipeline:
                 results.append(error_result)
         
         return results
+
+    async def _extract_table_complex(self, table, table_index: int, document_path: str) -> Optional[Dict[str, Any]]:
+        """Extract table using complex structure analysis."""
+        try:
+            # Use the complex extraction method
+            from ..core.table_extractor import TableExtractor
+            extractor = TableExtractor(self.logger)
+            
+            # Try the complex extraction method directly
+            headers, rows = extractor._extract_complex_table_structure(table)
+            
+            if headers and rows:
+                # Create table data structure
+                table_data = {
+                    "headers": headers,
+                    "rows": rows,
+                    "cells": extractor._create_cells_from_headers_and_rows(headers, rows),
+                    "columns": [{"name": header, "index": i} for i, header in enumerate(headers)],
+                    "footers": [],
+                    "metadata": extractor._extract_table_metadata(table, table_index, document_path),
+                    "row_count": len(rows),
+                    "column_count": len(headers),
+                    "table_index": table_index,
+                    "extractor": "ComplexTableExtractor"
+                }
+                return table_data
+            
+            return None
+            
+        except Exception as e:
+            self.logger.logger.error(f"Complex extraction failed: {e}")
+            return None
+    
+    def _calculate_table_confidence(self, table_data: Dict[str, Any]) -> float:
+        """Calculate confidence score for a table based on its structure and content."""
+        try:
+            confidence = 0.0
+            
+            # Base confidence from structure
+            headers = table_data.get('headers', [])
+            rows = table_data.get('rows', [])
+            
+            if headers and rows:
+                # Good structure
+                confidence += 0.4
+                
+                # Check header quality
+                meaningful_headers = sum(1 for h in headers if len(str(h).strip()) > 2)
+                if meaningful_headers >= len(headers) * 0.8:
+                    confidence += 0.2
+                
+                # Check data quality
+                if len(rows) >= 1:
+                    confidence += 0.2
+                    
+                    # Check for data diversity
+                    all_cells = []
+                    for row in rows[:5]:  # Sample first 5 rows
+                        all_cells.extend([str(cell).strip() for cell in row if cell])
+                    
+                    if all_cells:
+                        unique_ratio = len(set(all_cells)) / len(all_cells)
+                        if unique_ratio > 0.5:
+                            confidence += 0.1
+                
+                # Check for financial table indicators
+                header_text = ' '.join(str(h).lower() for h in headers)
+                financial_terms = ['commission', 'premium', 'billed', 'group', 'client', 'total', 'amount']
+                financial_matches = sum(1 for term in financial_terms if term in header_text)
+                if financial_matches >= 2:
+                    confidence += 0.1
+            
+            return min(1.0, confidence)
+            
+        except Exception as e:
+            self.logger.logger.error(f"Error calculating table confidence: {e}")
+            return 0.5  # Default confidence
