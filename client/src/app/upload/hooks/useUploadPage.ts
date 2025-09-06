@@ -51,10 +51,7 @@ export function useUploadPage() {
   const [approvalProgress, setApprovalProgress] = useState({ totalRows: 0, processedRows: 0 })
   
   // Debug state changes
-  useEffect(() => {
-    console.log('🔄 useUploadPage state changed:', { submitting, approvalProgress })
-  }, [submitting, approvalProgress])
-
+ 
   // Date extraction state
   const [selectedStatementDate, setSelectedStatementDate] = useState<any>(null)
 
@@ -63,14 +60,10 @@ export function useUploadPage() {
     uploadId: uploaded?.upload_id,
     currentStep: showTableEditor ? 'table_editor' : showFieldMapper ? 'field_mapper' : finalTables.length > 0 ? 'dashboard' : 'upload',
     autoSaveInterval: 60000,
-    onProgressSaved: (step, data) => {
-      console.log(`Progress saved for step: ${step}`, data)
-    },
+   
     onProgressLoad: (step, data) => {
-      console.log(`Progress loaded for step: ${step}`, data)
       // Load selected statement date from progress data
       if (data.selected_statement_date && !selectedStatementDate) {
-        console.log('🎯 Loading selected statement date from progress:', data.selected_statement_date)
         setSelectedStatementDate(data.selected_statement_date)
       }
     }
@@ -806,13 +799,10 @@ export function useUploadPage() {
   }
 
   async function handleApprove() {
-    console.log('🚀 handleApprove called')
-    console.log('📊 Company:', company)
-    console.log('📄 Upload ID:', uploaded?.upload_id)
-    console.log('📋 Final tables:', finalTables)
+   
     
     if (!company || !uploaded?.upload_id) {
-      console.log('❌ Missing company or upload_id, returning early')
+      
       return
     }
     
@@ -821,13 +811,11 @@ export function useUploadPage() {
       return total + (table.rows ? table.rows.length : 0);
     }, 0);
     
-    console.log('📊 Total rows calculated:', totalRows)
-    console.log('🔄 Setting approval progress and submitting state')
+   
     
     setApprovalProgress({ totalRows, processedRows: 0 });
     setSubmitting(true);
     
-    console.log('✅ States set - should trigger ApprovalLoader')
     
     // Start progress simulation immediately
     const progressInterval = setInterval(() => {

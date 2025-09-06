@@ -287,7 +287,7 @@ class GoogleDocAIExtractor:
     
     def extract_tables(self, pdf_path: str) -> List[Dict[str, Any]]:
         """
-        Extract tables from PDF using Google Document AI directly without image conversion.
+        Extract tables from PDF using Google Document AI with smart page handling.
         
         Args:
             pdf_path: Path to the PDF file
@@ -307,30 +307,97 @@ class GoogleDocAIExtractor:
             with open(pdf_path, "rb") as pdf_file:
                 pdf_content = pdf_file.read()
             
-            # Send PDF directly to Google Doc AI without image conversion
-            request = documentai.ProcessRequest(
-                name=self.processor_name,
-                raw_document=documentai.RawDocument(
-                    content=pdf_content,
-                    mime_type="application/pdf"
-                ),
-                # Simplified field mask for table extraction
-                field_mask="text,pages.tables,pages.pageNumber,pages.dimension"
-            )
+            # Get page count to determine processing strategy
+            page_count = self._get_pdf_page_count(pdf_content)
+            print(f"📄 Google Document AI: Document has {page_count} pages")
             
-            # Process the document with retry logic
-            print("🔄 Google Document AI: Starting document processing...")
-            sys.stdout.flush()
-            document = self._process_document_with_retry(request)
-            print("✅ Google Document AI: Document processing completed")
-            sys.stdout.flush()
+            # **ENHANCED DEBUGGING: Track processing strategy and results**
+            processing_mode = "unknown"
+            tables = []
             
-            # Extract tables from the processed document
-            print("🔍 Google Document AI: Extracting tables from processed document...")
-            sys.stdout.flush()
-            tables = self._extract_tables_from_document(document)
+            # Determine processing strategy based on page count
+            if page_count <= 15:
+                # Use regular mode for small documents
+                processing_mode = "regular"
+                print("🔄 Google Document AI: Using regular mode (≤15 pages)")
+                tables = self._process_document_regular_mode(pdf_content)
+                print(f"✅ Google Document AI: Regular mode extracted {len(tables)} tables")
+                
+            elif page_count <= 30:
+                # Use imageless mode for medium documents
+                processing_mode = "imageless"
+                print(f"🔄 Google Document AI: Using imageless mode ({page_count} pages)")
+                try:
+                    tables = self._process_document_imageless_mode(pdf_content)
+                    print(f"✅ Google Document AI: Imageless mode extracted {len(tables)} tables")
+                except Exception as e:
+                    if "PAGE_LIMIT_EXCEEDED" in str(e) or "page limit" in str(e).lower():
+                        processing_mode = "chunked"
+                        print(f"⚠️ Google Document AI: Imageless mode failed, falling back to chunked processing")
+                        tables = self._process_document_in_chunks(pdf_content, page_count)
+                        print(f"✅ Google Document AI: Chunked processing extracted {len(tables)} tables")
+                    else:
+                        print(f"❌ Google Document AI: Imageless mode failed with non-page-limit error: {e}")
+                        raise
+                        
+            else:
+                # Use chunked processing for large documents
+                processing_mode = "chunked"
+                print(f"🔄 Google Document AI: Using chunked processing ({page_count} pages)")
+                tables = self._process_document_in_chunks(pdf_content, page_count)
+                print(f"✅ Google Document AI: Chunked processing extracted {len(tables)} tables")
+            
+            # **ENHANCED DEBUGGING: Calculate extraction metrics**
+            tables_per_page = len(tables) / page_count if page_count > 0 else 0
+            total_rows = sum(len(table.get('rows', [])) for table in tables)
+            avg_rows_per_table = total_rows / len(tables) if tables else 0
+            
+            print(f"📊 EXTRACTION METRICS:")
+            print(f"   Processing mode: {processing_mode}")
+            print(f"   Total pages: {page_count}")
+            print(f"   Tables extracted: {len(tables)}")
+            print(f"   Tables per page: {tables_per_page:.3f}")
+            print(f"   Total rows: {total_rows}")
+            print(f"   Average rows per table: {avg_rows_per_table:.1f}")
+            
+            # **ALERT: Check for suspicious extraction patterns**
+            if page_count > 15 and len(tables) < 5:
+                print(f"⚠️ ALERT: Large document ({page_count} pages) with very few tables ({len(tables)})")
+                print(f"   Expected: 15-{page_count*3} tables, Got: {len(tables)} tables")
+            elif tables_per_page < 0.5:
+                print(f"⚠️ ALERT: Low table density ({tables_per_page:.3f} tables/page)")
+                print(f"   Expected: 0.5-3.0 tables/page for commission statements")
+            elif avg_rows_per_table > 50:
+                print(f"⚠️ ALERT: Unusually large tables ({avg_rows_per_table:.1f} rows/table)")
+                print(f"   This may indicate over-aggressive table merging")
+            
             print(f"📊 Google Document AI: Found {len(tables)} tables in document")
             sys.stdout.flush()
+            
+            # **NEW: Apply table merging to consolidate similar tables**
+            if len(tables) > 1:
+                print(f"🔗 Google Document AI: Applying table merging to {len(tables)} tables")
+                try:
+                    from .extraction_utils import stitch_multipage_tables
+                    merged_tables = stitch_multipage_tables(tables)
+                    print(f"🔗 Google Document AI: Table merging completed: {len(tables)} → {len(merged_tables)} tables")
+                    
+                    # Update metrics after merging
+                    merged_tables_per_page = len(merged_tables) / page_count if page_count > 0 else 0
+                    merged_total_rows = sum(len(table.get('rows', [])) for table in merged_tables)
+                    merged_avg_rows_per_table = merged_total_rows / len(merged_tables) if merged_tables else 0
+                    
+                    print(f"📊 MERGED EXTRACTION METRICS:")
+                    print(f"   Tables after merging: {len(merged_tables)}")
+                    print(f"   Tables per page: {merged_tables_per_page:.3f}")
+                    print(f"   Total rows: {merged_total_rows}")
+                    print(f"   Average rows per table: {merged_avg_rows_per_table:.1f}")
+                    
+                    tables = merged_tables
+                    
+                except Exception as e:
+                    print(f"⚠️ Warning: Table merging failed: {e}")
+                    print(f"   Proceeding with original {len(tables)} tables")
             
             # Log extraction method used
             form_parser_count = sum(1 for table in tables if table.get("metadata", {}).get("extraction_method") == "google_docai_form_parser")
@@ -421,6 +488,216 @@ class GoogleDocAIExtractor:
                     print(f"🔄 Google Document AI: Retrying...")
         
         raise Exception("All retry attempts failed")
+    
+    def _get_pdf_page_count(self, pdf_content: bytes) -> int:
+        """
+        Get the number of pages in a PDF document.
+        
+        Args:
+            pdf_content: PDF file content as bytes
+            
+        Returns:
+            Number of pages in the PDF
+        """
+        try:
+            # Try to use pypdf library to count pages
+            try:
+                import pypdf
+                pdf_reader = pypdf.PdfReader(io.BytesIO(pdf_content))
+                return len(pdf_reader.pages)
+            except ImportError:
+                # Fallback: try to estimate from PDF structure
+                # This is a rough estimation based on PDF markers
+                pdf_text = pdf_content.decode('latin-1', errors='ignore')
+                # Count page markers (this is approximate)
+                page_count = pdf_text.count('/Type /Page') + pdf_text.count('/Type/Page')
+                return max(1, page_count)  # At least 1 page
+        except Exception as e:
+            print(f"⚠️ Warning: Could not determine page count: {e}")
+            # Default to assuming it's a large document to be safe
+            return 31  # Force chunked processing
+    
+    def _process_document_regular_mode(self, pdf_content: bytes) -> List[Dict[str, Any]]:
+        """
+        Process document in regular mode (≤15 pages).
+        
+        Args:
+            pdf_content: PDF file content as bytes
+            
+        Returns:
+            List of extracted tables
+        """
+        request = documentai.ProcessRequest(
+            name=self.processor_name,
+            raw_document=documentai.RawDocument(
+                content=pdf_content,
+                mime_type="application/pdf"
+            ),
+            field_mask="text,pages.tables,pages.pageNumber,pages.dimension"
+        )
+        
+        document = self._process_document_with_retry(request)
+        return self._extract_tables_from_document(document)
+    
+    def _process_document_imageless_mode(self, pdf_content: bytes) -> List[Dict[str, Any]]:
+        """
+        Process document in imageless mode (≤30 pages).
+        
+        Args:
+            pdf_content: PDF file content as bytes
+            
+        Returns:
+            List of extracted tables
+        """
+        request = documentai.ProcessRequest(
+            name=self.processor_name,
+            raw_document=documentai.RawDocument(
+                content=pdf_content,
+                mime_type="application/pdf"
+            ),
+            # Enable imageless mode for larger documents
+            process_options=documentai.ProcessOptions(
+                ocr_config=documentai.OcrConfig(
+                    enable_image_quality_scores=False,
+                    enable_symbol=False,
+                    premium_features=documentai.OcrConfig.PremiumFeatures(
+                        compute_style_info=False,
+                        enable_math_ocr=False,
+                        enable_selection_mark_detection=False
+                    )
+                )
+            ),
+            field_mask="text,pages.tables,pages.pageNumber,pages.dimension"
+        )
+        
+        document = self._process_document_with_retry(request)
+        return self._extract_tables_from_document(document)
+    
+    def _process_document_in_chunks(self, pdf_content: bytes, page_count: int) -> List[Dict[str, Any]]:
+        """
+        Process large documents by splitting them into chunks.
+        
+        Args:
+            pdf_content: PDF file content as bytes
+            page_count: Total number of pages in the document
+            
+        Returns:
+            List of extracted tables from all chunks
+        """
+        try:
+            import pypdf
+            from io import BytesIO
+            
+            all_tables = []
+            chunk_size = 15  # Process 15 pages at a time (DocAI non-imageless limit)
+            
+            # Read the PDF
+            pdf_reader = pypdf.PdfReader(io.BytesIO(pdf_content))
+            
+            for start_page in range(0, page_count, chunk_size):
+                end_page = min(start_page + chunk_size, page_count)
+                chunk_pages = end_page - start_page
+                
+                print(f"🔄 Google Document AI: Processing pages {start_page + 1}-{end_page} ({chunk_pages} pages)")
+                
+                # Ensure chunk doesn't exceed limits
+                if chunk_pages > 15:
+                    print(f"⚠️ Warning: Chunk has {chunk_pages} pages, splitting further...")
+                    # Split this chunk into smaller pieces
+                    for sub_start in range(start_page, end_page, 15):
+                        sub_end = min(sub_start + 15, end_page)
+                        sub_chunk_pages = sub_end - sub_start
+                        print(f"🔄 Processing sub-chunk: pages {sub_start + 1}-{sub_end} ({sub_chunk_pages} pages)")
+                        
+                        # Create PDF for sub-chunk
+                        pdf_writer = pypdf.PdfWriter()
+                        for page_num in range(sub_start, sub_end):
+                            pdf_writer.add_page(pdf_reader.pages[page_num])
+                        
+                        # Convert to bytes
+                        chunk_buffer = BytesIO()
+                        pdf_writer.write(chunk_buffer)
+                        chunk_content = chunk_buffer.getvalue()
+                        
+                        # Process sub-chunk
+                        try:
+                            chunk_tables = self._process_document_regular_mode(chunk_content)
+                            
+                            # **ENHANCED DEBUGGING: Track sub-chunk processing results**
+                            chunk_rows = sum(len(table.get('rows', [])) for table in chunk_tables)
+                            print(f"✅ Google Document AI: Extracted {len(chunk_tables)} tables ({chunk_rows} rows) from sub-chunk {sub_start + 1}-{sub_end}")
+                            
+                            # **DEBUG: Log table details for each sub-chunk**
+                            for i, table in enumerate(chunk_tables):
+                                table_rows = len(table.get('rows', []))
+                                table_headers = len(table.get('headers', []))
+                                print(f"   Sub-chunk Table {i+1}: {table_headers} headers, {table_rows} rows")
+                            
+                            # Adjust page numbers in the results
+                            for table in chunk_tables:
+                                if 'page_number' in table:
+                                    table['page_number'] += sub_start
+                                if 'metadata' in table:
+                                    table['metadata']['original_page_number'] = table.get('page_number', 0)
+                                    table['metadata']['chunk_start_page'] = sub_start + 1
+                                    table['metadata']['chunk_end_page'] = sub_end
+                            
+                            all_tables.extend(chunk_tables)
+                            
+                        except Exception as e:
+                            print(f"⚠️ Warning: Failed to process sub-chunk {sub_start + 1}-{sub_end}: {e}")
+                            print(f"   This sub-chunk will be skipped, potentially losing data")
+                            continue
+                    continue
+                
+                # Create a new PDF with just these pages
+                pdf_writer = pypdf.PdfWriter()
+                for page_num in range(start_page, end_page):
+                    pdf_writer.add_page(pdf_reader.pages[page_num])
+                
+                # Convert to bytes
+                chunk_buffer = BytesIO()
+                pdf_writer.write(chunk_buffer)
+                chunk_content = chunk_buffer.getvalue()
+                
+                # Process this chunk
+                try:
+                    chunk_tables = self._process_document_regular_mode(chunk_content)
+                    
+                    # **ENHANCED DEBUGGING: Track chunk processing results**
+                    chunk_rows = sum(len(table.get('rows', [])) for table in chunk_tables)
+                    print(f"✅ Google Document AI: Extracted {len(chunk_tables)} tables ({chunk_rows} rows) from pages {start_page + 1}-{end_page}")
+                    
+                    # **DEBUG: Log table details for each chunk**
+                    for i, table in enumerate(chunk_tables):
+                        table_rows = len(table.get('rows', []))
+                        table_headers = len(table.get('headers', []))
+                        print(f"   Table {i+1}: {table_headers} headers, {table_rows} rows")
+                    
+                    # Adjust page numbers in the results
+                    for table in chunk_tables:
+                        if 'page_number' in table:
+                            table['page_number'] += start_page
+                        if 'metadata' in table:
+                            table['metadata']['original_page_number'] = table.get('page_number', 0)
+                            table['metadata']['chunk_start_page'] = start_page + 1
+                            table['metadata']['chunk_end_page'] = end_page
+                    
+                    all_tables.extend(chunk_tables)
+                    
+                except Exception as e:
+                    print(f"⚠️ Warning: Failed to process pages {start_page + 1}-{end_page}: {e}")
+                    print(f"   This chunk will be skipped, potentially losing data")
+                    continue
+            
+            return all_tables
+            
+        except ImportError:
+            print("❌ Error: pypdf not available for chunked processing. Install with: pip install pypdf")
+            raise Exception("pypdf required for processing large documents")
+        except Exception as e:
+            print(f"❌ Error in chunked processing: {e}")
+            raise
     
     # Removed _save_json_response method to prevent timeouts
     
@@ -1280,6 +1557,48 @@ class GoogleDocAIExtractor:
         
         return processed_tables
     
+    def _fix_ocr_errors(self, text: str) -> str:
+        """Fix common OCR errors, particularly O to 0 in numeric contexts."""
+        if not text:
+            return text
+        
+        import re
+        original_text = text
+        
+        # Fix O to 0 in numeric contexts
+        # Pattern 1: O between digits (e.g., 2O25 -> 2025)
+        text = re.sub(r'(\d)O(\d)', r'\g<1>0\g<2>', text)
+        
+        # Pattern 2: O after currency symbol (e.g., $O -> $0)
+        text = re.sub(r'(\$)O(\d)', r'\g<1>0\g<2>', text)
+        
+        # Pattern 3: Years like 2O25 -> 2025
+        text = re.sub(r'2O2[0-9]', lambda m: m.group().replace('O', '0'), text)
+        
+        # Pattern 4: O in decimal contexts (e.g., 1O9.O1 -> 109.01)
+        text = re.sub(r'(\d)O(\d)\.O(\d)', r'\g<1>0\g<2>.0\g<3>', text)
+        
+        # Pattern 4b: O in decimal contexts without leading digit (e.g., O1 -> 01)
+        text = re.sub(r'\.O(\d)', r'.0\g<1>', text)
+        
+        # Pattern 5: O in percentage contexts (e.g., 2O.O% -> 20.0%)
+        text = re.sub(r'(\d)O\.O%', r'\g<1>0.0%', text)
+        
+        # Pattern 6: O in state codes (e.g., MNOO867 -> MN00867)
+        text = re.sub(r'([A-Z]{2})O+(\d+)', r'\g<1>00\g<2>', text)
+        
+        # Pattern 6b: Fix remaining O's in state codes (e.g., MD005OO -> MD00500)
+        text = re.sub(r'([A-Z]{2}\d+)O+', r'\g<1>0', text)
+        
+        # Pattern 7: O in standalone numeric contexts
+        text = re.sub(r' O(\d) ', r' 0\g<1> ', text)
+        
+        # Debug logging for OCR corrections
+        if original_text != text:
+            print(f"🔧 OCR correction: '{original_text}' -> '{text}'")
+        
+        return text
+
     def _clean_text(self, text: str) -> str:
         """Clean and normalize text."""
         if not text:
@@ -1303,7 +1622,9 @@ class GoogleDocAIExtractor:
         
         # Remove common OCR artifacts
         cleaned = cleaned.replace("|", "I")  # Common OCR mistake
-        cleaned = cleaned.replace("0", "O")  # Common OCR mistake in certain contexts
+        
+        # Fix OCR errors - O to 0 in numeric contexts (CRITICAL FIX)
+        cleaned = self._fix_ocr_errors(cleaned)
         
         # Remove leading/trailing whitespace
         cleaned = cleaned.strip()

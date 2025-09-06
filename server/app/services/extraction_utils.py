@@ -162,9 +162,14 @@ def stitch_multipage_tables(tables: List[Dict[str, Any]]) -> List[Dict[str, Any]
     print(f"📎 Enhanced multi-strategy stitching: Processing {len(tables)} tables")
     
     # Step 1: Find canonical header (most complete header)
-    headers_list = [table.get("headers", []) for table in tables if table.get("headers")]
+    headers_list = [table.get("headers", []) for table in tables if table.get("headers") and len(table.get("headers", [])) > 0]
     canonical_header = max(headers_list, key=len) if headers_list else []
     print(f"📎 Canonical header identified: {canonical_header} ({len(canonical_header)} columns)")
+    
+    # **DEBUG: Log header information for each table**
+    for i, table in enumerate(tables):
+        headers = table.get("headers", [])
+        print(f"📎 Table {i+1} headers: {headers} ({len(headers)} columns)")
     
     # Step 2: Group tables by comprehensive similarity
     table_groups = _group_tables_by_similarity(tables, canonical_header)
@@ -176,20 +181,68 @@ def stitch_multipage_tables(tables: List[Dict[str, Any]]) -> List[Dict[str, Any]
     for i, group in enumerate(table_groups):
         print(f"📎 Merging group {i+1} with {len(group)} tables")
         merged_table = _merge_table_group(group, canonical_header)
+        
+        # **DEBUG: Log merged table structure**
+        merged_headers = merged_table.get("headers", [])
+        merged_rows = merged_table.get("rows", [])
+        print(f"📎 Merged table {i+1}: {len(merged_headers)} headers, {len(merged_rows)} rows")
+        print(f"📎 Merged headers: {merged_headers}")
+        
         merged_tables.append(merged_table)
     
     print(f"📎 Enhanced stitching completed: {len(merged_tables)} final tables")
     return merged_tables
 
 def _group_tables_by_similarity(tables: List[Dict[str, Any]], canonical_header: List[str]) -> List[List[Dict[str, Any]]]:
-    """Group tables by comprehensive similarity analysis."""
+    """Group tables by comprehensive similarity analysis with improved identical header handling."""
     if not tables:
         return []
     
     groups = []
     processed = set()
     
+    # **IMPROVED: First pass - group all tables with identical headers**
+    header_groups = {}
     for i, table in enumerate(tables):
+        headers = table.get("headers", [])
+        header_key = tuple(h.lower().strip() for h in headers)
+        
+        if header_key not in header_groups:
+            header_groups[header_key] = []
+        header_groups[header_key].append((i, table))
+    
+    print(f"📎 Found {len(header_groups)} unique header patterns")
+    for header_key, table_list in header_groups.items():
+        if len(table_list) > 1:
+            print(f"📎 Header pattern '{header_key[0] if header_key else 'empty'}' appears in {len(table_list)} tables")
+    
+    # Process each header group
+    for header_key, table_list in header_groups.items():
+        if not table_list:
+            continue
+            
+        # If multiple tables have the same headers, group them together
+        if len(table_list) > 1:
+            group_indices = [i for i, _ in table_list]
+            group_tables = [table for _, table in table_list]
+            
+            print(f"📎 Creating group with {len(group_tables)} tables (identical headers)")
+            groups.append(group_tables)
+            
+            # Mark all tables in this group as processed
+            for i in group_indices:
+                processed.add(i)
+        else:
+            # Single table with unique headers - process individually
+            i, table = table_list[0]
+            if i not in processed:
+                groups.append([table])
+                processed.add(i)
+    
+    # **SECOND PASS: For remaining unprocessed tables, use similarity-based grouping**
+    remaining_tables = [(i, table) for i, table in enumerate(tables) if i not in processed]
+    
+    for i, table in remaining_tables:
         if i in processed:
             continue
         
@@ -197,12 +250,12 @@ def _group_tables_by_similarity(tables: List[Dict[str, Any]], canonical_header: 
         current_group = [table]
         processed.add(i)
         
-        # Find similar tables
-        for j, other_table in enumerate(tables):
+        # Find similar tables among remaining tables
+        for j, other_table in remaining_tables:
             if j in processed or j == i:
                 continue
             
-            # Calculate comprehensive similarity
+            # Calculate comprehensive similarity for non-exact matches
             similarity = _calculate_comprehensive_similarity(table, other_table, canonical_header)
             
             print(f"📎 Similarity between table {i} and {j}: {similarity:.3f}")
@@ -603,6 +656,19 @@ def _merge_table_group(group: List[Dict[str, Any]], canonical_header: List[str])
     if not group:
         return {}
     
+    # **IMPROVED: Find the best header from the group**
+    best_headers = None
+    for table in group:
+        headers = table.get("headers", [])
+        if headers and len(headers) > 0:
+            # Use the first non-empty header we find
+            if not best_headers or len(headers) > len(best_headers):
+                best_headers = headers
+    
+    # Fallback to canonical header if no good headers found
+    if not best_headers:
+        best_headers = canonical_header
+    
     # Use the first table as base
     base_table = group[0].copy()
     all_rows = base_table.get("rows", [])
@@ -612,15 +678,19 @@ def _merge_table_group(group: List[Dict[str, Any]], canonical_header: List[str])
         rows = table.get("rows", [])
         all_rows.extend(rows)
     
+    # **IMPROVED: Preserve original table metadata**
+    merged_metadata = {
+        "total_tables_merged": len(group),
+        "total_rows": len(all_rows),
+        "canonical_header": best_headers,
+        "merged_from_tables": [table.get("metadata", {}).get("table_id", i) for i, table in enumerate(group)]
+    }
+    
     # Create merged table
     merged_table = {
-        "headers": canonical_header,
+        "headers": best_headers,
         "rows": all_rows,
-        "metadata": {
-            "total_tables_merged": len(group),
-            "total_rows": len(all_rows),
-            "canonical_header": canonical_header
-        }
+        "metadata": merged_metadata
     }
     
     return merged_table

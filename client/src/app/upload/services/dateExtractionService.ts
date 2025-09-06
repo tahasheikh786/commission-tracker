@@ -41,14 +41,12 @@ class DateExtractionService {
     formData.append('max_pages', '1') // Only extract from first page
 
     try {
-      console.log('🚀 Starting date extraction for file:', file.name, 'company:', companyId)
       
       const response = await fetch(`${this.baseUrl}/extract-dates/`, {
         method: 'POST',
         body: formData,
       })
 
-      console.log('📡 Date extraction response status:', response.status)
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))

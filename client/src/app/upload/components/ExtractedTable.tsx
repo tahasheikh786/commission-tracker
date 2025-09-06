@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Pencil, Trash2, X, Check, Download, ArrowUpDown, ArrowDown, ArrowUp, Table2 } from 'lucide-react'
 import clsx from 'clsx'
+import ProfessionalPagination from '../../components/ui/ProfessionalPagination'
 
 type TableData = {
   header: string[]
@@ -50,31 +51,6 @@ function downloadCSV(table: TableData, name: string) {
 
 const ROWS_OPTIONS = [10, 25, 50];
 
-function Pagination({
-  page, setPage, pageCount
-}: { page: number, setPage: (n: number) => void, pageCount: number }) {
-  return (
-    <div className="flex justify-center mt-4 space-x-2">
-      <button disabled={page <= 1}
-        className="px-2 py-1 rounded border bg-white hover:bg-gray-100 disabled:opacity-40"
-        onClick={() => setPage(page - 1)}
-      >Prev</button>
-      {Array.from({ length: pageCount }, (_, i) => (
-        <button key={i}
-          onClick={() => setPage(i + 1)}
-          className={clsx(
-            "px-2 py-1 rounded border",
-            page === i + 1 ? "bg-blue-600 text-white" : "bg-white hover:bg-gray-100"
-          )}
-        >{i + 1}</button>
-      ))}
-      <button disabled={page >= pageCount}
-        className="px-2 py-1 rounded border bg-white hover:bg-gray-100 disabled:opacity-40"
-        onClick={() => setPage(page + 1)}
-      >Next</button>
-    </div>
-  )
-}
 
 export default function ExtractedTables({ tables: backendTables, onTablesChange, highlightedRow, onRowHover }: ExtractedTablesProps) {
   // All hooks organized at the top - must be called before any early returns
@@ -517,10 +493,10 @@ export default function ExtractedTables({ tables: backendTables, onTablesChange,
           </tbody>
         </table>
       </div>
-      <Pagination
-        page={currentPage}
-        setPage={pg => setPage(tab, pg)}
-        pageCount={pageCount}
+      <ProfessionalPagination
+        currentPage={currentPage}
+        totalPages={pageCount}
+        onPageChange={pg => setPage(tab, pg)}
       />
     </div>
   )

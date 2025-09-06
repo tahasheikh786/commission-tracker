@@ -60,11 +60,17 @@ class TableValidator:
             has_meaningful_headers = any(len(str(h).strip()) > 2 for h in headers)
             has_reasonable_structure = len(headers) >= 3  # Complex tables should have multiple columns
             
+            # Special case: Check if this might be a continuation table
+            is_continuation_table = self._is_likely_continuation_table(headers, rows)
+            
             if has_meaningful_headers and has_reasonable_structure:
                 self.logger.logger.info(f"✅ ACCEPTING complex table: {len(headers)} headers, {len(rows)} rows")
                 return True
+            elif is_continuation_table:
+                self.logger.logger.info(f"✅ ACCEPTING continuation table: {len(headers)} headers, {len(rows)} rows")
+                return True
             else:
-                self.logger.logger.warning(f"⚠️ Complex table validation failed: meaningful_headers={has_meaningful_headers}, structure={has_reasonable_structure}")
+                self.logger.logger.warning(f"⚠️ Complex table validation failed: meaningful_headers={has_meaningful_headers}, structure={has_reasonable_structure}, continuation={is_continuation_table}")
                 return False
         
         # Enhanced validation for standard tables
@@ -953,4 +959,36 @@ class TableValidator:
         if len(result_text) < len(text) * 0.8:  # If we removed more than 20% of the text
             self.logger.logger.info(f"🧹 DEDUPLICATED: '{text[:50]}...' → '{result_text[:50]}...'")
         
-        return result_text.strip()
+        return result_text
+    
+    def _is_likely_continuation_table(self, headers: List[str], rows: List[List[str]]) -> bool:
+        """Check if this table is likely a continuation of a previous table."""
+        
+        # Check for continuation indicators in headers
+        header_text = ' '.join(str(h).lower() for h in headers)
+        continuation_indicators = ['continued', 'continued next page', 'anat goldstein continued']
+        
+        if any(indicator in header_text for indicator in continuation_indicators):
+            self.logger.logger.info(f"🔍 Found continuation indicator in headers: {header_text}")
+            return True
+        
+        # Check for continuation patterns in data
+        if rows:
+            # Look for commission statement patterns in the data
+            data_text = ' '.join(str(cell).lower() for row in rows[:3] for cell in row)
+            commission_patterns = ['medical', 'dental', 'vision', 'premium', 'commission', 'group number']
+            
+            pattern_count = sum(1 for pattern in commission_patterns if pattern in data_text)
+            if pattern_count >= 2:  # At least 2 commission-related patterns
+                self.logger.logger.info(f"🔍 Found {pattern_count} commission patterns in data - likely continuation")
+                return True
+        
+        # Check if headers look like data (common in continuation tables)
+        if len(headers) == 1 and headers[0]:
+            header_value = str(headers[0]).strip()
+            # If the single header looks like a company name or ID, it's likely data
+            if len(header_value) > 5 and any(char.isdigit() for char in header_value):
+                self.logger.logger.info(f"🔍 Single header looks like data: {header_value} - likely continuation")
+                return True
+        
+        return False

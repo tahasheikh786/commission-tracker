@@ -547,6 +547,10 @@ export default function DashboardTab() {
             setShowFieldMapper(false);
             handleReset();
           }}
+          onGoToTableEditor={() => {
+            setShowFieldMapper(false);
+            setShowTableEditor(true);
+          }}
           initialFields={databaseFields}
           initialMapping={mapping || {}}
           initialPlanTypes={planTypes}

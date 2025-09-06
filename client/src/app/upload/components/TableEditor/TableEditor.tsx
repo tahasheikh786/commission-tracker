@@ -15,6 +15,8 @@ import {
   Calendar,
   X,
   Brain,
+  Eye,
+  EyeOff,
 } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 
@@ -83,6 +85,7 @@ export default function TableEditor({
   const [showRowActions, setShowRowActions] = useState<{ tableIdx: number, rowIdx: number } | null>(null)
   const [showSummaryRows, setShowSummaryRows] = useState(true)
   const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set())
+  const [showPreview, setShowPreview] = useState(true)
   
   // Date extraction state
   const [showDateModal, setShowDateModal] = useState(false)
@@ -482,9 +485,7 @@ export default function TableEditor({
   }
 
   const handleCloseDateModalWithoutSelection = () => {
-    console.log('Modal closed without selection:', { extractedDates: extractedDates.length, hasExtractedDates })
     // Always reset the state when modal is closed without selection to allow retry
-    console.log('Resetting state for retry')
     setHasExtractedDates(false)
     setExtractedDates([])
     // Always reset loading state when modal is closed
@@ -492,7 +493,6 @@ export default function TableEditor({
   }
 
   const performDateExtraction = useCallback(async () => {
-    console.log('Starting date extraction')
     setDateExtractionLoading(true)
     
     // Check if component is unmounting
@@ -941,18 +941,15 @@ export default function TableEditor({
                         {/* Date Extraction Button */}
             <button
               onClick={() => {
-                console.log('Extract dates button clicked:', { hasExtractedDates, extractedDates: extractedDates.length, dateExtractionLoading })
                 
                 // If dates were already extracted and we have dates, just reopen the modal
                 if (hasExtractedDates && extractedDates.length > 0) {
-                  console.log('Reopening modal with existing dates')
                   setShowDateModal(true)
                   return
                 }
                 
                 // If not loading, perform extraction (this will handle both initial extraction and retry)
                 if (!dateExtractionLoading) {
-                  console.log('Starting date extraction')
                   performDateExtraction()
                 }
               }}
@@ -1034,10 +1031,23 @@ export default function TableEditor({
           </div>
         </div>
 
+        {/* Toggle Button */}
+        {uploaded && (
+          <div className="px-6 pt-4">
+            <button
+              onClick={() => setShowPreview(!showPreview)}
+              className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm hover:bg-gray-50 transition-colors text-sm font-medium text-gray-700"
+            >
+              {showPreview ? <EyeOff size={16} /> : <Eye size={16} />}
+              {showPreview ? 'Hide Preview' : 'Show Preview'}
+            </button>
+          </div>
+        )}
+
         {/* Side by Side Content */}
         <div className="flex-1 flex flex-row gap-6 p-6 bg-gradient-to-br from-white via-blue-50 to-purple-50 min-h-0">
           {/* Document Preview - Left Side */}
-          {uploaded && (
+          {uploaded && showPreview && (
             <DocumentPreview
               uploaded={uploaded}
               zoom={zoom}
@@ -1047,7 +1057,7 @@ export default function TableEditor({
           )}
 
           {/* Table Editor - Right Side */}
-          <div className="w-3/5 min-w-0 flex flex-col rounded-2xl shadow-xl bg-white border border-purple-100 overflow-hidden">
+          <div className={`${showPreview ? 'w-3/5' : 'w-full'} min-w-0 flex flex-col rounded-2xl shadow-xl bg-white border border-purple-100 overflow-hidden`}>
             <TableHeader
               currentTableIdx={currentTableIdx}
               tablesLength={tables.length}
@@ -1134,7 +1144,7 @@ export default function TableEditor({
                   }`}>
                     <div className="overflow-x-auto w-full">
                       <div 
-                        className="max-h-[420px] overflow-y-auto border-t border-gray-100 custom-scrollbar" 
+                        className="max-h-[570px] overflow-y-auto border-t border-gray-100 custom-scrollbar" 
                         style={{ 
                           scrollbarWidth: 'thin', 
                           scrollbarColor: '#d1d5db #f3f4f6',
@@ -1456,7 +1466,6 @@ export default function TableEditor({
         <DateSelectionModal
           isOpen={showDateModal}
           onClose={() => {
-            console.log('Modal closed normally')
             setShowDateModal(false)
           }}
           onDateSelect={handleDateSelect}

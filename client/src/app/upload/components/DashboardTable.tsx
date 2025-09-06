@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { Pencil, Trash2, X, Check, Clock, Calendar } from 'lucide-react'
 import clsx from 'clsx'
+import ProfessionalPagination from '../../components/ui/ProfessionalPagination'
 
 type TableData = {
   header: string[]
@@ -35,31 +36,6 @@ function fixPercent(val: string): string {
     .replace(/010/g, '%')
 }
 
-function Pagination({
-  page, setPage, pageCount
-}: { page: number, setPage: (n: number) => void, pageCount: number }) {
-  return (
-    <div className="flex justify-center mt-4 space-x-2">
-      <button disabled={page <= 1}
-        className="px-2 py-1 rounded border bg-white hover:bg-gray-100 disabled:opacity-40"
-        onClick={() => setPage(page - 1)}
-      >Prev</button>
-      {Array.from({ length: pageCount }, (_, i) => (
-        <button key={i}
-          onClick={() => setPage(i + 1)}
-          className={clsx(
-            "px-2 py-1 rounded border",
-            page === i + 1 ? "bg-blue-600 text-white" : "bg-white hover:bg-gray-100"
-          )}
-        >{i + 1}</button>
-      ))}
-      <button disabled={page >= pageCount}
-        className="px-2 py-1 rounded border bg-white hover:bg-gray-100 disabled:opacity-40"
-        onClick={() => setPage(page + 1)}
-      >Next</button>
-    </div>
-  )
-}
 
 const ROWS_OPTIONS = [10, 25, 50]
 
@@ -420,10 +396,10 @@ export default function DashboardTable({
       </table>
       </div>
       <div className="mt-4">
-        <Pagination
-          page={page}
-          setPage={setPage}
-          pageCount={pageCount}
+        <ProfessionalPagination
+          currentPage={page}
+          totalPages={pageCount}
+          onPageChange={setPage}
         />
       </div>
     </div>

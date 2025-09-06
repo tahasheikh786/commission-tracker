@@ -2,6 +2,7 @@
 
 from typing import List, Dict, Any, Optional, Tuple
 import numpy as np
+import re
 from dataclasses import dataclass
 import asyncio
 from ..utils.logging_utils import get_logger
@@ -15,6 +16,7 @@ class PageTable:
     headers: List[str]
     bbox: List[float]
     confidence: float
+    original_table: Optional[Any] = None  # Store reference to original table object
     
 class MultiPageTableHandler:
     """Handler for linking and reconstructing tables across multiple pages using sequence-based approach."""
@@ -47,6 +49,11 @@ class MultiPageTableHandler:
                         bbox=table.get('bbox', [0, 0, 0, 0]),
                         confidence=table.get('confidence', 0.0)
                     )
+                    # **NEW: Store reference to original table object for better data extraction**
+                    if hasattr(table, 'original_table'):
+                        page_table.original_table = table.original_table
+                    elif 'original_table' in table:
+                        page_table.original_table = table['original_table']
                     all_page_tables.append(page_table)
             
             # Sort by page number to maintain sequence
@@ -133,21 +140,37 @@ class MultiPageTableHandler:
         table: PageTable, 
         current_headers: Optional[List[str]]
     ) -> bool:
-        """Determine if this table starts a new table group using enhanced similarity analysis."""
+        """Enhanced table continuation detection with intelligent commission statement handling."""
         
         # If no current headers, this is definitely a new table
         if current_headers is None:
             self.logger.logger.info(f"🆕 First table - starting new group")
             return True
         
-        # If table has no headers, it's likely a continuation
-        if not table.headers:
-            self.logger.logger.info(f"📋 No headers - likely continuation")
+        # **IMPROVED: Better handling of empty or minimal headers**
+        # If table has no headers or very few headers, it's likely a continuation
+        if not table.headers or len([h for h in table.headers if h.strip()]) <= 1:
+            self.logger.logger.info(f"📋 No/minimal headers - likely continuation")
             return False
+        
+        # **NEW: Check if this is clearly a different table with distinct headers**
+        if self._is_clearly_different_table(table.headers, current_headers):
+            self.logger.logger.info(f"🆕 Clearly different table detected - starting new group")
+            return True
         
         # Check if headers look like data (strong continuation indicator)
         if self._headers_look_like_data(table.headers):
             self.logger.logger.info(f"📋 Headers look like data - likely continuation")
+            return False
+        
+        # **IMPROVED: Better commission statement continuation detection**
+        if await self._is_commission_statement_continuation(table, current_headers):
+            self.logger.logger.info(f"📋 Commission statement continuation detected - merging tables")
+            return False
+        
+        # **NEW: Check for continuation indicators in table data**
+        if self._has_continuation_indicators(table):
+            self.logger.logger.info(f"📋 Found continuation indicators in table data - likely continuation")
             return False
         
         # Enhanced similarity analysis
@@ -157,10 +180,10 @@ class MultiPageTableHandler:
         
         # More flexible threshold for table merging
         # If similarity is high enough, merge even with some header differences
-        if similarity_score >= 0.5:  # **CHANGED: Lowered from 0.7 to 0.5**
+        if similarity_score >= 0.4:  # **CHANGED: Lowered from 0.5 to 0.4**
             self.logger.logger.info(f"📋 High comprehensive similarity ({similarity_score:.3f}) - merging tables")
             return False
-        elif similarity_score >= 0.3:  # **CHANGED: Lowered from 0.5 to 0.3**
+        elif similarity_score >= 0.25:  # **CHANGED: Lowered from 0.3 to 0.25**
             # Check additional structural criteria for moderate similarity
             if await self._has_similar_structure(table, current_headers):
                 self.logger.logger.info(f"📋 Moderate similarity with similar structure - merging tables")
@@ -700,9 +723,42 @@ class MultiPageTableHandler:
         
         return common_chars / total_chars if total_chars > 0 else 0.0
     
+    def _has_continuation_indicators(self, table: PageTable) -> bool:
+        """Check if table contains continuation indicators in its data."""
+        if not table.table_data or not table.table_data.get('rows'):
+            return False
+        
+        # Check first few rows for continuation indicators
+        rows = table.table_data.get('rows', [])
+        for row in rows[:3]:  # Check first 3 rows
+            if not row:
+                continue
+            
+            row_text = ' '.join(str(cell).lower() for cell in row if cell)
+            
+            # Look for continuation indicators
+            continuation_indicators = [
+                'continued', 'continued next page', 'anat goldstein continued',
+                'total commissions', 'total medical premium', 'total dental premium',
+                'total vision premium', 'total paid commissions'
+            ]
+            
+            for indicator in continuation_indicators:
+                if indicator in row_text:
+                    self.logger.logger.info(f"🔍 Found continuation indicator: '{indicator}' in row: {row_text[:100]}...")
+                    return True
+        
+        return False
+    
     def _headers_look_like_data(self, headers: List[str]) -> bool:
         """Check if headers actually look like data rows instead of headers."""
         if not headers:
+            return False
+        
+        # **IMPROVED: Better detection of actual headers vs data rows**
+        # First check if this looks like a proper header row
+        if self._looks_like_proper_header_row(headers):
+            self.logger.logger.info(f"🔍 Headers look like proper headers - not data")
             return False
         
         # Use statistical analysis to determine if headers look like data
@@ -725,6 +781,88 @@ class MultiPageTableHandler:
             self.logger.logger.info(f"🔍 Headers look like data: {data_indicators}/{total_headers} indicators")
         
         return result
+    
+    def _looks_like_proper_header_row(self, headers: List[str]) -> bool:
+        """Check if headers look like a proper header row (not data)."""
+        if not headers:
+            return False
+        
+        # Check for common header patterns
+        header_indicators = 0
+        total_headers = len(headers)
+        
+        for header in headers:
+            header_str = str(header).strip().lower()
+            
+            # Check for header-like characteristics
+            if self._is_header_like_content(header_str):
+                header_indicators += 1
+        
+        # If more than 60% of headers look like proper headers, they probably are headers
+        threshold = 0.6 if total_headers >= 5 else 0.5
+        
+        result = header_indicators >= total_headers * threshold
+        
+        if result:
+            self.logger.logger.info(f"🔍 Headers look like proper headers: {header_indicators}/{total_headers} indicators")
+        
+        return result
+    
+    def _is_header_like_content(self, content: str) -> bool:
+        """Determine if content looks like a header using enhanced analysis."""
+        if not content:
+            return False
+        
+        indicators = 0
+        
+        # Header-like characteristics
+        header_words = [
+            'company', 'name', 'policy', 'current', 'comm', 'rate', 'invoicing', 'period', 
+            'premium', 'amount', 'action', 'adjustment', 'group', 'comm.period',
+            'billing', 'subscriber', 'total', 'due', 'prior', 'month', 'year', 'date'
+        ]
+        
+        # Check for header words
+        if any(word in content for word in header_words):
+            indicators += 2
+        
+        # Check for proper case patterns (headers often have proper case or title case)
+        if content.istitle() or content.islower():
+            indicators += 1
+        
+        # Check for reasonable length (headers are usually not too long or too short)
+        if 3 <= len(content) <= 25:
+            indicators += 1
+        
+        # Check for common header patterns
+        if any(pattern in content for pattern in ['comm.', 'period', 'amount', 'rate']):
+            indicators += 1
+        
+        # Check for multiple words (headers often have multiple words)
+        if len(content.split()) >= 2:
+            indicators += 1
+        
+        # Check for no numbers at the start (headers rarely start with numbers)
+        if not content[0].isdigit():
+            indicators += 1
+        
+        # Check for no currency symbols (headers rarely have currency symbols)
+        if '$' not in content:
+            indicators += 1
+        
+        # Check for no percentage symbols (headers rarely have percentage symbols)
+        if '%' not in content:
+            indicators += 1
+        
+        # Check for no dates (headers rarely contain dates)
+        if not re.search(r'\d{1,2}[/-]\d{1,2}[/-]\d{2,4}', content):
+            indicators += 1
+        
+        # Check for no company suffixes in the middle (data often has LLC, Inc, etc.)
+        if not any(suffix in content for suffix in ['llc', 'inc', 'corp', 'company']):
+            indicators += 1
+        
+        return indicators >= 4  # Need at least 4 indicators to be considered header-like
     
     def _is_data_like_content(self, content: str) -> bool:
         """Determine if content looks like data using statistical analysis."""
@@ -801,6 +939,150 @@ class MultiPageTableHandler:
         
         final_score = indicators - header_indicators
         return final_score >= 2
+    
+    def _is_clearly_different_table(self, headers1: List[str], headers2: List[str]) -> bool:
+        """Check if headers represent clearly different tables."""
+        
+        if not headers1 or not headers2:
+            return False
+        
+        # Normalize headers for comparison
+        norm1 = [str(h).lower().strip() for h in headers1 if h.strip()]
+        norm2 = [str(h).lower().strip() for h in headers2 if h.strip()]
+        
+        # Check for completely different header sets (no overlap)
+        set1 = set(norm1)
+        set2 = set(norm2)
+        intersection = set1.intersection(set2)
+        
+        # If there's no overlap at all, it's clearly a different table
+        if len(intersection) == 0:
+            self.logger.logger.info(f"🔍 No header overlap - clearly different table")
+            return True
+        
+        # Check for different column counts with minimal overlap
+        if abs(len(norm1) - len(norm2)) >= 2 and len(intersection) <= 1:
+            self.logger.logger.info(f"🔍 Different column count ({len(norm1)} vs {len(norm2)}) with minimal overlap - different table")
+            return True
+        
+        # Check for specific patterns that indicate different table types
+        # Commission adjustments vs Group business patterns
+        adjustment_indicators = ['action', 'adjustment', 'comm.rate', 'overpayment', 'comm.period']
+        group_business_indicators = ['company name', 'current comm.rate', 'invoicing period', 'premium', 'comm. amt', 'companyname']
+        
+        has_adjustment_indicators = any(indicator in ' '.join(norm1) for indicator in adjustment_indicators)
+        has_group_business_indicators = any(indicator in ' '.join(norm1) for indicator in group_business_indicators)
+        
+        prev_has_adjustment = any(indicator in ' '.join(norm2) for indicator in adjustment_indicators)
+        prev_has_group_business = any(indicator in ' '.join(norm2) for indicator in group_business_indicators)
+        
+        # If one is adjustment table and other is group business table, they're different
+        if (has_adjustment_indicators and prev_has_group_business) or (has_group_business_indicators and prev_has_adjustment):
+            self.logger.logger.info(f"🔍 Different table types detected (adjustment vs group business) - different table")
+            return True
+        
+        # **NEW: Check for specific header patterns that indicate different table purposes**
+        # Check if headers have completely different semantic meaning
+        if self._has_different_table_purpose(norm1, norm2):
+            self.logger.logger.info(f"🔍 Different table purposes detected - different table")
+            return True
+        
+        # Check for header patterns that suggest different table purposes
+        # If headers have completely different semantic meaning
+        semantic_similarity = self._calculate_semantic_similarity(norm1, norm2)
+        if semantic_similarity < 0.2:  # Very low semantic similarity
+            self.logger.logger.info(f"🔍 Very low semantic similarity ({semantic_similarity:.3f}) - different table")
+            return True
+        
+        return False
+    
+    def _calculate_semantic_similarity(self, headers1: List[str], headers2: List[str]) -> float:
+        """Calculate semantic similarity between header sets."""
+        
+        if not headers1 or not headers2:
+            return 0.0
+        
+        # Define semantic categories for headers
+        categories = {
+            'financial': ['amount', 'premium', 'commission', 'total', 'due', 'paid'],
+            'identification': ['company', 'name', 'group', 'policy', 'number', 'id'],
+            'temporal': ['date', 'period', 'month', 'year', 'invoicing'],
+            'action': ['action', 'adjustment', 'increase', 'decrease', 'overpayment'],
+            'rate': ['rate', 'percent', '%', 'commission rate', 'current comm']
+        }
+        
+        # Categorize headers
+        def categorize_headers(headers):
+            categories_found = set()
+            for header in headers:
+                header_lower = header.lower()
+                for category, keywords in categories.items():
+                    if any(keyword in header_lower for keyword in keywords):
+                        categories_found.add(category)
+            return categories_found
+        
+        cat1 = categorize_headers(headers1)
+        cat2 = categorize_headers(headers2)
+        
+        # Calculate Jaccard similarity for categories
+        intersection = len(cat1.intersection(cat2))
+        union = len(cat1.union(cat2))
+        
+        return intersection / union if union > 0 else 0.0
+    
+    def _has_different_table_purpose(self, headers1: List[str], headers2: List[str]) -> bool:
+        """Check if headers represent tables with different purposes."""
+        
+        if not headers1 or not headers2:
+            return False
+        
+        # Define table purpose categories
+        purposes = {
+            'adjustment': ['action', 'adjustment', 'comm.rate', 'overpayment', 'comm.period'],
+            'group_business': ['company name', 'current comm.rate', 'invoicing period', 'premium', 'comm. amt', 'companyname'],
+            'summary': ['total', 'summary', 'grand total', 'subtotal'],
+            'billing': ['billing', 'invoice', 'due', 'paid', 'outstanding']
+        }
+        
+        # Determine purpose of each header set
+        def get_table_purpose(headers):
+            header_text = ' '.join(headers).lower()
+            purpose_scores = {}
+            
+            for purpose, keywords in purposes.items():
+                score = sum(1 for keyword in keywords if keyword in header_text)
+                purpose_scores[purpose] = score
+            
+            # Return the purpose with the highest score
+            if purpose_scores:
+                return max(purpose_scores, key=purpose_scores.get)
+            return None
+        
+        purpose1 = get_table_purpose(headers1)
+        purpose2 = get_table_purpose(headers2)
+        
+        # If purposes are different and both are clearly defined, they're different tables
+        if purpose1 and purpose2 and purpose1 != purpose2:
+            self.logger.logger.info(f"🔍 Different table purposes: {purpose1} vs {purpose2}")
+            return True
+        
+        # Check for specific patterns that indicate different table types
+        # Commission adjustments vs Group business patterns
+        adjustment_indicators = ['action', 'adjustment', 'comm.rate', 'overpayment', 'comm.period']
+        group_business_indicators = ['company name', 'current comm.rate', 'invoicing period', 'premium', 'comm. amt', 'companyname']
+        
+        has_adjustment_indicators = any(indicator in ' '.join(headers1) for indicator in adjustment_indicators)
+        has_group_business_indicators = any(indicator in ' '.join(headers1) for indicator in group_business_indicators)
+        
+        prev_has_adjustment = any(indicator in ' '.join(headers2) for indicator in adjustment_indicators)
+        prev_has_group_business = any(indicator in ' '.join(headers2) for indicator in group_business_indicators)
+        
+        # If one is adjustment table and other is group business table, they're different
+        if (has_adjustment_indicators and prev_has_group_business) or (has_group_business_indicators and prev_has_adjustment):
+            self.logger.logger.info(f"🔍 Different table types detected (adjustment vs group business) - different table")
+            return True
+        
+        return False
     
     def _matches_table_structure(self, potential_data_row: List[str], table_data: Dict[str, Any]) -> bool:
         """Check if a potential data row matches the structure of the table."""
@@ -1124,6 +1406,7 @@ class MultiPageTableHandler:
             # Add rows (skip headers if they exist)
             rows = table_data.get('rows', [])
             
+            # **IMPROVED: Better handling of continuation tables**
             # Check if the "headers" of this table are actually data
             if self._headers_look_like_data(table_data.get('headers', [])):
                 # The "headers" are actually data, so include them as the first row
@@ -1133,6 +1416,36 @@ class MultiPageTableHandler:
                 # Skip first row if it looks like headers
                 if self._is_header_row(rows[0], base_table.get('headers', [])):
                     rows = rows[1:]
+            
+            # **NEW: Handle continuation tables with proper data extraction**
+            # If this is a continuation table, ensure we extract all the data properly
+            if i > 0 and self._is_continuation_table(page_table, base_table):
+                # For continuation tables, we need to be more careful about data extraction
+                rows = self._extract_continuation_data(table_data, base_table.get('headers', []))
+            elif i > 0 and not rows:
+                # If no rows found, try to extract from table_cells
+                rows = self._extract_continuation_data(table_data, base_table.get('headers', []))
+            elif i > 0 and rows and len(rows) < 3:
+                # If very few rows found, try to extract from table_cells
+                rows = self._extract_continuation_data(table_data, base_table.get('headers', []))
+            
+            # **NEW: Always try to extract from the original table object if we have it**
+            if i > 0 and (not rows or len(rows) < 3):
+                # Try to access the original table object from the page_table
+                original_table = getattr(page_table, 'original_table', None)
+                if original_table and hasattr(original_table, 'table_cells'):
+                    self.logger.logger.info(f"🔍 Found original table with {len(original_table.table_cells)} cells")
+                    rows = self._extract_rows_from_docling_cells(original_table.table_cells, base_table.get('headers', []))
+                    self.logger.logger.info(f"🔍 Extracted {len(rows)} rows from original table")
+                    
+                    # If we still don't have enough rows, try to extract directly from the table_cells
+                    if not rows or len(rows) < 3:
+                        self.logger.logger.info(f"🔍 Still not enough rows, trying direct extraction from table_cells")
+                        # Try to extract all rows from the table_cells, including continuation indicators
+                        all_rows_from_cells = self._extract_all_rows_from_docling_cells(original_table.table_cells, base_table.get('headers', []))
+                        if all_rows_from_cells:
+                            self.logger.logger.info(f"🔍 Direct extraction found {len(all_rows_from_cells)} rows")
+                            rows = all_rows_from_cells
             
             all_rows.extend(rows)
             
@@ -1236,3 +1549,507 @@ class MultiPageTableHandler:
         except Exception as e:
             self.logger.logger.error(f"Header consolidation failed: {e}")
             return tables
+    
+    async def _is_commission_statement_continuation(
+        self, 
+        table: PageTable, 
+        current_headers: List[str]
+    ) -> bool:
+        """Intelligent detection of commission statement table continuations."""
+        
+        # Check if this looks like a commission statement table
+        if not self._is_commission_statement_table(table, current_headers):
+            return False
+        
+        # **IMPROVED: Enhanced continuation detection for commission statements**
+        continuation_indicators = []
+        
+        # 1. Check for explicit continuation text in table data
+        continuation_text_found = False
+        table_text = ""
+        for row in table.table_data.get('rows', []):
+            for cell in row:
+                cell_text = str(cell).lower().strip()
+                table_text += cell_text + " "
+                if any(indicator in cell_text for indicator in [
+                    'continued', 'anat goldstein continued', 'continued next page',
+                    'total commissions', 'total medical premium', 'total dental premium', 'total vision premium'
+                ]):
+                    continuation_text_found = True
+                    self.logger.logger.info(f"🔍 Found continuation text: '{cell_text}'")
+        
+        continuation_indicators.append(continuation_text_found)
+        
+        # 2. Check if headers are similar but with variations (more lenient)
+        header_similarity = self._has_commission_header_variations(table.headers, current_headers)
+        continuation_indicators.append(header_similarity)
+        
+        # 3. Check if data patterns match (financial data, company names, etc.)
+        data_patterns_match = self._has_commission_data_patterns(table.table_data)
+        continuation_indicators.append(data_patterns_match)
+        
+        # 4. **NEW: Check for commission statement specific patterns**
+        commission_patterns = self._has_commission_specific_patterns(table.table_data, table_text)
+        continuation_indicators.append(commission_patterns)
+        
+        # 5. **NEW: Check if this is a summary/continuation section**
+        is_summary_section = self._is_commission_summary_section(table.table_data, table_text)
+        continuation_indicators.append(is_summary_section)
+        
+        # 6. Check if column count matches (more flexible)
+        column_count_match = (
+            len(table.headers) == len(current_headers) if table.headers and current_headers else
+            len(table.headers) <= len(current_headers) + 1 if table.headers and current_headers else
+            False
+        )
+        continuation_indicators.append(column_count_match)
+        
+        # Calculate continuation score
+        continuation_score = sum(continuation_indicators) / len(continuation_indicators)
+        
+        self.logger.logger.info(f"🔍 Commission continuation indicators:")
+        self.logger.logger.info(f"   Continuation text: {continuation_text_found}")
+        self.logger.logger.info(f"   Header similarity: {header_similarity}")
+        self.logger.logger.info(f"   Data patterns: {data_patterns_match}")
+        self.logger.logger.info(f"   Commission patterns: {commission_patterns}")
+        self.logger.logger.info(f"   Summary section: {is_summary_section}")
+        self.logger.logger.info(f"   Column count match: {column_count_match}")
+        self.logger.logger.info(f"   Final score: {continuation_score:.3f}")
+        
+        # **IMPROVED: More aggressive threshold for commission statements**
+        return continuation_score >= 0.2  # Lowered from 0.25 to 0.2
+    
+    def _is_commission_statement_table(self, table: PageTable, current_headers: List[str]) -> bool:
+        """Check if this table appears to be from a commission statement."""
+        
+        # Commission statement indicators
+        commission_indicators = [
+            'commission', 'premium', 'group number', 'company name', 'paid month',
+            'product', 'medical', 'dental', 'vision', 'agent', 'broker'
+        ]
+        
+        # Check headers for commission-related terms
+        all_headers = (table.headers or []) + (current_headers or [])
+        header_text = ' '.join(str(h).lower() for h in all_headers)
+        
+        commission_score = sum(1 for indicator in commission_indicators if indicator in header_text)
+        
+        # Check table data for commission patterns
+        if table.table_data and table.table_data.get('rows'):
+            data_text = ' '.join(str(cell).lower() for row in table.table_data['rows'] for cell in row)
+            data_commission_score = sum(1 for indicator in commission_indicators if indicator in data_text)
+            commission_score += data_commission_score * 0.5  # Weight data patterns less
+        
+        return commission_score >= 2  # At least 2 indicators
+    
+    def _has_commission_header_variations(self, headers1: List[str], headers2: List[str]) -> bool:
+        """Check if headers are variations of commission statement headers."""
+        
+        if not headers1 or not headers2:
+            return False
+        
+        # Normalize headers for comparison
+        norm1 = [str(h).lower().strip() for h in headers1]
+        norm2 = [str(h).lower().strip() for h in headers2]
+        
+        # Check for partial matches (common in commission statements)
+        matches = 0
+        for h1 in norm1:
+            for h2 in norm2:
+                # Exact match
+                if h1 == h2:
+                    matches += 1
+                # Partial match (one contains the other)
+                elif h1 in h2 or h2 in h1:
+                    matches += 0.5
+                # Word overlap
+                elif any(word in h2 for word in h1.split() if len(word) > 2):
+                    matches += 0.3
+        
+        # Calculate similarity ratio
+        max_headers = max(len(norm1), len(norm2))
+        similarity = matches / max_headers if max_headers > 0 else 0
+        
+        return similarity >= 0.3  # At least 30% similarity
+    
+    def _has_commission_data_patterns(self, table_data: Dict[str, Any]) -> bool:
+        """Check if table data contains commission statement patterns."""
+        
+        if not table_data or not table_data.get('rows'):
+            return False
+        
+        patterns_found = 0
+        
+        for row in table_data['rows'][:5]:  # Check first 5 rows
+            row_text = ' '.join(str(cell).lower() for cell in row)
+            
+            # Check for commission statement patterns
+            if any(pattern in row_text for pattern in ['medical', 'dental', 'vision']):
+                patterns_found += 1
+            if re.search(r'\$\s*\d+[,.]?\d*', row_text):  # Dollar amounts
+                patterns_found += 1
+            if re.search(r'\d{5,}', row_text):  # Group numbers
+                patterns_found += 1
+            if re.search(r'\d{2}-\d{2}', row_text):  # Date patterns like 11-24
+                patterns_found += 1
+        
+        return patterns_found >= 2  # At least 2 patterns found
+    
+    def _has_commission_specific_patterns(self, table_data: Dict[str, Any], table_text: str) -> bool:
+        """Check for commission statement specific patterns."""
+        
+        if not table_data or not table_data.get('rows'):
+            return False
+        
+        patterns_found = 0
+        
+        # Check for commission-specific patterns in the text
+        commission_patterns = [
+            'group number', 'company name', 'paid month', 'product', 'paid premium',
+            'comm %', 'comm amount', 'medical', 'dental', 'vision', 'agent no',
+            'broker', 'commission statement', 'californiachoice'
+        ]
+        
+        for pattern in commission_patterns:
+            if pattern in table_text.lower():
+                patterns_found += 1
+        
+        # Check for financial data patterns in rows
+        for row in table_data['rows'][:5]:  # Check first 5 rows
+            row_text = ' '.join(str(cell).lower() for cell in row)
+            
+            # Check for group number patterns (5-digit numbers)
+            if re.search(r'\b\d{5}\b', row_text):
+                patterns_found += 1
+            
+            # Check for company name patterns (LLC, Inc, Corp)
+            if any(suffix in row_text for suffix in ['llc', 'inc', 'corp', 'company']):
+                patterns_found += 1
+            
+            # Check for date patterns (MM-YY)
+            if re.search(r'\b\d{2}-\d{2}\b', row_text):
+                patterns_found += 1
+        
+        return patterns_found >= 3  # At least 3 commission-specific patterns
+    
+    def _is_commission_summary_section(self, table_data: Dict[str, Any], table_text: str) -> bool:
+        """Check if this is a commission summary/continuation section."""
+        
+        if not table_data or not table_data.get('rows'):
+            return False
+        
+        # Check for summary indicators
+        summary_indicators = [
+            'total commissions', 'total medical premium', 'total dental premium',
+            'total vision premium', 'total paid commissions', 'anat goldstein continued'
+        ]
+        
+        for indicator in summary_indicators:
+            if indicator in table_text.lower():
+                return True
+        
+        # Check if this looks like a summary table (fewer rows, totals)
+        rows = table_data.get('rows', [])
+        if len(rows) <= 5:  # Summary sections typically have fewer rows
+            # Check if rows contain totals or summary data
+            for row in rows:
+                row_text = ' '.join(str(cell).lower() for cell in row)
+                if any(word in row_text for word in ['total', 'premium', 'commission', 'medical', 'dental', 'vision']):
+                    return True
+        
+        return False
+    
+    def _is_continuation_table(self, page_table: PageTable, base_table: Dict[str, Any]) -> bool:
+        """Check if a table is a continuation of the base table."""
+        
+        # Check for continuation indicators in headers
+        headers = page_table.headers or []
+        if any('continued' in str(h).lower() for h in headers):
+            return True
+        
+        # Check if headers look like data (strong continuation indicator)
+        if self._headers_look_like_data(headers):
+            return True
+        
+        # Check if table has similar structure but different headers
+        base_headers = base_table.get('headers', [])
+        if len(headers) != len(base_headers) and len(headers) <= 1:
+            return True
+        
+        return False
+    
+    def _extract_continuation_data(self, table_data: Dict[str, Any], expected_headers: List[str]) -> List[List[str]]:
+        """Extract data from a continuation table, ensuring proper structure."""
+        
+        rows = table_data.get('rows', [])
+        headers = table_data.get('headers', [])
+        
+        self.logger.logger.info(f"🔍 Extracting continuation data: {len(rows)} rows, {len(headers)} headers")
+        self.logger.logger.info(f"🔍 Expected headers: {expected_headers}")
+        
+        # **IMPROVED: Better data extraction from continuation tables**
+        # If headers look like data, they should be included as the first row
+        if self._headers_look_like_data(headers):
+            # The headers are actually data, so include them
+            if headers:
+                self.logger.logger.info(f"🔍 Headers look like data, including as first row: {headers}")
+                rows = [headers] + rows
+        
+        # **NEW: Try to extract data from table_cells if rows are empty or incomplete**
+        if not rows or all(not row or len(row) < len(expected_headers) for row in rows):
+            self.logger.logger.info(f"🔍 Rows are empty/incomplete, trying to extract from cells")
+            # Try to extract from table_cells
+            cells = table_data.get('cells', [])
+            if cells:
+                self.logger.logger.info(f"🔍 Found {len(cells)} cells, extracting rows")
+                rows = self._extract_rows_from_cells(cells, expected_headers)
+                self.logger.logger.info(f"🔍 Extracted {len(rows)} rows from cells")
+            else:
+                # **NEW: Try to extract from table_cells in the original table structure**
+                # Sometimes the cells are stored differently in the table data
+                self.logger.logger.info(f"🔍 No cells found in 'cells' key, checking other structures")
+                if hasattr(table_data, 'table_cells') and table_data.table_cells:
+                    self.logger.logger.info(f"🔍 Found table_cells attribute with {len(table_data.table_cells)} cells")
+                    rows = self._extract_rows_from_docling_cells(table_data.table_cells, expected_headers)
+                    self.logger.logger.info(f"🔍 Extracted {len(rows)} rows from table_cells attribute")
+        
+        # **NEW: Try alternative extraction methods if still no data**
+        if not rows or len(rows) == 0:
+            self.logger.logger.info(f"🔍 Still no rows, trying alternative extraction methods")
+            # Try to extract from other table data structures
+            alternative_rows = self._extract_alternative_data(table_data, expected_headers)
+            if alternative_rows:
+                rows = alternative_rows
+                self.logger.logger.info(f"🔍 Alternative extraction found {len(rows)} rows")
+        
+        # **IMPROVED: Better row filtering and validation**
+        filtered_rows = []
+        for i, row in enumerate(rows):
+            if not row:
+                continue
+            
+            # Skip completely empty rows
+            if all(not str(cell).strip() for cell in row):
+                continue
+            
+            # **NEW: Check if this row contains continuation indicators**
+            row_text = ' '.join(str(cell).lower() for cell in row if cell)
+            if any(indicator in row_text for indicator in [
+                'continued', 'anat goldstein continued', 'total commissions',
+                'total medical premium', 'total dental premium', 'total vision premium'
+            ]):
+                self.logger.logger.info(f"🔍 Found continuation indicator in row {i}: {row_text[:100]}...")
+                # Include this row as it's part of the continuation data
+            
+            # **IMPROVED: Be more lenient with row filtering for continuation tables**
+            # Don't filter out rows that might contain important data
+            filtered_rows.append(row)
+        
+        rows = filtered_rows
+        self.logger.logger.info(f"🔍 After filtering: {len(rows)} rows")
+        
+        # Ensure all rows have the correct number of columns
+        expected_cols = len(expected_headers)
+        normalized_rows = []
+        
+        for i, row in enumerate(rows):
+            if not row:
+                continue
+            
+            # Pad or truncate row to match expected column count
+            if len(row) < expected_cols:
+                # Pad with empty strings
+                normalized_row = row + [''] * (expected_cols - len(row))
+                self.logger.logger.info(f"🔍 Padded row {i} from {len(row)} to {expected_cols} columns")
+            elif len(row) > expected_cols:
+                # Truncate to expected length
+                normalized_row = row[:expected_cols]
+                self.logger.logger.info(f"🔍 Truncated row {i} from {len(row)} to {expected_cols} columns")
+            else:
+                normalized_row = row
+            
+            normalized_rows.append(normalized_row)
+        
+        self.logger.logger.info(f"🔍 Final normalized rows: {len(normalized_rows)}")
+        return normalized_rows
+    
+    def _extract_rows_from_cells(self, cells: List[Dict[str, Any]], expected_headers: List[str]) -> List[List[str]]:
+        """Extract rows from table cells when regular row extraction fails."""
+        
+        if not cells:
+            return []
+        
+        self.logger.logger.info(f"🔍 Extracting rows from {len(cells)} cells")
+        
+        # Group cells by row
+        rows_dict = {}
+        for cell in cells:
+            row_idx = cell.get('row', 0)
+            col_idx = cell.get('col', 0)
+            content = cell.get('content', '')
+            
+            if row_idx not in rows_dict:
+                rows_dict[row_idx] = {}
+            
+            rows_dict[row_idx][col_idx] = content
+        
+        self.logger.logger.info(f"🔍 Grouped cells into {len(rows_dict)} rows")
+        
+        # Convert to list of rows
+        rows = []
+        for row_idx in sorted(rows_dict.keys()):
+            row_data = rows_dict[row_idx]
+            # Create row with proper column order
+            row = []
+            max_col = max(row_data.keys()) if row_data else 0
+            for col_idx in range(max_col + 1):
+                row.append(row_data.get(col_idx, ''))
+            
+            # Only add non-empty rows
+            if any(cell.strip() for cell in row):
+                rows.append(row)
+                self.logger.logger.info(f"🔍 Row {row_idx}: {row}")
+        
+        self.logger.logger.info(f"🔍 Extracted {len(rows)} non-empty rows from cells")
+        return rows
+    
+    def _extract_rows_from_docling_cells(self, table_cells, expected_headers: List[str]) -> List[List[str]]:
+        """Extract rows from Docling table_cells when regular extraction fails."""
+        
+        if not table_cells:
+            return []
+        
+        self.logger.logger.info(f"🔍 Extracting rows from {len(table_cells)} Docling cells")
+        
+        # Group cells by row
+        rows_dict = {}
+        for cell in table_cells:
+            # Docling cells have different structure
+            row_idx = getattr(cell, 'row', 0)
+            col_idx = getattr(cell, 'col', 0)
+            content = getattr(cell, 'content', '') or getattr(cell, 'text', '')
+            
+            if row_idx not in rows_dict:
+                rows_dict[row_idx] = {}
+            
+            rows_dict[row_idx][col_idx] = content
+        
+        self.logger.logger.info(f"🔍 Grouped Docling cells into {len(rows_dict)} rows")
+        
+        # Convert to list of rows
+        rows = []
+        for row_idx in sorted(rows_dict.keys()):
+            row_data = rows_dict[row_idx]
+            # Create row with proper column order
+            row = []
+            max_col = max(row_data.keys()) if row_data else 0
+            for col_idx in range(max_col + 1):
+                row.append(row_data.get(col_idx, ''))
+            
+            # Only add non-empty rows and skip continuation indicators
+            if any(cell.strip() for cell in row):
+                row_text = ' '.join(str(cell).lower() for cell in row if cell)
+                if not any(indicator in row_text for indicator in [
+                    'continued', 'anat goldstein continued', 'total commissions',
+                    'total medical premium', 'total dental premium', 'total vision premium'
+                ]):
+                    rows.append(row)
+                    self.logger.logger.info(f"🔍 Docling Row {row_idx}: {row}")
+        
+        self.logger.logger.info(f"🔍 Extracted {len(rows)} non-empty rows from Docling cells")
+        return rows
+    
+    def _extract_all_rows_from_docling_cells(self, table_cells, expected_headers: List[str]) -> List[List[str]]:
+        """Extract all rows from Docling table_cells without filtering continuation indicators."""
+        
+        if not table_cells:
+            return []
+        
+        self.logger.logger.info(f"🔍 Extracting ALL rows from {len(table_cells)} Docling cells")
+        
+        # Group cells by row
+        rows_dict = {}
+        for cell in table_cells:
+            # Docling cells have different structure
+            row_idx = getattr(cell, 'row', 0)
+            col_idx = getattr(cell, 'col', 0)
+            content = getattr(cell, 'content', '') or getattr(cell, 'text', '')
+            
+            if row_idx not in rows_dict:
+                rows_dict[row_idx] = {}
+            
+            rows_dict[row_idx][col_idx] = content
+        
+        self.logger.logger.info(f"🔍 Grouped Docling cells into {len(rows_dict)} rows")
+        
+        # Convert to list of rows
+        rows = []
+        for row_idx in sorted(rows_dict.keys()):
+            row_data = rows_dict[row_idx]
+            # Create row with proper column order
+            row = []
+            max_col = max(row_data.keys()) if row_data else 0
+            for col_idx in range(max_col + 1):
+                row.append(row_data.get(col_idx, ''))
+            
+            # Only add non-empty rows (but don't filter continuation indicators)
+            if any(cell.strip() for cell in row):
+                rows.append(row)
+                self.logger.logger.info(f"🔍 Docling Row {row_idx}: {row}")
+        
+        self.logger.logger.info(f"🔍 Extracted {len(rows)} non-empty rows from Docling cells (all rows)")
+        return rows
+    
+    def _extract_alternative_data(self, table_data: Dict[str, Any], expected_headers: List[str]) -> List[List[str]]:
+        """Try alternative methods to extract data from continuation tables."""
+        
+        rows = []
+        
+        # Method 1: Try to extract from any available data structures
+        if 'data' in table_data:
+            data = table_data['data']
+            if isinstance(data, list):
+                for item in data:
+                    if isinstance(item, list):
+                        rows.append(item)
+                    elif isinstance(item, dict) and 'text' in item:
+                        rows.append([item['text']])
+        
+        # Method 2: Try to extract from text content
+        if 'text' in table_data:
+            text = table_data['text']
+            if text:
+                # Try to parse text into rows (simple approach)
+                lines = text.split('\n')
+                for line in lines:
+                    if line.strip():
+                        # Try to split by common delimiters
+                        cells = []
+                        for delimiter in ['\t', '|', '  ']:  # Tab, pipe, double space
+                            if delimiter in line:
+                                cells = [cell.strip() for cell in line.split(delimiter)]
+                                break
+                        
+                        if not cells:
+                            cells = [line.strip()]
+                        
+                        if cells:
+                            rows.append(cells)
+        
+        # Method 3: Try to extract from any nested structures
+        for key, value in table_data.items():
+            if key not in ['rows', 'headers', 'cells', 'data', 'text'] and isinstance(value, list):
+                for item in value:
+                    if isinstance(item, list):
+                        rows.append(item)
+                    elif isinstance(item, dict):
+                        # Try to extract text from dict values
+                        row = []
+                        for v in item.values():
+                            if isinstance(v, str) and v.strip():
+                                row.append(v.strip())
+                        if row:
+                            rows.append(row)
+        
+        self.logger.logger.info(f"🔍 Alternative extraction found {len(rows)} rows")
+        return rows

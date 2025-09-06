@@ -733,20 +733,17 @@ async def extract_tables_gpt(
         
         logger.info("GPT extraction completed successfully")
         
-        # Process tables with company detection
+        # Use enhanced extracted tables with hierarchical structure detection
         processed_tables = []
         
-        logger.info(f"Processing {len(extracted_tables)} extracted tables with company detection")
+        logger.info(f"Processing {len(extracted_tables)} extracted tables with hierarchical structure enhancement")
         for i, table in enumerate(extracted_tables):
-            logger.info(f"Processing table {i+1} with company detection")
-            # Apply company detection service for all tables
-            from app.services.company_name_service import CompanyNameDetectionService
-            company_detector = CompanyNameDetectionService()
-            
-            enhanced_table = company_detector.detect_company_names_in_extracted_data(
-                table, "gpt4o_vision"
-            )
-            processed_tables.append(enhanced_table)
+            logger.info(f"Processing table {i+1} with hierarchical structure enhancement")
+            # The hierarchical structure detection is already applied in the GPT service
+            # Just add final metadata
+            table["extractor"] = "gpt4o_vision_enhanced"
+            table["processing_notes"] = "Enhanced extraction with hierarchical structure detection and company name propagation"
+            processed_tables.append(table)
         
         
         # Step 4: Merge similar tables with identical headers

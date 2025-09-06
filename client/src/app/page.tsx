@@ -15,13 +15,10 @@ function HomePageContent() {
   // Handle URL parameters for tab selection
   useEffect(() => {
     const tabParam = searchParams.get('tab')
-    console.log('URL tab parameter:', tabParam)
     if (tabParam && ['dashboard', 'carriers', 'earned-commission'].includes(tabParam)) {
-      console.log('Setting tab to:', tabParam)
       setTab(tabParam as "dashboard" | "carriers" | "earned-commission")
     } else {
       // Default to dashboard if no tab parameter or invalid tab
-      console.log('Setting tab to dashboard (default)')
       setTab("dashboard")
     }
   }, [searchParams])

@@ -212,14 +212,15 @@ async def save_statement_review(
     db_upload.completed_at = datetime.utcnow()
     db_upload.last_updated = datetime.utcnow()
     
+    # If the statement is approved, process commission data BEFORE committing
+    if status == "Approved":
+        print(f"✅ Statement approved, processing commission data with BULK OPTIMIZATION...")
+        from .earned_commission import bulk_process_commissions
+        await bulk_process_commissions(db, db_upload)
+    
+    # Commit all changes together (statement + commission data)
     await db.commit()
     await db.refresh(db_upload)
-    
-    # If the statement is approved, process commission data
-    if status == "Approved":
-        print(f"✅ Statement approved, processing commission data...")
-        from .earned_commission import process_commission_data_from_statement
-        await process_commission_data_from_statement(db, db_upload)
     
     return db_upload
 

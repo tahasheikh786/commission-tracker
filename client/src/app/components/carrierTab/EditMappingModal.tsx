@@ -119,6 +119,7 @@ export default function EditMappingModal({
             }
           }}
           onSkip={onClose}
+          onGoToTableEditor={onClose} // Close modal when going back to table editor
           initialFields={fieldConfig}
           initialMapping={mapping}
           initialPlanTypes={planTypes}

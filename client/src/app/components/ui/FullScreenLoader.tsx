@@ -47,10 +47,8 @@ export default function FullScreenLoader({
     }
   }, [steps]);
 
-  console.log('🎯 FullScreenLoader rendered:', { isVisible, title, type, progress })
   
   if (!isVisible) {
-    console.log('❌ FullScreenLoader not visible, returning null')
     return null;
   }
 

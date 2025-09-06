@@ -28,6 +28,15 @@ class CompanyNameDetectionService:
             # Add more patterns based on commission statement formats
         ]
         
+        # US State abbreviations for cleaning company names
+        self.us_states = [
+            'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA',
+            'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD',
+            'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ',
+            'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC',
+            'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY'
+        ]
+        
         # Customer header patterns for hierarchical documents
         self.customer_header_patterns = [
             r'Customer:\s*(\d+)',
@@ -92,7 +101,15 @@ class CompanyNameDetectionService:
             
             # Combine all detected companies
             all_companies = hierarchical_companies + scattered_companies + ner_companies
-            unique_companies = list(set(all_companies))  # Remove duplicates
+            
+            # Clean all company names to remove state codes and numbers
+            cleaned_companies = []
+            for company in all_companies:
+                cleaned_company = self.clean_company_name(company)
+                if cleaned_company and cleaned_company not in cleaned_companies:
+                    cleaned_companies.append(cleaned_company)
+            
+            unique_companies = cleaned_companies
             
             # Enhanced company mapping for hierarchical structures
             if hierarchical_companies:
@@ -137,8 +154,10 @@ class CompanyNameDetectionService:
                 if match:
                     customer_name = match.group(1).strip()
                     if customer_name and len(customer_name) > 2:
-                        companies.append(customer_name)
-                        current_customer_name = customer_name
+                        # Clean the company name before adding it
+                        cleaned_name = self.clean_company_name(customer_name)
+                        companies.append(cleaned_name)
+                        current_customer_name = cleaned_name
                         break
             
             # Enhanced company detection for standalone company names
@@ -146,8 +165,10 @@ class CompanyNameDetectionService:
             if self._is_company_header_row(row, row_text):
                 company_name = self._extract_company_from_header_row(row, row_text)
                 if company_name and company_name not in companies:
-                    companies.append(company_name)
-                    current_customer_name = company_name
+                    # Clean the company name before adding it
+                    cleaned_name = self.clean_company_name(company_name)
+                    companies.append(cleaned_name)
+                    current_customer_name = cleaned_name
         
         return companies
     
@@ -183,7 +204,8 @@ class CompanyNameDetectionService:
                 matches = re.findall(pattern, row_text, re.IGNORECASE)
                 for match in matches:
                     if match and match.strip() and len(match.strip()) > 3:
-                        return match.strip()
+                        # Clean the company name before returning it
+                        return self.clean_company_name(match.strip())
             except re.error:
                 continue
         
@@ -198,8 +220,10 @@ class CompanyNameDetectionService:
                     # Include previous word if it looks like part of company name
                     potential_name = f"{words[i-1]} {word}"
                     if len(potential_name) > 5:
-                        return potential_name
-                return word
+                        # Clean the company name before returning it
+                        return self.clean_company_name(potential_name)
+                # Clean the company name before returning it
+                return self.clean_company_name(word)
         
         return None
     
@@ -228,7 +252,9 @@ class CompanyNameDetectionService:
                 matches = re.findall(pattern, text, re.IGNORECASE)
                 for match in matches:
                     if match and match.strip() and len(match.strip()) > 3:
-                        companies.append(match.strip())
+                        # Clean the company name before adding it
+                        cleaned_name = self.clean_company_name(match.strip())
+                        companies.append(cleaned_name)
             except re.error:
                 continue
         
@@ -248,7 +274,9 @@ class CompanyNameDetectionService:
         # Extract organization entities
         for ent in doc.ents:
             if ent.label_ == "ORG":  # Organization
-                companies.append(ent.text.strip())
+                # Clean the company name before adding it
+                cleaned_name = self.clean_company_name(ent.text.strip())
+                companies.append(cleaned_name)
         
         return list(set(companies))
     
@@ -468,3 +496,158 @@ class CompanyNameDetectionService:
             validation_result["issues"].append("Contains invalid characters")
         
         return validation_result
+    
+    def clean_company_name(self, company_name: str) -> str:
+        """
+        Clean company name by removing state abbreviation and number patterns.
+        Removes patterns like 'VA00598', 'FL00719', 'PA00840', 'TX04039' from company names.
+        Now includes OCR-aware cleaning for corrupted state codes and handles state codes
+        anywhere in the company name, not just at the end.
+        
+        Args:
+            company_name: The company name to clean
+            
+        Returns:
+            Cleaned company name with state codes and numbers removed
+        """
+        if not company_name or not isinstance(company_name, str):
+            return company_name
+        
+        original_name = company_name.strip()
+        
+        # **NEW: Fix OCR errors in state codes before pattern matching**
+        original_name = self._fix_ocr_in_state_codes(original_name)
+        
+        # **UPDATED: Handle state codes anywhere in the company name, not just at the end**
+        
+        # Pattern 1: State abbreviation followed by 5 digits (e.g., VA00598, FL00719, TX04039)
+        pattern1 = re.compile(r'\s+([A-Z]{2}\d{5})\s*')
+        match1 = pattern1.search(original_name)
+        if match1:
+            cleaned = pattern1.sub(' ', original_name).strip()
+            logger.info(f"🧹 Cleaned company name: '{original_name}' → '{cleaned}' (removed {match1.group(1)})")
+            return cleaned
+        
+        # Pattern 2: State abbreviation followed by 4 digits (e.g., VA0598, FL0719)
+        pattern2 = re.compile(r'\s+([A-Z]{2}\d{4})\s*')
+        match2 = pattern2.search(original_name)
+        if match2:
+            cleaned = pattern2.sub(' ', original_name).strip()
+            logger.info(f"🧹 Cleaned company name: '{original_name}' → '{cleaned}' (removed {match2.group(1)})")
+            return cleaned
+        
+        # Pattern 3: State abbreviation followed by 3 digits (e.g., VA598, FL719)
+        pattern3 = re.compile(r'\s+([A-Z]{2}\d{3})\s*')
+        match3 = pattern3.search(original_name)
+        if match3:
+            cleaned = pattern3.sub(' ', original_name).strip()
+            logger.info(f"🧹 Cleaned company name: '{original_name}' → '{cleaned}' (removed {match3.group(1)})")
+            return cleaned
+        
+        # Pattern 4: State abbreviation followed by 2 digits (e.g., VA98, FL19)
+        pattern4 = re.compile(r'\s+([A-Z]{2}\d{2})\s*')
+        match4 = pattern4.search(original_name)
+        if match4:
+            cleaned = pattern4.sub(' ', original_name).strip()
+            logger.info(f"🧹 Cleaned company name: '{original_name}' → '{cleaned}' (removed {match4.group(1)})")
+            return cleaned
+        
+        # Pattern 5: State abbreviation followed by 1 digit (e.g., VA8, FL9)
+        pattern5 = re.compile(r'\s+([A-Z]{2}\d{1})\s*')
+        match5 = pattern5.search(original_name)
+        if match5:
+            cleaned = pattern5.sub(' ', original_name).strip()
+            logger.info(f"🧹 Cleaned company name: '{original_name}' → '{cleaned}' (removed {match5.group(1)})")
+            return cleaned
+        
+        # Pattern 6: More flexible - any state abbreviation followed by digits anywhere in the name
+        for state in self.us_states:
+            pattern = re.compile(rf'\s+{state}\d+\s*')
+            if pattern.search(original_name):
+                cleaned = pattern.sub(' ', original_name).strip()
+                logger.info(f"🧹 Cleaned company name: '{original_name}' → '{cleaned}' (removed {state} + digits)")
+                return cleaned
+        
+        return original_name
+    
+    def _fix_ocr_in_state_codes(self, company_name: str) -> str:
+        """
+        Fix common OCR errors in state codes before applying cleaning patterns.
+        Handles cases like MNOO867 -> MN00867, LAOO748 -> LA00748, etc.
+        
+        Args:
+            company_name: Company name that may contain OCR-corrupted state codes
+            
+        Returns:
+            Company name with OCR errors in state codes corrected
+        """
+        if not company_name:
+            return company_name
+        
+        original_name = company_name
+        fixed_name = company_name
+        
+        # **OCR Pattern 1: Fix O to 0 in state codes (e.g., MNOO867 -> MN00867)**
+        # Pattern: [A-Z]{2}O+[0-9]+ (state code with O's instead of 0's)
+        ocr_pattern1 = re.compile(r'([A-Z]{2})O+(\d+)')
+        match1 = ocr_pattern1.search(fixed_name)
+        if match1:
+            state_code = match1.group(1)
+            digits = match1.group(2)
+            # Replace O's with appropriate number of 0's
+            if len(digits) == 3:  # 3 digits, need 2 zeros
+                corrected = f"{state_code}00{digits}"
+            elif len(digits) == 2:  # 2 digits, need 3 zeros
+                corrected = f"{state_code}000{digits}"
+            elif len(digits) == 1:  # 1 digit, need 4 zeros
+                corrected = f"{state_code}0000{digits}"
+            else:  # Default: pad with zeros to make 5 total digits
+                zeros_needed = 5 - len(digits)
+                corrected = f"{state_code}{'0' * zeros_needed}{digits}"
+            
+            fixed_name = ocr_pattern1.sub(corrected, fixed_name)
+            logger.info(f"🔧 OCR fix: '{original_name}' → '{fixed_name}' (state code correction)")
+        
+        # **OCR Pattern 1b: Fix remaining O's in state codes (e.g., MD005OO -> MD00500)**
+        ocr_pattern1b = re.compile(r'([A-Z]{2}\d+)O+')
+        match1b = ocr_pattern1b.search(fixed_name)
+        if match1b:
+            base_code = match1b.group(1)
+            # Replace trailing O's with 0's to make 5 total digits
+            if len(base_code) < 7:  # Need to pad to 7 characters (2 state + 5 digits)
+                zeros_needed = 7 - len(base_code)
+                corrected = f"{base_code}{'0' * zeros_needed}"
+                fixed_name = ocr_pattern1b.sub(corrected, fixed_name)
+                logger.info(f"🔧 OCR fix: '{original_name}' → '{fixed_name}' (remaining O's correction)")
+        
+        # **OCR Pattern 2: Fix mixed O/0 in state codes (e.g., MN0O867 -> MN00867)**
+        ocr_pattern2 = re.compile(r'([A-Z]{2})[0O]+(\d+)')
+        match2 = ocr_pattern2.search(fixed_name)
+        if match2 and (match1 is None or match2.group(0) != match1.group(0)):
+            state_code = match2.group(1)
+            digits = match2.group(2)
+            # Replace all O's and 0's with proper padding
+            if len(digits) == 3:
+                corrected = f"{state_code}00{digits}"
+            elif len(digits) == 2:
+                corrected = f"{state_code}000{digits}"
+            elif len(digits) == 1:
+                corrected = f"{state_code}0000{digits}"
+            else:
+                zeros_needed = 5 - len(digits)
+                corrected = f"{state_code}{'0' * zeros_needed}{digits}"
+            
+            fixed_name = ocr_pattern2.sub(corrected, fixed_name)
+            logger.info(f"🔧 OCR fix: '{original_name}' → '{fixed_name}' (mixed O/0 correction)")
+        
+        # **OCR Pattern 3: Fix single O in state codes (e.g., MN0O67 -> MN0067)**
+        ocr_pattern3 = re.compile(r'([A-Z]{2}\d)O(\d+)')
+        match3 = ocr_pattern3.search(fixed_name)
+        if match3:
+            state_code = match3.group(1)
+            digits = match3.group(2)
+            corrected = f"{state_code}0{digits}"
+            fixed_name = ocr_pattern3.sub(corrected, fixed_name)
+            logger.info(f"🔧 OCR fix: '{original_name}' → '{fixed_name}' (single O correction)")
+        
+        return fixed_name

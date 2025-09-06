@@ -302,6 +302,8 @@ def parse_statement_date(date_str: str) -> datetime:
             '%m-%d-%y',  # 01-15-25
             '%B %d, %Y',  # January 15, 2025
             '%b %d, %Y',  # Jan 15, 2025
+            '%B%d, %Y',   # January28, 2025 (no space between month and day)
+            '%b%d, %Y',   # Jan28, 2025 (no space between month and day)
         ]
         
         for fmt in formats:
@@ -330,6 +332,34 @@ def parse_statement_date(date_str: str) -> datetime:
             parsed_date = datetime(int(year), int(month), int(day))
             logger.info(f"🎯 Date Parsing: Successfully parsed date '{date_str}' with regex YYYY-MM-DD -> {parsed_date}")
             return parsed_date
+        
+        # **NEW: Handle month names without spaces (e.g., "January28,2025")
+        month_names = ['January', 'February', 'March', 'April', 'May', 'June', 
+                      'July', 'August', 'September', 'October', 'November', 'December']
+        month_abbrevs = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+                        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        
+        # Try full month names without space
+        for month_name in month_names:
+            pattern = f'^{month_name}(\\d{{1,2}}),?(\\d{{4}})$'
+            match = re.search(pattern, date_str, re.IGNORECASE)
+            if match:
+                day, year = match.groups()
+                month_num = datetime.strptime(month_name, '%B').month
+                parsed_date = datetime(int(year), month_num, int(day))
+                logger.info(f"🎯 Date Parsing: Successfully parsed date '{date_str}' with regex {month_name}DD,YYYY -> {parsed_date}")
+                return parsed_date
+        
+        # Try abbreviated month names without space
+        for month_abbrev in month_abbrevs:
+            pattern = f'^{month_abbrev}(\\d{{1,2}}),?(\\d{{4}})$'
+            match = re.search(pattern, date_str, re.IGNORECASE)
+            if match:
+                day, year = match.groups()
+                month_num = datetime.strptime(month_abbrev, '%b').month
+                parsed_date = datetime(int(year), month_num, int(day))
+                logger.info(f"🎯 Date Parsing: Successfully parsed date '{date_str}' with regex {month_abbrev}DD,YYYY -> {parsed_date}")
+                return parsed_date
         
         logger.error(f"🎯 Date Parsing: Could not parse date '{date_str}' with any format")
         return None

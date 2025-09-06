@@ -48,10 +48,7 @@ export default function FieldMapperSection({
   onGoToTableEditor,
   onReset
 }: FieldMapperSectionProps) {
-  console.log('🚀 FieldMapperSection component rendered')
-  
   const [currentMapping, setCurrentMapping] = useState<Record<string, string>>({})
-  console.log('🎯 FieldMapperSection: Received selectedStatementDate:', selectedStatementDate)
   const tablesToUse = editedTables.length > 0 ? editedTables : uploaded.tables.length > 0 ? uploaded.tables : finalTables
 
   return (
@@ -132,6 +129,7 @@ export default function FieldMapperSection({
                         selectedStatementDate={selectedStatementDate}
                         onSave={onSave}
                         onSkip={onSkip}
+                        onGoToTableEditor={onGoToTableEditor}
                         initialFields={fieldConfig.length > 0 ? fieldConfig : databaseFields}
                         initialMapping={mapping}
                         mappingAutoApplied={mappingAutoApplied}
@@ -169,12 +167,12 @@ export default function FieldMapperSection({
           <div className="flex justify-center gap-4 mt-8">
             <button 
               onClick={onGoToTableEditor} 
-              className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700 flex items-center gap-2"
+              className="px-6 py-3 rounded-lg bg-blue-600 text-white hover:bg-blue-700 flex items-center gap-2 font-semibold shadow-lg transition-colors"
             >
               <Pencil className="w-4 h-4" />
               Back to Table Editor
             </button>
-            <button onClick={onReset} className="px-4 py-2 rounded bg-gray-300 text-gray-700 hover:bg-gray-400">
+            <button onClick={onReset} className="px-6 py-3 rounded-lg bg-gray-300 text-gray-700 hover:bg-gray-400 font-semibold transition-colors">
               Start Over
             </button>
           </div>

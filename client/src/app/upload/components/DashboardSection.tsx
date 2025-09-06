@@ -2,7 +2,6 @@
 import Modal from '../../components/Modal'
 import DashboardTable from './DashboardTable'
 import ProgressBar from './ProgressBar'
-import { useState, useEffect } from 'react'
 import { ApprovalLoader } from '../../components/ui/FullScreenLoader'
 import toast from 'react-hot-toast'
 
@@ -50,20 +49,12 @@ export default function DashboardSection({
   selectedStatementDate,
   approvalProgress = { totalRows: 0, processedRows: 0 }
 }: DashboardSectionProps) {
-  console.log('🚀 DashboardSection component rendered')
-  console.log('📊 Submitting state:', submitting)
-  console.log('📈 Approval progress:', approvalProgress)
-  console.log('📋 Final tables:', finalTables)
+  
   
   const calculatedProgress = approvalProgress.totalRows > 0 ? Math.round((approvalProgress.processedRows / approvalProgress.totalRows) * 100) : 0
-  console.log('📊 Calculated progress:', calculatedProgress)
   
-  const [showCarriersModal, setShowCarriersModal] = useState(false)
   
-  // Monitor state changes
-  useEffect(() => {
-    console.log('🔄 DashboardSection state changed:', { submitting, approvalProgress, calculatedProgress })
-  }, [submitting, approvalProgress, calculatedProgress])
+
   return (
     <>
       <ApprovalLoader 

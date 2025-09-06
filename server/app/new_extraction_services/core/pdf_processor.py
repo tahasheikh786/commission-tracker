@@ -3,7 +3,7 @@
 import asyncio
 import time
 from pathlib import Path
-from typing import List
+from typing import List, Tuple
 import numpy as np
 import pdfplumber
 from pdf2image import convert_from_path
@@ -62,44 +62,85 @@ class PDFProcessor:
                 if table_data:
                     extracted_tables.append(table_data)
             
-            # Extract pages and metadata
+            # Extract pages and metadata with intelligent page detection
             pages = []
             
-            # Create a single page since Docling v2 doesn't have page-level structure
-            # All elements are in the assembled document
-            page_data = {
-                'page_number': 0,
-                'width': 0,  # Will be set from PDF if needed
-                'height': 0,
-                'elements': [],
-                'text': '',
-                'tables': []
-            }
+            # Try to detect page boundaries from the document structure
+            page_boundaries = self._detect_page_boundaries(document.elements)
             
-            # Extract all elements from the assembled document
-            for element in document.elements:
-                element_data = {
-                    'type': element.__class__.__name__,
-                    'bbox': None,  # Docling v2 doesn't expose bbox directly
-                    'text': getattr(element, 'text', ''),
-                    'confidence': 1.0  # Default confidence
-                }
-                page_data['elements'].append(element_data)
-                
-                if hasattr(element, 'text') and element.text:
-                    page_data['text'] += element.text + ' '
-                
-                # Check if this is a table
-                if hasattr(element, '__class__') and 'Table' in element.__class__.__name__:
-                    table_data = {
-                        'bbox': None,
-                        'confidence': 1.0,
-                        'rows': getattr(element, 'num_rows', 0),
-                        'columns': getattr(element, 'num_cols', 0)
+            if page_boundaries:
+                # Create separate pages based on detected boundaries
+                for page_num, (start_idx, end_idx) in enumerate(page_boundaries):
+                    page_elements = document.elements[start_idx:end_idx]
+                    
+                    page_data = {
+                        'page_number': page_num,
+                        'width': 0,  # Will be set from PDF if needed
+                        'height': 0,
+                        'elements': [],
+                        'text': '',
+                        'tables': []
                     }
-                    page_data['tables'].append(table_data)
-            
-            pages.append(page_data)
+                    
+                    # Process elements for this page
+                    for element in page_elements:
+                        element_data = {
+                            'type': element.__class__.__name__,
+                            'bbox': None,  # Docling v2 doesn't expose bbox directly
+                            'text': getattr(element, 'text', ''),
+                            'confidence': 1.0  # Default confidence
+                        }
+                        page_data['elements'].append(element_data)
+                        
+                        if hasattr(element, 'text') and element.text:
+                            page_data['text'] += element.text + ' '
+                        
+                        # Check if this is a table
+                        if hasattr(element, '__class__') and 'Table' in element.__class__.__name__:
+                            table_data = {
+                                'bbox': None,
+                                'confidence': 1.0,
+                                'rows': getattr(element, 'num_rows', 0),
+                                'columns': getattr(element, 'num_cols', 0)
+                            }
+                            page_data['tables'].append(table_data)
+                    
+                    pages.append(page_data)
+            else:
+                # Fallback: Create a single page with all elements
+                page_data = {
+                    'page_number': 0,
+                    'width': 0,  # Will be set from PDF if needed
+                    'height': 0,
+                    'elements': [],
+                    'text': '',
+                    'tables': []
+                }
+                
+                # Extract all elements from the assembled document
+                for element in document.elements:
+                    element_data = {
+                        'type': element.__class__.__name__,
+                        'bbox': None,  # Docling v2 doesn't expose bbox directly
+                        'text': getattr(element, 'text', ''),
+                        'confidence': 1.0  # Default confidence
+                    }
+                    page_data['elements'].append(element_data)
+                    
+                    if hasattr(element, 'text') and element.text:
+                        page_data['text'] += element.text + ' '
+                    
+                    # Check if this is a table
+                    if hasattr(element, '__class__') and 'Table' in element.__class__.__name__:
+                        table_data = {
+                            'bbox': None,
+                            'confidence': 1.0,
+                            'rows': getattr(element, 'num_rows', 0),
+                            'columns': getattr(element, 'num_cols', 0)
+                        }
+                        page_data['tables'].append(table_data)
+                
+                pages.append(page_data)
             
             # Get document metadata
             metadata = {
@@ -175,3 +216,42 @@ class PDFProcessor:
                 images.append(blank_image)
         
         return images
+    
+    def _detect_page_boundaries(self, elements: List) -> List[Tuple[int, int]]:
+        """Intelligently detect page boundaries from document elements."""
+        if not elements:
+            return []
+        
+        page_boundaries = []
+        current_page_start = 0
+        
+        # Look for page break indicators in the elements
+        for i, element in enumerate(elements):
+            element_text = getattr(element, 'text', '') or ''
+            element_text = element_text.lower() if element_text else ''
+            
+            # Check for page break indicators
+            page_break_indicators = [
+                'continued', 'page', 'statement', 'commission statement',
+                'deposit advice', 'check number', 'statement date'
+            ]
+            
+            # If we find a strong page break indicator, consider it a new page
+            if any(indicator in element_text for indicator in page_break_indicators):
+                # Check if this looks like a header/title (likely start of new page)
+                if len(element_text) < 100 and any(word in element_text for word in ['statement', 'commission', 'continued']):
+                    # This might be a new page
+                    if i > current_page_start:
+                        page_boundaries.append((current_page_start, i))
+                        current_page_start = i
+        
+        # Add the final page
+        if current_page_start < len(elements):
+            page_boundaries.append((current_page_start, len(elements)))
+        
+        # If we didn't find clear boundaries, return empty list to use fallback
+        if len(page_boundaries) <= 1:
+            return []
+        
+        self.logger.logger.info(f"Detected {len(page_boundaries)} page boundaries: {page_boundaries}")
+        return page_boundaries

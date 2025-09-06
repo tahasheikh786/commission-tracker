@@ -83,20 +83,43 @@ class DateExtractionService:
             ]
         }
         
-        # Date patterns for validation
+        # Enhanced date patterns for validation - smart and comprehensive
         self.date_patterns = [
-            # MM/DD/YYYY or MM-DD-YYYY
+            # MM/DD/YYYY or MM-DD-YYYY (most common US format)
             r'\b(0?[1-9]|1[0-2])[/-](0?[1-9]|[12]\d|3[01])[/-](19|20)\d{2}\b',
-            # MM/DD/YY or MM-DD-YY
+            # MM/DD/YY or MM-DD-YY (2-digit year)
             r'\b(0?[1-9]|1[0-2])[/-](0?[1-9]|[12]\d|3[01])[/-]\d{2}\b',
-            # YYYY-MM-DD
+            # YYYY-MM-DD (ISO format)
             r'\b(19|20)\d{2}-(0?[1-9]|1[0-2])-(0?[1-9]|[12]\d|3[01])\b',
-            # Month DD, YYYY
+            # Month DD, YYYY (full month name) - improved to handle optional comma
             r'\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+(19|20)\d{2}\b',
             # Abbreviated month DD, YYYY
-            r'\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2},?\s+(19|20)\d{2}\b',
+            r'\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+\d{1,2},?\s+(19|20)\d{2}\b',
             # DD/MM/YYYY (European format)
             r'\b(0?[1-9]|[12]\d|3[01])[/-](0?[1-9]|1[0-2])[/-](19|20)\d{2}\b',
+            # MM/DD/YYYY with optional spaces around separators
+            r'\b(0?[1-9]|1[0-2])\s*[/-]\s*(0?[1-9]|[12]\d|3[01])\s*[/-]\s*(19|20)\d{2}\b',
+            # Month DD YYYY (without comma)
+            r'\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}\s+(19|20)\d{2}\b',
+            # Abbreviated month DD YYYY (without comma)
+            r'\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+\d{1,2}\s+(19|20)\d{2}\b',
+            # DD Month YYYY (alternative format)
+            r'\b(0?[1-9]|[12]\d|3[01])\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(19|20)\d{2}\b',
+            # DD Abbreviated Month YYYY
+            r'\b(0?[1-9]|[12]\d|3[01])\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\s+(19|20)\d{2}\b',
+            # **NEW: Patterns for concatenated text (no spaces) - common in PDF extraction**
+            # MM/DD/YYYY without word boundaries (for concatenated text)
+            r'(0?[1-9]|1[0-2])[/-](0?[1-9]|[12]\d|3[01])[/-](19|20)\d{2}',
+            # Month DD, YYYY without spaces (concatenated)
+            r'(January|February|March|April|May|June|July|August|September|October|November|December)\d{1,2},?\d{4}',
+            # Abbreviated month DD, YYYY without spaces (concatenated)
+            r'(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\d{1,2},?\d{4}',
+            # Statement date patterns (common in commission statements)
+            r'StatementDate\d{1,2}/\d{1,2}/\d{4}',
+            r'StatementDate\d{1,2}-\d{1,2}-\d{4}',
+            # Payment date patterns
+            r'PaymentDate\d{1,2}/\d{1,2}/\d{4}',
+            r'PaymentDate\d{1,2}-\d{1,2}-\d{4}',
         ]
         
         self.logger.logger.info("Date Extraction Service initialized successfully")
@@ -104,14 +127,14 @@ class DateExtractionService:
     async def extract_dates_from_file(
         self, 
         file_path: str,
-        max_pages: int = 1  # Only process first page by default
+        max_pages: int = 2  # Process first 2 pages by default for better date detection
     ) -> Dict[str, Any]:
         """
-        Extract dates from the first page of a document.
+        Extract dates from the first few pages of a document.
         
         Args:
             file_path: Path to the document file
-            max_pages: Maximum number of pages to process (default: 1 for first page only)
+            max_pages: Maximum number of pages to process (default: 2 for better date detection)
             
         Returns:
             Dictionary containing extracted dates and metadata
@@ -156,7 +179,7 @@ class DateExtractionService:
         file_bytes: bytes,
         file_name: str,
         file_type: str = "pdf",
-        max_pages: int = 1
+        max_pages: int = 2
     ) -> Dict[str, Any]:
         """
         Extract dates from file bytes using the date extraction pipeline.
@@ -165,7 +188,7 @@ class DateExtractionService:
             file_bytes: File content as bytes
             file_name: Name of the file
             file_type: Type of file (pdf, image, etc.)
-            max_pages: Maximum number of pages to process (default: 1 for first page only)
+            max_pages: Maximum number of pages to process (default: 2 for better date detection)
             
         Returns:
             Dictionary containing extracted dates and metadata
@@ -333,16 +356,19 @@ class DateExtractionService:
             return []
     
     def _extract_dates_from_text(self, text: str, page_number: int, bbox: Optional[List[float]] = None) -> List[ExtractedDate]:
-        """Extract dates from text with their labels."""
+        """Enhanced date extraction from text with intelligent context analysis."""
         dates = []
         
-        # Split text into lines
+        # Split text into lines and create context windows
         lines = text.split('\n')
         
         for line_num, line in enumerate(lines):
             line = line.strip()
             if not line:
                 continue
+            
+            # Create context window (current line + surrounding lines)
+            context_window = self._create_context_window(lines, line_num, window_size=2)
             
             # Find all date patterns in the line
             for pattern in self.date_patterns:
@@ -351,12 +377,16 @@ class DateExtractionService:
                 for match in matches:
                     date_value = match.group()
                     
-                    # Validate the date
-                    if not self._is_valid_date(date_value):
+                    # Enhanced date validation with context
+                    if not self._is_valid_date_with_context(date_value, context_window):
                         continue
                     
-                    # Find the label for this date
-                    label, confidence = self._find_date_label(line, date_value)
+                    # Intelligent label detection with context
+                    label, confidence = self._find_date_label_with_context(line, date_value, context_window)
+                    
+                    # Skip if confidence is too low
+                    if confidence < 0.3:
+                        continue
                     
                     # Create bounding box if not provided
                     if bbox is None:
@@ -372,11 +402,14 @@ class DateExtractionService:
                         confidence=confidence,
                         bbox=estimated_bbox,
                         page_number=page_number,
-                        context=line,
+                        context=context_window,
                         date_type=self._classify_date_type(label)
                     )
                     
                     dates.append(extracted_date)
+        
+        # Remove duplicates and prioritize by confidence
+        dates = self._deduplicate_and_prioritize_dates(dates)
         
         return dates
     
@@ -592,6 +625,71 @@ class DateExtractionService:
                     day, month, year = date_str.split('-')
                 datetime(int(year), int(month), int(day))
                 return True
+            # **NEW: Handle concatenated date patterns (no spaces)**
+            elif re.match(r'(0?[1-9]|1[0-2])[/-](0?[1-9]|[12]\d|3[01])[/-](19|20)\d{2}', date_str):
+                # MM/DD/YYYY without word boundaries (concatenated text)
+                if '/' in date_str:
+                    month, day, year = date_str.split('/')
+                else:
+                    month, day, year = date_str.split('-')
+                datetime(int(year), int(month), int(day))
+                return True
+            elif re.match(r'(January|February|March|April|May|June|July|August|September|October|November|December)\d{1,2},?\d{4}', date_str, re.IGNORECASE):
+                # Month DD, YYYY without spaces (concatenated)
+                # Extract month name and remaining digits
+                month_names = ['January', 'February', 'March', 'April', 'May', 'June', 
+                              'July', 'August', 'September', 'October', 'November', 'December']
+                for month_name in month_names:
+                    if date_str.lower().startswith(month_name.lower()):
+                        remaining = date_str[len(month_name):]
+                        # Extract day and year
+                        if ',' in remaining:
+                            day_str, year_str = remaining.split(',')
+                        else:
+                            # Try to split at year boundary (4 digits)
+                            match = re.match(r'(\d{1,2})(\d{4})', remaining)
+                            if match:
+                                day_str, year_str = match.groups()
+                            else:
+                                continue
+                        month_num = datetime.strptime(month_name, '%B').month
+                        datetime(int(year_str), month_num, int(day_str))
+                        return True
+            elif re.match(r'(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\.?\d{1,2},?\d{4}', date_str, re.IGNORECASE):
+                # Abbreviated month DD, YYYY without spaces (concatenated)
+                month_abbrevs = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+                                'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+                for month_abbrev in month_abbrevs:
+                    if date_str.lower().startswith(month_abbrev.lower()):
+                        remaining = date_str[len(month_abbrev):]
+                        # Remove optional period
+                        if remaining.startswith('.'):
+                            remaining = remaining[1:]
+                        # Extract day and year
+                        if ',' in remaining:
+                            day_str, year_str = remaining.split(',')
+                        else:
+                            # Try to split at year boundary (4 digits)
+                            match = re.match(r'(\d{1,2})(\d{4})', remaining)
+                            if match:
+                                day_str, year_str = match.groups()
+                            else:
+                                continue
+                        month_num = datetime.strptime(month_abbrev, '%b').month
+                        datetime(int(year_str), month_num, int(day_str))
+                        return True
+            elif re.match(r'StatementDate\d{1,2}/\d{1,2}/\d{4}', date_str, re.IGNORECASE):
+                # StatementDate MM/DD/YYYY
+                date_part = date_str[12:]  # Remove "StatementDate"
+                month, day, year = date_part.split('/')
+                datetime(int(year), int(month), int(day))
+                return True
+            elif re.match(r'StatementDate\d{1,2}-\d{1,2}-\d{4}', date_str, re.IGNORECASE):
+                # StatementDate MM-DD-YYYY
+                date_part = date_str[12:]  # Remove "StatementDate"
+                month, day, year = date_part.split('-')
+                datetime(int(year), int(month), int(day))
+                return True
             
             return False
             
@@ -620,10 +718,75 @@ class DateExtractionService:
         
         return unique_dates
     
+    def _normalize_date_for_commission(self, date_str: str) -> Dict[str, Any]:
+        """
+        Normalize date string to standard format for commission calculations and dashboard.
+        Converts month names to standardized format and extracts month/year for dashboard associations.
+        """
+        try:
+            # Import the parse_statement_date function from mapping.py
+            from app.api.mapping import parse_statement_date
+            
+            # Parse the date using the existing function
+            parsed_date = parse_statement_date(date_str)
+            
+            if not parsed_date:
+                self.logger.logger.warning(f"Could not parse date for normalization: {date_str}")
+                return {
+                    "original_date": date_str,
+                    "normalized_date": None,
+                    "iso_format": None,
+                    "month_number": None,
+                    "year": None,
+                    "month_name": None,
+                    "dashboard_month": None
+                }
+            
+            # Extract components for commission dashboard
+            month_number = parsed_date.month
+            year = parsed_date.year
+            month_name = parsed_date.strftime('%B')  # Full month name
+            
+            # Create dashboard month format (e.g., "2025-02" for February 2025)
+            dashboard_month = f"{year}-{month_number:02d}"
+            
+            # Create ISO format for database storage
+            iso_format = parsed_date.isoformat()
+            
+            self.logger.logger.info(f"Date normalized: '{date_str}' -> {iso_format} (Month: {month_number}, Year: {year}, Dashboard: {dashboard_month})")
+            
+            return {
+                "original_date": date_str,
+                "normalized_date": iso_format,
+                "iso_format": iso_format,
+                "month_number": month_number,
+                "year": year,
+                "month_name": month_name,
+                "dashboard_month": dashboard_month,
+                "parsed_date": parsed_date
+            }
+            
+        except Exception as e:
+            self.logger.logger.error(f"Error normalizing date '{date_str}': {str(e)}")
+            return {
+                "original_date": date_str,
+                "normalized_date": None,
+                "iso_format": None,
+                "month_number": None,
+                "year": None,
+                "month_name": None,
+                "dashboard_month": None,
+                "error": str(e)
+            }
+    
     def _date_to_dict(self, date: ExtractedDate) -> Dict[str, Any]:
         """Convert ExtractedDate to dictionary format."""
+        # Normalize the date value for commission calculations
+        normalized_date = self._normalize_date_for_commission(date.date_value)
+        
         return {
             "date_value": date.date_value,
+            "normalized_date": normalized_date,
             "label": date.label,
             "confidence": date.confidence,
             "bbox": date.bbox,
@@ -741,6 +904,116 @@ class DateExtractionService:
                 "supported_formats": ["pdf", "png", "jpg", "jpeg", "tiff", "tif", "xlsx", "xls", "xlsm", "xlsb"]
             }
         }
+    
+    def _create_context_window(self, lines: List[str], line_num: int, window_size: int = 2) -> str:
+        """Create a context window around a line for better date label detection."""
+        start_idx = max(0, line_num - window_size)
+        end_idx = min(len(lines), line_num + window_size + 1)
+        context_lines = lines[start_idx:end_idx]
+        return ' '.join(context_lines)
+    
+    def _is_valid_date_with_context(self, date_value: str, context: str) -> bool:
+        """Enhanced date validation that considers context to avoid false positives."""
+        # Basic date validation
+        if not self._is_valid_date(date_value):
+            return False
+        
+        # Context-based validation - avoid dates that are clearly not statement dates
+        context_lower = context.lower()
+        
+        # **IMPROVED: Be more permissive for statement dates**
+        # Check if this looks like a statement date context
+        statement_indicators = ['statement', 'commission', 'report', 'date', 'january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december']
+        if any(indicator in context_lower for indicator in statement_indicators):
+            # If context contains statement-related keywords, be more permissive
+            return True
+        
+        # Skip dates that appear to be in table data (like policy numbers, IDs)
+        if any(indicator in context_lower for indicator in ['policy', 'id', 'number', 'code', 'reference']):
+            # Only skip if the date is clearly part of an ID/number
+            if re.search(r'\d{4,}', date_value):  # Long numeric sequences
+                return False
+        
+        # Skip dates that appear to be in financial amounts
+        if re.search(r'\$.*\d{1,2}[/-]\d{1,2}[/-]\d{2,4}', context):
+            return False
+        
+        return True
+    
+    def _find_date_label_with_context(self, line: str, date_value: str, context: str) -> Tuple[str, float]:
+        """Enhanced label detection using context window for better accuracy."""
+        line_lower = line.lower()
+        context_lower = context.lower()
+        
+        # Check for explicit date labels in the line
+        for date_type, labels in self.date_labels.items():
+            for label in labels:
+                if label in line_lower:
+                    # Calculate confidence based on proximity to date
+                    date_pos = line_lower.find(date_value.lower())
+                    label_pos = line_lower.find(label)
+                    if label_pos != -1:
+                        distance = abs(date_pos - label_pos)
+                        confidence = max(0.8, 1.0 - (distance / 100.0))  # Higher confidence for closer labels
+                        return label, confidence
+        
+        # Check context window for labels
+        for date_type, labels in self.date_labels.items():
+            for label in labels:
+                if label in context_lower:
+                    # Lower confidence for context-based detection
+                    return label, 0.6
+        
+        # Check for common statement date indicators
+        statement_indicators = ['statement', 'report', 'commission', 'payment', 'billing']
+        for indicator in statement_indicators:
+            if indicator in context_lower:
+                return f"{indicator} date", 0.5
+        
+        # **IMPROVED: Better detection for "Statement Date" specifically**
+        if 'statement date' in context_lower:
+            return "Statement Date", 0.9
+        elif 'statement' in context_lower and 'date' in context_lower:
+            return "Statement Date", 0.7
+        
+        # Default fallback
+        return "date", 0.3
+    
+    def _deduplicate_and_prioritize_dates(self, dates: List[ExtractedDate]) -> List[ExtractedDate]:
+        """Remove duplicate dates and prioritize by confidence and relevance."""
+        if not dates:
+            return dates
+        
+        # Group by date value
+        date_groups = {}
+        for date in dates:
+            date_key = date.date_value.lower().strip()
+            if date_key not in date_groups:
+                date_groups[date_key] = []
+            date_groups[date_key].append(date)
+        
+        # Select best date from each group
+        unique_dates = []
+        for date_group in date_groups.values():
+            # Sort by confidence, then by date type priority
+            type_priority = {
+                'statement_date': 1,
+                'payment_date': 2,
+                'billing_date': 3,
+                'effective_date': 4,
+                'report_date': 5
+            }
+            
+            best_date = max(date_group, key=lambda d: (
+                d.confidence,
+                -type_priority.get(d.date_type, 99)
+            ))
+            unique_dates.append(best_date)
+        
+        # Sort final results by confidence
+        unique_dates.sort(key=lambda d: d.confidence, reverse=True)
+        
+        return unique_dates
 
 
 # Create a global instance for easy access

@@ -1241,15 +1241,17 @@ class ExtractionPipeline:
             table_headers = table.get('headers', [])
             table_rows = table.get('rows', [])
             
+            # **IMPROVED: Better handling of continuation tables**
             # If this table has headers as first row, treat first row as data
             if self._headers_look_like_data(table_headers, base_headers):
                 # The "headers" are actually data, so include them as first row
                 data_rows = [table_headers] + table_rows
             else:
-                # Filter out header-like rows and metadata rows  
+                # Filter out header-like rows and metadata rows, but be more permissive for continuation data
                 data_rows = []
                 for row in table_rows:
-                    if not self._is_header_like_row(row, base_headers):
+                    # **IMPROVED: Don't filter out rows that might be continuation data**
+                    if not self._is_header_like_row(row, base_headers) or self._is_continuation_data_row(row):
                         data_rows.append(row)
             
             # Align columns to match base headers
@@ -1386,6 +1388,38 @@ class ExtractionPipeline:
             aligned_rows.append(aligned_row)
         
         return aligned_rows
+    
+    def _is_continuation_data_row(self, row: List[str]) -> bool:
+        """Check if a row contains continuation data that should be preserved."""
+        if not row:
+            return False
+        
+        row_text = ' '.join(str(cell).lower().strip() for cell in row if cell)
+        
+        # Look for continuation indicators
+        continuation_indicators = [
+            'continued', 'continued next page', 'anat goldstein continued',
+            'total commissions', 'total medical premium', 'total dental premium',
+            'total vision premium', 'total paid commissions'
+        ]
+        
+        for indicator in continuation_indicators:
+            if indicator in row_text:
+                return True
+        
+        # Look for data patterns that suggest this is continuation data
+        # Check if row contains financial data (numbers, currency symbols)
+        has_financial_data = any(
+            re.search(r'\$[\d,]+\.?\d*', str(cell)) or 
+            re.search(r'\d+\.?\d*%', str(cell)) or
+            re.search(r'\d{4,}', str(cell))  # Long numbers (like group numbers)
+            for cell in row if cell
+        )
+        
+        if has_financial_data:
+            return True
+        
+        return False
     
     def _is_header_like_row(self, row: List[str], headers: List[str]) -> bool:
         """Check if a row looks like headers (to avoid duplicating headers in merged table)."""
