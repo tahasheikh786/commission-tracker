@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from app.db import crud, schemas
 from app.config import get_db
 from typing import List
@@ -122,3 +123,28 @@ def get_presigned_pdf_url(s3_key: str):
     if not url:
         raise HTTPException(status_code=404, detail="Could not generate presigned URL")
     return {"url": url}
+
+@router.get("/statements/{statement_id}/formatted-tables")
+async def get_formatted_tables(statement_id: str, db: AsyncSession = Depends(get_db)):
+    """Get formatted/edited tables for a statement"""
+    try:
+        statement = await crud.get_statement_by_id(db, statement_id)
+        if not statement:
+            raise HTTPException(status_code=404, detail="Statement not found")
+        
+        # Return edited_tables which contains the formatted tables after table editor
+        formatted_tables = statement.edited_tables or []
+        
+        # If no edited tables, fall back to raw data
+        if not formatted_tables and statement.raw_data:
+            formatted_tables = statement.raw_data
+        
+        return {
+            "statement_id": statement_id,
+            "tables": formatted_tables,
+            "table_count": len(formatted_tables)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching formatted tables: {str(e)}")

@@ -350,14 +350,14 @@ export default function EarnedCommissionTab() {
           <div className="flex items-center justify-between">
             <div>
               <p className="font-semibold text-slate-600 text-sm">Total Invoice Amount</p>
-              <p className="font-bold text-slate-800 text-2xl">
+              <div className="font-bold text-slate-800 text-2xl">
                 {statsLoading ? (
                   <div className="flex items-center gap-2">
                     <div className="w-6 h-6 border-2 border-slate-200 border-t-blue-500 rounded-full animate-spin"></div>
                     <span>Loading...</span>
                   </div>
                 ) : formatCurrency(overallStats?.total_invoice || 0)}
-              </p>
+              </div>
             </div>
             <div className="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl p-3 shadow-lg">
               <DollarSign className="text-white" size={24} />

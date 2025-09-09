@@ -5,6 +5,7 @@ This service provides robust date extraction from various commission statement f
 
 import re
 import logging
+import time
 from datetime import datetime
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass
@@ -59,6 +60,12 @@ class DateExtractionService:
         # Initialize document processor
         self.document_processor = DocumentProcessor(self.config)
         
+        # Circuit breaker for OCR failures
+        self.ocr_failure_count = 0
+        self.max_ocr_failures = 3
+        self.ocr_circuit_breaker_reset_time = 300  # 5 minutes
+        self.last_ocr_failure_time = None
+        
         # Common date labels found in commission statements
         self.date_labels = {
             "statement_date": [
@@ -75,11 +82,17 @@ class DateExtractionService:
             ],
             "effective_date": [
                 "effective date", "effective", "coverage date", "policy date",
-                "start date", "beginning date"
+                "start date", "beginning date", "group effective date", "group effective dat"
             ],
             "report_date": [
                 "report date", "report", "generated", "created", "issued",
-                "document date", "print date"
+                "document date", "print date", "report run date"
+            ],
+            "archive_date": [
+                "archive date", "archived", "filing date"
+            ],
+            "coverage_period": [
+                "coverage period", "coverage", "period", "billing period"
             ]
         }
         
@@ -222,40 +235,83 @@ class DateExtractionService:
             }
     
     async def _extract_dates_from_pdf(self, file_path: str, max_pages: int) -> Dict[str, Any]:
-        """Extract dates from PDF document."""
+        """Extract dates from PDF document with timeout and retry limits."""
         try:
             dates = []
+            extraction_methods = []
             
-            # Method 1: Use pdfplumber for text extraction
-            with pdfplumber.open(file_path) as pdf:
-                for page_num in range(min(len(pdf.pages), max_pages)):
-                    page = pdf.pages[page_num]
-                    
-                    # Extract text from page
-                    text = page.extract_text() or ""
-                    
-                    # Extract dates from text
-                    text_dates = self._extract_dates_from_text(text, page_num + 1)
-                    dates.extend(text_dates)
-                    
-                    # Extract dates from words with bounding boxes
-                    words = page.extract_words()
-                    bbox_dates = self._extract_dates_from_words(words, page_num + 1)
-                    dates.extend(bbox_dates)
+            # Method 1: Use pdfplumber for text extraction (fast, no OCR)
+            try:
+                with pdfplumber.open(file_path) as pdf:
+                    for page_num in range(min(len(pdf.pages), max_pages)):
+                        page = pdf.pages[page_num]
+                        
+                        # Extract text from page
+                        text = page.extract_text() or ""
+                        
+                        # Extract dates from text
+                        text_dates = self._extract_dates_from_text(text, page_num + 1)
+                        dates.extend(text_dates)
+                        
+                        # Extract dates from words with bounding boxes
+                        words = page.extract_words()
+                        bbox_dates = self._extract_dates_from_words(words, page_num + 1)
+                        dates.extend(bbox_dates)
+                
+                extraction_methods.append("text_extraction")
+                self.logger.logger.info(f"Text extraction found {len(dates)} dates")
+                
+            except Exception as e:
+                self.logger.logger.warning(f"Text extraction failed: {e}")
             
-            # Method 2: Use OCR for scanned PDFs (if text extraction didn't find enough dates)
-            if len(dates) < 3:  # If we found less than 3 dates, try OCR
-                ocr_dates = await self._extract_dates_with_ocr(file_path, max_pages)
-                dates.extend(ocr_dates)
+            # Method 2: Use OCR for scanned PDFs (only if text extraction found < 2 dates)
+            # Add timeout and retry limits to prevent infinite loops
+            if len(dates) < 2:  # Reduced threshold for OCR fallback
+                # Check circuit breaker for OCR failures
+                if self._is_ocr_circuit_breaker_open():
+                    self.logger.logger.warning("OCR circuit breaker is open, skipping OCR extraction")
+                    extraction_methods.append("ocr_circuit_breaker_open")
+                else:
+                    try:
+                        # Set timeout for OCR processing (30 seconds max)
+                        ocr_dates = await asyncio.wait_for(
+                            self._extract_dates_with_ocr(file_path, max_pages),
+                            timeout=30.0
+                        )
+                        dates.extend(ocr_dates)
+                        extraction_methods.append("ocr")
+                        self.logger.logger.info(f"OCR extraction found {len(ocr_dates)} additional dates")
+                        
+                        # Reset circuit breaker on success
+                        self._reset_ocr_circuit_breaker()
+                        
+                    except asyncio.TimeoutError:
+                        self.logger.logger.warning("OCR extraction timed out after 30 seconds")
+                        extraction_methods.append("ocr_timeout")
+                        self._increment_ocr_failure_count()
+                    except Exception as e:
+                        self.logger.logger.warning(f"OCR extraction failed: {e}")
+                        extraction_methods.append("ocr_failed")
+                        self._increment_ocr_failure_count()
             
             # Remove duplicates and sort by confidence
             unique_dates = self._deduplicate_dates(dates)
+            
+            # Early exit if no dates found after both methods
+            if not unique_dates:
+                return {
+                    "success": False,
+                    "error": "No dates found in document after text extraction and OCR",
+                    "dates": [],
+                    "extraction_methods": extraction_methods,
+                    "total_dates_found": 0
+                }
             
             return {
                 "success": True,
                 "dates": [self._date_to_dict(date) for date in unique_dates],
                 "total_dates_found": len(unique_dates),
-                "extraction_methods": ["text_extraction", "ocr"] if len(dates) < 3 else ["text_extraction"]
+                "extraction_methods": extraction_methods
             }
             
         except Exception as e:
@@ -295,19 +351,42 @@ class DateExtractionService:
             }
     
     async def _extract_dates_with_ocr(self, file_path: str, max_pages: int) -> List[ExtractedDate]:
-        """Extract dates using OCR from PDF pages."""
+        """Extract dates using OCR from PDF pages with timeout and retry limits."""
         try:
             dates = []
             
-            # Convert PDF pages to images
-            images = convert_from_path(file_path, first_page=1, last_page=max_pages)
+            # Convert PDF pages to images with timeout
+            try:
+                # Set timeout for PDF to image conversion (10 seconds)
+                images = await asyncio.wait_for(
+                    asyncio.to_thread(convert_from_path, file_path, first_page=1, last_page=max_pages),
+                    timeout=10.0
+                )
+            except asyncio.TimeoutError:
+                self.logger.logger.warning("PDF to image conversion timed out")
+                return []
+            except Exception as e:
+                self.logger.logger.warning(f"PDF to image conversion failed: {e}")
+                return []
             
+            # Process each page with individual timeouts
             for page_num, image in enumerate(images):
-                image_array = np.array(image)
-                
-                # Extract dates from the image
-                page_dates = await self._extract_dates_with_ocr_from_image(image_array, page_num + 1)
-                dates.extend(page_dates)
+                try:
+                    image_array = np.array(image)
+                    
+                    # Extract dates from the image with timeout (5 seconds per page)
+                    page_dates = await asyncio.wait_for(
+                        self._extract_dates_with_ocr_from_image(image_array, page_num + 1),
+                        timeout=5.0
+                    )
+                    dates.extend(page_dates)
+                    
+                except asyncio.TimeoutError:
+                    self.logger.logger.warning(f"OCR extraction timed out for page {page_num + 1}")
+                    continue
+                except Exception as e:
+                    self.logger.logger.warning(f"OCR extraction failed for page {page_num + 1}: {e}")
+                    continue
             
             return dates
             
@@ -316,7 +395,7 @@ class DateExtractionService:
             return []
     
     async def _extract_dates_with_ocr_from_image(self, image: np.ndarray, page_number: int) -> List[ExtractedDate]:
-        """Extract dates from image using OCR."""
+        """Extract dates from image using OCR with timeout and retry limits."""
         try:
             dates = []
             
@@ -331,10 +410,14 @@ class DateExtractionService:
                 (width // 4, height // 4, 3 * width // 4, 3 * height // 4),  # Center
             ]
             
-            for region_bbox in regions:
+            # Process regions with timeout and early exit
+            for i, region_bbox in enumerate(regions):
                 try:
-                    # Extract text from region
-                    ocr_result = await self.ocr_engine.extract_text_ensemble(image, region_bbox)
+                    # Set timeout for each region (2 seconds max)
+                    ocr_result = await asyncio.wait_for(
+                        self.ocr_engine.extract_text_ensemble(image, region_bbox),
+                        timeout=2.0
+                    )
                     
                     if ocr_result.text and ocr_result.confidence > 0.3:
                         # Extract dates from OCR text
@@ -345,8 +428,16 @@ class DateExtractionService:
                         )
                         dates.extend(region_dates)
                         
+                        # Early exit if we found enough dates (optimization)
+                        if len(dates) >= 3:
+                            self.logger.logger.info(f"Found sufficient dates ({len(dates)}), skipping remaining regions")
+                            break
+                        
+                except asyncio.TimeoutError:
+                    self.logger.logger.warning(f"OCR extraction timed out for region {i + 1}")
+                    continue
                 except Exception as e:
-                    self.logger.logger.warning(f"OCR extraction failed for region: {e}")
+                    self.logger.logger.warning(f"OCR extraction failed for region {i + 1}: {e}")
                     continue
             
             return dates
@@ -820,7 +911,7 @@ class DateExtractionService:
                             if pd.notna(cell_value):
                                 cell_str = str(cell_value).strip()
                                 
-                                # Check if cell contains a date
+                                # First, check if the entire cell is a valid date (standalone dates)
                                 if self._is_valid_date(cell_str):
                                     # Look for date labels in nearby cells
                                     label = self._find_date_label_in_excel(df, row_idx, col_idx)
@@ -836,6 +927,24 @@ class DateExtractionService:
                                         date_type=self._classify_date_type(label)
                                     )
                                     dates.append(extracted_date)
+                                
+                                # Also check if the cell contains dates with labels (like "Archive Date: 1/23/2025")
+                                else:
+                                    # Use the text extraction method to find dates within the cell text
+                                    cell_dates = self._extract_dates_from_text(cell_str, page_number=1)
+                                    
+                                    # Add Excel-specific context to the extracted dates
+                                    for cell_date in cell_dates:
+                                        # Update the context to include Excel cell information
+                                        cell_date.context = f"Sheet: {sheet_name}, Cell: {chr(65 + col_idx)}{row_idx + 1} - {cell_date.context}"
+                                        
+                                        # Update bounding box to Excel cell coordinates
+                                        cell_date.bbox = [col_idx, row_idx, col_idx + 1, row_idx + 1]
+                                        
+                                        # Adjust confidence for Excel data
+                                        cell_date.confidence = min(0.9, cell_date.confidence + 0.1)
+                                        
+                                        dates.append(cell_date)
                     
                 except Exception as e:
                     self.logger.logger.warning(f"Error processing Excel sheet {sheet_name}: {e}")
@@ -1014,6 +1123,34 @@ class DateExtractionService:
         unique_dates.sort(key=lambda d: d.confidence, reverse=True)
         
         return unique_dates
+    
+    def _is_ocr_circuit_breaker_open(self) -> bool:
+        """Check if OCR circuit breaker is open due to repeated failures."""
+        if self.ocr_failure_count < self.max_ocr_failures:
+            return False
+        
+        # Check if enough time has passed to reset the circuit breaker
+        if self.last_ocr_failure_time is None:
+            return True
+        
+        current_time = time.time()
+        if current_time - self.last_ocr_failure_time > self.ocr_circuit_breaker_reset_time:
+            self._reset_ocr_circuit_breaker()
+            return False
+        
+        return True
+    
+    def _increment_ocr_failure_count(self):
+        """Increment OCR failure count and update last failure time."""
+        self.ocr_failure_count += 1
+        self.last_ocr_failure_time = time.time()
+        self.logger.logger.warning(f"OCR failure count: {self.ocr_failure_count}/{self.max_ocr_failures}")
+    
+    def _reset_ocr_circuit_breaker(self):
+        """Reset OCR circuit breaker after successful operation."""
+        self.ocr_failure_count = 0
+        self.last_ocr_failure_time = None
+        self.logger.logger.info("OCR circuit breaker reset")
 
 
 # Create a global instance for easy access

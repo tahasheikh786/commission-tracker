@@ -113,11 +113,11 @@ export default function CompareModal({ statement, onClose }: Props) {
           {/* Extracted Table Card */}
           <section className="flex-1 min-w-0 min-h-0 flex flex-col rounded-2xl shadow-xl bg-white border border-purple-100 overflow-hidden">
             <div className="sticky top-0 z-10 bg-white/90 px-4 py-2 border-b font-semibold text-purple-700 flex items-center gap-2">
-              Extracted Table(s)
+              {statement.edited_tables && statement.edited_tables.length > 0 ? 'Formatted Table(s)' : 'Extracted Table(s)'}
             </div>
             <div className="flex-1 min-h-0 min-w-0 overflow-auto">
-              {statement.raw_data && statement.raw_data.length > 0 ? (
-                <ExtractedTable tables={statement.raw_data} />
+              {(statement.edited_tables && statement.edited_tables.length > 0) || (statement.raw_data && statement.raw_data.length > 0) ? (
+                <ExtractedTable tables={statement.edited_tables || statement.raw_data} />
               ) : (
                 <div className="text-gray-500 text-center flex items-center justify-center h-full">No extracted data found.</div>
               )}

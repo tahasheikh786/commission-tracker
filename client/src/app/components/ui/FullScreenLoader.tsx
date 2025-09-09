@@ -287,3 +287,57 @@ export function ApprovalLoader({ isVisible, progress, totalRows, processedRows, 
     />
   );
 }
+
+export function GPTExtractionLoader({ isVisible, progress, onCancel }: {
+  isVisible: boolean;
+  progress?: number;
+  onCancel?: () => void;
+}) {
+  const steps = [
+    { id: 'prepare', label: 'Preparing GPT-5 Vision model', status: 'completed' as const },
+    { id: 'analyze', label: 'Analyzing document with AI vision', status: progress && progress > 25 ? 'completed' as const : 'active' as const },
+    { id: 'extract', label: 'Extracting tables using GPT-5', status: progress && progress > 50 ? 'completed' as const : progress && progress > 25 ? 'active' as const : 'pending' as const },
+    { id: 'process', label: 'Processing extracted data', status: progress && progress > 75 ? 'completed' as const : progress && progress > 50 ? 'active' as const : 'pending' as const },
+    { id: 'validate', label: 'Validating extraction results', status: progress === 100 ? 'completed' as const : progress && progress > 75 ? 'active' as const : 'pending' as const }
+  ];
+
+  return (
+    <FullScreenLoader
+      isVisible={isVisible}
+      title="GPT-5 Vision Extraction"
+      subtitle="Using advanced AI vision to extract tables from your document"
+      type="gpt-correction"
+      progress={progress}
+      steps={steps}
+      onCancel={onCancel}
+      showCancelButton={true}
+    />
+  );
+}
+
+export function DOCAIExtractionLoader({ isVisible, progress, onCancel }: {
+  isVisible: boolean;
+  progress?: number;
+  onCancel?: () => void;
+}) {
+  const steps = [
+    { id: 'prepare', label: 'Initializing Google Document AI', status: 'completed' as const },
+    { id: 'upload', label: 'Uploading document to Google Cloud', status: progress && progress > 20 ? 'completed' as const : 'active' as const },
+    { id: 'process', label: 'Processing with Document AI', status: progress && progress > 50 ? 'completed' as const : progress && progress > 20 ? 'active' as const : 'pending' as const },
+    { id: 'extract', label: 'Extracting table structures', status: progress && progress > 80 ? 'completed' as const : progress && progress > 50 ? 'active' as const : 'pending' as const },
+    { id: 'format', label: 'Formatting extracted data', status: progress === 100 ? 'completed' as const : progress && progress > 80 ? 'active' as const : 'pending' as const }
+  ];
+
+  return (
+    <FullScreenLoader
+      isVisible={isVisible}
+      title="Google Document AI Extraction"
+      subtitle="Using Google's advanced document processing to extract tables"
+      type="extraction"
+      progress={progress}
+      steps={steps}
+      onCancel={onCancel}
+      showCancelButton={true}
+    />
+  );
+}

@@ -43,43 +43,55 @@ class AdvancedOCREngine:
         ]
         
     def _init_ocr_engines(self):
-        """Initialize multiple OCR engines for ensemble."""
+        """Initialize multiple OCR engines for ensemble with OMP conflict prevention."""
         
-        # EasyOCR
-        try:
-            import easyocr
-            self.engines['easyocr'] = easyocr.Reader(
-                self.config.processing.ocr_languages,
-                gpu=self.config.models.device == "cuda"
-            )
-            self.logger.logger.info("EasyOCR engine initialized")
-        except Exception as e:
-            self.logger.logger.warning(f"Failed to initialize EasyOCR: {e}")
+        # Limit to 2 engines to prevent OMP conflicts and infinite loops
+        max_engines = 2
+        engines_initialized = 0
         
-        # PaddleOCR (if available)
-        try:
-            from paddleocr import PaddleOCR
-            self.engines['paddleocr'] = PaddleOCR(
-                use_angle_cls=True,
-                lang='en',
-                show_log=False
-            )
-            self.logger.logger.info("PaddleOCR engine initialized")
-        except Exception as e:
-            self.logger.logger.warning(f"Failed to initialize PaddleOCR: {e}")
+        # EasyOCR (preferred for date extraction)
+        if engines_initialized < max_engines:
+            try:
+                import easyocr
+                self.engines['easyocr'] = easyocr.Reader(
+                    self.config.processing.ocr_languages,
+                    gpu=self.config.models.device == "cuda"
+                )
+                self.logger.logger.info("EasyOCR engine initialized")
+                engines_initialized += 1
+            except Exception as e:
+                self.logger.logger.warning(f"Failed to initialize EasyOCR: {e}")
         
-        # Tesseract (if available)
-        try:
-            import pytesseract
-            # Test if tesseract is available
-            pytesseract.get_tesseract_version()
-            self.engines['tesseract'] = pytesseract
-            self.logger.logger.info("Tesseract OCR engine initialized")
-        except Exception as e:
-            self.logger.logger.warning(f"Failed to initialize Tesseract: {e}")
+        # Tesseract (lightweight fallback)
+        if engines_initialized < max_engines:
+            try:
+                import pytesseract
+                # Test if tesseract is available
+                pytesseract.get_tesseract_version()
+                self.engines['tesseract'] = pytesseract
+                self.logger.logger.info("Tesseract OCR engine initialized")
+                engines_initialized += 1
+            except Exception as e:
+                self.logger.logger.warning(f"Failed to initialize Tesseract: {e}")
+        
+        # PaddleOCR (only if we have room and need it)
+        if engines_initialized < max_engines:
+            try:
+                from paddleocr import PaddleOCR
+                self.engines['paddleocr'] = PaddleOCR(
+                    use_angle_cls=True,
+                    lang='en',
+                    show_log=False
+                )
+                self.logger.logger.info("PaddleOCR engine initialized")
+                engines_initialized += 1
+            except Exception as e:
+                self.logger.logger.warning(f"Failed to initialize PaddleOCR: {e}")
         
         if not self.engines:
             raise RuntimeError("No OCR engines could be initialized")
+        
+        self.logger.logger.info(f"Initialized {len(self.engines)} OCR engines to prevent OMP conflicts")
     
     def _init_adaptive_pattern_system(self) -> Dict[str, Any]:
         """Initialize adaptive pattern learning system - NO HARDCODED PATTERNS."""
@@ -130,29 +142,39 @@ class AdvancedOCREngine:
             return OCRResult("", 0.0, bbox, "error")
     
     async def _run_ensemble_ocr(self, image: np.ndarray) -> List[OCRResult]:
-        """Run multiple OCR engines with different preprocessing."""
+        """Run multiple OCR engines with different preprocessing and timeout limits."""
         
         results = []
         
         # Create different preprocessed versions
         preprocessed_images = self._create_preprocessed_versions(image)
         
-        # Run each engine on each preprocessed version
+        # Run each engine on each preprocessed version with timeout
         tasks = []
         for engine_name, engine in self.engines.items():
             for preprocess_name, processed_image in preprocessed_images.items():
-                task = self._run_single_ocr(
-                    engine, engine_name, processed_image, preprocess_name
+                # Add timeout for each OCR task (5 seconds max per engine/preprocessing combo)
+                task = asyncio.wait_for(
+                    self._run_single_ocr(engine, engine_name, processed_image, preprocess_name),
+                    timeout=5.0
                 )
                 tasks.append(task)
         
-        # Execute all OCR tasks concurrently
-        ocr_results = await asyncio.gather(*tasks, return_exceptions=True)
+        # Execute all OCR tasks concurrently with timeout
+        try:
+            ocr_results = await asyncio.gather(*tasks, return_exceptions=True)
+        except Exception as e:
+            self.logger.logger.warning(f"OCR ensemble execution failed: {e}")
+            return []
         
-        # Filter successful results
+        # Filter successful results and handle timeouts
         for result in ocr_results:
             if isinstance(result, OCRResult) and result.confidence > 0.1:
                 results.append(result)
+            elif isinstance(result, asyncio.TimeoutError):
+                self.logger.logger.warning("OCR task timed out")
+            elif isinstance(result, Exception):
+                self.logger.logger.warning(f"OCR task failed: {result}")
         
         return results
     
@@ -222,9 +244,20 @@ class AdvancedOCREngine:
         image: np.ndarray, 
         preprocess_name: str
     ) -> OCRResult:
-        """Run EasyOCR on image."""
+        """Run EasyOCR on image with timeout."""
         
-        result = await asyncio.to_thread(engine.readtext, image)
+        try:
+            # Set timeout for EasyOCR (3 seconds max)
+            result = await asyncio.wait_for(
+                asyncio.to_thread(engine.readtext, image),
+                timeout=3.0
+            )
+        except asyncio.TimeoutError:
+            self.logger.logger.warning("EasyOCR timed out")
+            return OCRResult("", 0.0, [0, 0, 0, 0], "easyocr", preprocess_name)
+        except Exception as e:
+            self.logger.logger.warning(f"EasyOCR failed: {e}")
+            return OCRResult("", 0.0, [0, 0, 0, 0], "easyocr", preprocess_name)
         
         if result:
             # Combine all detected text
@@ -251,9 +284,20 @@ class AdvancedOCREngine:
         image: np.ndarray, 
         preprocess_name: str
     ) -> OCRResult:
-        """Run PaddleOCR on image."""
+        """Run PaddleOCR on image with timeout."""
         
-        result = await asyncio.to_thread(engine.ocr, image, cls=True)
+        try:
+            # Set timeout for PaddleOCR (3 seconds max)
+            result = await asyncio.wait_for(
+                asyncio.to_thread(engine.ocr, image, cls=True),
+                timeout=3.0
+            )
+        except asyncio.TimeoutError:
+            self.logger.logger.warning("PaddleOCR timed out")
+            return OCRResult("", 0.0, [0, 0, 0, 0], "paddleocr", preprocess_name)
+        except Exception as e:
+            self.logger.logger.warning(f"PaddleOCR failed: {e}")
+            return OCRResult("", 0.0, [0, 0, 0, 0], "paddleocr", preprocess_name)
         
         if result and result[0]:
             texts = []
@@ -279,21 +323,34 @@ class AdvancedOCREngine:
         image: np.ndarray, 
         preprocess_name: str
     ) -> OCRResult:
-        """Run Tesseract OCR on image."""
+        """Run Tesseract OCR on image with timeout."""
         
-        # Convert to PIL Image
-        pil_image = Image.fromarray(image)
-        
-        # Get text and confidence
-        text = await asyncio.to_thread(
-            engine.image_to_string, pil_image, 
-            config='--psm 6 -c tessedit_char_whitelist=0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz.,%-()$€£¥ '
-        )
-        
-        # Get confidence data
-        data = await asyncio.to_thread(
-            engine.image_to_data, pil_image, output_type=engine.Output.DICT
-        )
+        try:
+            # Convert to PIL Image
+            pil_image = Image.fromarray(image)
+            
+            # Get text and confidence with timeout (3 seconds max)
+            text = await asyncio.wait_for(
+                asyncio.to_thread(
+                    engine.image_to_string, pil_image, 
+                    config='--psm 6 -c tessedit_char_whitelist=0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz.,%-()$€£¥ '
+                ),
+                timeout=3.0
+            )
+            
+            # Get confidence data with timeout
+            data = await asyncio.wait_for(
+                asyncio.to_thread(
+                    engine.image_to_data, pil_image, output_type=engine.Output.DICT
+                ),
+                timeout=2.0
+            )
+        except asyncio.TimeoutError:
+            self.logger.logger.warning("Tesseract timed out")
+            return OCRResult("", 0.0, [0, 0, 0, 0], "tesseract", preprocess_name)
+        except Exception as e:
+            self.logger.logger.warning(f"Tesseract failed: {e}")
+            return OCRResult("", 0.0, [0, 0, 0, 0], "tesseract", preprocess_name)
         
         confidences = [conf for conf in data.get('conf', []) if conf > 0]
         avg_confidence = statistics.mean(confidences) / 100.0 if confidences else 0.0

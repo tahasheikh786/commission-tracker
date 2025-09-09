@@ -6,7 +6,7 @@ import ProfessionalPagination from '../../components/ui/ProfessionalPagination'
 
 type TableData = {
   header: string[]
-  rows: string[][]
+  rows: (string[] | Record<string, string>)[]
   name?: string // <-- add table name support
 }
 
@@ -77,7 +77,7 @@ export default function DashboardTable({
   } | {
     type: 'row',
     groupIdx: number,
-    row: string[],
+    row: string[] | Record<string, string>,
     globalRowIdx: number
   }
   const allRows: RowWithGroup[] = []
@@ -181,14 +181,22 @@ export default function DashboardTable({
   function startEdit(globalRowIdx: number) {
     setEditRowIdx(globalRowIdx)
     let idx = 0
-    let foundRow: string[] = []
+    let foundRow: string[] | Record<string, string> = []
     rows.forEach(table => {
       table.rows.forEach(row => {
         if (idx === globalRowIdx) foundRow = row
         idx++
       })
     })
-    setEditValues([...foundRow])
+    
+    // Convert to array format for editing
+    if (Array.isArray(foundRow)) {
+      setEditValues([...foundRow])
+    } else {
+      // Convert object to array based on fieldConfig
+      const values = fieldConfig.map(field => (foundRow as Record<string, string>)[field.field] || '')
+      setEditValues(values)
+    }
   }
   function cancelEdit() {
     setEditRowIdx(null)
@@ -200,6 +208,14 @@ export default function DashboardTable({
       const newRows = table.rows.map((row) => {
         if (idx === editRowIdx) {
           idx++
+          // If original row was an object, convert editValues back to object format
+          if (!Array.isArray(row)) {
+            const updatedRow: Record<string, string> = {}
+            fieldConfig.forEach((field, index) => {
+              updatedRow[field.field] = editValues[index] || ''
+            })
+            return updatedRow
+          }
           return editValues
         }
         idx++
@@ -346,24 +362,47 @@ export default function DashboardTable({
                       />
                     </td>
                   )}
-                  {row.map((val: string, colIdx: number) => (
-                    <td key={colIdx} className="py-2 px-4 border-b align-top">
-                      {isEditing
-                        ? (
-                          <input
-                            value={editValues[colIdx] ?? ""}
-                            onChange={e => onEditCell(colIdx, e.target.value)}
-                            className="border rounded px-2 py-1 w-full text-sm"
-                          />
-                        )
-                        : (
-                          (val && val.trim())
-                            ? <span className="text-gray-800 text-sm">{fixPercent(val)}</span>
-                            : <span className="text-gray-400">-</span>
-                        )
-                      }
-                    </td>
-                  ))}
+                  {Array.isArray(row) 
+                    ? row.map((val: string, colIdx: number) => (
+                        <td key={colIdx} className="py-2 px-4 border-b align-top">
+                          {isEditing
+                            ? (
+                              <input
+                                value={editValues[colIdx] ?? ""}
+                                onChange={e => onEditCell(colIdx, e.target.value)}
+                                className="border rounded px-2 py-1 w-full text-sm"
+                              />
+                            )
+                            : (
+                              (val && val.trim())
+                                ? <span className="text-gray-800 text-sm">{fixPercent(val)}</span>
+                                : <span className="text-gray-400">-</span>
+                            )
+                          }
+                        </td>
+                      ))
+                    : fieldConfig.map((field, colIdx) => (
+                        <td key={colIdx} className="py-2 px-4 border-b align-top">
+                          {isEditing
+                            ? (
+                              <input
+                                value={editValues[colIdx] ?? ""}
+                                onChange={e => onEditCell(colIdx, e.target.value)}
+                                className="border rounded px-2 py-1 w-full text-sm"
+                              />
+                            )
+                            : (
+                              (() => {
+                                const val = (row as Record<string, string>)[field.field] || '';
+                                return (val && val.trim())
+                                  ? <span className="text-gray-800 text-sm">{fixPercent(val)}</span>
+                                  : <span className="text-gray-400">-</span>;
+                              })()
+                            )
+                          }
+                        </td>
+                      ))
+                  }
                   {!readOnly && (
                     <td className="py-2 px-2 border-b align-top">
                       {!isEditing ? (

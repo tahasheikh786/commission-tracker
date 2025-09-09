@@ -354,7 +354,8 @@ async def update_upload_tables(db: AsyncSession, upload_id: str, tables_data: li
     
     print(f"🎯 CRUD: Found upload, updating with tables and statement date")
     
-    db_upload.raw_data = tables_data
+    # Save edited tables to edited_tables field, not raw_data
+    db_upload.edited_tables = tables_data
     db_upload.current_step = 'table_editor'
     db_upload.last_updated = datetime.utcnow()
     

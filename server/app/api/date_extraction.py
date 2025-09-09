@@ -10,6 +10,7 @@ from app.services.date_extraction_service import get_date_extraction_service
 from app.config import get_db
 from app.utils.db_retry import with_db_retry
 import os
+import asyncio
 from datetime import datetime
 from app.services.s3_utils import upload_file_to_s3, get_s3_file_url
 import logging
@@ -102,7 +103,7 @@ async def extract_dates(
         # Get the date extraction service
         extraction_service = await get_date_extraction_service_instance()
         
-        # Extract dates from the document
+        # Extract dates from the document with global timeout
         logger.info("Starting date extraction...")
         print(f"🚀 API: Starting date extraction for {file.filename}")
         
@@ -110,18 +111,48 @@ async def extract_dates(
         if not os.path.exists(file_path):
             raise HTTPException(status_code=500, detail="File was removed before extraction")
         
-        extraction_result = await extraction_service.extract_dates_from_file(
-            file_path=file_path,
-            max_pages=max_pages
-        )
+        # Set global timeout for entire date extraction process (60 seconds max)
+        try:
+            extraction_result = await asyncio.wait_for(
+                extraction_service.extract_dates_from_file(
+                    file_path=file_path,
+                    max_pages=max_pages
+                ),
+                timeout=60.0
+            )
+        except asyncio.TimeoutError:
+            logger.error(f"Date extraction timed out after 60 seconds for {file.filename}")
+            raise HTTPException(
+                status_code=408, 
+                detail="Date extraction timed out. The document may be too complex or corrupted. Please try with a simpler document."
+            )
+        except Exception as e:
+            logger.error(f"Date extraction failed for {file.filename}: {e}")
+            raise HTTPException(
+                status_code=500, 
+                detail=f"Date extraction failed: {str(e)}"
+            )
         
         print(f"✅ API: Date extraction completed")
         
         if not extraction_result.get("success"):
-            raise HTTPException(
-                status_code=400, 
-                detail=f"Date extraction failed: {extraction_result.get('error', 'Unknown error')}"
-            )
+            error_msg = extraction_result.get('error', 'Unknown error')
+            # Provide more helpful error messages based on the type of failure
+            if "timed out" in error_msg.lower():
+                raise HTTPException(
+                    status_code=408, 
+                    detail="Date extraction timed out. The document may be too complex or corrupted. Please try with a simpler document or contact support if the issue persists."
+                )
+            elif "no dates found" in error_msg.lower():
+                raise HTTPException(
+                    status_code=422, 
+                    detail="No dates were found in the document. Please ensure the document contains readable date information or try with a different document."
+                )
+            else:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Date extraction failed: {error_msg}"
+                )
         
         # Transform response to client format
         client_response = transform_date_extraction_response_to_client_format(
@@ -191,24 +222,54 @@ async def extract_dates_bytes(
         # Get the date extraction service
         extraction_service = await get_date_extraction_service_instance()
         
-        # Extract dates from file bytes
+        # Extract dates from file bytes with global timeout
         logger.info("Starting date extraction from bytes...")
         print(f"🚀 API: Starting date extraction from bytes for {file.filename}")
         
-        extraction_result = await extraction_service.extract_dates_from_bytes(
-            file_bytes=file_content,
-            file_name=file.filename,
-            file_type=file_ext[1:],  # Remove the dot
-            max_pages=max_pages
-        )
+        # Set global timeout for entire date extraction process (60 seconds max)
+        try:
+            extraction_result = await asyncio.wait_for(
+                extraction_service.extract_dates_from_bytes(
+                    file_bytes=file_content,
+                    file_name=file.filename,
+                    file_type=file_ext[1:],  # Remove the dot
+                    max_pages=max_pages
+                ),
+                timeout=60.0
+            )
+        except asyncio.TimeoutError:
+            logger.error(f"Date extraction from bytes timed out after 60 seconds for {file.filename}")
+            raise HTTPException(
+                status_code=408, 
+                detail="Date extraction timed out. The document may be too complex or corrupted. Please try with a simpler document."
+            )
+        except Exception as e:
+            logger.error(f"Date extraction from bytes failed for {file.filename}: {e}")
+            raise HTTPException(
+                status_code=500, 
+                detail=f"Date extraction failed: {str(e)}"
+            )
         
         print(f"✅ API: Date extraction from bytes completed")
         
         if not extraction_result.get("success"):
-            raise HTTPException(
-                status_code=400, 
-                detail=f"Date extraction failed: {extraction_result.get('error', 'Unknown error')}"
-            )
+            error_msg = extraction_result.get('error', 'Unknown error')
+            # Provide more helpful error messages based on the type of failure
+            if "timed out" in error_msg.lower():
+                raise HTTPException(
+                    status_code=408, 
+                    detail="Date extraction timed out. The document may be too complex or corrupted. Please try with a simpler document or contact support if the issue persists."
+                )
+            elif "no dates found" in error_msg.lower():
+                raise HTTPException(
+                    status_code=422, 
+                    detail="No dates were found in the document. Please ensure the document contains readable date information or try with a different document."
+                )
+            else:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Date extraction failed: {error_msg}"
+                )
         
         # Transform response to client format
         client_response = transform_date_extraction_response_to_client_format(

@@ -41,6 +41,26 @@ def detect_pdf_type(pdf_path: str) -> str:
         return "unknown"
 
 
+def get_pdf_page_count(pdf_path: str) -> int:
+    """
+    Get the number of pages in a PDF document.
+    
+    Args:
+        pdf_path: Path to the PDF file
+        
+    Returns:
+        Number of pages in the PDF
+    """
+    try:
+        doc = fitz.open(pdf_path)
+        page_count = len(doc)
+        doc.close()
+        return page_count
+    except Exception as e:
+        print(f"Error getting PDF page count: {e}")
+        return 0
+
+
 def capture_table_screenshot(pdf_path: str, bbox: Tuple[float, float, float, float], page_num: int = 0) -> str:
     """
     Capture a screenshot of a table region for error reporting.

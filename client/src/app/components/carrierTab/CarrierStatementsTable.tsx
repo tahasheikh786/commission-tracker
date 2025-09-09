@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Eye, LayoutList, Trash2, CheckCircle, XCircle, Clock, FileText, ExternalLink, ChevronLeft, ChevronRight } from "lucide-react";
+import { Eye, LayoutList, Trash2, CheckCircle, XCircle, Clock, FileText, ExternalLink, ChevronLeft, ChevronRight, Table } from "lucide-react";
 import { useRouter } from 'next/navigation';
+import TableViewerModal from './TableViewerModal';
 
 type Statement = {
   id: string;
@@ -23,6 +24,8 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
   const [selectedStatements, setSelectedStatements] = useState<Set<string>>(new Set());
   const [selectAll, setSelectAll] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [tableViewerOpen, setTableViewerOpen] = useState(false);
+  const [selectedStatementId, setSelectedStatementId] = useState<string>('');
   const itemsPerPage = 10;
   const router = useRouter();
 
@@ -63,6 +66,11 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
     }
     setSelectedStatements(newSelectedStatements);
     setSelectAll(!selectAll);
+  };
+
+  const handleViewFormattedTables = (statementId: string) => {
+    setSelectedStatementId(statementId);
+    setTableViewerOpen(true);
   };
 
   const getStatusInfo = (status: string) => {
@@ -236,6 +244,15 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
                       >
                         <LayoutList size={16} />
                       </button>
+
+                      {/* Formatted table viewing button */}
+                      <button
+                        title="View formatted tables"
+                        className="btn btn-ghost p-2 text-green-600 hover:bg-green-50"
+                        onClick={() => handleViewFormattedTables(statement.id)}
+                      >
+                        <Table size={16} />
+                      </button>
                       
                       {(statement.status === "Pending" || statement.status === "pending" || statement.status === "extracted" || statement.status === "success") && (
                         <button
@@ -310,6 +327,16 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
           </div>
         )}
       </div>
+
+      {/* Table Viewer Modal */}
+      <TableViewerModal
+        isOpen={tableViewerOpen}
+        onClose={() => setTableViewerOpen(false)}
+        statementId={selectedStatementId}
+        tableType="formatted"
+        title="Formatted Tables"
+        statement={statements.find(s => s.id === selectedStatementId)}
+      />
     </div>
   );
 }

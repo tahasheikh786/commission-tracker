@@ -29,12 +29,38 @@ export interface DateExtractionResponse {
 
 class DateExtractionService {
   private baseUrl: string
+  private pendingRequests: Map<string, Promise<DateExtractionResponse>> = new Map()
 
   constructor() {
     this.baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
   }
 
   async extractDatesFromFile(file: File, companyId: string): Promise<DateExtractionResponse> {
+    // Create a unique key for this request to prevent duplicate calls
+    const requestKey = `${file.name}-${file.size}-${companyId}`
+    
+    // If there's already a pending request for this file, return that promise
+    if (this.pendingRequests.has(requestKey)) {
+      console.log('🔄 Date extraction already in progress for this file, returning existing promise')
+      return this.pendingRequests.get(requestKey)!
+    }
+
+    // Create the request promise
+    const requestPromise = this._performDateExtraction(file, companyId)
+    
+    // Store the promise to prevent duplicate requests
+    this.pendingRequests.set(requestKey, requestPromise)
+    
+    try {
+      const result = await requestPromise
+      return result
+    } finally {
+      // Clean up the pending request
+      this.pendingRequests.delete(requestKey)
+    }
+  }
+
+  private async _performDateExtraction(file: File, companyId: string): Promise<DateExtractionResponse> {
     const formData = new FormData()
     formData.append('file', file)
     formData.append('company_id', companyId)

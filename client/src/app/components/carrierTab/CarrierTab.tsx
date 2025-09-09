@@ -9,7 +9,7 @@ import DatabaseFieldsManager from "./DatabaseFieldsManager";
 import PlanTypesManager from "./PlanTypesManager";
 import toast from 'react-hot-toast';
 import { TableLoader, CardLoader } from "@/app/upload/components/Loader";
-import { Database, Settings, Plus, Search, Filter, Sparkles, Building2, FileText } from "lucide-react";
+import { Database, Settings, Plus, Search, Filter, Sparkles, Building2, FileText, DollarSign, TrendingUp, Users } from "lucide-react";
 import { useSubmission } from "@/context/SubmissionContext";
 
 type Carrier = { id: string; name: string };
@@ -24,6 +24,14 @@ type Statement = {
   rejection_reason?: string;
 };
 
+interface CommissionStats {
+  carrier_name: string;
+  total_invoice: number;
+  total_commission: number;
+  total_companies: number;
+  total_statements: number;
+}
+
 export default function CarrierTab() {
   const { triggerDashboardRefresh } = useSubmission();
   const [carriers, setCarriers] = useState<Carrier[]>([]);
@@ -37,6 +45,8 @@ export default function CarrierTab() {
   const [deletingCarriers, setDeletingCarriers] = useState(false);
   const [deletingStatements, setDeletingStatements] = useState(false);
   const [activeTab, setActiveTab] = useState<'carriers' | 'database-fields' | 'plan-types'>('carriers');
+  const [commissionStats, setCommissionStats] = useState<CommissionStats | null>(null);
+  const [loadingCommission, setLoadingCommission] = useState(false);
 
   // Fetch carriers on mount
   useEffect(() => {
@@ -57,6 +67,7 @@ export default function CarrierTab() {
   useEffect(() => {
     if (!selected) {
       setStatements([]);
+      setCommissionStats(null);
       return;
     }
     setLoadingStatements(true);
@@ -65,6 +76,34 @@ export default function CarrierTab() {
       .then(setStatements)
       .finally(() => setLoadingStatements(false));
   }, [selected]);
+
+  // Fetch commission data for selected carrier
+  useEffect(() => {
+    if (!selected) {
+      setCommissionStats(null);
+      return;
+    }
+    
+    setLoadingCommission(true);
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/earned-commission/carrier/${selected.id}/stats`)
+      .then(r => r.json())
+      .then((data) => {
+        setCommissionStats(data);
+      })
+      .catch((error) => {
+        console.error('Error fetching commission stats:', error);
+        setCommissionStats(null);
+      })
+      .finally(() => setLoadingCommission(false));
+  }, [selected]);
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+    }).format(amount);
+  };
 
   // Handle deletion of selected statements
   const handleDelete = (ids: string[]) => {
@@ -235,6 +274,52 @@ export default function CarrierTab() {
                   )}
                 </div>
               </div>
+              
+              {/* Commission Stats Display */}
+              {selected && (
+                <div className="px-6 py-4 border-b border-slate-200/50 bg-gradient-to-r from-green-50/50 to-blue-50/50">
+                  {loadingCommission ? (
+                    <div className="flex items-center gap-3">
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                      <span className="text-slate-600">Loading commission data...</span>
+                    </div>
+                  ) : commissionStats ? (
+                    <div className="grid grid-cols-3 gap-6">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                          <DollarSign className="text-green-600" size={18} />
+                        </div>
+                        <div>
+                          <p className="text-sm text-slate-600">Total Commission</p>
+                          <p className="font-bold text-green-700 text-lg">{formatCurrency(commissionStats.total_commission)}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                          <TrendingUp className="text-blue-600" size={18} />
+                        </div>
+                        <div>
+                          <p className="text-sm text-slate-600">Total Invoice</p>
+                          <p className="font-bold text-blue-700 text-lg">{formatCurrency(commissionStats.total_invoice)}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
+                          <Users className="text-purple-600" size={18} />
+                        </div>
+                        <div>
+                          <p className="text-sm text-slate-600">Total Companies</p>
+                          <p className="font-bold text-purple-700 text-lg">{commissionStats.total_companies}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-2">
+                      <p className="text-slate-500 text-sm">No commission data available for this carrier</p>
+                    </div>
+                  )}
+                </div>
+              )}
               
               <div className="p-6">
                 {loadingStatements ? (

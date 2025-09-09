@@ -97,7 +97,7 @@ export function useUploadPage() {
 
   // Fetch saved mapping for the company when tables are available
   useEffect(() => {
-    if (uploaded?.tables?.length && company && !fetchingMapping && !mapping) {
+    if (uploaded?.tables?.length && company && !fetchingMapping) {
       if (!fetchMappingRef.current) {
         fetchMappingRef.current = true
         setFetchingMapping(true)
@@ -162,7 +162,7 @@ export function useUploadPage() {
         })
       }
     }
-  }, [uploaded?.tables, company, fetchingMapping, mapping, fieldConfig, databaseFields, getLabelFromDatabaseFields])
+  }, [uploaded?.tables, company, fetchingMapping, fieldConfig, databaseFields, getLabelFromDatabaseFields])
 
   // Fetch database fields from backend
   useEffect(() => {
@@ -603,6 +603,11 @@ export function useUploadPage() {
         setCurrentExtractionIndex(prev => prev + 1)
       }
 
+      // Reset mapping state to allow loading saved mappings for the new extraction
+      setMapping(null)
+      setMappingAutoApplied(false)
+      fetchMappingRef.current = false
+
       const formData = new FormData()
       formData.append('file', originalFile!)
       formData.append('company_id', company.id)
@@ -646,6 +651,11 @@ export function useUploadPage() {
     try {
       setIsImprovingExtraction(true)
       toast.loading('Improving extraction with GPT-5 Vision and LLM format enforcement...', { id: 'improve-extraction' })
+
+      // Reset mapping state to allow loading saved mappings for the improved extraction
+      setMapping(null)
+      setMappingAutoApplied(false)
+      fetchMappingRef.current = false
 
       const formData = new FormData()
       formData.append('upload_id', uploaded.upload_id)

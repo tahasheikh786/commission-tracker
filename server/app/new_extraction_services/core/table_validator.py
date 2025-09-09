@@ -48,6 +48,25 @@ class TableValidator:
             self.logger.logger.warning("⚠️ Generic structure - extraction failed")
             return False
         
+        # **NEW: Special handling for commission statement tables**
+        # Commission statements often have complex structures that might initially appear as generic
+        if len(headers) >= 3 and any('commission' in str(h).lower() or 'payment' in str(h).lower() or 
+                                   'premium' in str(h).lower() or 'group' in str(h).lower() 
+                                   for h in headers):
+            self.logger.logger.info(f"✅ ACCEPTING commission statement table: {len(headers)} headers, {len(rows)} rows")
+            return True
+        
+        # **NEW: More lenient validation for tables with reasonable structure**
+        # If we have multiple columns and some data, accept it even if headers are generic
+        if len(headers) >= 5 and len(rows) > 0:
+            self.logger.logger.info(f"✅ ACCEPTING multi-column table with data: {len(headers)} headers, {len(rows)} rows")
+            return True
+        
+        # **NEW: Accept tables with inferred headers if they have data**
+        if any('Column_' in str(h) for h in headers) and len(headers) >= 3 and len(rows) > 0:
+            self.logger.logger.info(f"✅ ACCEPTING table with inferred headers: {len(headers)} headers, {len(rows)} rows")
+            return True
+        
         # Check if this is a complex table structure
         is_complex = self._is_complex_table_structure(headers, rows)
         self.logger.logger.info(f"🔍 VALIDATION: Is complex table: {is_complex}")

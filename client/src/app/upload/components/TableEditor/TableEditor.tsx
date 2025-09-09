@@ -32,7 +32,7 @@ import TableHeader from './components/TableHeader'
 import TableControls from './components/TableControls'
 import DateSelectionModal from '../DateSelectionModal'
 import { dateExtractionService, ExtractedDate } from '../../services/dateExtractionService'
-import { GPTCorrectionLoader } from '../../../components/ui/FullScreenLoader'
+import { GPTCorrectionLoader, GPTExtractionLoader, DOCAIExtractionLoader } from '../../../components/ui/FullScreenLoader'
 
 import ProgressBar from '../ProgressBar'
 
@@ -225,7 +225,8 @@ export default function TableEditor({
   // Ref to track processed data keys to prevent duplicate extractions
   const processedDataKeysRef = useRef<Set<string>>(new Set())
   
-
+  // Ref to track if date extraction is currently in progress
+  const dateExtractionInProgressRef = useRef(false)
 
   // Click outside handler for menus
   useEffect(() => {
@@ -418,30 +419,50 @@ export default function TableEditor({
       return
     }
 
-    const dataKey = `${tables.length}-${uploaded.file_name}-${companyId}`
-    
-    // Skip if already processed
-    if (processedDataKeysRef.current.has(dataKey)) {
+    // Skip if date extraction is already in progress
+    if (dateExtractionInProgressRef.current) {
+      console.log('🚫 Date extraction already in progress, skipping...')
       return
     }
 
+    // Create a more stable key that doesn't change on every render
+    const dataKey = `${tables.length}-${uploaded.file_name}-${companyId}-${uploaded.file?.name || uploaded.file?.size || 'unknown'}`
+    
+    // Skip if already processed
+    if (processedDataKeysRef.current.has(dataKey)) {
+      console.log('🚫 Date extraction already processed for this file, skipping...')
+      return
+    }
+
+    // Skip if we already have extracted dates for this file
+    if (hasExtractedDates && extractedDates.length > 0) {
+      console.log('🚫 Dates already extracted for this file, skipping...')
+      return
+    }
+
+    // Skip if a statement date has already been selected
+    if (selectedStatementDate) {
+      console.log('🚫 Statement date already selected, skipping date extraction...')
+      return
+    }
+
+    console.log('🚀 Starting date extraction for file:', uploaded.file_name)
     processedDataKeysRef.current.add(dataKey)
+    dateExtractionInProgressRef.current = true
     
     const extractDates = async () => {
-      if (isUnmountingRef.current) return
-      
       setDateExtractionLoading(true)
       
       try {
         const response = await dateExtractionService.extractDatesFromFile(uploaded.file, companyId)
         
-        // Always try to show modal if we have a successful response, even if component is unmounting
+        // Show modal if we have a successful response
         if (response.success) {
           setExtractedDates(response.dates || [])
           if (response.dates && response.dates.length > 0) {
             setHasExtractedDates(true) // Mark that dates were extracted
           }
-          setShowDateModal(true) // 🎯 This will now work!
+          setShowDateModal(true)
           
           if (response.dates && response.dates.length > 0) {
             toast.success(`Found ${response.dates.length} date(s) in your document`)
@@ -451,26 +472,41 @@ export default function TableEditor({
         }
       } catch (error) {
         console.log('❌ Date extraction failed:', error)
-        // Always try to show modal for manual selection, even if component is unmounting
+        // Show modal for manual selection
         setExtractedDates([])
         setHasExtractedDates(false) // Reset flag on error
         setShowDateModal(true)
         toast.error('Date extraction failed. Please select manually.')
       } finally {
-        // Always reset loading state
+        // Always reset loading state and progress flag
         setDateExtractionLoading(false)
+        dateExtractionInProgressRef.current = false
       }
     }
     
     extractDates()
-  }, [tables.length, uploaded?.file, uploaded?.file_name, companyId, disableAutoDateExtraction, dateExtractionLoading])
+  }, [tables.length, uploaded?.file_name, companyId, disableAutoDateExtraction, hasExtractedDates, extractedDates.length, selectedStatementDate])
 
   // Cleanup effect that only runs on unmount
   useEffect(() => {
+    // Reset unmounting flag when component mounts
+    isUnmountingRef.current = false
+    
     return () => {
+      // Only set unmounting flag when component actually unmounts
       isUnmountingRef.current = true
     }
   }, [])
+
+  // Reset processed keys when file changes
+  useEffect(() => {
+    if (uploaded?.file_name) {
+      // Clear processed keys and reset progress flag when a new file is loaded
+      processedDataKeysRef.current.clear()
+      dateExtractionInProgressRef.current = false
+      console.log('🔄 Cleared processed keys and reset progress flag for new file:', uploaded.file_name)
+    }
+  }, [uploaded?.file_name])
 
   const handleDateSelect = (selectedDate: string, dateType: string) => {
     if (onStatementDateSelect) {
@@ -493,14 +529,15 @@ export default function TableEditor({
   }
 
   const performDateExtraction = useCallback(async () => {
+    console.log('🗓️ performDateExtraction called', {
+      hasFile: !!uploaded?.file,
+      companyId
+    })
+    
     setDateExtractionLoading(true)
     
-    // Check if component is unmounting
-    if (isUnmountingRef.current) {
-      return
-    }
-    
     if (!uploaded?.file || !companyId) {
+      console.log('🗓️ Missing file or companyId, aborting date extraction')
       setDateExtractionLoading(false)
       return
     }
@@ -508,6 +545,11 @@ export default function TableEditor({
     try {
       const fileToUse = uploaded.file
       let response
+      
+      console.log('🗓️ Starting date extraction API call', {
+        fileType: fileToUse instanceof File ? 'File' : typeof fileToUse,
+        fileName: uploaded.file_name
+      })
       
       if (fileToUse instanceof File) {
         response = await dateExtractionService.extractDatesFromFile(fileToUse, companyId)
@@ -522,7 +564,7 @@ export default function TableEditor({
           const file = new File([fileBlob], fileName, { type: fileBlob.type || 'application/pdf' })
           response = await dateExtractionService.extractDatesFromFile(file, companyId)
         } catch (fetchError) {
-          // Always try to show modal, even if component is unmounting
+          // Show modal for manual selection
           setExtractedDates([])
           setHasExtractedDates(true) // Reset flag on error
           setShowDateModal(true)
@@ -531,7 +573,7 @@ export default function TableEditor({
           return
         }
       } else {
-        // Always try to show modal, even if component is unmounting
+        // Show modal for manual selection
         setExtractedDates([])
         setHasExtractedDates(false) // Reset flag on error
         setShowDateModal(true)
@@ -540,20 +582,28 @@ export default function TableEditor({
         return
       }
       
-      // Always try to show modal, even if component is unmounting
+      console.log('🗓️ Date extraction API response', {
+        success: response.success,
+        datesCount: response.dates?.length || 0,
+        errors: response.errors
+      })
+      
+      // Show modal with results
       if (response.success && response.dates && response.dates.length > 0) {
+        console.log('🗓️ Setting extracted dates and showing modal')
         setExtractedDates(response.dates)
         setHasExtractedDates(true) // Mark that dates were extracted
         setShowDateModal(true)
         toast.success(`Found ${response.dates.length} date(s) in your document`)
       } else {
+        console.log('🗓️ No dates found, showing modal for manual selection')
         setExtractedDates([])
         setHasExtractedDates(true) // Set to true to indicate extraction was attempted
         setShowDateModal(true)
         toast.success('No dates found in the document. You can manually select a date.')
       }
     } catch (error: any) {
-      // Always try to show modal for manual selection, even if component is unmounting
+      // Show modal for manual selection
       setExtractedDates([])
       setHasExtractedDates(true) // Set to true to indicate extraction was attempted
       setShowDateModal(true)
@@ -894,6 +944,28 @@ export default function TableEditor({
           toast.error("GPT correction is already in progress and cannot be cancelled");
         }}
       />
+
+      {/* GPT Extraction Full-Screen Loader */}
+      <GPTExtractionLoader 
+        isVisible={isExtractingWithGPT}
+        progress={isExtractingWithGPT ? 60 : 0}
+        onCancel={() => {
+          setIsExtractingWithGPT(false)
+          toast.dismiss('extract-gpt')
+          toast.error("GPT extraction cancelled")
+        }}
+      />
+
+      {/* DOCAI Extraction Full-Screen Loader */}
+      <DOCAIExtractionLoader 
+        isVisible={isExtractingWithGoogleDocAI}
+        progress={isExtractingWithGoogleDocAI ? 60 : 0}
+        onCancel={() => {
+          setIsExtractingWithGoogleDocAI(false)
+          toast.dismiss('extract-google')
+          toast.error("Google DOC AI extraction cancelled")
+        }}
+      />
       
       {/* Main Content - Side by Side Layout */}
       <div className="flex flex-col h-full">
@@ -941,16 +1013,26 @@ export default function TableEditor({
                         {/* Date Extraction Button */}
             <button
               onClick={() => {
+                console.log('🗓️ Date extraction button clicked', {
+                  hasExtractedDates,
+                  extractedDatesLength: extractedDates.length,
+                  dateExtractionLoading,
+                  showDateModal
+                })
                 
                 // If dates were already extracted and we have dates, just reopen the modal
                 if (hasExtractedDates && extractedDates.length > 0) {
+                  console.log('🗓️ Reopening date modal with existing dates')
                   setShowDateModal(true)
                   return
                 }
                 
                 // If not loading, perform extraction (this will handle both initial extraction and retry)
                 if (!dateExtractionLoading) {
+                  console.log('🗓️ Starting manual date extraction')
                   performDateExtraction()
+                } else {
+                  console.log('🗓️ Date extraction already in progress, ignoring click')
                 }
               }}
               disabled={dateExtractionLoading}

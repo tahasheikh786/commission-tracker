@@ -28,6 +28,83 @@ logger = logging.getLogger(__name__)
 UPLOAD_DIR = "pdfs"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+
+def transform_gpt_extraction_response_to_client_format(gpt_result: Dict[str, Any], filename: str, company_id: str) -> Dict[str, Any]:
+    """
+    Transform GPT extraction result to client format.
+    
+    Args:
+        gpt_result: Result from GPT4oVisionService.extract_commission_data
+        filename: Original filename
+        company_id: Company ID
+        
+    Returns:
+        Client-formatted response
+    """
+    try:
+        if not gpt_result.get("success"):
+            return {
+                "status": "error",
+                "error": gpt_result.get("error", "GPT extraction failed"),
+                "tables": []
+            }
+        
+        tables = gpt_result.get("tables", [])
+        if not tables:
+            return {
+                "status": "error", 
+                "error": "No tables found in GPT extraction result",
+                "tables": []
+            }
+        
+        # Transform tables to client format
+        client_tables = []
+        for table in tables:
+            # GPT service returns tables with 'headers' and 'rows' keys
+            headers = table.get("headers", [])
+            rows = table.get("rows", [])
+            
+            # Convert to client format (header array, rows as array of arrays)
+            client_table = {
+                "header": headers,
+                "rows": rows,
+                "extractor": table.get("extractor", "gpt4o_vision"),
+                "metadata": {
+                    "extraction_method": "gpt4o_vision",
+                    "processing_notes": table.get("processing_notes", ""),
+                    "company_detection_applied": gpt_result.get("company_detection_applied", False)
+                }
+            }
+            client_tables.append(client_table)
+        
+        # Get extraction metadata
+        extraction_metadata = gpt_result.get("extraction_metadata", {})
+        
+        return {
+            "status": "success",
+            "job_id": str(uuid.uuid4()),
+            "file_name": filename,
+            "tables": client_tables,
+            "extraction_metrics": {
+                "total_tables": len(client_tables),
+                "extraction_time": 1.0,  # GPT doesn't provide timing info
+                "confidence": extraction_metadata.get("confidence", 0.9),
+                "method": extraction_metadata.get("method", "gpt4o_vision")
+            },
+            "extraction_config": {
+                "method": "gpt4o_vision",
+                "description": "OpenAI GPT-4 Vision extraction for scanned PDFs"
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Error transforming GPT extraction result: {e}")
+        return {
+            "status": "error",
+            "error": f"Failed to transform GPT extraction result: {str(e)}",
+            "tables": []
+        }
+
 # Initialize the new extraction service
 new_extraction_service = None
 
@@ -380,17 +457,28 @@ async def extract_tables_smart(
             raise HTTPException(status_code=500, detail="Failed to upload file to S3.")
         s3_url = get_s3_file_url(s3_key)
 
-        # Detect PDF type
-        from app.services.extraction_utils import detect_pdf_type
+        # Detect PDF type and page count for automatic routing
+        from app.services.extraction_utils import detect_pdf_type, get_pdf_page_count
         pdf_type = detect_pdf_type(file_path)
-        logger.info(f"Detected PDF type: {pdf_type} for {file.filename}")
+        page_count = get_pdf_page_count(file_path)
+        logger.info(f"🔍 PDF Analysis: {file.filename} - Type: {pdf_type}, Pages: {page_count}")
+        
+        # Log routing decision
+        if pdf_type == "digital":
+            logger.info(f"📄 Routing to Docling (Digital PDF): {file.filename}")
+        elif pdf_type == "scanned" and page_count <= 20:
+            logger.info(f"🤖 Routing to OpenAI GPT (Scanned PDF ≤ 20 pages): {file.filename}")
+        elif pdf_type == "scanned" and page_count > 20:
+            logger.info(f"🔍 Routing to DocAI (Scanned PDF > 20 pages): {file.filename}")
+        else:
+            logger.info(f"⚠️ Unknown PDF type, defaulting to DocAI: {file.filename}")
         
         extraction_result = None
         extraction_method = None
         
         if pdf_type == "digital":
-            # Use new advanced extraction pipeline for digital PDFs
-            logger.info(f"Using new advanced extraction pipeline for digital PDF: {file.filename}")
+            # Use new advanced extraction pipeline (Docling) for digital PDFs
+            logger.info(f"Using new advanced extraction pipeline (Docling) for digital PDF: {file.filename}")
             extraction_service = await get_new_extraction_service_instance()
             
             extraction_result = await extraction_service.extract_tables_from_file(
@@ -404,9 +492,36 @@ async def extract_tables_smart(
             )
             extraction_method = "new_advanced_pipeline"
             
+        elif pdf_type == "scanned":
+            # Automatic routing for scanned PDFs based on page count
+            if page_count <= 20:
+                # Use OpenAI GPT extraction for scanned PDFs ≤ 20 pages
+                logger.info(f"Using OpenAI GPT extraction for scanned PDF ≤ 20 pages: {file.filename} ({page_count} pages)")
+                from app.services.gpt4o_vision_service import GPT4oVisionService
+                
+                gpt4o_service = GPT4oVisionService()
+                if not gpt4o_service.is_available():
+                    logger.warning("GPT-4 Vision service not available, falling back to DocAI")
+                    # Fallback to DocAI if GPT service is not available
+                    from app.services.extractor_google_docai import GoogleDocAIExtractor
+                    extractor = GoogleDocAIExtractor()
+                    extraction_result = await extractor.extract_tables_async(file_path)
+                    extraction_method = "google_docai"
+                else:
+                    # Use GPT extraction with page count limit
+                    extraction_result = gpt4o_service.extract_commission_data(file_path, max_pages=page_count)
+                    extraction_method = "gpt4o_vision"
+            else:
+                # Use Google DocAI extraction for scanned PDFs > 20 pages
+                logger.info(f"Using Google DocAI extraction for scanned PDF > 20 pages: {file.filename} ({page_count} pages)")
+                from app.services.extractor_google_docai import GoogleDocAIExtractor
+                
+                extractor = GoogleDocAIExtractor()
+                extraction_result = await extractor.extract_tables_async(file_path)
+                extraction_method = "google_docai"
         else:
-            # Use Google DocAI extractor for scanned PDFs
-            logger.info(f"Using Google DocAI extractor for scanned PDF: {file.filename}")
+            # Unknown PDF type - default to DocAI
+            logger.warning(f"Unknown PDF type detected, defaulting to DocAI extraction: {file.filename}")
             from app.services.extractor_google_docai import GoogleDocAIExtractor
             
             extractor = GoogleDocAIExtractor()
@@ -414,18 +529,26 @@ async def extract_tables_smart(
             extraction_method = "google_docai"
         
         if not extraction_result.get("success"):
+            logger.error(f"❌ Extraction failed with {extraction_method}: {extraction_result.get('error', 'Unknown error')}")
             raise HTTPException(
                 status_code=400, 
                 detail=f"Extraction failed: {extraction_result.get('error', 'Unknown error')}"
             )
+        
+        logger.info(f"✅ Extraction successful with {extraction_method} for {file.filename}")
         
         # Transform response based on extraction method
         if extraction_method == "new_advanced_pipeline":
             client_response = transform_new_extraction_response_to_client_format(
                 extraction_result, file.filename, company_id
             )
+        elif extraction_method == "gpt4o_vision":
+            # Transform GPT extraction result to client format
+            client_response = transform_gpt_extraction_response_to_client_format(
+                extraction_result, file.filename, company_id
+            )
         else:
-            # Use existing transform function for existing pipeline
+            # Use existing transform function for existing pipeline (DocAI)
             from app.services.extraction_utils import transform_pipeline_response_to_client_format
             client_response = transform_pipeline_response_to_client_format(extraction_result, file.filename)
         
