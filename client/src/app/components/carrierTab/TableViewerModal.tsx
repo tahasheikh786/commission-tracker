@@ -48,7 +48,7 @@ export default function TableViewerModal({
     try {
       // Use existing data from the statement instead of making API calls
       // For formatted tables, use edited_tables if available, otherwise fall back to raw_data
-      let tableData = statement.edited_tables || statement.raw_data || [];
+      const tableData = statement.edited_tables || statement.raw_data || [];
       
       if (Array.isArray(tableData) && tableData.length > 0) {
         setTables(tableData);
