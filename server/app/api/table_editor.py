@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.models import StatementUpload, Company
-from app.db.crud import save_edited_tables, get_edited_tables, update_upload_tables
+from app.db.crud import save_edited_tables, get_edited_tables, update_upload_tables, delete_edited_tables
 from app.config import get_db
 from app.utils.db_retry import with_db_retry
 from app.services.format_learning_service import FormatLearningService
@@ -45,7 +45,7 @@ class GetTablesRequest(BaseModel):
 
 
 @router.post("/save-tables/")
-async def save_tables(request: SaveTablesRequest):
+async def save_tables(request: SaveTablesRequest, db: AsyncSession = Depends(get_db)):
     """
     Save edited tables to the database and learn format patterns.
     """
@@ -83,7 +83,6 @@ async def save_tables(request: SaveTablesRequest):
         logger.info(f"🎯 Table Editor API: Converted {len(tables_data)} tables to database format")
         
         # Save to database
-        db = await anext(get_db())
         saved_upload = await save_edited_tables(db, tables_data)
         logger.info(f"🎯 Table Editor API: Saved edited tables to database")
         
@@ -130,7 +129,7 @@ async def save_tables(request: SaveTablesRequest):
                 }
                 
                 # Save table editor format learning
-                await save_table_editor_format_learning(format_learning_data, db)
+                await save_table_editor_format_learning(db, format_learning_data)
                 
                 logger.info(f"🎯 Table Editor API: Successfully learned format with signature: {format_signature}")
                 
@@ -155,7 +154,7 @@ async def save_tables(request: SaveTablesRequest):
         logger.error(f"🎯 Table Editor API: Error saving tables: {e}")
         raise HTTPException(status_code=500, detail=f"Error saving tables: {str(e)}")
 
-async def save_table_editor_format_learning(format_data: Dict[str, Any], db: AsyncSession):
+async def save_table_editor_format_learning(db: AsyncSession, format_data: Dict[str, Any]):
     """
     Save table editor format learning data.
     """

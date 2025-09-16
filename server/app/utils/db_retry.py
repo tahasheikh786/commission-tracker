@@ -100,3 +100,51 @@ async def with_db_retry(
         base_delay=float(base_delay),
         max_delay=float(max_delay)
     )
+
+def with_db_retry_sync(
+    operation: Callable,
+    max_retries: int = 3,
+    base_delay: float = 1.0,
+    max_delay: float = 10.0,
+    *args,
+    **kwargs
+) -> Any:
+    """
+    Execute a synchronous database operation with retry logic.
+    This is a simplified version for non-async contexts.
+    
+    Args:
+        operation: The function to retry
+        max_retries: Maximum number of retry attempts
+        base_delay: Base delay between retries in seconds
+        max_delay: Maximum delay between retries in seconds
+        *args: Arguments to pass to the operation
+        **kwargs: Keyword arguments to pass to the operation
+    
+    Returns:
+        The result of the operation
+    """
+    last_exception = None
+    
+    for attempt in range(max_retries + 1):
+        try:
+            return operation(*args, **kwargs)
+        except (InterfaceError, OperationalError, DisconnectionError) as e:
+            last_exception = e
+            if attempt == max_retries:
+                logger.error(f"Database operation failed after {max_retries + 1} attempts: {e}")
+                raise
+            
+            # Calculate delay with exponential backoff
+            delay = min(base_delay * (2 ** attempt), max_delay)
+            logger.warning(f"Database operation failed (attempt {attempt + 1}/{max_retries + 1}): {e}. Retrying in {delay:.2f}s...")
+            
+            import time
+            time.sleep(delay)
+        except Exception as e:
+            # For non-database errors, don't retry
+            logger.error(f"Non-database error occurred: {e}")
+            raise
+    
+    # This should never be reached, but just in case
+    raise last_exception

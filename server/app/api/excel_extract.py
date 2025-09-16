@@ -30,12 +30,9 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 # Initialize the Excel extraction service
 excel_extraction_service = None
 
-async def get_excel_extraction_service_instance():
+async def get_excel_extraction_service_instance(company_id: str = None):
     """Get or create the Excel extraction service instance."""
-    global excel_extraction_service
-    if excel_extraction_service is None:
-        excel_extraction_service = get_excel_extraction_service()
-    return excel_extraction_service
+    return get_excel_extraction_service()
 
 
 @router.post("/extract-tables-excel/")
@@ -98,7 +95,7 @@ async def extract_tables_excel(
         s3_url = get_s3_file_url(s3_key)
 
         # Get Excel extraction service
-        excel_service = await get_excel_extraction_service_instance()
+        excel_service = await get_excel_extraction_service_instance(company_id=company_id)
         
         # Parse sheet names if provided
         sheet_names_list = None
@@ -345,7 +342,7 @@ async def extract_tables_excel_bytes(
                 raise HTTPException(status_code=404, detail="Company not found")
 
             # Get Excel extraction service
-            excel_service = await get_excel_extraction_service_instance()
+            excel_service = await get_excel_extraction_service_instance(company_id=company_id)
             
             # Parse sheet names if provided
             sheet_names_list = None
@@ -642,7 +639,7 @@ async def extract_tables_excel_s3(
         
         try:
             # Get Excel extraction service
-            excel_service = await get_excel_extraction_service_instance()
+            excel_service = await get_excel_extraction_service_instance(company_id=company_id)
             
             # Parse sheet names if provided
             sheet_names_list = None

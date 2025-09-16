@@ -246,7 +246,7 @@ async def get_learned_field_mapping(
             table_structure=request.table_structure
         )
         
-        if learned_format and learned_format.get('field_mapping') and match_score > 0.6:
+        if learned_format and learned_format.get('field_mapping') and len(learned_format.get('field_mapping', {})) > 0 and match_score > 0.5:
             return {
                 "found_match": True,
                 "match_score": match_score,

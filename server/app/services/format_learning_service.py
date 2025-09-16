@@ -430,6 +430,77 @@ class FormatLearningService:
             traceback.print_exc()
             return None, 0.0
     
+    def find_matching_format_sync(
+        self, 
+        company_id: str, 
+        headers: List[str], 
+        table_structure: dict
+    ) -> Tuple[Optional[Dict[str, Any]], float]:
+        """
+        Synchronous version of find_matching_format for use in non-async contexts.
+        """
+        try:
+            print(f"🎯 FormatLearningService: Finding matching format (sync) for company {company_id}")
+            print(f"🎯 FormatLearningService: Headers: {headers}")
+            print(f"🎯 FormatLearningService: Table structure: {table_structure}")
+            
+            # Import here to avoid circular imports
+            from app.db import crud
+            from app.utils.db_retry import with_db_retry_sync
+            
+            # Get all formats for this company
+            formats = with_db_retry_sync(crud.get_carrier_formats_for_company, company_id=company_id)
+            print(f"🎯 FormatLearningService: Found {len(formats)} saved formats for company")
+            
+            best_match = None
+            best_score = 0.0
+            
+            for format_record in formats:
+                # Calculate similarity score using improved logic
+                header_similarity = crud.calculate_header_similarity(headers, format_record.headers)
+                structure_similarity = crud.calculate_structure_similarity(table_structure, format_record.table_structure)
+                
+                # Combined score (weighted average) - header similarity is more important
+                total_score = (header_similarity * 0.8) + (structure_similarity * 0.2)
+                
+                print(f"🎯 FormatLearningService: Comparing with saved format:")
+                print(f"🎯 FormatLearningService:   Saved headers: {format_record.headers}")
+                print(f"🎯 FormatLearningService:   Header similarity: {header_similarity}")
+                print(f"🎯 FormatLearningService:   Structure similarity: {structure_similarity}")
+                print(f"🎯 FormatLearningService:   Total score: {total_score}")
+                
+                # Lower threshold for better matching - 0.5 instead of 0.6
+                if total_score > best_score and total_score > 0.5:  # Even more flexible threshold
+                    best_score = total_score
+                    best_match = format_record
+                    print(f"🎯 FormatLearningService:   -> New best match with score {total_score}")
+            
+            if best_match:
+                print(f"🎯 FormatLearningService: Found matching format with signature: {best_match.format_signature}")
+                print(f"🎯 FormatLearningService: Learned field mapping: {best_match.field_mapping}")
+                print(f"🎯 FormatLearningService: Learned table editor settings: {best_match.table_editor_settings}")
+                
+                return {
+                    'format_signature': best_match.format_signature,
+                    'headers': best_match.headers,
+                    'column_types': best_match.column_types,
+                    'column_patterns': best_match.column_patterns,
+                    'field_mapping': best_match.field_mapping,
+                    'table_editor_settings': best_match.table_editor_settings,
+                    'confidence_score': best_match.confidence_score,
+                    'usage_count': best_match.usage_count
+                }, best_score
+            else:
+                print(f"🎯 FormatLearningService: No matching format found")
+            
+            return None, 0.0
+            
+        except Exception as e:
+            print(f"Error finding matching format (sync): {e}")
+            import traceback
+            traceback.print_exc()
+            return None, 0.0
+    
     def validate_data_against_learned_format(
         self, 
         table_data: List[List[str]], 

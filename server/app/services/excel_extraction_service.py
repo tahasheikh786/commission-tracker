@@ -53,9 +53,10 @@ class ExcelExtractionService:
     and dynamically find tables across all sheets.
     """
     
-    def __init__(self):
+    def __init__(self, company_id: str = None):
         """Initialize the Excel extraction service."""
         self.logger = logging.getLogger(__name__)
+        self.company_id = company_id
         
         # Table detection parameters
         self.min_table_size = (2, 2)  # Minimum rows, columns
@@ -355,6 +356,118 @@ class ExcelExtractionService:
         
         return min(confidence, 1.0)
     
+    def _find_best_headers(self, table_df: pd.DataFrame, company_id: str = None) -> Tuple[List[str], int, str]:
+        """
+        Find the best header row by examining multiple rows and looking for patterns.
+        If no good headers are found, check for learned headers as fallback.
+        Returns (headers, data_start_row, table_type)
+        """
+        rows, cols = table_df.shape
+        best_headers = None
+        best_confidence = 0.0
+        best_row_idx = 0
+        
+        # Look at the first few rows to find the best header
+        max_header_search_rows = min(5, rows)  # Don't search more than 5 rows
+        
+        for row_idx in range(max_header_search_rows):
+            row = table_df.iloc[row_idx]
+            confidence = self._assess_header_confidence(row)
+            
+            # Additional checks for financial table headers
+            if confidence > 0.3:  # Lower threshold for initial screening
+                # Check if this row looks like financial table headers
+                row_text = ' '.join(str(cell) for cell in row if pd.notna(cell)).lower()
+                financial_indicators = [
+                    'prem', 'group', 'agent', 'plan', 'tier', 'lives', 'rate', 'total',
+                    'commission', 'invoice', 'billed', 'amount', 'client', 'company'
+                ]
+                
+                financial_score = sum(1 for indicator in financial_indicators if indicator in row_text)
+                if financial_score >= 3:  # At least 3 financial indicators
+                    confidence += 0.3
+                
+                # Check for proper header structure (not all empty, not all same value)
+                non_empty_cells = [str(cell).strip() for cell in row if pd.notna(cell) and str(cell).strip()]
+                if len(non_empty_cells) >= 3 and len(set(non_empty_cells)) > 1:
+                    confidence += 0.2
+            
+            if confidence > best_confidence:
+                best_confidence = confidence
+                best_row_idx = row_idx
+                
+                # Create headers from this row
+                headers = []
+                for i, cell in enumerate(row):
+                    if pd.notna(cell) and str(cell).strip():
+                        headers.append(str(cell).strip())
+                    else:
+                        headers.append(f"Column_{i+1}")
+                best_headers = headers
+        
+        # If we found good headers, use them
+        if best_headers and best_confidence > 0.4:  # Good headers found in current file
+            return best_headers, best_row_idx + 1, "structured"
+        else:
+            # No good headers found in current file - check for learned headers
+            if company_id:
+                learned_headers = self._get_learned_headers(table_df, company_id)
+                if learned_headers:
+                    self.logger.info(f"🎯 Excel: No good headers found in current file, using learned headers: {learned_headers}")
+                    return learned_headers, 0, "learned"
+            
+            # Fallback to generic headers
+            headers = [f"Column_{i+1}" for i in range(cols)]
+            return headers, 0, "unstructured"
+    
+    def _get_learned_headers(self, table_df: pd.DataFrame, company_id: str) -> Optional[List[str]]:
+        """
+        Get learned headers for this table structure if available.
+        Returns None if no learned headers are found or if they don't match.
+        """
+        try:
+            # Analyze the current table structure
+            rows, cols = table_df.shape
+            table_structure = {
+                "column_count": cols,
+                "row_count": rows,
+                "has_header_row": False  # We're looking for learned headers because current file has poor headers
+            }
+            
+            # Get the first few rows to analyze the data pattern
+            sample_headers = []
+            for i in range(min(3, rows)):
+                row = table_df.iloc[i]
+                row_headers = [str(cell).strip() if pd.notna(cell) and str(cell).strip() else f"Column_{j+1}" 
+                              for j, cell in enumerate(row)]
+                sample_headers.append(row_headers)
+            
+            # Use the most common pattern as the "current" headers for comparison
+            current_headers = sample_headers[0] if sample_headers else [f"Column_{i+1}" for i in range(cols)]
+            
+            # Import here to avoid circular imports
+            from app.services.format_learning_service import FormatLearningService
+            format_learning_service = FormatLearningService()
+            
+            # Find matching format
+            learned_format, match_score = format_learning_service.find_matching_format_sync(
+                company_id=company_id,
+                headers=current_headers,
+                table_structure=table_structure
+            )
+            
+            if learned_format and match_score > 0.5:
+                learned_headers = learned_format.get('headers', [])
+                if learned_headers and len(learned_headers) == cols:
+                    self.logger.info(f"🎯 Excel: Found learned headers with {match_score:.2f} match score: {learned_headers}")
+                    return learned_headers
+            
+            return None
+            
+        except Exception as e:
+            self.logger.error(f"Error getting learned headers: {str(e)}")
+            return None
+    
     def _find_table_end(self, df: pd.DataFrame, start_row: int) -> int:
         """Find the end row of a table starting from start_row."""
         rows, cols = df.shape
@@ -509,21 +622,11 @@ class ExcelExtractionService:
             # Extract the table data
             table_df = df.iloc[start_row:end_row, start_col:end_col].copy()
             
-            # Determine if first row is header
-            first_row = table_df.iloc[0]
-            header_confidence = self._assess_header_confidence(first_row)
+            # Smart header detection - look for headers in multiple rows
+            headers, data_start_row, table_type = self._find_best_headers(table_df, company_id=self.company_id)
             
-            if header_confidence > self.header_confidence_threshold:
-                # Use first row as header
-                headers = [str(cell) if pd.notna(cell) else f"Column_{i+1}" 
-                          for i, cell in enumerate(first_row)]
-                data_rows = table_df.iloc[1:].values.tolist()
-                table_type = "structured"
-            else:
-                # Generate headers
-                headers = [f"Column_{i+1}" for i in range(len(first_row))]
-                data_rows = table_df.values.tolist()
-                table_type = "unstructured"
+            # Extract data rows starting from the detected header row
+            data_rows = table_df.iloc[data_start_row:].values.tolist()
             
             # Clean data
             cleaned_data = []
@@ -543,7 +646,7 @@ class ExcelExtractionService:
             # Create metadata
             metadata = {
                 "table_type": table_type,
-                "has_headers": header_confidence > self.header_confidence_threshold,
+                "has_headers": table_type == "structured",
                 "data_density": self._calculate_data_density(table_df),
                 "financial_data_present": self._has_financial_data(cleaned_data),
                 "row_count": len(cleaned_data),

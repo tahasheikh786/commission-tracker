@@ -97,7 +97,7 @@ export function useUploadPage() {
 
   // Fetch saved mapping for the company when tables are available
   useEffect(() => {
-    if (uploaded?.tables?.length && company && !fetchingMapping) {
+    if (uploaded?.tables?.length && company && !fetchingMapping && databaseFields.length > 0) {
       if (!fetchMappingRef.current) {
         fetchMappingRef.current = true
         setFetchingMapping(true)
@@ -120,41 +120,53 @@ export function useUploadPage() {
         })
         .then(r => r.json())
         .then(learnedData => {
+          let learnedMapping = null
+          let learnedMappingApplied = false
+          
           if (learnedData.found_match && learnedData.field_mapping && Object.keys(learnedData.field_mapping).length > 0) {
-            // Use the learned field mapping
-            setMapping(learnedData.field_mapping)
+            // Store the learned field mapping to preserve it
+            learnedMapping = learnedData.field_mapping
+            learnedMappingApplied = true
             setMappingAutoApplied(true)
             toast.success(`Applied learned field mapping (${Math.round(learnedData.match_score * 100)}% match)!`)
-            
-            // Also fetch the general company mapping for field config and plan types
-            return fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${company.id}/mapping/`)
-          } else {
-            // If no learned mapping, fetch the general company mapping
-            return fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${company.id}/mapping/`)
-          }
-        })
-        .then(r => r.json())
-        .then(map => {
-          let fieldsArr = fieldConfig
-          let loadedPlanTypes: string[] | null = null
-          let loadedTableNames: string[] | null = null
-          
-          if (map && typeof map === 'object') {
-            if (map.field_config && Array.isArray(map.field_config) && map.field_config.length > 0) {
-              fieldsArr = map.field_config
-            } else if (map.mapping && Object.keys(map.mapping).length > 0) {
-              fieldsArr = Object.keys(map.mapping).map(field => ({
-                field,
-                label: getLabelFromDatabaseFields(field)
-              }))
-            }
-            if (map.plan_types) loadedPlanTypes = map.plan_types
-            if (map.table_names) loadedTableNames = map.table_names
           }
           
-          setFieldConfig(fieldsArr)
-          if (loadedPlanTypes) setPlanTypes(loadedPlanTypes)
-          setFetchingMapping(false)
+          // Always fetch the general company mapping for field config and plan types
+          return fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${company.id}/mapping/`)
+            .then(r => r.json())
+            .then(map => {
+              let fieldsArr = fieldConfig
+              let loadedPlanTypes: string[] | null = null
+              let loadedTableNames: string[] | null = null
+              let finalMapping = learnedMapping // Start with learned mapping if available
+              
+              if (map && typeof map === 'object') {
+                if (map.field_config && Array.isArray(map.field_config) && map.field_config.length > 0) {
+                  fieldsArr = map.field_config
+                } else if (map.mapping && Object.keys(map.mapping).length > 0) {
+                  fieldsArr = Object.keys(map.mapping).map(field => ({
+                    field,
+                    label: getLabelFromDatabaseFields(field)
+                  }))
+                }
+                if (map.plan_types) loadedPlanTypes = map.plan_types
+                if (map.table_names) loadedTableNames = map.table_names
+                
+                // If no learned mapping was found, use the general company mapping
+                if (!learnedMappingApplied && map.mapping && Object.keys(map.mapping).length > 0) {
+                  finalMapping = map.mapping
+                }
+              }
+              
+              // Set the final mapping (learned mapping takes precedence)
+              if (finalMapping) {
+                setMapping(finalMapping)
+              }
+              
+              setFieldConfig(fieldsArr)
+              if (loadedPlanTypes) setPlanTypes(loadedPlanTypes)
+              setFetchingMapping(false)
+            })
         })
         .catch((error) => {
           console.error('❌ Error fetching mappings:', error)
@@ -162,7 +174,7 @@ export function useUploadPage() {
         })
       }
     }
-  }, [uploaded?.tables, company, fetchingMapping, fieldConfig, databaseFields, getLabelFromDatabaseFields])
+  }, [uploaded?.tables, company, databaseFields])
 
   // Fetch database fields from backend
   useEffect(() => {
@@ -177,10 +189,6 @@ export function useUploadPage() {
             label: field.display_name
           }))
           setDatabaseFields(fieldsFromBackend)
-          
-          if (fieldConfig.length === 0) {
-            setFieldConfig([])
-          }
         } else {
           console.error('Failed to fetch database fields')
           toast.error('Failed to load database fields')
@@ -196,7 +204,7 @@ export function useUploadPage() {
     if (databaseFields.length === 0) {
       fetchDatabaseFields()
     }
-  }, [databaseFields.length, fieldConfig.length])
+  }, [databaseFields.length])
 
   // Handle URL parameters for resuming files and check for active sessions
   const handleResumeFile = useCallback(async (fileId: string, stepParam?: string | null) => {

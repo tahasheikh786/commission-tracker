@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import toast from 'react-hot-toast'
 import { X, Plus, GripVertical, Calendar } from 'lucide-react'
 import Loader from './Loader';
@@ -22,25 +22,6 @@ import { CSS } from '@dnd-kit/utilities'
 
 // NOTE: initialFields and initialMapping must be preprocessed as in EditMappingModal.
 // initialMapping should be { field: column }, and initialFields should be [{ field, label }], with pretty labels from STANDARD_FIELDS if available.
-function fuzzyMatch(a: string | undefined, b: string | undefined) {
-  // Handle undefined or null values
-  if (!a || !b) return false;
-  
-  const aClean = a.toLowerCase().replace(/[^a-z]/g, '')
-  const bClean = b.toLowerCase().replace(/[^a-z]/g, '')
-  
-  // Exact match (highest priority)
-  if (aClean === bClean) return true
-  
-  // Contains match (lower priority)
-  if (aClean.includes(bClean) || bClean.includes(aClean)) {
-    // Only allow contains match if the difference is small (to avoid false positives)
-    const lengthDiff = Math.abs(aClean.length - bClean.length)
-    return lengthDiff <= 3 // Only allow small differences
-  }
-  
-  return false
-}
 
 type FieldConf = { field: string, label: string }
 
@@ -127,7 +108,13 @@ export default function FieldMapper({
   const [availablePlanTypes, setAvailablePlanTypes] = useState<PlanType[]>([])
   const [loadingPlanTypes, setLoadingPlanTypes] = useState(true)
   const [learnedMapping, setLearnedMapping] = useState<Record<string, string> | null>(null)
-  const [mappingSource, setMappingSource] = useState<'manual' | 'learned' | 'fuzzy'>('manual')
+  const [mappingSource, setMappingSource] = useState<'manual' | 'learned'>('manual')
+  const mappingAppliedRef = useRef(false)
+
+  // Reset mapping applied ref when initialMapping changes (new file uploaded)
+  useEffect(() => {
+    mappingAppliedRef.current = false
+  }, [initialMapping])
 
   // Add effect to handle initialMapping changes
   useEffect(() => {
@@ -264,56 +251,41 @@ export default function FieldMapper({
   }, [databaseFields, fields.length, initialFields])
 
   useEffect(() => {
+    // Prevent multiple runs if mapping has already been applied
+    if (mappingAppliedRef.current) {
+      return
+    }
+    
     if (initialMapping && Object.keys(initialMapping).length > 0) {
       console.log('🎯 FieldMapper: Setting mapping from initialMapping:', initialMapping)
       setMapping(initialMapping)
       setMappingSource('learned') // Mark as learned since it came from backend
-      return // Exit early, don't run fuzzy matching
+      mappingAppliedRef.current = true
     } else if (learnedMapping && Object.keys(learnedMapping).length > 0 && mappingSource === 'learned') {
       // Keep the learned mapping if it was already set
       setMapping(learnedMapping)
-      return // Exit early, don't run fuzzy matching
-    } else if (columns && columns.length > 0 && fields && fields.length > 0) {
-      // Enable fuzzy matching for auto-mapping only if no valid mapping exists
-      const map: Record<string, string> = {}
-      const usedColumns = new Set<string>() // Track used columns to prevent duplicates
-      
-      for (const f of fields) {
-        // Skip if field is missing required properties or has invalid field key
-        if (!f.field || !f.label || f.field === 'undefined') continue;
-        
-        let found = columns.find(col => col && fuzzyMatch(col, f.label) && !usedColumns.has(col))
-        if (!found) {
-          found = columns.find(col => col && fuzzyMatch(col, f.field) && !usedColumns.has(col))
-        }
-        if (found) {
-          map[f.field] = found
-          usedColumns.add(found) // Mark this column as used
-        }
-      }
-      
-      if (Object.keys(map).length > 0) {
-        setMapping(map)
-        setMappingSource('fuzzy')
-        toast.success('Fields auto-mapped using fuzzy matching!')
-      }
+      mappingAppliedRef.current = true
     }
-  }, [initialMapping, learnedMapping, mappingSource, columns, fields]) // Add columns and fields back to dependencies
+    // No fuzzy matching - users must manually map fields if no saved mapping exists
+  }, [initialMapping, learnedMapping, mappingSource])
 
   function setFieldMap(field: string, col: string) {
     setMapping(prevMapping => {
       const newMapping = { ...prevMapping, [field]: col }
       return newMapping
     })
+    setMappingSource('manual') // Mark as manually changed
   }
 
   function resetMapping() {
     setMapping({})
     setFields([])
+    setMappingSource('manual')
   }
 
   function clearMapping() {
     setMapping({})
+    setMappingSource('manual')
   }
 
   async function handleAddDatabaseField() {
@@ -476,12 +448,6 @@ export default function FieldMapper({
                   Auto-mapped from learned format
                 </div>
               )}
-              {mappingSource === 'fuzzy' && (
-                <div className="flex items-center gap-2 px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
-                  <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
-                  Auto-mapped using fuzzy matching
-                </div>
-              )}
             </div>
           )}
         </div>
@@ -633,13 +599,27 @@ export default function FieldMapper({
                                       <select
                                         key={`select-${f.field}`}
                                         className="border border-gray-300 rounded-md px-3 py-2 w-full min-w-[140px] text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                        style={mapping[f.field] ? { backgroundColor: '#f3f4f6', color: '#6b7280' } : {}}
                                         value={mapping[f.field] || ""}
                                         onChange={e => setFieldMap(f.field, e.target.value)}
                                       >
                                         <option value="">Select column...</option>
-                                        {allDropdownColumns.map(col => (
-                                          <option key={col} value={col}>{col}</option>
-                                        ))}
+                                        {allDropdownColumns.map(col => {
+                                          // Check if this column is already mapped to another field
+                                          const isMappedElsewhere = Object.entries(mapping).some(([fieldKey, mappedCol]) => 
+                                            fieldKey !== f.field && mappedCol === col
+                                          )
+                                          
+                                          return (
+                                            <option 
+                                              key={col} 
+                                              value={col}
+                                              style={isMappedElsewhere ? { backgroundColor: '#f3f4f6', color: '#6b7280' } : {}}
+                                            >
+                                              {col}
+                                            </option>
+                                          )
+                                        })}
                                       </select>
                                       {/* Show auto-fill indicator for Invoice Total fields */}
                                       {(f.label.toLowerCase().includes('invoice total') || 

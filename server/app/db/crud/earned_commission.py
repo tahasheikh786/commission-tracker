@@ -8,6 +8,7 @@ from uuid import UUID
 from typing import Optional, List, Dict, Any
 import asyncio
 import time
+from decimal import Decimal
 from ...services.company_name_service import CompanyNameDetectionService
 
 # Create a global instance of the company name service for cleaning
@@ -793,9 +794,12 @@ async def remove_upload_from_earned_commissions(db: AsyncSession, upload_id: str
                     if deleted_contribution:
                         print(f"🎯 Remove Upload: Subtracting deleted contribution for {commission.client_name}: invoice=${deleted_contribution['invoice_total']}, commission=${deleted_contribution['commission_earned']}")
                         
-                        # Subtract from totals
-                        commission.invoice_total = max(0, (commission.invoice_total or 0) - deleted_contribution['invoice_total'])
-                        commission.commission_earned = max(0, (commission.commission_earned or 0) - deleted_contribution['commission_earned'])
+                        # Subtract from totals - convert float to Decimal to avoid type mismatch
+                        deleted_invoice = Decimal(str(deleted_contribution['invoice_total']))
+                        deleted_commission = Decimal(str(deleted_contribution['commission_earned']))
+                        
+                        commission.invoice_total = max(Decimal('0'), (commission.invoice_total or Decimal('0')) - deleted_invoice)
+                        commission.commission_earned = max(Decimal('0'), (commission.commission_earned or Decimal('0')) - deleted_commission)
                         commission.statement_count = max(0, (commission.statement_count or 0) - 1)
                         
                         # Subtract from monthly breakdown if we know the month
@@ -808,8 +812,8 @@ async def remove_upload_from_earned_commissions(db: AsyncSession, upload_id: str
                             }
                             
                             if deleted_month in month_columns:
-                                current_month_value = getattr(commission, month_columns[deleted_month]) or 0
-                                new_month_value = max(0, current_month_value - deleted_contribution['commission_earned'])
+                                current_month_value = getattr(commission, month_columns[deleted_month]) or Decimal('0')
+                                new_month_value = max(Decimal('0'), current_month_value - deleted_commission)
                                 setattr(commission, month_columns[deleted_month], new_month_value)
                                 print(f"🎯 Remove Upload: Subtracted ${deleted_contribution['commission_earned']} from {month_columns[deleted_month]} for {commission.client_name}")
                         
