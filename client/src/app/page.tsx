@@ -1,16 +1,20 @@
 'use client'
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useAuth } from "@/context/AuthContext";
+import ProtectedRoute from "@/components/ProtectedRoute";
 import DashboardTab from "./components/dashboardTab/DashboardTab";
 import CarrierTab from "./components/carrierTab/CarrierTab";
 import EarnedCommissionTab from "./components/dashboardTab/EarnedCommissionTab";
 
-import { Database, BarChart3, DollarSign, ChevronRight } from "lucide-react";
+import { Database, BarChart3, DollarSign, Settings, LogOut, ChevronDown } from "lucide-react";
 
 function HomePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { user, logout } = useAuth();
   const [tab, setTab] = useState<"dashboard" | "carriers" | "earned-commission">("dashboard");
+  const [showUserDropdown, setShowUserDropdown] = useState(false);
 
   // Handle URL parameters for tab selection
   useEffect(() => {
@@ -22,6 +26,23 @@ function HomePageContent() {
       setTab("dashboard")
     }
   }, [searchParams])
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (showUserDropdown) {
+        setShowUserDropdown(false);
+      }
+    };
+
+    if (showUserDropdown) {
+      document.addEventListener('click', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
+    };
+  }, [showUserDropdown])
 
   const tabConfig = [
     {
@@ -70,6 +91,67 @@ function HomePageContent() {
                 </h1>
                 <p className="text-sm text-slate-500 font-medium">Professional Commission Management</p>
               </div>
+            </div>
+
+            {/* User Avatar with Dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setShowUserDropdown(!showUserDropdown)}
+                className="flex items-center gap-3 p-2 rounded-full hover:bg-slate-100/80 transition-all duration-200 group"
+              >
+                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-semibold shadow-lg">
+                  {user?.first_name?.[0] || user?.email?.[0]?.toUpperCase() || 'U'}
+                </div>
+                <div className="text-left hidden sm:block">
+                  <p className="text-sm font-medium text-slate-700">
+                    {user?.first_name && user?.last_name 
+                      ? `${user.first_name} ${user.last_name}`
+                      : user?.email
+                    }
+                  </p>
+                  <p className="text-xs text-slate-500 capitalize">{user?.role}</p>
+                </div>
+                <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform duration-200 ${showUserDropdown ? 'rotate-180' : ''}`} />
+              </button>
+
+              {/* Dropdown Menu */}
+              {showUserDropdown && (
+                <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-xl border border-slate-200/60 backdrop-blur-xl z-50">
+                  <div className="p-4 border-b border-slate-100">
+                    <p className="font-medium text-slate-900">
+                      {user?.first_name && user?.last_name 
+                        ? `${user.first_name} ${user.last_name}`
+                        : user?.email
+                      }
+                    </p>
+                    <p className="text-sm text-slate-500 capitalize">{user?.role}</p>
+                  </div>
+                  <div className="p-2">
+                    {user?.role === 'admin' && (
+                      <button
+                        onClick={() => {
+                          router.push('/admin/dashboard');
+                          setShowUserDropdown(false);
+                        }}
+                        className="w-full flex items-center gap-3 px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 rounded-lg transition-colors duration-200"
+                      >
+                        <Settings className="w-4 h-4" />
+                        Admin Dashboard
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        logout();
+                        setShowUserDropdown(false);
+                      }}
+                      className="w-full flex items-center gap-3 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors duration-200"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      Logout
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Enhanced Navigation Tabs */}
@@ -121,20 +203,22 @@ function HomePageContent() {
 
 export default function HomePage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-100/50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="relative">
-            <div className="w-16 h-16 bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg animate-pulse">
-              <Database className="text-white" size={32} />
+    <ProtectedRoute requireAuth={true}>
+      <Suspense fallback={
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-100/50 flex items-center justify-center">
+          <div className="text-center">
+            <div className="relative">
+              <div className="w-16 h-16 bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg animate-pulse">
+                <Database className="text-white" size={32} />
+              </div>
+              <div className="absolute -top-2 -right-2 w-6 h-6 bg-gradient-to-r from-emerald-400 to-teal-400 rounded-full animate-ping"></div>
             </div>
-            <div className="absolute -top-2 -right-2 w-6 h-6 bg-gradient-to-r from-emerald-400 to-teal-400 rounded-full animate-ping"></div>
+            <p className="mt-6 text-slate-600 font-medium">Loading Commission Tracker...</p>
           </div>
-          <p className="mt-6 text-slate-600 font-medium">Loading Commission Tracker...</p>
         </div>
-      </div>
-    }>
-      <HomePageContent />
-    </Suspense>
+      }>
+        <HomePageContent />
+      </Suspense>
+    </ProtectedRoute>
   );
 }

@@ -214,3 +214,39 @@ class SummaryRowPattern(Base):
     __table_args__ = (
         UniqueConstraint('company_id', 'pattern_name', name='uq_summary_row_pattern'),
     )
+
+# Authentication and User Management Models
+class User(Base):
+    __tablename__ = 'users'
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    email = Column(String, unique=True, nullable=False, index=True)
+    password_hash = Column(String, nullable=True)  # Nullable for first-time admin login
+    first_name = Column(String, nullable=True)
+    last_name = Column(String, nullable=True)
+    role = Column(String, nullable=False, default='user')  # admin, user, read_only
+    is_active = Column(Integer, default=1)  # 1 for active, 0 for inactive
+    is_verified = Column(Integer, default=0)  # 1 for verified, 0 for unverified
+    company_id = Column(UUID(as_uuid=True), ForeignKey('companies.id'), nullable=True)
+    last_login = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, server_default=text('now()'), nullable=False)
+    updated_at = Column(DateTime, server_default=text('now()'), onupdate=text('now()'), nullable=False)
+
+class AllowedDomain(Base):
+    __tablename__ = 'allowed_domains'
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    domain = Column(String, unique=True, nullable=False, index=True)
+    company_id = Column(UUID(as_uuid=True), ForeignKey('companies.id'), nullable=True)
+    is_active = Column(Integer, default=1)  # 1 for active, 0 for inactive
+    created_by = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False)
+    created_at = Column(DateTime, server_default=text('now()'), nullable=False)
+    updated_at = Column(DateTime, server_default=text('now()'), onupdate=text('now()'), nullable=False)
+
+class UserSession(Base):
+    __tablename__ = 'user_sessions'
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False)
+    session_token = Column(String, unique=True, nullable=False, index=True)
+    expires_at = Column(DateTime, nullable=False)
+    is_active = Column(Integer, default=1)  # 1 for active, 0 for inactive
+    created_at = Column(DateTime, server_default=text('now()'), nullable=False)
+    last_accessed = Column(DateTime, server_default=text('now()'), nullable=False)

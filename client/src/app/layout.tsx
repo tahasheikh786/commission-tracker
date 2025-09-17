@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { SubmissionProvider } from "@/context/SubmissionContext";
+import { AuthProvider } from "@/context/AuthContext";
 import { Toaster } from "@/app/toast";
 
 // import Providers from "./providers";
@@ -32,9 +33,11 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <SubmissionProvider>
-          {children}
-        </SubmissionProvider>
+        <AuthProvider>
+          <SubmissionProvider>
+            {children}
+          </SubmissionProvider>
+        </AuthProvider>
         <Toaster />
       </body>
     </html>
