@@ -28,7 +28,7 @@ pdf2image>=1.16.0,<2.0.0
 
 # Environment and data handling
 python-dotenv>=1.0.0
-pydantic>=2.6.0,<3.0.0
+pydantic[email]>=2.6.0,<3.0.0
 python-multipart>=0.0.6,<1.0.0
 
 # Image processing - Pin scikit-image to version with Python 3.11 wheels
