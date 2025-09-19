@@ -14,7 +14,7 @@ import os
 import shutil
 from datetime import datetime
 from uuid import uuid4
-from app.services.s3_utils import upload_file_to_s3, get_s3_file_url, download_file_from_s3
+from app.services.gcs_utils import upload_file_to_gcs, get_gcs_file_url, download_file_from_gcs
 import logging
 import asyncio
 from typing import Optional, Dict, Any
@@ -169,12 +169,12 @@ async def extract_tables_advanced(
             os.remove(file_path)
             raise HTTPException(status_code=404, detail="Company not found")
 
-        # Upload to S3
-        s3_key = f"statements/{company_id}/{file.filename}"
-        uploaded = upload_file_to_s3(file_path, s3_key)
+        # Upload to GCS
+        gcs_key = f"statements/{company_id}/{file.filename}"
+        uploaded = upload_file_to_gcs(file_path, gcs_key)
         if not uploaded:
-            raise HTTPException(status_code=500, detail="Failed to upload file to S3.")
-        s3_url = get_s3_file_url(s3_key)
+            raise HTTPException(status_code=500, detail="Failed to upload file to GCS.")
+        gcs_url = get_gcs_file_url(gcs_key)
 
         # Get the new extraction service
         extraction_service = await get_new_extraction_service_instance()
@@ -242,14 +242,14 @@ async def extract_tables_advanced(
         extraction_time = (datetime.now() - start_time).total_seconds()
         client_response["extraction_time_seconds"] = extraction_time
         client_response["extraction_method"] = "new_advanced_pipeline"
-        client_response["s3_url"] = s3_url
+        client_response["gcs_url"] = gcs_url
         
         # Save extraction record to database
         extraction_record = schemas.ExtractionRecord(
             id=str(uuid4()),
             company_id=company_id,
             filename=file.filename,
-            s3_key=s3_key,
+            gcs_key=gcs_key,
             extraction_method="new_advanced_pipeline",
             processing_time=extraction_time,
             tables_found=len(extraction_result.get("tables", [])),
@@ -450,12 +450,12 @@ async def extract_tables_smart(
             os.remove(file_path)
             raise HTTPException(status_code=404, detail="Company not found")
 
-        # Upload to S3
-        s3_key = f"statements/{company_id}/{file.filename}"
-        uploaded = upload_file_to_s3(file_path, s3_key)
+        # Upload to GCS
+        gcs_key = f"statements/{company_id}/{file.filename}"
+        uploaded = upload_file_to_gcs(file_path, gcs_key)
         if not uploaded:
-            raise HTTPException(status_code=500, detail="Failed to upload file to S3.")
-        s3_url = get_s3_file_url(s3_key)
+            raise HTTPException(status_code=500, detail="Failed to upload file to GCS.")
+        gcs_url = get_gcs_file_url(gcs_key)
 
         # Detect PDF type and page count for automatic routing
         from app.services.extraction_utils import detect_pdf_type, get_pdf_page_count
@@ -711,7 +711,7 @@ async def extract_tables_smart(
         db_upload = schemas.StatementUpload(
             id=upload_id,
             company_id=company_id,
-            file_name=s3_key,
+            file_name=gcs_key,
             uploaded_at=datetime.utcnow(),
             status="extracted",
             current_step="extracted",
@@ -730,8 +730,8 @@ async def extract_tables_smart(
             "success": True,
             "extraction_id": str(upload_id),
             "upload_id": str(upload_id),
-            "s3_url": s3_url,
-            "s3_key": s3_key
+            "gcs_url": gcs_url,
+            "gcs_key": gcs_key
         })
         
         return client_response
@@ -768,19 +768,19 @@ async def extract_tables_gpt(
         if not upload_info:
             raise HTTPException(status_code=404, detail="Upload not found")
         
-        # Get PDF file from S3
-        s3_key = upload_info.file_name
-        logger.info(f"Using S3 key: {s3_key}")
+        # Get PDF file from GCS
+        gcs_key = upload_info.file_name
+        logger.info(f"Using GCS key: {gcs_key}")
         
-        # Download PDF from S3 to temporary file
-        temp_pdf_path = download_file_from_s3(s3_key)
+        # Download PDF from GCS to temporary file
+        temp_pdf_path = download_file_from_gcs(gcs_key)
         if not temp_pdf_path:
             raise HTTPException(
                 status_code=404, 
-                detail=f"Failed to download PDF from S3: {s3_key}"
+                detail=f"Failed to download PDF from GCS: {gcs_key}"
             )
         
-        logger.info(f"Processing PDF: {temp_pdf_path} (downloaded from S3)")
+        logger.info(f"Processing PDF: {temp_pdf_path} (downloaded from GCS)")
         
         # Use the GPT-5 Vision service for extraction
         from app.services.gpt4o_vision_service import GPT4oVisionService
@@ -1053,8 +1053,8 @@ async def extract_tables_gpt(
                 "processing_notes": "GPT-5 Vision table extraction",
                 "format_accuracy": "≥95%"
             },
-            "s3_key": upload_info.file_name,
-            "s3_url": f"https://text-extraction-pdf.s3.us-east-1.amazonaws.com/{upload_info.file_name}",
+            "gcs_key": upload_info.file_name,
+            "gcs_url": f"https://text-extraction-pdf.s3.us-east-1.amazonaws.com/{upload_info.file_name}",
             "file_name": upload_info.file_name.split('/')[-1] if '/' in upload_info.file_name else upload_info.file_name,
             "timestamp": datetime.now().isoformat(),
             "format_learning": format_learning_data
@@ -1093,19 +1093,19 @@ async def extract_tables_google_docai(
         if not upload_info:
             raise HTTPException(status_code=404, detail="Upload not found")
         
-        # Get PDF file from S3
-        s3_key = upload_info.file_name
-        logger.info(f"Using S3 key: {s3_key}")
+        # Get PDF file from GCS
+        gcs_key = upload_info.file_name
+        logger.info(f"Using GCS key: {gcs_key}")
         
-        # Download PDF from S3 to temporary file
-        temp_pdf_path = download_file_from_s3(s3_key)
+        # Download PDF from GCS to temporary file
+        temp_pdf_path = download_file_from_gcs(gcs_key)
         if not temp_pdf_path:
             raise HTTPException(
                 status_code=404, 
-                detail=f"Failed to download PDF from S3: {s3_key}"
+                detail=f"Failed to download PDF from GCS: {gcs_key}"
             )
         
-        logger.info(f"Processing PDF: {temp_pdf_path} (downloaded from S3)")
+        logger.info(f"Processing PDF: {temp_pdf_path} (downloaded from GCS)")
         
         # Use Google DOC AI extractor
         from app.services.extractor_google_docai import GoogleDocAIExtractor
@@ -1288,8 +1288,8 @@ async def extract_tables_google_docai(
                 "processing_notes": "Google Document AI table extraction",
                 "format_accuracy": "≥80%"
             },
-            "s3_key": upload_info.file_name,
-            "s3_url": f"https://text-extraction-pdf.s3.us-east-1.amazonaws.com/{upload_info.file_name}",
+            "gcs_key": upload_info.file_name,
+            "gcs_url": f"https://text-extraction-pdf.s3.us-east-1.amazonaws.com/{upload_info.file_name}",
             "file_name": upload_info.file_name.split('/')[-1] if '/' in upload_info.file_name else upload_info.file_name,
             "timestamp": datetime.now().isoformat(),
             "format_learning": format_learning_data
@@ -1329,19 +1329,19 @@ async def extract_tables_gpt_enhanced(
         if not upload_info:
             raise HTTPException(status_code=404, detail="Upload not found")
         
-        # Get PDF file from S3
-        s3_key = upload_info.file_name
-        logger.info(f"Using S3 key: {s3_key}")
+        # Get PDF file from GCS
+        gcs_key = upload_info.file_name
+        logger.info(f"Using GCS key: {gcs_key}")
         
-        # Download PDF from S3 to temporary file
-        temp_pdf_path = download_file_from_s3(s3_key)
+        # Download PDF from GCS to temporary file
+        temp_pdf_path = download_file_from_gcs(gcs_key)
         if not temp_pdf_path:
             raise HTTPException(
                 status_code=404, 
-                detail=f"Failed to download PDF from S3: {s3_key}"
+                detail=f"Failed to download PDF from GCS: {gcs_key}"
             )
         
-        logger.info(f"Processing PDF: {temp_pdf_path} (downloaded from S3)")
+        logger.info(f"Processing PDF: {temp_pdf_path} (downloaded from GCS)")
         
         # Use the GPT-5 Vision service for enhanced extraction
         from app.services.gpt4o_vision_service import GPT4oVisionService

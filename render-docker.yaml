@@ -12,14 +12,8 @@ services:
         sync: false
       - key: SUPABASE_DB_KEY
         sync: false
-      - key: AWS_ACCESS_KEY_ID
-        sync: false
-      - key: AWS_SECRET_ACCESS_KEY
-        sync: false
-      - key: AWS_REGION
-        value: us-east-1
-      - key: S3_BUCKET_NAME
-        sync: false
+      - key: GCS_BUCKET_NAME
+        value: pdf_extraction_files_saver
       - key: GOOGLE_CLOUD_PROJECT_ID
         value: pdf-tables-extractor-465009
       - key: GOOGLE_DOCAI_PROCESSOR_ID

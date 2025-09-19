@@ -14,7 +14,7 @@ import os
 import shutil
 from datetime import datetime
 from uuid import uuid4
-from app.services.s3_utils import upload_file_to_s3, get_s3_file_url, download_file_from_s3
+from app.services.gcs_utils import upload_file_to_gcs, get_gcs_file_url, download_file_from_gcs
 import logging
 import asyncio
 from typing import Optional, Dict, Any, List
@@ -87,12 +87,12 @@ async def extract_tables_excel(
             os.remove(file_path)
             raise HTTPException(status_code=404, detail="Company not found")
 
-        # Upload to S3
-        s3_key = f"statements/{company_id}/{file.filename}"
-        uploaded = upload_file_to_s3(file_path, s3_key)
+        # Upload to GCS
+        gcs_key = f"statements/{company_id}/{file.filename}"
+        uploaded = upload_file_to_gcs(file_path, gcs_key)
         if not uploaded:
-            raise HTTPException(status_code=500, detail="Failed to upload file to S3.")
-        s3_url = get_s3_file_url(s3_key)
+            raise HTTPException(status_code=500, detail="Failed to upload file to GCS.")
+        gcs_url = get_gcs_file_url(gcs_key)
 
         # Get Excel extraction service
         excel_service = await get_excel_extraction_service_instance(company_id=company_id)
@@ -118,7 +118,7 @@ async def extract_tables_excel(
         db_upload = schemas.StatementUpload(
             id=upload_id,
             company_id=company_id,
-            file_name=s3_key,
+            file_name=gcs_key,
             uploaded_at=datetime.utcnow(),
             status="extracted",
             current_step="extracted",
@@ -270,8 +270,8 @@ async def extract_tables_excel(
             "upload_id": str(upload_id),
             "extraction_id": str(uuid.uuid4()),
             "company_id": company_id,
-            "s3_url": s3_url,
-            "s3_key": s3_key,  # Add S3 key for consistency with PDF flow
+            "gcs_url": gcs_url,
+            "gcs_key": gcs_key,  # Add GCS key for consistency with PDF flow
             "file_type": "excel",
             "extraction_method": "excel_extraction",
             "format_learning": format_learning_data
@@ -555,13 +555,13 @@ async def get_excel_sheet_info(
         if not company:
             raise HTTPException(status_code=404, detail="Company not found")
         
-        # Construct S3 key
-        s3_key = f"statements/{company_id}/{file_name}"
+        # Construct GCS key
+        gcs_key = f"statements/{company_id}/{file_name}"
         
-        # Download file from S3
-        local_path = download_file_from_s3(s3_key)
+        # Download file from GCS
+        local_path = download_file_from_gcs(gcs_key)
         if not local_path:
-            raise HTTPException(status_code=404, detail="File not found in S3")
+            raise HTTPException(status_code=404, detail="File not found in GCS")
         
         try:
             # Get sheet information
@@ -620,10 +620,10 @@ async def extract_tables_excel_s3(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Extract tables from Excel file stored in S3.
+    Extract tables from Excel file stored in GCS.
     """
     start_time = datetime.now()
-    logger.info(f"Starting Excel extraction from S3 for {file_name}")
+    logger.info(f"Starting Excel extraction from GCS for {file_name}")
     
     try:
         # Get company info
@@ -631,11 +631,11 @@ async def extract_tables_excel_s3(
         if not company:
             raise HTTPException(status_code=404, detail="Company not found")
         
-        # Construct S3 key and download file
-        s3_key = f"statements/{company_id}/{file_name}"
-        local_path = download_file_from_s3(s3_key)
+        # Construct GCS key and download file
+        gcs_key = f"statements/{company_id}/{file_name}"
+        local_path = download_file_from_gcs(gcs_key)
         if not local_path:
-            raise HTTPException(status_code=404, detail="File not found in S3")
+            raise HTTPException(status_code=404, detail="File not found in GCS")
         
         try:
             # Get Excel extraction service
@@ -662,7 +662,7 @@ async def extract_tables_excel_s3(
             db_upload = schemas.StatementUpload(
                 id=upload_id,
                 company_id=company_id,
-                file_name=s3_key,
+                file_name=gcs_key,
                 uploaded_at=datetime.utcnow(),
                 status="extracted",
                 current_step="extracted",
@@ -703,21 +703,21 @@ async def extract_tables_excel_s3(
                     )
                     
                     if learned_format and match_score > 0.5:
-                        logger.info(f"🎯 Excel S3: Found matching format with score {match_score}")
+                        logger.info(f"🎯 Excel GCS: Found matching format with score {match_score}")
                         
                         # Apply table editor settings if available (same logic as PDF flow)
                         if learned_format.get("table_editor_settings"):
                             table_editor_settings = learned_format["table_editor_settings"]
-                            logger.info(f"🎯 Excel S3: Applying table editor settings: {table_editor_settings}")
+                            logger.info(f"🎯 Excel GCS: Applying table editor settings: {table_editor_settings}")
                             
                             # Apply learned headers with intelligent matching
                             if table_editor_settings.get("headers"):
                                 learned_headers = table_editor_settings["headers"]
                                 current_headers = first_table.get("header", [])
                                 
-                                logger.info(f"🎯 Excel S3: Learned headers: {learned_headers}")
-                                logger.info(f"🎯 Excel S3: Current headers: {current_headers}")
-                                logger.info(f"🎯 Excel S3: Learned count: {len(learned_headers)}, Current count: {len(current_headers)}")
+                                logger.info(f"🎯 Excel GCS: Learned headers: {learned_headers}")
+                                logger.info(f"🎯 Excel GCS: Current headers: {current_headers}")
+                                logger.info(f"🎯 Excel GCS: Learned count: {len(learned_headers)}, Current count: {len(current_headers)}")
                                 
                                 # For financial tables, the learned headers are usually correct
                                 # Check if this looks like a financial table that needs header correction
@@ -729,16 +729,16 @@ async def extract_tables_excel_s3(
                                 if is_financial_table and match_score > 0.5:
                                     # For financial tables with good match score, apply learned headers
                                     # and adjust the data rows accordingly
-                                    logger.info(f"🎯 Excel S3: Financial table detected - applying learned headers")
+                                    logger.info(f"🎯 Excel GCS: Financial table detected - applying learned headers")
                                     
                                     # Apply learned headers
                                     first_table["header"] = learned_headers
-                                    logger.info(f"🎯 Excel S3: Applied learned headers: {learned_headers}")
+                                    logger.info(f"🎯 Excel GCS: Applied learned headers: {learned_headers}")
                                     
                                     # Adjust data rows if column count changed
                                     current_rows = first_table.get("rows", [])
                                     if current_rows and len(learned_headers) != len(current_headers):
-                                        logger.info(f"🎯 Excel S3: Adjusting data rows for header correction")
+                                        logger.info(f"🎯 Excel GCS: Adjusting data rows for header correction")
                                         adjusted_rows = []
                                         
                                         for row in current_rows:
@@ -752,35 +752,35 @@ async def extract_tables_excel_s3(
                                             adjusted_rows.append(adjusted_row)
                                         
                                         first_table["rows"] = adjusted_rows
-                                        logger.info(f"🎯 Excel S3: Adjusted {len(adjusted_rows)} rows to match {len(learned_headers)} columns")
+                                        logger.info(f"🎯 Excel GCS: Adjusted {len(adjusted_rows)} rows to match {len(learned_headers)} columns")
                                     
                                 else:
                                     # For non-financial tables or low confidence, use length-based matching
                                     if len(learned_headers) == len(current_headers):
                                         # Apply headers directly if count matches
                                         first_table["header"] = learned_headers
-                                        logger.info(f"🎯 Excel S3: Applied learned headers (length match): {learned_headers}")
+                                        logger.info(f"🎯 Excel GCS: Applied learned headers (length match): {learned_headers}")
                                     elif len(learned_headers) > len(current_headers):
                                         # Pad current headers if learned has more columns
                                         padded_headers = current_headers + [f"Column_{i+1}" for i in range(len(current_headers), len(learned_headers))]
                                         first_table["header"] = learned_headers[:len(padded_headers)]
-                                        logger.info(f"🎯 Excel S3: Applied learned headers with padding: {learned_headers[:len(padded_headers)]}")
+                                        logger.info(f"🎯 Excel GCS: Applied learned headers with padding: {learned_headers[:len(padded_headers)]}")
                                     else:
                                         # Truncate learned headers if current has more columns
                                         first_table["header"] = learned_headers + [f"Column_{i+1}" for i in range(len(learned_headers), len(current_headers))]
-                                        logger.info(f"🎯 Excel S3: Applied learned headers with truncation: {first_table['header']}")
+                                        logger.info(f"🎯 Excel GCS: Applied learned headers with truncation: {first_table['header']}")
                             else:
-                                logger.info(f"🎯 Excel S3: No learned headers to apply")
+                                logger.info(f"🎯 Excel GCS: No learned headers to apply")
                             
                             # Apply learned summary rows
                             if table_editor_settings.get("summary_rows"):
                                 summary_rows_set = set(table_editor_settings["summary_rows"])
                                 first_table["summaryRows"] = summary_rows_set
-                                logger.info(f"🎯 Excel S3: Applied learned summary rows: {list(summary_rows_set)}")
+                                logger.info(f"🎯 Excel GCS: Applied learned summary rows: {list(summary_rows_set)}")
                             else:
-                                logger.info(f"🎯 Excel S3: No summary rows to apply")
+                                logger.info(f"🎯 Excel GCS: No summary rows to apply")
                         else:
-                            logger.info(f"🎯 Excel S3: No table editor settings found in learned format")
+                            logger.info(f"🎯 Excel GCS: No table editor settings found in learned format")
                         
                         format_learning_data = {
                             "found_match": True,
@@ -790,7 +790,7 @@ async def extract_tables_excel_s3(
                             "table_editor_settings": learned_format.get("table_editor_settings")
                         }
                     else:
-                        logger.info(f"🎯 Excel S3: No matching format found (score: {match_score})")
+                        logger.info(f"🎯 Excel GCS: No matching format found (score: {match_score})")
                         format_learning_data = {
                             "found_match": False,
                             "match_score": match_score or 0,
@@ -800,7 +800,7 @@ async def extract_tables_excel_s3(
                         }
                         
                 except Exception as e:
-                    logger.warning(f"Excel S3: Format learning failed: {str(e)}")
+                    logger.warning(f"Excel GCS: Format learning failed: {str(e)}")
                     format_learning_data = {
                         "found_match": False,
                         "match_score": 0,
@@ -814,14 +814,14 @@ async def extract_tables_excel_s3(
                 "upload_id": str(upload_id),
                 "extraction_id": str(uuid.uuid4()),
                 "company_id": company_id,
-                "s3_url": get_s3_file_url(s3_key),
-                "s3_key": s3_key,
+                "gcs_url": get_s3_file_url(gcs_key),
+                "gcs_key": gcs_key,
                 "file_type": "excel",
                 "extraction_method": "excel_extraction",
                 "format_learning": format_learning_data
             })
             
-            logger.info(f"Excel extraction from S3 completed successfully. Found {len(response_data.get('tables', []))} tables.")
+            logger.info(f"Excel extraction from GCS completed successfully. Found {len(response_data.get('tables', []))} tables.")
             return JSONResponse(content=response_data)
             
         finally:
@@ -832,7 +832,7 @@ async def extract_tables_excel_s3(
                 logger.warning(f"Failed to clean up local file: {str(cleanup_error)}")
         
     except Exception as e:
-        logger.error(f"Excel extraction from S3 failed: {str(e)}")
+        logger.error(f"Excel extraction from GCS failed: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail=f"Excel extraction failed: {str(e)}"

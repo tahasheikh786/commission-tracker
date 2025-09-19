@@ -12,7 +12,7 @@ from app.utils.db_retry import with_db_retry
 import os
 import asyncio
 from datetime import datetime
-from app.services.s3_utils import upload_file_to_s3, get_s3_file_url
+from app.services.gcs_utils import upload_file_to_gcs, get_gcs_file_url
 import logging
 from typing import Optional, Dict, Any
 
@@ -88,17 +88,17 @@ async def extract_dates(
             logger.warning(f"Could not validate company {company_id}: {e}")
             # Continue with date extraction even if company validation fails
         
-        # Upload to S3 (only if company is valid)
-        s3_url = None
+        # Upload to GCS (only if company is valid)
+        gcs_url = None
         if company:
-            s3_key = f"statements/{company_id}/{file.filename}"
-            uploaded = upload_file_to_s3(file_path, s3_key)
+            gcs_key = f"statements/{company_id}/{file.filename}"
+            uploaded = upload_file_to_gcs(file_path, gcs_key)
             if uploaded:
-                s3_url = get_s3_file_url(s3_key)
+                gcs_url = get_gcs_file_url(gcs_key)
             else:
-                logger.warning("Failed to upload file to S3, but continuing with date extraction")
+                logger.warning("Failed to upload file to GCS, but continuing with date extraction")
         else:
-            logger.warning("Skipping S3 upload due to invalid company ID")
+            logger.warning("Skipping GCS upload due to invalid company ID")
 
         # Get the date extraction service
         extraction_service = await get_date_extraction_service_instance()
@@ -163,7 +163,7 @@ async def extract_dates(
         extraction_time = (datetime.now() - start_time).total_seconds()
         client_response["extraction_time_seconds"] = extraction_time
         client_response["extraction_method"] = "date_extraction_service"
-        client_response["s3_url"] = s3_url
+        client_response["gcs_url"] = gcs_url
         
         # Note: Extraction record saving is disabled as ExtractionRecord schema doesn't exist
         # This doesn't affect the date extraction functionality

@@ -8,7 +8,7 @@ from uuid import UUID
 from pydantic import BaseModel
 from fastapi.responses import FileResponse, RedirectResponse
 import os
-from app.services.s3_utils import get_s3_file_url, generate_presigned_url
+from app.services.gcs_utils import get_gcs_file_url, generate_gcs_signed_url
 from urllib.parse import unquote
 
 router = APIRouter()
@@ -39,11 +39,11 @@ async def get_pdf(file_path: str):
     print(f"PDF request received for file_path: {file_path}")
     
     if file_path.startswith("statements/"):
-        print(f"Generating presigned URL for S3 file: {file_path}")
-        presigned_url = generate_presigned_url(file_path)
+        print(f"Generating signed URL for GCS file: {file_path}")
+        presigned_url = generate_gcs_signed_url(file_path)
         if not presigned_url:
             print(f"Failed to generate presigned URL for: {file_path}")
-            raise HTTPException(status_code=404, detail="Could not generate S3 presigned URL")
+            raise HTTPException(status_code=404, detail="Could not generate GCS signed URL")
         print(f"Redirecting to presigned URL: {presigned_url}")
         return RedirectResponse(presigned_url)
     
@@ -116,12 +116,12 @@ async def delete_multiple_statements(
         )
 
 @router.get("/statements/presigned-url/")
-def get_presigned_pdf_url(s3_key: str):
-    url = generate_presigned_url(s3_key)
+def get_presigned_pdf_url(gcs_key: str):
+    url = generate_gcs_signed_url(gcs_key)
     print(url)
-    print(s3_key)
+    print(gcs_key)
     if not url:
-        raise HTTPException(status_code=404, detail="Could not generate presigned URL")
+        raise HTTPException(status_code=404, detail="Could not generate signed URL")
     return {"url": url}
 
 @router.get("/statements/{statement_id}/formatted-tables")

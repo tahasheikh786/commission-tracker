@@ -12,7 +12,7 @@ from app.db import crud
 from app.config import get_db
 from app.services.gpt4o_vision_service import GPT4oVisionService
 # Removed old extraction pipeline import - using new extraction service instead
-from app.services.s3_utils import download_file_from_s3
+from app.services.gcs_utils import download_file_from_gcs
 import uuid
 import tempfile
 from pydantic import BaseModel
@@ -887,20 +887,20 @@ async def improve_current_extraction(
                 "id": str(uuid.uuid4())  # Generate a temporary ID
             })
         
-        # Get PDF file from S3
-        # upload_info.file_name already contains the full S3 path
-        s3_key = upload_info.file_name
-        logger.info(f"Using S3 key: {s3_key}")
+        # Get PDF file from GCS
+        # upload_info.file_name already contains the full GCS path
+        gcs_key = upload_info.file_name
+        logger.info(f"Using GCS key: {gcs_key}")
         
-        # Download PDF from S3 to temporary file
-        temp_pdf_path = download_file_from_s3(s3_key)
+        # Download PDF from GCS to temporary file
+        temp_pdf_path = download_file_from_gcs(gcs_key)
         if not temp_pdf_path:
             raise HTTPException(
                 status_code=404, 
-                detail=f"Failed to download PDF from S3: {s3_key}"
+                detail=f"Failed to download PDF from GCS: {gcs_key}"
             )
         
-        logger.info(f"Processing PDF: {temp_pdf_path} (downloaded from S3)")
+        logger.info(f"Processing PDF: {temp_pdf_path} (downloaded from GCS)")
         
         # Step 1: Use the new intelligent extraction method for improvement
         logger.info("Starting intelligent GPT extraction for improvement...")
