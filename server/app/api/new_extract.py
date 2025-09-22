@@ -10,6 +10,11 @@ from app.db import crud, schemas
 from app.services.new_extraction_service import get_new_extraction_service
 from app.config import get_db
 from app.utils.db_retry import with_db_retry
+from app.api.auth import get_current_user
+from app.db.models import User
+from app.services.duplicate_detection_service import DuplicateDetectionService
+from app.services.user_profile_service import UserProfileService
+from app.services.audit_logging_service import AuditLoggingService
 import os
 import shutil
 from datetime import datetime
@@ -21,6 +26,7 @@ from typing import Optional, Dict, Any
 from fastapi.responses import JSONResponse
 import uuid
 from app.services.hierarchical_extraction_service import HierarchicalExtractionService
+import hashlib
 
 router = APIRouter(tags=["new-extract"])
 logger = logging.getLogger(__name__)
@@ -126,6 +132,8 @@ async def extract_tables_advanced(
     enable_multipage: bool = Form(True),
     max_tables_per_page: int = Form(10),
     output_format: str = Form("json"),
+    replace_duplicate: bool = Form(False),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -155,6 +163,75 @@ async def extract_tables_advanced(
                 status_code=413, 
                 detail="File too large. Maximum size is 50MB."
             )
+    
+    # Calculate file hash for duplicate detection
+    file_hash = hashlib.sha256(file_content).hexdigest()
+    
+    # Check for duplicates
+    duplicate_service = DuplicateDetectionService(db)
+    duplicate_check = await duplicate_service.check_duplicate(
+        file_hash=file_hash,
+        user_id=current_user.id,
+        file_name=file.filename
+    )
+    
+    if duplicate_check['is_duplicate']:
+        if not replace_duplicate:
+            return JSONResponse(
+                status_code=409,
+                content={
+                    "status": "duplicate_detected",
+                    "message": duplicate_check['message'],
+                    "duplicate_info": {
+                        "type": duplicate_check['duplicate_type'],
+                        "existing_upload_id": str(duplicate_check['existing_upload'].id),
+                        "existing_file_name": duplicate_check['existing_upload'].file_name,
+                        "existing_upload_date": duplicate_check['existing_upload'].uploaded_at.isoformat() if duplicate_check['existing_upload'].uploaded_at else None
+                    }
+                }
+            )
+        else:
+            # Handle replacement logic
+            existing_upload = duplicate_check['existing_upload']
+            if duplicate_check['duplicate_type'] == 'user':
+                # Replace user's existing file
+                existing_upload.file_name = file.filename
+                existing_upload.uploaded_at = datetime.utcnow()
+                existing_upload.status = 'pending'
+                await duplicate_service.record_duplicate(
+                    file_hash=file_hash,
+                    original_upload_id=existing_upload.id,
+                    duplicate_upload_id=existing_upload.id,
+                    action_taken="replaced"
+                )
+                
+                # Log duplicate detection for audit
+                audit_service = AuditLoggingService(db)
+                await audit_service.log_duplicate_detection(
+                    user_id=current_user.id,
+                    file_hash=file_hash,
+                    duplicate_type="user",
+                    original_upload_id=existing_upload.id,
+                    duplicate_upload_id=existing_upload.id,
+                    action_taken="replaced"
+                )
+                
+                logger.info(f"Replaced existing file: {existing_upload.file_name}")
+            else:
+                # Global duplicate - cannot replace
+                return JSONResponse(
+                    status_code=409,
+                    content={
+                        "status": "global_duplicate",
+                        "message": "Cannot replace file uploaded by another user",
+                        "duplicate_info": {
+                            "type": "global",
+                            "existing_upload_id": str(existing_upload.id),
+                            "existing_file_name": existing_upload.file_name,
+                            "existing_upload_date": existing_upload.uploaded_at.isoformat() if existing_upload.uploaded_at else None
+                        }
+                    }
+                )
     
     file_path = os.path.join(UPLOAD_DIR, file.filename)
     
@@ -418,6 +495,7 @@ async def validate_file_for_extraction(
 async def extract_tables_smart(
     file: UploadFile = File(...),
     company_id: str = Form(...),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -438,6 +516,33 @@ async def extract_tables_smart(
     # Save uploaded file
     file_path = os.path.join(UPLOAD_DIR, file.filename)
     file_content = await file.read()
+    
+    # Calculate file size and hash for duplicate detection
+    file_size = len(file_content)
+    file_hash = hashlib.sha256(file_content).hexdigest()
+    
+    # Check for duplicates
+    duplicate_service = DuplicateDetectionService(db)
+    duplicate_check = await duplicate_service.check_duplicate(
+        file_hash=file_hash,
+        user_id=current_user.id,
+        file_name=file.filename
+    )
+    
+    if duplicate_check['is_duplicate']:
+        return JSONResponse(
+            status_code=409,
+            content={
+                "status": "duplicate_detected",
+                "message": duplicate_check['message'],
+                "duplicate_info": {
+                    "type": duplicate_check['duplicate_type'],
+                    "existing_upload_id": str(duplicate_check['existing_upload'].id),
+                    "existing_file_name": duplicate_check['existing_upload'].file_name,
+                    "existing_upload_date": duplicate_check['existing_upload'].uploaded_at.isoformat() if duplicate_check['existing_upload'].uploaded_at else None
+                }
+            }
+        )
     
     try:
         # Save uploaded file
@@ -711,7 +816,10 @@ async def extract_tables_smart(
         db_upload = schemas.StatementUpload(
             id=upload_id,
             company_id=company_id,
+            user_id=current_user.id,
             file_name=gcs_key,
+            file_hash=file_hash,
+            file_size=file_size,
             uploaded_at=datetime.utcnow(),
             status="extracted",
             current_step="extracted",
@@ -721,6 +829,34 @@ async def extract_tables_smart(
         
         # Save statement upload with retry
         await with_db_retry(db, crud.save_statement_upload, upload=db_upload)
+        
+        # Record user contribution
+        profile_service = UserProfileService(db)
+        await profile_service.record_user_contribution(
+            user_id=current_user.id,
+            upload_id=upload_id,
+            contribution_type="upload",
+            contribution_data={
+                "file_name": file.filename,
+                "file_size": file_size,
+                "file_hash": file_hash,
+                "extraction_method": "smart_extraction",
+                "confidence_threshold": 0.6,
+                "enable_ocr": True,
+                "enable_multipage": True
+            }
+        )
+        
+        # Log file upload for audit
+        audit_service = AuditLoggingService(db)
+        await audit_service.log_file_upload(
+            user_id=current_user.id,
+            file_name=file.filename,
+            file_size=file_size,
+            file_hash=file_hash,
+            company_id=company_id,
+            upload_id=upload_id
+        )
         
         # Clean up local file
         os.remove(file_path)
@@ -800,7 +936,7 @@ async def extract_tables_gpt(
         
         logger.info(f"PDF has {num_pages} pages")
         
-                # Use the new intelligent extraction method that automatically handles PDF type and optimization
+        # Use the new intelligent extraction method that automatically handles PDF type and optimization
         logger.info("Starting intelligent GPT extraction with automatic PDF type detection...")
         extraction_result = gpt4o_service.extract_commission_data(
             pdf_path=temp_pdf_path,

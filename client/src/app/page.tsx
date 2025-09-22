@@ -7,7 +7,7 @@ import DashboardTab from "./components/dashboardTab/DashboardTab";
 import CarrierTab from "./components/carrierTab/CarrierTab";
 import EarnedCommissionTab from "./components/dashboardTab/EarnedCommissionTab";
 
-import { Database, BarChart3, DollarSign, Settings, LogOut, ChevronDown } from "lucide-react";
+import { Database, BarChart3, DollarSign, Settings, LogOut, ChevronDown, User } from "lucide-react";
 
 function HomePageContent() {
   const router = useRouter();
@@ -68,7 +68,7 @@ function HomePageContent() {
       description: "Manage Carriers & Statements",
       gradient: "from-violet-600 via-purple-600 to-fuchsia-600",
       bgGradient: "from-violet-50 via-purple-50 to-fuchsia-50"
-    }
+    },
   ];
 
   return (

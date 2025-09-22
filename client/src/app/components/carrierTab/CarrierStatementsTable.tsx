@@ -9,6 +9,7 @@ type Statement = {
   uploaded_at: string;
   status: string;
   rejection_reason?: string;
+  selected_statement_date?: any;
 };
 
 type Props = {
@@ -18,9 +19,10 @@ type Props = {
   onCompare: (idx: number) => void;
   onDelete: (ids: string[]) => void;
   deleting?: boolean;
+  readOnly?: boolean;
 };
 
-export default function CarrierStatementsTable({ statements, setStatements, onPreview, onCompare, onDelete, deleting }: Props) {
+export default function CarrierStatementsTable({ statements, setStatements, onPreview, onCompare, onDelete, deleting, readOnly = false }: Props) {
   const [selectedStatements, setSelectedStatements] = useState<Set<string>>(new Set());
   const [selectAll, setSelectAll] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
@@ -29,10 +31,10 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
   const itemsPerPage = 10;
   const router = useRouter();
 
-  const totalPages = Math.ceil(statements.length / itemsPerPage);
+  const totalPages = Math.ceil((statements?.length || 0) / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
-  const paginatedStatements = statements.slice(startIndex, endIndex);
+  const paginatedStatements = (statements || []).slice(startIndex, endIndex);
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
@@ -71,6 +73,53 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
   const handleViewFormattedTables = (statementId: string) => {
     setSelectedStatementId(statementId);
     setTableViewerOpen(true);
+  };
+
+  const normalizeFileName = (fileName: string) => {
+    // Extract just the filename from the full path
+    const parts = fileName.split('/');
+    return parts[parts.length - 1];
+  };
+
+  const formatStatementDate = (selectedStatementDate: any) => {
+    if (!selectedStatementDate) return '—';
+    
+    try {
+      // Handle different date formats that might be stored
+      const dateStr = selectedStatementDate.date || selectedStatementDate.date_value || selectedStatementDate;
+      
+      if (typeof dateStr === 'string') {
+        // Handle different date formats
+        let date: Date;
+        
+        // Try parsing as MM/DD/YYYY format first (common in US)
+        if (dateStr.includes('/')) {
+          const parts = dateStr.split('/');
+          if (parts.length === 3) {
+            // MM/DD/YYYY format
+            date = new Date(parseInt(parts[2]), parseInt(parts[0]) - 1, parseInt(parts[1]));
+          } else {
+            date = new Date(dateStr);
+          }
+        } else {
+          // Try standard Date parsing for ISO format
+          date = new Date(dateStr);
+        }
+        
+        if (!isNaN(date.getTime())) {
+          return date.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
+          });
+        }
+      }
+      
+      return dateStr || '—';
+    } catch (error) {
+      console.error('Error formatting statement date:', error, selectedStatementDate);
+      return '—';
+    }
   };
 
   const getStatusInfo = (status: string) => {
@@ -121,7 +170,7 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
       )}
       
       {/* Enhanced Delete Button */}
-      {selectedStatements.size > 0 && (
+      {selectedStatements.size > 0 && !readOnly && (
         <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -142,6 +191,20 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
         </div>
       )}
 
+      {/* Read-only mode indicator */}
+      {readOnly && (
+        <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+          <div className="flex items-center gap-3">
+            <div className="w-5 h-5 bg-amber-100 rounded-full flex items-center justify-center">
+              <span className="text-amber-600 text-xs">🔒</span>
+            </div>
+            <span className="text-amber-700 font-medium">
+              Read-only mode - You can view data but cannot make changes
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Enhanced Table */}
       <div className="card overflow-hidden w-full">
         <table className="table w-full">
@@ -152,7 +215,7 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
                   type="checkbox"
                   checked={selectAll}
                   onChange={handleSelectAllChange}
-                  disabled={deleting}
+                  disabled={deleting || readOnly}
                   className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
                 />
               </th>
@@ -163,6 +226,7 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
                 </div>
               </th>
               <th className="p-4 text-left">Uploaded On</th>
+              <th className="p-4 text-left">Statement Date</th>
               <th className="p-4 text-left">Status</th>
               <th className="p-4 text-left">Rejection Reason</th>
               <th className="p-4 text-center">Actions</th>
@@ -184,7 +248,7 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
                       type="checkbox"
                       checked={selectedStatements.has(statement.id)}
                       onChange={() => handleCheckboxChange(statement.id)}
-                      disabled={deleting}
+                      disabled={deleting || readOnly}
                       className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
                     />
                   </td>
@@ -194,7 +258,7 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
                         <FileText size={16} className="text-primary" />
                       </div>
                       <div>
-                        <div className="font-medium text-gray-900">{statement.file_name}</div>
+                        <div className="font-medium text-gray-900">{normalizeFileName(statement.file_name)}</div>
                         <div className="text-sm text-gray-500">ID: {statement.id.slice(0, 8)}...</div>
                       </div>
                     </div>
@@ -205,6 +269,11 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
                     </div>
                     <div className="text-xs text-gray-500">
                       {new Date(statement.uploaded_at).toLocaleTimeString()}
+                    </div>
+                  </td>
+                  <td className="p-4">
+                    <div className="text-sm text-gray-900">
+                      {formatStatementDate(statement.selected_statement_date)}
                     </div>
                   </td>
                   <td className="p-4">
@@ -294,7 +363,7 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
             <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
               <div className="flex gap-2">
                 <button
-                  onClick={() => handlePageChange(1)}
+                  onClick={() => handlePageChange(currentPage - 1)}
                   disabled={currentPage === 1}
                   className="relative inline-flex items-center px-2 py-2 border border-gray-300 bg-white text-sm font-medium rounded-md text-gray-500 hover:bg-gray-50"
                 >
@@ -305,7 +374,7 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
                   <span className="font-medium">{totalPages}</span>
                 </span>
                 <button
-                  onClick={() => handlePageChange(totalPages)}
+                  onClick={() => handlePageChange(currentPage + 1)}
                   disabled={currentPage === totalPages}
                   className="relative inline-flex items-center px-2 py-2 border border-gray-300 bg-white text-sm font-medium rounded-md text-gray-500 hover:bg-gray-50"
                 >
@@ -317,7 +386,7 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
         )}
 
         {/* Empty State */}
-        {statements.length === 0 && (
+        {(statements?.length || 0) === 0 && (
           <div className="text-center py-12">
             <FileText className="mx-auto h-12 w-12 text-gray-300 mb-4" />
             <h3 className="text-lg font-medium text-gray-600 mb-2">No statements found</h3>
@@ -335,7 +404,7 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
         statementId={selectedStatementId}
         tableType="formatted"
         title="Formatted Tables"
-        statement={statements.find(s => s.id === selectedStatementId)}
+        statement={(statements || []).find(s => s.id === selectedStatementId)}
       />
     </div>
   );

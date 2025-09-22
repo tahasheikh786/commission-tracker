@@ -18,7 +18,9 @@ const setCookie = (name: string, value: string, days: number) => {
   if (typeof document === 'undefined') return;
   const expires = new Date();
   expires.setTime(expires.getTime() + (days * 24 * 60 * 60 * 1000));
-  document.cookie = `${name}=${value};expires=${expires.toUTCString()};path=/;secure;samesite=strict`;
+  const isSecure = window.location.protocol === 'https:';
+  // Use lax samesite for development to avoid issues
+  document.cookie = `${name}=${value};expires=${expires.toUTCString()};path=/;${isSecure ? 'secure;' : ''}samesite=lax`;
 };
 
 const deleteCookie = (name: string) => {
@@ -95,6 +97,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const isAuthenticated = !!user;
 
+  const logout = () => {
+    // Clear token from cookie
+    deleteCookie('access_token');
+    
+    // Remove axios default header
+    delete axios.defaults.headers.common['Authorization'];
+
+    // Clear state
+    setUser(null);
+    setPermissions(null);
+
+    // Redirect to login
+    router.push('/auth/login');
+  };
+
   // Set up axios interceptor for auth token
   useEffect(() => {
     const token = getCookie('access_token');
@@ -116,31 +133,46 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return () => {
       axios.interceptors.response.eject(responseInterceptor);
     };
-  }, []);
+  }, [logout]);
 
   // Check if user is logged in on mount
   useEffect(() => {
     const checkAuth = async () => {
       const token = getCookie('access_token');
+      console.log('Auth check - token found:', !!token);
       if (token) {
         try {
+          console.log('Attempting to refresh user...');
           await refreshUser();
+          console.log('User refreshed successfully');
         } catch (error) {
           console.error('Auth check failed:', error);
           logout();
         }
+      } else {
+        console.log('No token found, user not authenticated');
       }
       setIsLoading(false);
     };
 
-    checkAuth();
+    // Add a timeout to prevent infinite loading
+    const timeoutId = setTimeout(() => {
+      console.log('Auth check timeout, setting loading to false');
+      setIsLoading(false);
+    }, 5000); // 5 second timeout
+
+    checkAuth().finally(() => {
+      clearTimeout(timeoutId);
+    });
   }, []);
 
   const login = async (credentials: LoginRequest) => {
     try {
+      console.log('Attempting login...');
       const response = await axios.post<LoginResponse>('/auth/login', credentials);
       const { access_token, user: userData } = response.data;
 
+      console.log('Login successful, storing token...');
       // Store token in cookie
       setCookie('access_token', access_token, 1); // 1 day
 
@@ -149,7 +181,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       setUser(userData);
       await checkPermissions();
+      console.log('Login completed successfully');
     } catch (error: any) {
+      console.error('Login failed:', error);
       const errorMessage = error.response?.data?.detail || 'Login failed';
       throw new Error(errorMessage);
     }
@@ -174,27 +208,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  const logout = () => {
-    // Clear token from cookie
-    deleteCookie('access_token');
-    
-    // Remove axios default header
-    delete axios.defaults.headers.common['Authorization'];
-
-    // Clear state
-    setUser(null);
-    setPermissions(null);
-
-    // Redirect to login
-    router.push('/auth/login');
-  };
-
   const refreshUser = async () => {
     try {
       const response = await axios.get<User>('/auth/me');
+      console.log('refreshUser: User data received:', response.data);
       setUser(response.data);
       await checkPermissions();
     } catch (error) {
+      console.error('refreshUser: Error:', error);
       throw error;
     }
   };

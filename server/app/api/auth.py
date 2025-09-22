@@ -18,6 +18,7 @@ from app.utils.auth_utils import (
     create_session_token, is_domain_allowed, get_user_by_email, create_user_session,
     get_user_session, invalidate_session, is_admin_user, can_upload_files, can_edit_data
 )
+from app.services.audit_logging_service import AuditLoggingService
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 security = HTTPBearer()
@@ -59,8 +60,21 @@ async def get_admin_user(current_user: User = Depends(get_current_user)) -> User
 @router.post("/login", response_model=LoginResponse)
 async def login(login_data: LoginRequest, request: Request, db: AsyncSession = Depends(get_db)):
     """Login endpoint with domain validation."""
+    audit_service = AuditLoggingService(db)
+    client_ip = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+    
     # Check if domain is allowed
     if not await is_domain_allowed(db, login_data.email):
+        # Log failed login attempt
+        await audit_service.log_user_authentication(
+            user_id=uuid.uuid4(),  # Placeholder for unknown user
+            action="login",
+            success=False,
+            ip_address=client_ip,
+            user_agent=user_agent,
+            failure_reason="Domain not allowed"
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Email domain not allowed. Please contact administrator."
@@ -70,12 +84,30 @@ async def login(login_data: LoginRequest, request: Request, db: AsyncSession = D
     user = await get_user_by_email(db, login_data.email)
     
     if user is None:
+        # Log failed login attempt
+        await audit_service.log_user_authentication(
+            user_id=uuid.uuid4(),  # Placeholder for unknown user
+            action="login",
+            success=False,
+            ip_address=client_ip,
+            user_agent=user_agent,
+            failure_reason="User not found"
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password"
         )
     
     if user.is_active == 0:
+        # Log failed login attempt
+        await audit_service.log_user_authentication(
+            user_id=user.id,
+            action="login",
+            success=False,
+            ip_address=client_ip,
+            user_agent=user_agent,
+            failure_reason="Account inactive"
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User account is inactive"
@@ -83,18 +115,45 @@ async def login(login_data: LoginRequest, request: Request, db: AsyncSession = D
     
     # Verify password
     if not user.password_hash:
+        # Log failed login attempt
+        await audit_service.log_user_authentication(
+            user_id=user.id,
+            action="login",
+            success=False,
+            ip_address=client_ip,
+            user_agent=user_agent,
+            failure_reason="Account not configured"
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Account not properly configured. Please contact administrator."
         )
     
     if not login_data.password:
+        # Log failed login attempt
+        await audit_service.log_user_authentication(
+            user_id=user.id,
+            action="login",
+            success=False,
+            ip_address=client_ip,
+            user_agent=user_agent,
+            failure_reason="No password provided"
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Password required"
         )
     
     if not verify_password(login_data.password, user.password_hash):
+        # Log failed login attempt
+        await audit_service.log_user_authentication(
+            user_id=user.id,
+            action="login",
+            success=False,
+            ip_address=client_ip,
+            user_agent=user_agent,
+            failure_reason="Invalid password"
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password"
@@ -115,6 +174,16 @@ async def login(login_data: LoginRequest, request: Request, db: AsyncSession = D
     # Create session
     session_token = create_session_token()
     await create_user_session(db, str(user.id), session_token)
+    
+    # Log successful login
+    await audit_service.log_user_authentication(
+        user_id=user.id,
+        action="login",
+        success=True,
+        ip_address=client_ip,
+        user_agent=user_agent,
+        session_id=session_token
+    )
     
     return LoginResponse(
         access_token=access_token,

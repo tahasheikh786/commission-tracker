@@ -4,7 +4,7 @@ apply_compatibility_fixes()
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
-from app.api import company, mapping, review, statements, database_fields, plan_types, table_editor, improve_extraction, pending, dashboard, format_learning, new_extract, summary_rows, date_extraction, excel_extract, auth
+from app.api import company, mapping, review, statements, database_fields, plan_types, table_editor, improve_extraction, pending, dashboard, format_learning, new_extract, summary_rows, date_extraction, excel_extract, auth, user_management, admin
 from fastapi.middleware.cors import CORSMiddleware
 import os
 
@@ -30,6 +30,9 @@ app.add_middleware(
 #     app.mount("/pdfs", StaticFiles(directory=pdfs_dir), name="pdfs")
 
 app.include_router(auth.router)
+app.include_router(user_management.router)
+app.include_router(admin.router)
+app.include_router(dashboard.router)
 app.include_router(company.router)
 app.include_router(mapping.router)
 app.include_router(review.router)
@@ -39,7 +42,6 @@ app.include_router(plan_types.router)
 app.include_router(table_editor.router)
 app.include_router(improve_extraction.router)
 app.include_router(pending.router)
-app.include_router(dashboard.router)
 app.include_router(format_learning.router)
 app.include_router(new_extract.router)
 app.include_router(summary_rows.router)

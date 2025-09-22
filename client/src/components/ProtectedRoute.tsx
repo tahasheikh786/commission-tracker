@@ -31,21 +31,25 @@ export default function ProtectedRoute({
     if (isLoading) return;
 
     if (requireAuth && !isAuthenticated) {
+      console.log('ProtectedRoute: Not authenticated, redirecting to login');
       router.push('/auth/login');
       return;
     }
 
     if (requireAdmin && user?.role !== 'admin') {
+      console.log('ProtectedRoute: Not admin, redirecting to home');
       router.push('/');
       return;
     }
 
     if (requireUpload && permissions && !permissions.can_upload) {
+      console.log('ProtectedRoute: No upload permission, redirecting to home');
       router.push('/');
       return;
     }
 
     if (requireEdit && permissions && !permissions.can_edit) {
+      console.log('ProtectedRoute: No edit permission, redirecting to home');
       router.push('/');
       return;
     }

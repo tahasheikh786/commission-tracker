@@ -87,6 +87,7 @@ from .earned_commission import (
     upsert_earned_commission,
     get_earned_commissions_by_carrier,
     get_all_earned_commissions,
+    get_earned_commissions_by_carriers,
     get_commission_record,
     recalculate_commission_totals,
     extract_commission_data_from_statement,
@@ -140,7 +141,7 @@ __all__ = [
     # Earned commission operations
     'create_earned_commission', 'get_earned_commission_by_carrier_and_client',
     'update_earned_commission', 'upsert_earned_commission', 'get_earned_commissions_by_carrier',
-    'get_all_earned_commissions', 'get_commission_record', 'recalculate_commission_totals',
+    'get_all_earned_commissions', 'get_earned_commissions_by_carriers', 'get_commission_record', 'recalculate_commission_totals',
     'extract_commission_data_from_statement', 'remove_upload_from_earned_commissions',
     'create_commission_record', 'update_commission_record', 'process_commission_data_from_statement',
     'parse_currency_amount'

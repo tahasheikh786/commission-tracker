@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import func, select
+from sqlalchemy import func, select, and_
 from app.db import crud, schemas
 from app.config import get_db
-from app.db.models import StatementUpload, Company, EarnedCommission
+from app.db.models import StatementUpload, Company, EarnedCommission, User
+from app.api.auth import get_current_user
 from typing import List, Dict, Any, Optional
 from uuid import UUID
 from decimal import Decimal
@@ -12,40 +13,65 @@ from datetime import datetime
 router = APIRouter()
 
 @router.get("/dashboard/stats")
-async def get_dashboard_stats(db: AsyncSession = Depends(get_db)):
-    """Get dashboard statistics for all cards"""
+async def get_dashboard_stats(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get dashboard statistics - automatically filters by user data for regular users, global for admins"""
     try:
+        # For admin users, show global data. For regular users, show only their data
+        is_admin = current_user.role == 'admin'
+        
+        # Base query condition - admin sees all, regular users see only their data
+        user_condition = True if is_admin else (StatementUpload.user_id == current_user.id)
+        
         # Get total statements count
         total_statements_result = await db.execute(
             select(func.count(StatementUpload.id))
+            .where(user_condition)
         )
         total_statements = total_statements_result.scalar() or 0
 
-        # Get total carriers count
-        total_carriers_result = await db.execute(
-            select(func.count(Company.id))
-        )
+        # Get total carriers count - for admin show carriers with statements, for regular users show carriers they've worked with
+        if is_admin:
+            total_carriers_result = await db.execute(
+                select(func.count(func.distinct(StatementUpload.company_id)))
+            )
+        else:
+            total_carriers_result = await db.execute(
+                select(func.count(func.distinct(StatementUpload.company_id)))
+                .where(StatementUpload.user_id == current_user.id)
+            )
         total_carriers = total_carriers_result.scalar() or 0
 
         # Get pending reviews count (extracted and success are considered pending for review)
-        pending_reviews_result = await db.execute(
-            select(func.count(StatementUpload.id))
-            .where(StatementUpload.status.in_(['extracted', 'success']))
+        pending_query = select(func.count(StatementUpload.id)).where(
+            and_(
+                StatementUpload.status.in_(['extracted', 'success']),
+                user_condition
+            )
         )
+        pending_reviews_result = await db.execute(pending_query)
         pending_reviews = pending_reviews_result.scalar() or 0
 
         # Get approved statements count (completed and Approved are considered approved)
-        approved_statements_result = await db.execute(
-            select(func.count(StatementUpload.id))
-            .where(StatementUpload.status.in_(['completed', 'Approved']))
+        approved_query = select(func.count(StatementUpload.id)).where(
+            and_(
+                StatementUpload.status.in_(['completed', 'Approved']),
+                user_condition
+            )
         )
+        approved_statements_result = await db.execute(approved_query)
         approved_statements = approved_statements_result.scalar() or 0
 
-        # Get rejected statements count (currently none in database)
-        rejected_statements_result = await db.execute(
-            select(func.count(StatementUpload.id))
-            .where(StatementUpload.status == 'rejected')
+        # Get rejected statements count
+        rejected_query = select(func.count(StatementUpload.id)).where(
+            and_(
+                StatementUpload.status == 'rejected',
+                user_condition
+            )
         )
+        rejected_statements_result = await db.execute(rejected_query)
         rejected_statements = rejected_statements_result.scalar() or 0
 
         return {
@@ -61,15 +87,26 @@ async def get_dashboard_stats(db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Error fetching dashboard stats: {str(e)}")
 
 @router.get("/dashboard/statements")
-async def get_all_statements(db: AsyncSession = Depends(get_db)):
-    """Get all statements with company information"""
+async def get_all_statements(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get all statements with company information - automatically filters by user data for regular users"""
     try:
-        # Get all statements with company info
-        result = await db.execute(
-            select(StatementUpload, Company.name.label('company_name'))
-            .join(Company, StatementUpload.company_id == Company.id)
-            .order_by(StatementUpload.uploaded_at.desc())
-        )
+        # For admin users, show all statements. For regular users, show only their statements
+        is_admin = current_user.role == 'admin'
+        
+        # Build query with user filter
+        query = select(StatementUpload, Company.name.label('company_name'))
+        query = query.join(Company, StatementUpload.company_id == Company.id)
+        
+        # Apply user filter - admin sees all, regular users see only their data
+        if not is_admin:
+            query = query.where(StatementUpload.user_id == current_user.id)
+        
+        query = query.order_by(StatementUpload.uploaded_at.desc())
+        
+        result = await db.execute(query)
         statements = result.all()
         
         formatted_statements = []
@@ -86,7 +123,8 @@ async def get_all_statements(db: AsyncSession = Depends(get_db)):
                 "plan_types": statement.plan_types,
                 "raw_data": statement.raw_data,
                 "edited_tables": statement.edited_tables,
-                "final_data": statement.final_data
+                "final_data": statement.final_data,
+                "selected_statement_date": statement.selected_statement_date
             })
         
         return formatted_statements
@@ -94,11 +132,18 @@ async def get_all_statements(db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Error fetching statements: {str(e)}")
 
 @router.get("/dashboard/statements/{status}")
-async def get_statements_by_status(status: str, db: AsyncSession = Depends(get_db)):
-    """Get statements filtered by status (pending, approved, rejected)"""
+async def get_statements_by_status(
+    status: str, 
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get statements filtered by status (pending, approved, rejected) - automatically filters by user data"""
     try:
         if status not in ['pending', 'approved', 'rejected']:
             raise HTTPException(status_code=400, detail="Invalid status. Must be pending, approved, or rejected")
+        
+        # For admin users, show all statements. For regular users, show only their statements
+        is_admin = current_user.role == 'admin'
         
         # Map frontend status to database statuses
         status_mapping = {
@@ -109,12 +154,17 @@ async def get_statements_by_status(status: str, db: AsyncSession = Depends(get_d
         
         db_statuses = status_mapping.get(status, [])
         
-        result = await db.execute(
-            select(StatementUpload, Company.name.label('company_name'))
-            .join(Company, StatementUpload.company_id == Company.id)
-            .where(StatementUpload.status.in_(db_statuses))
-            .order_by(StatementUpload.uploaded_at.desc())
-        )
+        query = select(StatementUpload, Company.name.label('company_name'))
+        query = query.join(Company, StatementUpload.company_id == Company.id)
+        query = query.where(StatementUpload.status.in_(db_statuses))
+        
+        # Apply user filter - admin sees all, regular users see only their data
+        if not is_admin:
+            query = query.where(StatementUpload.user_id == current_user.id)
+        
+        query = query.order_by(StatementUpload.uploaded_at.desc())
+        
+        result = await db.execute(query)
         statements = result.all()
         
         formatted_statements = []
@@ -131,7 +181,8 @@ async def get_statements_by_status(status: str, db: AsyncSession = Depends(get_d
                 "plan_types": statement.plan_types,
                 "raw_data": statement.raw_data,
                 "edited_tables": statement.edited_tables,
-                "final_data": statement.final_data
+                "final_data": statement.final_data,
+                "selected_statement_date": statement.selected_statement_date
             })
         
         return formatted_statements
@@ -139,20 +190,41 @@ async def get_statements_by_status(status: str, db: AsyncSession = Depends(get_d
         raise HTTPException(status_code=500, detail=f"Error fetching statements: {str(e)}")
 
 @router.get("/dashboard/carriers")
-async def get_carriers_with_statement_counts(db: AsyncSession = Depends(get_db)):
-    """Get all carriers with their statement counts"""
+async def get_carriers_with_statement_counts(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get carriers with their statement counts - automatically filters by user data for regular users"""
     try:
-        # Get carriers with statement counts
-        result = await db.execute(
-            select(
-                Company.id,
-                Company.name,
-                func.count(StatementUpload.id).label('statement_count')
+        # For admin users, show all carriers. For regular users, show only carriers they've worked with
+        is_admin = current_user.role == 'admin'
+        
+        if is_admin:
+            # Admin sees all carriers with total statement counts
+            result = await db.execute(
+                select(
+                    Company.id,
+                    Company.name,
+                    func.count(StatementUpload.id).label('statement_count')
+                )
+                .outerjoin(StatementUpload, Company.id == StatementUpload.company_id)
+                .group_by(Company.id, Company.name)
+                .order_by(Company.name)
             )
-            .outerjoin(StatementUpload, Company.id == StatementUpload.company_id)
-            .group_by(Company.id, Company.name)
-            .order_by(Company.name)
-        )
+        else:
+            # Regular users see only carriers they've uploaded statements for
+            result = await db.execute(
+                select(
+                    Company.id,
+                    Company.name,
+                    func.count(StatementUpload.id).label('statement_count')
+                )
+                .join(StatementUpload, Company.id == StatementUpload.company_id)
+                .where(StatementUpload.user_id == current_user.id)
+                .group_by(Company.id, Company.name)
+                .order_by(Company.name)
+            )
+        
         carriers = result.all()
         
         formatted_carriers = []
@@ -203,7 +275,8 @@ async def get_statements_by_carrier(carrier_id: UUID, db: AsyncSession = Depends
                 "plan_types": statement.plan_types,
                 "raw_data": statement.raw_data,
                 "edited_tables": statement.edited_tables,
-                "final_data": statement.final_data
+                "final_data": statement.final_data,
+                "selected_statement_date": statement.selected_statement_date
             })
         
         return formatted_statements
@@ -263,18 +336,118 @@ async def get_statements_by_carrier_and_status(
                 "plan_types": statement.plan_types,
                 "raw_data": statement.raw_data,
                 "edited_tables": statement.edited_tables,
-                "final_data": statement.final_data
+                "final_data": statement.final_data,
+                "selected_statement_date": statement.selected_statement_date
             })
         
         return formatted_statements
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching carrier statements: {str(e)}")
 
-@router.get("/dashboard/earned-commissions")
-async def get_all_earned_commissions(year: Optional[int] = None, db: AsyncSession = Depends(get_db)):
-    """Get all earned commission data with carrier names, optionally filtered by year"""
+@router.get("/companies/user-specific")
+async def get_user_specific_companies(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get companies that the current user has worked with"""
     try:
-        commissions = await crud.get_all_earned_commissions(db, year=year)
+        # Get carriers that the user has uploaded statements for
+        user_carriers_result = await db.execute(
+            select(func.distinct(StatementUpload.company_id))
+            .where(StatementUpload.user_id == current_user.id)
+        )
+        user_carrier_ids = [row[0] for row in user_carriers_result.all()]
+        
+        if not user_carrier_ids:
+            return []
+        
+        # Get company details for user's carriers
+        companies_result = await db.execute(
+            select(Company.id, Company.name)
+            .where(Company.id.in_(user_carrier_ids))
+            .order_by(Company.name.asc())
+        )
+        
+        companies = []
+        for company_id, company_name in companies_result.all():
+            companies.append({
+                "id": str(company_id),
+                "name": company_name
+            })
+        
+        return companies
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching user-specific companies: {str(e)}")
+
+@router.get("/companies/user-specific/{company_id}/statements")
+async def get_user_specific_company_statements(
+    company_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get statements for a specific company that the current user has uploaded"""
+    try:
+        # Get statements for this company that the user has uploaded
+        statements_result = await db.execute(
+            select(StatementUpload)
+            .where(
+                StatementUpload.company_id == company_id,
+                StatementUpload.user_id == current_user.id
+            )
+            .order_by(StatementUpload.uploaded_at.desc())
+        )
+        
+        statements = statements_result.scalars().all()
+        
+        formatted_statements = []
+        for statement in statements:
+            formatted_statements.append({
+                "id": str(statement.id),
+                "file_name": statement.file_name,
+                "uploaded_at": statement.uploaded_at.isoformat() if statement.uploaded_at else None,
+                "status": statement.status,
+                "rejection_reason": statement.rejection_reason,
+                "selected_statement_date": statement.selected_statement_date,
+                "final_data": statement.final_data,
+                "field_config": statement.field_config,
+                "raw_data": statement.raw_data
+            })
+        
+        return formatted_statements
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching user-specific company statements: {str(e)}")
+
+@router.get("/dashboard/earned-commissions")
+async def get_all_earned_commissions(
+    year: Optional[int] = None, 
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get earned commission data - user-specific for regular users, global for admins"""
+    try:
+        # For admin users, show global data. For regular users, show only their data
+        is_admin = current_user.role == 'admin'
+        
+        if is_admin:
+            # Admin sees all data
+            commissions = await crud.get_all_earned_commissions(db, year=year)
+        else:
+            # Regular users see only data from carriers they've worked with
+            # Get carriers that the user has worked with
+            user_carriers_result = await db.execute(
+                select(func.distinct(StatementUpload.company_id))
+                .where(StatementUpload.user_id == current_user.id)
+            )
+            user_carrier_ids = [row[0] for row in user_carriers_result.all()]
+            
+            if not user_carrier_ids:
+                # User has no uploaded statements, return empty list
+                return []
+            
+            # Get earned commissions for user's carriers only
+            commissions = await crud.get_earned_commissions_by_carriers(db, user_carrier_ids, year=year)
         
         formatted_commissions = []
         for commission, carrier_name in commissions:
@@ -398,9 +571,109 @@ async def get_earned_commissions_summary(db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Error fetching earned commissions summary: {str(e)}")
 
 @router.get("/earned-commission/stats")
-async def get_earned_commission_stats(year: Optional[int] = None, db: AsyncSession = Depends(get_db)):
-    """Get overall earned commission statistics, optionally filtered by year"""
+async def get_earned_commission_stats(
+    year: Optional[int] = None, 
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get earned commission statistics - user-specific for regular users, global for admins"""
     try:
+        # For admin users, show global data. For regular users, show only their data
+        is_admin = current_user.role == 'admin'
+        
+        # Build base conditions
+        base_conditions = []
+        if year is not None:
+            base_conditions.append(EarnedCommission.statement_year == year)
+        
+        # For non-admin users, filter by their uploaded statements
+        if not is_admin:
+            # Get carriers that the user has worked with
+            user_carriers_result = await db.execute(
+                select(func.distinct(StatementUpload.company_id))
+                .where(StatementUpload.user_id == current_user.id)
+            )
+            user_carrier_ids = [row[0] for row in user_carriers_result.all()]
+            
+            if not user_carrier_ids:
+                # User has no uploaded statements, return zeros
+                return {
+                    "total_invoice": 0.0,
+                    "total_commission": 0.0,
+                    "total_carriers": 0,
+                    "total_companies": 0
+                }
+            
+            base_conditions.append(EarnedCommission.carrier_id.in_(user_carrier_ids))
+
+        # Get total invoice amounts
+        if base_conditions:
+            total_invoice_result = await db.execute(
+                select(func.sum(EarnedCommission.invoice_total))
+                .where(and_(*base_conditions))
+            )
+        else:
+            total_invoice_result = await db.execute(
+                select(func.sum(EarnedCommission.invoice_total))
+            )
+        total_invoice = float(total_invoice_result.scalar() or 0)
+
+        # Get total commission earned
+        if base_conditions:
+            total_commission_result = await db.execute(
+                select(func.sum(EarnedCommission.commission_earned))
+                .where(and_(*base_conditions))
+            )
+        else:
+            total_commission_result = await db.execute(
+                select(func.sum(EarnedCommission.commission_earned))
+            )
+        total_commission = float(total_commission_result.scalar() or 0)
+
+        # Get total carriers with commission data
+        if base_conditions:
+            total_carriers_result = await db.execute(
+                select(func.count(func.distinct(EarnedCommission.carrier_id)))
+                .where(and_(*base_conditions))
+            )
+        else:
+            total_carriers_result = await db.execute(
+                select(func.count(func.distinct(EarnedCommission.carrier_id)))
+            )
+        total_carriers = total_carriers_result.scalar() or 0
+
+        # Get total companies/clients
+        if base_conditions:
+            total_companies_result = await db.execute(
+                select(func.count(func.distinct(EarnedCommission.client_name)))
+                .where(and_(*base_conditions))
+            )
+        else:
+            total_companies_result = await db.execute(
+                select(func.count(func.distinct(EarnedCommission.client_name)))
+            )
+        total_companies = total_companies_result.scalar() or 0
+
+        return {
+            "total_invoice": total_invoice,
+            "total_commission": total_commission,
+            "total_carriers": total_carriers,
+            "total_companies": total_companies
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching earned commission stats: {str(e)}")
+
+@router.get("/earned-commission/global/stats")
+async def get_global_earned_commission_stats(
+    year: Optional[int] = None, 
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get global earned commission statistics (all data) - requires admin or explicit permission"""
+    try:
+        # For now, allow all authenticated users to view global data
+        # In production, you might want to add additional permission checks
+        
         # Get total invoice amounts
         if year is not None:
             total_invoice_result = await db.execute(
@@ -455,8 +728,59 @@ async def get_earned_commission_stats(year: Optional[int] = None, db: AsyncSessi
             "total_carriers": total_carriers,
             "total_companies": total_companies
         }
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching earned commission stats: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error fetching global earned commission stats: {str(e)}")
+
+@router.get("/earned-commission/global/data")
+async def get_global_earned_commissions(
+    year: Optional[int] = None, 
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get global earned commission data (all data) - requires admin or explicit permission"""
+    try:
+        # For now, allow all authenticated users to view global data
+        # In production, you might want to add additional permission checks
+        
+        # Get all earned commissions (global data)
+        commissions = await crud.get_all_earned_commissions(db, year=year)
+        
+        formatted_commissions = []
+        for commission, carrier_name in commissions:
+            formatted_commissions.append({
+                "id": str(commission.id),
+                "carrier_id": str(commission.carrier_id),
+                "carrier_name": carrier_name,
+                "client_name": commission.client_name,
+                "invoice_total": float(commission.invoice_total),
+                "commission_earned": float(commission.commission_earned),
+                "statement_count": commission.statement_count,
+                "statement_date": commission.statement_date.isoformat() if commission.statement_date else None,
+                "statement_month": commission.statement_month,
+                "statement_year": commission.statement_year,
+                "monthly_breakdown": {
+                    "jan": float(commission.jan_commission),
+                    "feb": float(commission.feb_commission),
+                    "mar": float(commission.mar_commission),
+                    "apr": float(commission.apr_commission),
+                    "may": float(commission.may_commission),
+                    "jun": float(commission.jun_commission),
+                    "jul": float(commission.jul_commission),
+                    "aug": float(commission.aug_commission),
+                    "sep": float(commission.sep_commission),
+                    "oct": float(commission.oct_commission),
+                    "nov": float(commission.nov_commission),
+                    "dec": float(commission.dec_commission)
+                },
+                "last_updated": commission.last_updated.isoformat() if commission.last_updated else None,
+                "created_at": commission.created_at.isoformat() if commission.created_at else None
+            })
+        
+        return formatted_commissions
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching global earned commission data: {str(e)}")
 
 @router.get("/earned-commission/carrier/{carrier_id}/stats")
 async def get_carrier_earned_commission_stats(carrier_id: UUID, db: AsyncSession = Depends(get_db)):

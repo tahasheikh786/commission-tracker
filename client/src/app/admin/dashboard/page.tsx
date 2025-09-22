@@ -1,742 +1,705 @@
-'use client';
-
+'use client'
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
+import ProtectedRoute from '@/components/ProtectedRoute';
+import axios from 'axios';
 import { 
   Users, 
-  Shield, 
-  Settings, 
-  LogOut, 
-  Plus, 
-  Trash2, 
-  Edit, 
-  Eye, 
-  EyeOff,
-  Building2,
-  Mail,
-  Key,
-  CheckCircle,
-  XCircle,
-  AlertCircle,
-  Home,
-  UserPlus
+  Building2, 
+  FileText, 
+  TrendingUp, 
+  DollarSign, 
+  Activity,
+  ArrowLeft,
+  Settings,
+  BarChart3,
+  Calendar,
+  Shield,
+  Globe,
+  Plus,
+  Trash2,
+  Edit,
+  MoreVertical,
+  RotateCcw,
+  UserX
 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
-import axios from 'axios';
+
+interface CompanyStats {
+  total_statements: number;
+  total_carriers: number;
+  total_commission: number;
+  pending_reviews: number;
+  approved_statements: number;
+  rejected_statements: number;
+}
+
+interface UserStats {
+  id: string;
+  email: string;
+  first_name: string | null;
+  last_name: string | null;
+  role: string;
+  is_active: boolean;
+  last_login: string | null;
+  created_at: string;
+  total_uploads: number;
+  total_approved: number;
+  total_rejected: number;
+  total_pending: number;
+  carriers_worked_with: number;
+  total_commission_contributed: number;
+}
+
+interface AdminDashboardData {
+  company_stats: CompanyStats;
+  users: UserStats[];
+  total_users: number;
+  active_users: number;
+}
 
 interface AllowedDomain {
   id: string;
   domain: string;
+  company_id: string | null;
   is_active: boolean;
-  company_id?: string;
   created_at: string;
   updated_at: string;
 }
 
-interface User {
-  id: string;
-  email: string;
-  first_name?: string;
-  last_name?: string;
-  role: string;
-  is_active: boolean;
-  is_verified: boolean;
-  last_login?: string;
-  created_at: string;
-}
-
 export default function AdminDashboard() {
-  const { user, logout } = useAuth();
+  const { user, logout, isLoading: authLoading } = useAuth();
   const router = useRouter();
-  
+  const [data, setData] = useState<AdminDashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'overview' | 'domains'>('overview');
   const [domains, setDomains] = useState<AllowedDomain[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'domains' | 'users' | 'settings'>('domains');
-  
-  // Domain management state
+  const [domainLoading, setDomainLoading] = useState(false);
   const [showAddDomain, setShowAddDomain] = useState(false);
   const [newDomain, setNewDomain] = useState('');
-  
-  // User management state
-  const [showAddUser, setShowAddUser] = useState(false);
-  const [newUser, setNewUser] = useState({
-    email: '',
-    role: 'user'
-  });
-  
-  // Settings state
-  const [showPasswordForm, setShowPasswordForm] = useState(false);
-  const [showProfileForm, setShowProfileForm] = useState(false);
-  const [passwordData, setPasswordData] = useState({
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: ''
-  });
-  const [profileData, setProfileData] = useState({
-    first_name: user?.first_name || '',
-    last_name: user?.last_name || ''
-  });
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
 
   useEffect(() => {
-    if (user?.role !== 'admin') {
-      router.push('/');
-      return;
+    // Wait for authentication to complete before fetching data
+    if (!authLoading && user) {
+      fetchAdminData();
     }
-    
-    fetchData();
-  }, [user, router]);
+  }, [authLoading, user]);
 
-  const fetchData = async () => {
+  useEffect(() => {
+    if (activeTab === 'domains') {
+      fetchDomains();
+    }
+  }, [activeTab]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
+      if (openDropdown && !target.closest('.dropdown-container')) {
+        setOpenDropdown(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [openDropdown]);
+
+  const fetchAdminData = async () => {
     try {
-      const [domainsRes, usersRes] = await Promise.all([
-        axios.get('/auth/admin/domains'),
-        axios.get('/auth/admin/users')
-      ]);
-      
-      setDomains(domainsRes.data);
-      setUsers(usersRes.data);
-    } catch (error) {
-      toast.error('Failed to fetch data');
+      setLoading(true);
+      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/admin/dashboard`);
+      setData(response.data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+      toast.error('Failed to load admin dashboard');
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  const handleAddDomain = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newDomain.trim()) return;
+  const fetchDomains = async () => {
+    try {
+      setDomainLoading(true);
+      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/admin/domains`);
+      setDomains(response.data);
+    } catch (err) {
+      toast.error('Failed to load domains');
+    } finally {
+      setDomainLoading(false);
+    }
+  };
+
+  const addDomain = async () => {
+    if (!newDomain.trim()) {
+      toast.error('Please enter a domain');
+      return;
+    }
 
     try {
-      const response = await axios.post('/auth/admin/domains', {
+      await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/admin/domains`, {
         domain: newDomain.trim(),
         is_active: true
       });
-      
-      setDomains([...domains, response.data]);
+      toast.success('Domain added successfully');
       setNewDomain('');
       setShowAddDomain(false);
-      toast.success('Domain added successfully');
-    } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Failed to add domain');
+      fetchDomains();
+    } catch (err) {
+      toast.error('Failed to add domain');
     }
   };
 
-  const handleToggleDomain = async (domainId: string, isActive: boolean) => {
-    try {
-      await axios.put(`/auth/admin/domains/${domainId}`, {
-        domain: domains.find(d => d.id === domainId)?.domain || '',
-        is_active: !isActive
-      });
-      
-      setDomains(domains.map(d => 
-        d.id === domainId ? { ...d, is_active: !isActive } : d
-      ));
-      toast.success('Domain status updated');
-    } catch (error: any) {
-      toast.error('Failed to update domain');
+  const deleteDomain = async (domainId: string) => {
+    if (!confirm('Are you sure you want to delete this domain?')) {
+      return;
     }
-  };
-
-  const handleDeleteDomain = async (domainId: string) => {
-    if (!confirm('Are you sure you want to delete this domain?')) return;
 
     try {
-      await axios.delete(`/auth/admin/domains/${domainId}`);
-      setDomains(domains.filter(d => d.id !== domainId));
+      await axios.delete(`${process.env.NEXT_PUBLIC_API_URL}/admin/domains/${domainId}`);
       toast.success('Domain deleted successfully');
-    } catch (error: any) {
+      fetchDomains();
+    } catch (err) {
       toast.error('Failed to delete domain');
     }
   };
 
-  const handleUpdateUserRole = async (userId: string, role: string, isActive: boolean) => {
+  const toggleDomainStatus = async (domainId: string, isActive: boolean) => {
     try {
-      await axios.put(`/auth/admin/users/${userId}/role`, {
-        user_id: userId,
-        role,
-        is_active: isActive
+      await axios.put(`${process.env.NEXT_PUBLIC_API_URL}/admin/domains/${domainId}`, {
+        is_active: !isActive
       });
-      
-      setUsers(users.map(u => 
-        u.id === userId ? { ...u, role, is_active: isActive } : u
-      ));
-      toast.success('User role updated');
-    } catch (error: any) {
+      toast.success('Domain status updated');
+      fetchDomains();
+    } catch (err) {
+      toast.error('Failed to update domain status');
+    }
+  };
+
+  const deleteUser = async (userId: string) => {
+    if (!confirm('Are you sure you want to delete this user? This will permanently remove the user and all their data from the system.')) {
+      return;
+    }
+
+    try {
+      await axios.delete(`${process.env.NEXT_PUBLIC_API_URL}/admin/users/${userId}`);
+      toast.success('User deleted successfully');
+      fetchAdminData();
+    } catch (err) {
+      toast.error('Failed to delete user');
+    }
+  };
+
+  const resetUserData = async (userId: string) => {
+    if (!confirm('Are you sure you want to reset this user\'s data? This will clear all uploaded data but keep the user account active.')) {
+      return;
+    }
+
+    try {
+      await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/admin/users/${userId}/reset-data`);
+      toast.success('User data reset successfully');
+      fetchAdminData();
+    } catch (err) {
+      toast.error('Failed to reset user data');
+    }
+  };
+
+  const updateUserRole = async (userId: string, newRole: string) => {
+    try {
+      await axios.put(`${process.env.NEXT_PUBLIC_API_URL}/admin/users/${userId}/role`, {
+        role: newRole
+      });
+      toast.success('User role updated successfully');
+      fetchAdminData();
+    } catch (err) {
       toast.error('Failed to update user role');
     }
   };
 
-  const handleAddUser = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!newUser.email.trim()) {
-      toast.error('Please enter an email address');
-      return;
-    }
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+    }).format(amount);
+  };
 
-    try {
-      const response = await axios.post('/auth/admin/create-user', {
-        email: newUser.email.trim(),
-        role: newUser.role
-      });
-      
-      setUsers([...users, response.data]);
-      setNewUser({ email: '', role: 'user' });
-      setShowAddUser(false);
-      toast.success('User created successfully');
-    } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Failed to create user');
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'approved':
+        return 'bg-emerald-100 text-emerald-800';
+      case 'rejected':
+        return 'bg-red-100 text-red-800';
+      case 'pending':
+        return 'bg-yellow-100 text-yellow-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
     }
   };
 
-  const handleUpdateProfile = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!profileData.first_name.trim() || !profileData.last_name.trim()) {
-      toast.error('Please fill in all required fields');
-      return;
-    }
-
-    try {
-      await axios.put('/auth/admin/update-profile', {
-        first_name: profileData.first_name.trim(),
-        last_name: profileData.last_name.trim()
-      });
-      
-      setShowProfileForm(false);
-      toast.success('Profile updated successfully');
-      // Refresh user data
-      window.location.reload();
-    } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Failed to update profile');
-    }
-  };
-
-  const handleChangePassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (passwordData.newPassword !== passwordData.confirmPassword) {
-      toast.error('Passwords do not match');
-      return;
-    }
-
-    try {
-      await axios.post('/auth/admin/change-password', {
-        current_password: passwordData.currentPassword,
-        new_password: passwordData.newPassword
-      });
-      
-      setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
-      setShowPasswordForm(false);
-      toast.success('Password changed successfully');
-    } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Failed to change password');
-    }
-  };
-
-  if (isLoading) {
+  if (loading || authLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-100/50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg animate-pulse">
+            <Shield className="text-white" size={32} />
+          </div>
+          <p className="mt-6 text-slate-600 font-medium">Loading Admin Dashboard...</p>
+        </div>
       </div>
     );
   }
 
+  if (error || !data) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-100/50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 bg-gradient-to-br from-red-500 to-red-600 rounded-2xl flex items-center justify-center shadow-lg">
+            <Activity className="text-white" size={32} />
+          </div>
+          <p className="mt-6 text-slate-600 font-medium">Error loading dashboard</p>
+          <button
+            onClick={fetchAdminData}
+            className="mt-4 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const statCards = [
+    {
+      label: "Total Statements",
+      value: data.company_stats.total_statements,
+      icon: FileText,
+      color: "blue",
+      gradient: "from-blue-500 to-indigo-600",
+      description: "All uploaded statements"
+    },
+    {
+      label: "Total Carriers",
+      value: data.company_stats.total_carriers,
+      icon: Building2,
+      color: "purple",
+      gradient: "from-purple-500 to-violet-600",
+      description: "Active carriers"
+    },
+    {
+      label: "Total Commission",
+      value: formatCurrency(data.company_stats.total_commission),
+      icon: DollarSign,
+      color: "green",
+      gradient: "from-emerald-500 to-teal-600",
+      description: "Commission earned"
+    },
+    {
+      label: "Total Users",
+      value: data.total_users,
+      icon: Users,
+      color: "indigo",
+      gradient: "from-indigo-500 to-blue-600",
+      description: "Registered users"
+    },
+    {
+      label: "Active Users",
+      value: data.active_users,
+      icon: Activity,
+      color: "emerald",
+      gradient: "from-emerald-500 to-green-600",
+      description: "Recently active"
+    },
+    {
+      label: "Pending Reviews",
+      value: data.company_stats.pending_reviews,
+      icon: BarChart3,
+      color: "amber",
+      gradient: "from-amber-500 to-orange-600",
+      description: "Awaiting review"
+    }
+  ];
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Enhanced Header */}
-      <header className="bg-white/95 backdrop-blur-xl shadow-lg border-b border-gray-200/60 sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex justify-between items-center">
-            {/* Left Section - Logo and Title */}
+    <ProtectedRoute requireAuth={true} requireAdmin={true}>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-100/50">
+      {/* Header */}
+      <header className="bg-white/90 backdrop-blur-xl border-b border-slate-200/60 shadow-lg sticky top-0 z-50">
+        <div className="w-[90%] mx-auto px-6 py-4">
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
-                <Building2 className="h-6 w-6 text-white" />
+              <button
+                onClick={() => router.push('/')}
+                className="p-2 rounded-xl hover:bg-slate-100 transition-colors duration-200"
+              >
+                <ArrowLeft className="w-6 h-6 text-slate-600" />
+              </button>
+              <div className="relative">
+                <div className="w-12 h-12 bg-gradient-to-br from-purple-600 via-indigo-600 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
+                  <Shield className="text-white" size={24} />
+                </div>
+                <div className="absolute -top-1 -right-1 w-4 h-4 bg-gradient-to-r from-emerald-400 to-teal-400 rounded-full border-2 border-white shadow-sm"></div>
               </div>
               <div>
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-slate-800 via-slate-700 to-slate-600 bg-clip-text text-transparent">
+                <h1 className="font-bold text-2xl bg-gradient-to-r from-slate-800 via-slate-700 to-slate-600 bg-clip-text text-transparent">
                   Admin Dashboard
                 </h1>
-                <p className="text-sm text-slate-500 font-medium">System Administration & Management</p>
+                <p className="text-sm text-slate-500 font-medium">Company Overview & User Management</p>
               </div>
             </div>
 
-            {/* Right Section - User Info and Actions */}
-            <div className="flex items-center gap-6">
-              {/* Home Button */}
-              <button
-                onClick={() => router.push('/')}
-                className="flex items-center gap-2 px-4 py-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-all duration-200 font-medium"
-              >
-                <Home className="h-4 w-4" />
-                <span className="hidden sm:inline">Home</span>
-              </button>
-
-              {/* User Info */}
-              <div className="flex items-center gap-3 px-4 py-2 bg-slate-50 rounded-lg border border-slate-200">
-                <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-semibold text-sm">
-                  {user?.first_name?.[0] || user?.email?.[0]?.toUpperCase() || 'A'}
-                </div>
-                <div className="text-left">
-                  <p className="text-sm font-semibold text-slate-900">
-                    {user?.first_name && user?.last_name 
-                      ? `${user.first_name} ${user.last_name}`
-                      : user?.email
-                    }
-                  </p>
-                  <p className="text-xs text-slate-500 capitalize font-medium">{user?.role}</p>
-                </div>
-              </div>
-
-              {/* Logout Button */}
+            <div className="flex items-center gap-4">
               <button
                 onClick={logout}
-                className="flex items-center gap-2 px-4 py-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all duration-200 font-medium border border-red-200 hover:border-red-300"
+                className="flex items-center gap-2 px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-xl transition-colors duration-200"
               >
-                <LogOut className="h-4 w-4" />
-                <span className="hidden sm:inline">Logout</span>
+                <Settings className="w-4 h-4" />
+                Logout
               </button>
             </div>
           </div>
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Enhanced Tabs */}
-        <div className="mb-8">
-          <nav className="flex items-center gap-2 bg-slate-100/80 backdrop-blur-sm rounded-2xl p-2 shadow-inner">
-            {[
-              { id: 'domains', label: 'Domain Management', icon: Shield, gradient: 'from-blue-600 to-indigo-600' },
-              { id: 'users', label: 'User Management', icon: Users, gradient: 'from-emerald-600 to-teal-600' },
-              { id: 'settings', label: 'Settings', icon: Settings, gradient: 'from-purple-600 to-pink-600' }
-            ].map((tab) => {
-              const isActive = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id as any)}
-                  className={`group relative flex items-center gap-3 px-6 py-3 rounded-xl font-semibold transition-all duration-300 ${
-                    isActive 
-                      ? `bg-gradient-to-r ${tab.gradient} text-white shadow-lg transform scale-105` 
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-white/70 hover:shadow-md'
-                  }`}
-                >
-                  <tab.icon size={18} className={`transition-transform duration-200 ${isActive ? 'scale-110' : 'group-hover:scale-105'}`} />
-                  <span className="font-medium">{tab.label}</span>
-                  {isActive && (
-                    <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-2 h-2 bg-white rounded-full shadow-sm"></div>
-                  )}
-                </button>
-              );
-            })}
-          </nav>
+      {/* Tab Navigation */}
+      <div className="w-[90%] mx-auto px-6 py-4">
+        <div className="bg-white/90 backdrop-blur-xl rounded-2xl border border-white/50 shadow-lg p-2">
+          <div className="flex space-x-2">
+            <button
+              onClick={() => setActiveTab('overview')}
+              className={`flex-1 px-4 py-2 rounded-xl font-medium transition-all duration-200 ${
+                activeTab === 'overview'
+                  ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg'
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <div className="flex items-center justify-center gap-2">
+                <BarChart3 className="w-4 h-4" />
+                Overview
+              </div>
+            </button>
+            <button
+              onClick={() => setActiveTab('domains')}
+              className={`flex-1 px-4 py-2 rounded-xl font-medium transition-all duration-200 ${
+                activeTab === 'domains'
+                  ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg'
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <div className="flex items-center justify-center gap-2">
+                <Globe className="w-4 h-4" />
+                Domain Management
+              </div>
+            </button>
+          </div>
         </div>
-
-        {/* Domain Management Tab */}
-        {activeTab === 'domains' && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-white rounded-lg shadow"
-          >
-            <div className="px-6 py-4 border-b border-gray-200">
-              <div className="flex justify-between items-center">
-                <h2 className="text-lg font-medium text-gray-900">Allowed Domains</h2>
-                <button
-                  onClick={() => setShowAddDomain(true)}
-                  className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Domain
-                </button>
-              </div>
-            </div>
-
-            <div className="p-6">
-              {domains.length === 0 ? (
-                <div className="text-center py-8">
-                  <Shield className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-500">No domains configured yet</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {domains.map((domain) => (
-                    <div
-                      key={domain.id}
-                      className="flex items-center justify-between p-4 border border-gray-200 rounded-lg"
-                    >
-                      <div className="flex items-center">
-                        <Mail className="h-5 w-5 text-gray-400 mr-3" />
-                        <div>
-                          <p className="font-medium text-gray-900">{domain.domain}</p>
-                          <p className="text-sm text-gray-500">
-                            Added {new Date(domain.created_at).toLocaleDateString()}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <button
-                          onClick={() => handleToggleDomain(domain.id, domain.is_active)}
-                          className={`flex items-center px-3 py-1 rounded-full text-sm ${
-                            domain.is_active
-                              ? 'bg-green-100 text-green-800'
-                              : 'bg-red-100 text-red-800'
-                          }`}
-                        >
-                          {domain.is_active ? (
-                            <CheckCircle className="h-4 w-4 mr-1" />
-                          ) : (
-                            <XCircle className="h-4 w-4 mr-1" />
-                          )}
-                          {domain.is_active ? 'Active' : 'Inactive'}
-                        </button>
-                        <button
-                          onClick={() => handleDeleteDomain(domain.id)}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </motion.div>
-        )}
-
-        {/* User Management Tab */}
-        {activeTab === 'users' && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-white rounded-lg shadow"
-          >
-            <div className="px-6 py-4 border-b border-gray-200">
-              <div className="flex justify-between items-center">
-                <h2 className="text-lg font-medium text-gray-900">User Management</h2>
-                <button
-                  onClick={() => setShowAddUser(true)}
-                  className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                >
-                  <UserPlus className="h-4 w-4 mr-2" />
-                  Add User
-                </button>
-              </div>
-            </div>
-
-            <div className="p-6">
-              <div className="space-y-4">
-                {users.map((user) => (
-                  <div
-                    key={user.id}
-                    className="flex items-center justify-between p-4 border border-gray-200 rounded-lg"
-                  >
-                    <div className="flex items-center">
-                      <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center mr-4">
-                        <span className="text-sm font-medium text-gray-600">
-                          {user.first_name?.[0] || user.email[0].toUpperCase()}
-                        </span>
-                      </div>
-                      <div>
-                        <p className="font-medium text-gray-900">
-                          {user.first_name && user.last_name 
-                            ? `${user.first_name} ${user.last_name}`
-                            : user.email
-                          }
-                        </p>
-                        <p className="text-sm text-gray-500">{user.email}</p>
-                        <p className="text-xs text-gray-400">
-                          Last login: {user.last_login 
-                            ? new Date(user.last_login).toLocaleDateString()
-                            : 'Never'
-                          }
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <select
-                        value={user.role}
-                        onChange={(e) => handleUpdateUserRole(user.id, e.target.value, user.is_active)}
-                        className="px-3 py-1 border border-gray-300 rounded-lg text-sm"
-                      >
-                        <option value="admin">Admin</option>
-                        <option value="user">User</option>
-                        <option value="read_only">Read Only</option>
-                      </select>
-                      <button
-                        onClick={() => handleUpdateUserRole(user.id, user.role, !user.is_active)}
-                        className={`px-3 py-1 rounded-full text-sm ${
-                          user.is_active
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-red-100 text-red-800'
-                        }`}
-                      >
-                        {user.is_active ? 'Active' : 'Inactive'}
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </motion.div>
-        )}
-
-        {/* Settings Tab */}
-        {activeTab === 'settings' && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-white rounded-lg shadow"
-          >
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h2 className="text-lg font-medium text-gray-900">Account Settings</h2>
-            </div>
-
-            <div className="p-6">
-              <div className="space-y-6">
-                <div>
-                  <h3 className="text-md font-medium text-gray-900 mb-4">Profile Information</h3>
-                  {!showProfileForm ? (
-                    <div className="space-y-2">
-                      <p className="text-sm text-gray-600">
-                        <span className="font-medium">Name:</span> {user?.first_name && user?.last_name 
-                          ? `${user.first_name} ${user.last_name}`
-                          : 'Not set'
-                        }
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        <span className="font-medium">Email:</span> {user?.email}
-                      </p>
-                      <button
-                        onClick={() => setShowProfileForm(true)}
-                        className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                      >
-                        <Edit className="h-4 w-4 mr-2" />
-                        Edit Profile
-                      </button>
-                    </div>
-                  ) : (
-                    <form onSubmit={handleUpdateProfile} className="space-y-4 max-w-md">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          First Name
-                        </label>
-                        <input
-                          type="text"
-                          value={profileData.first_name}
-                          onChange={(e) => setProfileData({...profileData, first_name: e.target.value})}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Last Name
-                        </label>
-                        <input
-                          type="text"
-                          value={profileData.last_name}
-                          onChange={(e) => setProfileData({...profileData, last_name: e.target.value})}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                          required
-                        />
-                      </div>
-                      <div className="flex space-x-2">
-                        <button
-                          type="submit"
-                          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                        >
-                          Update Profile
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setShowProfileForm(false)}
-                          className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </form>
-                  )}
-                </div>
-                
-                <div>
-                  <h3 className="text-md font-medium text-gray-900 mb-4">Change Password</h3>
-                  {!showPasswordForm ? (
-                    <button
-                      onClick={() => setShowPasswordForm(true)}
-                      className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                    >
-                      <Key className="h-4 w-4 mr-2" />
-                      Change Password
-                    </button>
-                  ) : (
-                    <form onSubmit={handleChangePassword} className="space-y-4 max-w-md">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Current Password
-                        </label>
-                        <input
-                          type="password"
-                          value={passwordData.currentPassword}
-                          onChange={(e) => setPasswordData({...passwordData, currentPassword: e.target.value})}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          New Password
-                        </label>
-                        <input
-                          type="password"
-                          value={passwordData.newPassword}
-                          onChange={(e) => setPasswordData({...passwordData, newPassword: e.target.value})}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Confirm New Password
-                        </label>
-                        <input
-                          type="password"
-                          value={passwordData.confirmPassword}
-                          onChange={(e) => setPasswordData({...passwordData, confirmPassword: e.target.value})}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                          required
-                        />
-                      </div>
-                      <div className="flex space-x-2">
-                        <button
-                          type="submit"
-                          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                        >
-                          Update Password
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setShowPasswordForm(false)}
-                          className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </form>
-                  )}
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        )}
       </div>
 
-      {/* Add Domain Modal */}
-      {showAddDomain && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="bg-white rounded-lg p-6 w-full max-w-md"
-          >
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Add New Domain</h3>
-            <form onSubmit={handleAddDomain}>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Domain
-                </label>
-                <input
-                  type="text"
-                  value={newDomain}
-                  onChange={(e) => setNewDomain(e.target.value)}
-                  placeholder="example.com"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-              </div>
-              <div className="flex space-x-2">
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                >
-                  Add Domain
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowAddDomain(false)}
-                  className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </motion.div>
+      {/* Main Content */}
+      <main className="w-[90%] mx-auto px-6 py-8">
+        {activeTab === 'overview' && (
+          <>
+            {/* Company Overview Stats */}
+        <div className="mb-8">
+          <h2 className="text-2xl font-bold text-slate-800 mb-6">Company Overview</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
+            {statCards.map((card, i) => {
+              const Icon = card.icon;
+              return (
+                <div key={i} className="bg-white/90 backdrop-blur-xl rounded-2xl border border-white/50 shadow-lg p-6 hover:shadow-xl transition-all duration-300">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className={`w-12 h-12 bg-gradient-to-br ${card.gradient} rounded-xl flex items-center justify-center shadow-lg`}>
+                      <Icon className="text-white" size={24} />
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-sm text-slate-600 font-medium mb-1">{card.label}</p>
+                    <p className="text-2xl font-bold text-slate-800 mb-1">{card.value}</p>
+                    <p className="text-xs text-slate-500">{card.description}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
-      )}
 
-      {/* Add User Modal */}
-      {showAddUser && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="bg-white rounded-lg p-6 w-full max-w-md"
-          >
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Add New User</h3>
-            <form onSubmit={handleAddUser}>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Email Address *
-                  </label>
-                  <input
-                    type="email"
-                    value={newUser.email}
-                    onChange={(e) => setNewUser({...newUser, email: e.target.value})}
-                    placeholder="user@example.com"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Role
-                  </label>
-                  <select
-                    value={newUser.role}
-                    onChange={(e) => setNewUser({...newUser, role: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="user">User</option>
-                    <option value="admin">Admin</option>
-                    <option value="read_only">Read Only</option>
-                  </select>
-                </div>
-              </div>
-              <div className="flex space-x-2 mt-6">
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                >
-                  Create User
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowAddUser(false)}
-                  className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </motion.div>
+        {/* Users Table */}
+        <div className="bg-white/90 backdrop-blur-xl rounded-2xl border border-white/50 shadow-lg p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-bold text-slate-800">Company Users</h2>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-slate-200">
+                  <th className="text-left py-3 px-4 font-semibold text-slate-700">User</th>
+                  <th className="text-left py-3 px-4 font-semibold text-slate-700">Role</th>
+                  <th className="text-left py-3 px-4 font-semibold text-slate-700">Status</th>
+                  <th className="text-left py-3 px-4 font-semibold text-slate-700">Uploads</th>
+                  <th className="text-left py-3 px-4 font-semibold text-slate-700">Carriers</th>
+                  <th className="text-left py-3 px-4 font-semibold text-slate-700">Commission</th>
+                  <th className="text-left py-3 px-4 font-semibold text-slate-700">Last Login</th>
+                  <th className="text-left py-3 px-4 font-semibold text-slate-700">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.users.map((user) => (
+                  <tr key={user.id} className="border-b border-slate-100 hover:bg-slate-50/50 transition-colors">
+                    <td className="py-4 px-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-semibold">
+                          {user.first_name?.[0] || user.email[0].toUpperCase()}
+                        </div>
+                        <div>
+                          <p className="font-medium text-slate-800">
+                            {user.first_name && user.last_name 
+                              ? `${user.first_name} ${user.last_name}`
+                              : user.email
+                            }
+                          </p>
+                          <p className="text-sm text-slate-500">{user.email}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-4 px-4">
+                      <select
+                        value={user.role}
+                        onChange={(e) => updateUserRole(user.id, e.target.value)}
+                        className={`px-3 py-1 rounded-full text-sm font-medium capitalize border-0 focus:ring-2 focus:ring-blue-500 ${
+                          user.role === 'admin' 
+                            ? 'bg-purple-100 text-purple-800' 
+                            : user.role === 'user'
+                            ? 'bg-blue-100 text-blue-800'
+                            : 'bg-gray-100 text-gray-800'
+                        }`}
+                      >
+                        <option value="user">User</option>
+                        <option value="admin">Admin</option>
+                        <option value="read_only">Read Only</option>
+                      </select>
+                    </td>
+                    <td className="py-4 px-4">
+                      <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                        user.is_active 
+                          ? 'bg-emerald-100 text-emerald-800' 
+                          : 'bg-red-100 text-red-800'
+                      }`}>
+                        {user.is_active ? 'Active' : 'Inactive'}
+                      </span>
+                    </td>
+                    <td className="py-4 px-4">
+                      <div className="text-center">
+                        <p className="font-semibold text-slate-800">{user.total_uploads}</p>
+                        <div className="flex justify-center gap-1 text-xs text-slate-500">
+                          <span className="text-emerald-600">{user.total_approved}✓</span>
+                          <span className="text-red-600">{user.total_rejected}✗</span>
+                          <span className="text-yellow-600">{user.total_pending}⏳</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-4 px-4">
+                      <p className="font-semibold text-slate-800">{user.carriers_worked_with}</p>
+                    </td>
+                    <td className="py-4 px-4">
+                      <p className="font-semibold text-slate-800">{formatCurrency(user.total_commission_contributed)}</p>
+                    </td>
+                    <td className="py-4 px-4">
+                      <p className="text-sm text-slate-600">
+                        {user.last_login ? formatDate(user.last_login) : 'Never'}
+                      </p>
+                    </td>
+                    <td className="py-4 px-4">
+                      <div className="relative dropdown-container">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOpenDropdown(openDropdown === user.id ? null : user.id);
+                          }}
+                          className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                          title="More Options"
+                        >
+                          <MoreVertical className="w-4 h-4" />
+                        </button>
+                        
+                        {openDropdown === user.id && (
+                          <div className="absolute right-0 top-10 bg-white border border-slate-200 rounded-lg shadow-lg z-10 min-w-[200px]">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                resetUserData(user.id);
+                                setOpenDropdown(null);
+                              }}
+                              className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                            >
+                              <RotateCcw className="w-4 h-4" />
+                              Reset User Data
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteUser(user.id);
+                                setOpenDropdown(null);
+                              }}
+                              className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                            >
+                              <UserX className="w-4 h-4" />
+                              Delete User
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {data.users.length === 0 && (
+            <div className="text-center py-12">
+              <Users className="mx-auto text-slate-400" size={48} />
+              <p className="text-slate-600 mt-4">No users found</p>
+            </div>
+          )}
         </div>
-      )}
-    </div>
+          </>
+        )}
+
+        {activeTab === 'domains' && (
+          <div className="bg-white/90 backdrop-blur-xl rounded-2xl border border-white/50 shadow-lg p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-slate-800">Domain Management</h2>
+              <button
+                onClick={() => setShowAddDomain(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-xl hover:shadow-lg transition-all duration-200"
+              >
+                <Plus className="w-4 h-4" />
+                Add Domain
+              </button>
+            </div>
+
+            {/* Add Domain Form */}
+            {showAddDomain && (
+              <div className="mb-6 p-4 bg-slate-50 rounded-xl border border-slate-200">
+                <h3 className="text-lg font-semibold text-slate-800 mb-4">Add New Domain</h3>
+                <div className="flex gap-4">
+                  <input
+                    type="text"
+                    placeholder="Enter domain (e.g., company.com)"
+                    value={newDomain}
+                    onChange={(e) => setNewDomain(e.target.value)}
+                    className="flex-1 px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                  <button
+                    onClick={addDomain}
+                    className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    Add
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowAddDomain(false);
+                      setNewDomain('');
+                    }}
+                    className="px-6 py-2 bg-slate-500 text-white rounded-lg hover:bg-slate-600 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Domains List */}
+            {domainLoading ? (
+              <div className="text-center py-12">
+                <div className="w-16 h-16 bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg animate-pulse mx-auto">
+                  <Globe className="text-white" size={32} />
+                </div>
+                <p className="mt-6 text-slate-600 font-medium">Loading domains...</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-slate-200">
+                      <th className="text-left py-3 px-4 font-semibold text-slate-700">Domain</th>
+                      <th className="text-left py-3 px-4 font-semibold text-slate-700">Status</th>
+                      <th className="text-left py-3 px-4 font-semibold text-slate-700">Created</th>
+                      <th className="text-left py-3 px-4 font-semibold text-slate-700">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {domains.map((domain) => (
+                      <tr key={domain.id} className="border-b border-slate-100 hover:bg-slate-50/50 transition-colors">
+                        <td className="py-4 px-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-semibold">
+                              <Globe className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <p className="font-medium text-slate-800">{domain.domain}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-4 px-4">
+                          <button
+                            onClick={() => toggleDomainStatus(domain.id, domain.is_active)}
+                            className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
+                              domain.is_active
+                                ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
+                                : 'bg-red-100 text-red-800 hover:bg-red-200'
+                            }`}
+                          >
+                            {domain.is_active ? 'Active' : 'Inactive'}
+                          </button>
+                        </td>
+                        <td className="py-4 px-4">
+                          <p className="text-sm text-slate-600">
+                            {formatDate(domain.created_at)}
+                          </p>
+                        </td>
+                        <td className="py-4 px-4">
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => deleteDomain(domain.id)}
+                              className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
+                              title="Delete Domain"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                {domains.length === 0 && (
+                  <div className="text-center py-12">
+                    <Globe className="mx-auto text-slate-400" size={48} />
+                    <p className="text-slate-600 mt-4">No domains configured</p>
+                    <p className="text-sm text-slate-500 mt-2">Add a domain to allow users with that email domain to register</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </main>
+      </div>
+    </ProtectedRoute>
   );
 }

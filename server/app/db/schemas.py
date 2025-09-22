@@ -93,7 +93,10 @@ class CarrierFormatLearning(CarrierFormatLearningBase):
 class StatementUpload(BaseModel):
     id: UUID
     company_id: UUID
+    user_id: UUID  # User who uploaded the file
     file_name: str
+    file_hash: Optional[str] = None  # SHA-256 hash for duplicate detection
+    file_size: Optional[int] = None  # File size in bytes
     uploaded_at: datetime
     
     # Status Management
@@ -112,6 +115,7 @@ class StatementUpload(BaseModel):
     field_config: Optional[Any] = None  # Can be list or dict to handle both old and new formats
     rejection_reason: Optional[str] = None
     plan_types: Optional[List[str]] = None
+    selected_statement_date: Optional[Dict[str, Any]] = None
     
     # Timestamps
     last_updated: Optional[datetime] = None
@@ -126,7 +130,10 @@ class StatementUpload(BaseModel):
 
 class StatementUploadCreate(BaseModel):
     company_id: UUID
+    user_id: UUID  # User who uploaded the file
     file_name: str
+    file_hash: Optional[str] = None  # SHA-256 hash for duplicate detection
+    file_size: Optional[int] = None  # File size in bytes
     status: str = "pending"
     current_step: str = "upload"
     progress_data: Optional[Dict[str, Any]] = None
@@ -142,6 +149,7 @@ class StatementUploadUpdate(BaseModel):
     field_config: Optional[Any] = None  # Can be list or dict to handle both old and new formats
     rejection_reason: Optional[str] = None
     plan_types: Optional[List[str]] = None
+    selected_statement_date: Optional[Dict[str, Any]] = None
     session_id: Optional[str] = None
     auto_save_enabled: Optional[bool] = None
 
@@ -177,6 +185,7 @@ class StatementReview(BaseModel):
     rejection_reason: Optional[str] = None
     plan_types: Optional[List[str]] = None
     raw_data: Optional[List[Dict[str, Any]]] = None
+    selected_statement_date: Optional[Dict[str, Any]] = None
     last_updated: datetime
 
     class Config:
@@ -293,6 +302,70 @@ class EarnedCommission(EarnedCommissionBase):
     id: UUID
     last_updated: datetime
     created_at: datetime
+
+    class Config:
+        orm_mode = True
+
+# New schemas for multi-user functionality
+class FileDuplicateBase(BaseModel):
+    file_hash: str
+    original_upload_id: UUID
+    duplicate_upload_id: UUID
+    action_taken: str = "detected"
+
+class FileDuplicateCreate(FileDuplicateBase):
+    pass
+
+class FileDuplicate(FileDuplicateBase):
+    id: UUID
+    detected_at: datetime
+    created_at: datetime
+
+    class Config:
+        orm_mode = True
+
+class UserDataContributionBase(BaseModel):
+    user_id: UUID
+    upload_id: UUID
+    contribution_type: str
+    contribution_data: Optional[Dict[str, Any]] = None
+
+class UserDataContributionCreate(UserDataContributionBase):
+    pass
+
+class UserDataContribution(UserDataContributionBase):
+    id: UUID
+    created_at: datetime
+
+    class Config:
+        orm_mode = True
+
+# User profile and statistics schemas
+class UserProfile(BaseModel):
+    id: UUID
+    email: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    role: str
+    is_active: bool
+    is_verified: bool
+    company_id: Optional[UUID] = None
+    last_login: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        orm_mode = True
+
+class UserStats(BaseModel):
+    user_id: UUID
+    total_uploads: int
+    total_approved: int
+    total_rejected: int
+    total_pending: int
+    total_commission_contributed: float
+    last_upload_date: Optional[datetime] = None
+    data_contribution_percentage: float  # Percentage of total system data
 
     class Config:
         orm_mode = True

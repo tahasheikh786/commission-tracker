@@ -5,6 +5,7 @@ import { useCallback, useState } from 'react'
 import clsx from 'clsx'
 import { Calendar } from 'lucide-react' // Added import for Calendar icon
 import { ExtractionLoader } from '../../components/ui/FullScreenLoader'
+import axios from 'axios'
 
 type TableData = {
   header: string[]
@@ -286,27 +287,62 @@ export default function AdvancedUploadZone({
     formData.append('file', file)
     formData.append('company_id', companyId)
 
+    const loadingMessage = isExcel ? 'Excel extraction in progress...' : 'AI-powered extraction in progress...'
+    toast.loading(loadingMessage, { id: 'extracting' })
+    
+    // Choose endpoint based on file type
+    const endpoint = isExcel ? '/extract-tables-excel/' : '/extract-tables-smart/'
+    
     try {
-      const loadingMessage = isExcel ? 'Excel extraction in progress...' : 'AI-powered extraction in progress...'
-      toast.loading(loadingMessage, { id: 'extracting' })
-      
-      // Choose endpoint based on file type
-      const endpoint = isExcel ? '/extract-tables-excel/' : '/extract-tables-smart/'
-      
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}${endpoint}`, {
-        method: 'POST',
-        body: formData,
+      const res = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}${endpoint}`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
       })
+      
+      // Handle duplicate detection response
+      if (res.status === 409) {
+        const duplicateData = res.data
+        toast.dismiss('extracting')
+        
+        if (duplicateData.status === 'duplicate_detected') {
+          // Show duplicate detection modal/dialog
+          const shouldReplace = window.confirm(
+            `${duplicateData.message}\n\nDo you want to replace the existing file?`
+          )
+          
+          if (shouldReplace) {
+            // Retry upload with replace flag
+            formData.append('replace_duplicate', 'true')
+            const retryRes = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}${endpoint}`, formData, {
+              headers: {
+                'Content-Type': 'multipart/form-data',
+              },
+            })
+            
+            // Continue with normal processing
+            const retryData = retryRes.data
+            toast.success('File replaced successfully')
+            onParsed(retryData)
+            setLoading(false)
+            return
+          } else {
+            toast.error('Upload cancelled - file already exists')
+            setLoading(false)
+            return
+          }
+        } else if (duplicateData.status === 'global_duplicate') {
+          toast.error(duplicateData.message)
+          setLoading(false)
+          return
+        }
+      }
+      
+      // Success case - process the response
       toast.dismiss('extracting')
       setLoading(false)
       
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}))
-        toast.error(errorData.detail || "Failed to extract tables")
-        return
-      }
-      
-      const json = await res.json()
+      const json = res.data
       setTables(json.tables || [])
       setQualitySummary(json.quality_summary || null)
       
@@ -322,10 +358,22 @@ export default function AdvancedUploadZone({
       
       const successMessage = isExcel ? 'Excel extraction completed successfully!' : 'Extraction completed successfully!'
       toast.success(successMessage)
-    } catch (e) {
+    } catch (e: any) {
       setLoading(false)
       toast.dismiss('extracting')
-      toast.error("Failed to extract tables: " + (e as any)?.message)
+      
+      // Handle axios errors
+      if (e.response) {
+        // Server responded with error status
+        const errorMessage = e.response.data?.detail || e.response.data?.message || 'Server error'
+        toast.error(`Upload failed: ${errorMessage}`)
+      } else if (e.request) {
+        // Request was made but no response received
+        toast.error('Network error: Please check your connection')
+      } else {
+        // Something else happened
+        toast.error(`Upload failed: ${e.message}`)
+      }
     }
   }, [onParsed, companyId])
 

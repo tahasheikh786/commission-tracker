@@ -9,6 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import crud
 from app.config import get_db
 from app.db.schemas import PendingFile, StatementUploadUpdate
+from app.db.models import User
+from app.api.auth import get_current_user
 from uuid import UUID
 
 # Configure logging
@@ -21,13 +23,20 @@ router = APIRouter(prefix="/pending", tags=["pending"])
 @router.get("/files/{company_id}")
 async def get_pending_files(
     company_id: UUID,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Get all pending files for a specific company.
+    Get all pending files for a specific company - automatically filters by user data for regular users.
     """
     try:
-        pending_files = await crud.get_pending_files_for_company(db, company_id)
+        # For admin users, show all files. For regular users, show only their files
+        is_admin = current_user.role == 'admin'
+        
+        if is_admin:
+            pending_files = await crud.get_pending_files_for_company(db, company_id)
+        else:
+            pending_files = await crud.get_pending_files_for_company_by_user(db, company_id, current_user.id)
         
         return JSONResponse({
             "success": True,
@@ -54,10 +63,11 @@ async def get_pending_files(
 @router.get("/files/single/{upload_id}")
 async def get_pending_file(
     upload_id: UUID,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Get a single pending file by upload ID.
+    Get a single pending file by upload ID - automatically filters by user data for regular users.
     """
     try:
         upload = await crud.get_statement_upload_by_id(db, upload_id)
@@ -66,6 +76,14 @@ async def get_pending_file(
             raise HTTPException(
                 status_code=404,
                 detail="Upload not found"
+            )
+        
+        # For regular users, ensure they can only access their own uploads
+        is_admin = current_user.role == 'admin'
+        if not is_admin and upload.user_id != current_user.id:
+            raise HTTPException(
+                status_code=403,
+                detail="Access denied: You can only access your own uploads"
             )
         
         return JSONResponse({

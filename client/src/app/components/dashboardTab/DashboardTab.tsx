@@ -20,6 +20,7 @@ type FieldConfig = { field: string, label: string }
 export default function DashboardTab() {
   const router = useRouter();
   const { refreshTrigger } = useSubmission();
+  
   const { stats, loading, refetch: refetchStats } = useDashboardStats();
   const { carriers, loading: carriersLoading, fetchCarriers } = useCarriers();
   const { stats: earnedCommissionStats, loading: earnedCommissionLoading, refetch: refetchEarnedCommissionStats } = useEarnedCommissionStats();
@@ -619,6 +620,7 @@ export default function DashboardTab() {
           Monitor your commission tracking system performance and manage statements
         </p>
       </div>
+      
       
       {/* Enhanced Stats Grid - Full Width */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">

@@ -12,9 +12,10 @@ type Props = {
   loading?: boolean;
   onDelete: (ids: string[]) => void;
   deleting?: boolean;
+  readOnly?: boolean;
 };
 
-export default function CarrierList({ carriers, selected, onSelect, loading, onDelete, deleting }: Props) {
+export default function CarrierList({ carriers, selected, onSelect, loading, onDelete, deleting, readOnly = false }: Props) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCarriers, setSelectedCarriers] = useState<Set<string>>(new Set());
   const [currentPage, setCurrentPage] = useState(1);
@@ -115,10 +116,12 @@ export default function CarrierList({ carriers, selected, onSelect, loading, onD
             {carriers.length} total carrier{carriers.length !== 1 ? 's' : ''}
           </p>
         </div>
-        <button className="btn btn-primary px-4 py-2">
-          <Plus size={16} className="mr-2" />
-          Add New
-        </button>
+        {!readOnly && (
+          <button className="btn btn-primary px-4 py-2">
+            <Plus size={16} className="mr-2" />
+            Add New
+          </button>
+        )}
       </div>
 
       {/* Enhanced Search Bar */}
@@ -146,7 +149,7 @@ export default function CarrierList({ carriers, selected, onSelect, loading, onD
       </div>
 
       {/* Enhanced Delete Button */}
-      {selectedCarriers.size > 0 && (
+      {selectedCarriers.size > 0 && !readOnly && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
           <div className="flex items-center justify-between">
             <span className="text-red-700 font-medium">
@@ -180,13 +183,15 @@ export default function CarrierList({ carriers, selected, onSelect, loading, onD
               style={{ animationDelay: `${index * 50}ms` }}
             >
               <div className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  checked={selectedCarriers.has(carrier.id)}
-                  onChange={() => handleCheckboxChange(carrier.id)}
-                  disabled={deleting}
-                  className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
-                />
+                {!readOnly && (
+                  <input
+                    type="checkbox"
+                    checked={selectedCarriers.has(carrier.id)}
+                    onChange={() => handleCheckboxChange(carrier.id)}
+                    disabled={deleting}
+                    className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+                  />
+                )}
                 
                 {editingCarrierId === carrier.id ? (
                   <div className="flex-1 flex items-center gap-2">
@@ -227,16 +232,18 @@ export default function CarrierList({ carriers, selected, onSelect, loading, onD
                       {carrier.name}
                     </button>
                     
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button
-                        className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded"
-                        onClick={() => startEdit(carrier)}
-                        disabled={updating}
-                        title="Edit name"
-                      >
-                        <Edit size={14} />
-                      </button>
-                    </div>
+                    {!readOnly && (
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded"
+                          onClick={() => startEdit(carrier)}
+                          disabled={updating}
+                          title="Edit name"
+                        >
+                          <Edit size={14} />
+                        </button>
+                      </div>
+                    )}
                   </>
                 )}
               </div>

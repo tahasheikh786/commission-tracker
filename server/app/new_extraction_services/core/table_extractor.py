@@ -1118,29 +1118,47 @@ class TableExtractor:
                                 if r < len(grid) and c < len(grid[r]) and grid[r][c] is None:
                                     grid[r][c] = cell_info['text']
                     
-                    # **IMPROVED: Better header detection for commission statements**
-                    # Look for the first row that has multiple meaningful headers
-                    header_row_idx = 0
+                    # **IMPROVED: Intelligent header detection for commission statements**
+                    # Look for the row that best matches header characteristics
+                    best_header_row_idx = 0
+                    best_header_score = 0
+                    
                     for row_idx in range(len(grid)):
                         row = grid[row_idx]
                         non_empty_cells = [cell for cell in row if cell and str(cell).strip()]
+                        
                         if len(non_empty_cells) >= 3:  # Commission tables typically have many columns
-                            header_row_idx = row_idx
-                            break
+                            # Calculate header score based on content characteristics
+                            header_score = 0
+                            for cell in non_empty_cells:
+                                cell_text = str(cell).strip().lower()
+                                # Check for common header words
+                                if any(word in cell_text for word in [
+                                    'group', 'name', 'date', 'plan', 'rate', 'lives', 'premium', 
+                                    'commission', 'paid', 'billed', 'received', 'due', 'effective'
+                                ]):
+                                    header_score += 1
+                                # Headers are typically shorter and more descriptive
+                                if len(cell_text) <= 20 and cell_text.isalpha():
+                                    header_score += 0.5
+                            
+                            if header_score > best_header_score:
+                                best_header_score = header_score
+                                best_header_row_idx = row_idx
                     
-                    # Extract headers from the identified header row
-                    if grid and len(grid) > header_row_idx:
+                    # Extract headers from the best header row
+                    if grid and len(grid) > best_header_row_idx:
                         headers = []
-                        for i, cell in enumerate(grid[header_row_idx]):
+                        for i, cell in enumerate(grid[best_header_row_idx]):
                             if cell and str(cell).strip():
                                 headers.append(str(cell).strip())
                             else:
                                 headers.append(f"Column_{i+1}")
                         
-                        self.logger.logger.info(f"🔍 COMPLEX EXTRACTION: Found headers at row {header_row_idx}: {headers}")
+                        self.logger.logger.info(f"🔍 COMPLEX EXTRACTION: Found headers at row {best_header_row_idx} (score: {best_header_score}): {headers}")
                     
                     # Extract data rows (skip header row)
-                    for row_idx in range(header_row_idx + 1, len(grid)):
+                    for row_idx in range(best_header_row_idx + 1, len(grid)):
                         row_data = [str(cell) if cell is not None else "" 
                                    for cell in grid[row_idx]]
                         if any(cell.strip() for cell in row_data):  # Only add non-empty rows
@@ -1606,23 +1624,9 @@ class TableExtractor:
         return [line.strip()] if line.strip() else []
     
     def _generate_intelligent_header_name(self, col_index: int, existing_headers: List[str], existing_rows: List[List[str]]) -> str:
-        """Generate intelligent header names based on context."""
-        # Common financial table headers
-        financial_headers = [
-            'Group Number', 'Group Name', 'Rate Type', 'Due Date', 'Product Type',
-            'Schedule Effective Date', 'Split%', 'Rate', 'Mo', 'Days', 'Premium Count',
-            'Premium', 'Payment', 'Comments', 'Exch Ind', 'Producer Number', 'Producer Name',
-            'State', 'Case Number', 'Case Name', 'Sub Group Number', 'Market', 'Product',
-            'Total Payment', 'Base Payment', 'Override Payment', 'Association Payment',
-            'Oversight Payment', 'Other Payments', 'Levy/Garnishment Total', 'IRS Withholding Total',
-            'State Withholding Total', 'Paid Amount', 'Current Held Amount', 'Prior Balance'
-        ]
-        
-        # Try to use a financial header if available
-        if col_index < len(financial_headers):
-            return financial_headers[col_index]
-        
-        # Fallback to generic naming
+        """Generate intelligent header names based on context - NO HARDCODED PATTERNS."""
+        # **CRITICAL FIX: Remove hardcoded headers to prevent incorrect extraction**
+        # Instead, use generic naming that forces the system to extract real headers
         return f"Column_{col_index + 1}"
     
     def _generate_intelligent_data_name(self, col_index: int, current_row: List[str], existing_rows: List[List[str]]) -> str:
@@ -1634,7 +1638,7 @@ class TableExtractor:
     def _extract_from_document_context(self, table, expected_headers: List[str]) -> Tuple[List[str], List[List[str]]]:
         """Extract table data from document context when Docling cells are empty."""
         try:
-            self.logger.logger.info(f"🔍 Extracting from document context with {len(expected_headers)} expected headers")
+            self.logger.logger.info(f"🔍 Extracting from document context - looking for actual table structure")
             
             # Try to get the document's raw text content
             document_text = ""
@@ -1647,24 +1651,45 @@ class TableExtractor:
             
             if not document_text:
                 self.logger.logger.warning("No document text available for context extraction")
-                return expected_headers, []
+                return [], []
             
             # Parse the text to find table-like structures
             lines = document_text.strip().split('\n')
             
-            # Look for lines that contain the expected headers
+            # **IMPROVED: Look for actual table headers in the document**
+            # Instead of looking for expected headers, find the actual headers
+            actual_headers = []
             header_line_idx = -1
-            for i, line in enumerate(lines):
-                line_lower = line.lower()
-                # Check if this line contains most of our expected headers
-                header_matches = sum(1 for header in expected_headers if header.lower() in line_lower)
-                if header_matches >= len(expected_headers) * 0.6:  # At least 60% match
-                    header_line_idx = i
-                    break
             
-            if header_line_idx == -1:
-                self.logger.logger.warning("Could not find header line in document context")
-                return expected_headers, []
+            for i, line in enumerate(lines):
+                line = line.strip()
+                if not line:
+                    continue
+                
+                # Look for lines that contain multiple words separated by spaces/tabs
+                # This is typical of table headers
+                words = line.split()
+                if len(words) >= 3:  # Commission tables typically have many columns
+                    # Check if this looks like a header row (contains common header words)
+                    header_indicators = 0
+                    for word in words:
+                        word_lower = word.lower()
+                        if any(indicator in word_lower for indicator in [
+                            'group', 'name', 'date', 'plan', 'rate', 'lives', 'premium', 
+                            'commission', 'paid', 'billed', 'received', 'due', 'effective'
+                        ]):
+                            header_indicators += 1
+                    
+                    # If we found several header indicators, this is likely the header row
+                    if header_indicators >= 2:
+                        actual_headers = words
+                        header_line_idx = i
+                        self.logger.logger.info(f"🔍 Found potential header row at line {i}: {actual_headers}")
+                        break
+            
+            if header_line_idx == -1 or not actual_headers:
+                self.logger.logger.warning("Could not find actual header line in document context")
+                return [], []
             
             # Extract data rows after the header line
             data_rows = []
@@ -1687,21 +1712,21 @@ class TableExtractor:
                 else:
                     # Try to split by single spaces, but be more careful
                     parts = line.split(' ')
-                    if len(parts) >= len(expected_headers) * 0.5:  # At least half the expected columns
+                    if len(parts) >= len(actual_headers) * 0.5:  # At least half the actual columns
                         columns = parts
                 
-                if len(columns) >= len(expected_headers) * 0.5:  # At least half the expected columns
-                    # Pad or truncate to match expected header count
-                    while len(columns) < len(expected_headers):
+                if len(columns) >= len(actual_headers) * 0.5:  # At least half the actual columns
+                    # Pad or truncate to match actual header count
+                    while len(columns) < len(actual_headers):
                         columns.append('')
-                    columns = columns[:len(expected_headers)]
+                    columns = columns[:len(actual_headers)]
                     data_rows.append(columns)
             
             self.logger.logger.info(f"🔍 Extracted {len(data_rows)} rows from document context")
             if data_rows:
                 self.logger.logger.info(f"🔍 Sample row: {data_rows[0][:5]}")
             
-            return expected_headers, data_rows
+            return actual_headers, data_rows
             
         except Exception as e:
             self.logger.logger.error(f"Document context extraction failed: {e}")
@@ -1740,4 +1765,69 @@ class TableExtractor:
             
         except Exception as e:
             self.logger.logger.error(f"Error in pattern-based extraction: {e}")
+            return [], []
+
+    def _extract_from_table_text(self, text: str) -> Tuple[List[str], List[List[str]]]:
+        """Extract table data directly from table text content."""
+        try:
+            self.logger.logger.info(f"🔍 TEXT EXTRACTION: Starting text-based extraction")
+            
+            lines = text.strip().split('\n')
+            headers = []
+            rows = []
+            
+            # Look for the header row first
+            header_line_idx = -1
+            for i, line in enumerate(lines):
+                line = line.strip()
+                if not line:
+                    continue
+                
+                # Check if this line looks like headers
+                words = line.split()
+                if len(words) >= 3:
+                    # Count header indicators
+                    header_indicators = 0
+                    for word in words:
+                        word_lower = word.lower()
+                        if any(indicator in word_lower for indicator in [
+                            'group', 'name', 'date', 'plan', 'rate', 'lives', 'premium', 
+                            'commission', 'paid', 'billed', 'received', 'due', 'effective'
+                        ]):
+                            header_indicators += 1
+                    
+                    if header_indicators >= 2:
+                        headers = words
+                        header_line_idx = i
+                        self.logger.logger.info(f"🔍 TEXT EXTRACTION: Found headers at line {i}: {headers}")
+                        break
+            
+            if header_line_idx == -1:
+                self.logger.logger.warning("🔍 TEXT EXTRACTION: No header row found")
+                return [], []
+            
+            # Extract data rows
+            for i in range(header_line_idx + 1, len(lines)):
+                line = lines[i].strip()
+                if not line:
+                    continue
+                
+                # Skip summary lines
+                if any(keyword in line.lower() for keyword in ['total', 'summary', 'continued', 'page']):
+                    continue
+                
+                # Try to split the line into columns
+                words = line.split()
+                if len(words) >= len(headers) * 0.5:  # At least half the expected columns
+                    # Pad or truncate to match header count
+                    while len(words) < len(headers):
+                        words.append('')
+                    words = words[:len(headers)]
+                    rows.append(words)
+            
+            self.logger.logger.info(f"🔍 TEXT EXTRACTION: Extracted {len(rows)} rows")
+            return headers, rows
+            
+        except Exception as e:
+            self.logger.logger.error(f"Text extraction failed: {e}")
             return [], []

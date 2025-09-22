@@ -76,7 +76,10 @@ class StatementUpload(Base):
     __tablename__ = 'statement_uploads'
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     company_id = Column(UUID(as_uuid=True), ForeignKey('companies.id'), nullable=False)
+    user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False)  # User who uploaded the file
     file_name = Column(Text)
+    file_hash = Column(String, nullable=True)  # SHA-256 hash for duplicate detection
+    file_size = Column(Integer, nullable=True)  # File size in bytes
     uploaded_at = Column(TIMESTAMP)
     
     # Status Management
@@ -109,6 +112,7 @@ class Extraction(Base):
     __tablename__ = 'extractions'
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     company_id = Column(String, nullable=False)  # Using string for flexibility
+    user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=True)  # User who performed extraction
     filename = Column(String, nullable=False)
     s3_url = Column(String, nullable=False)
     total_tables = Column(Integer, nullable=False)
@@ -250,3 +254,22 @@ class UserSession(Base):
     is_active = Column(Integer, default=1)  # 1 for active, 0 for inactive
     created_at = Column(DateTime, server_default=text('now()'), nullable=False)
     last_accessed = Column(DateTime, server_default=text('now()'), nullable=False)
+
+class FileDuplicate(Base):
+    __tablename__ = 'file_duplicates'
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    file_hash = Column(String, nullable=False, index=True)  # SHA-256 hash
+    original_upload_id = Column(UUID(as_uuid=True), ForeignKey('statement_uploads.id'), nullable=False)
+    duplicate_upload_id = Column(UUID(as_uuid=True), ForeignKey('statement_uploads.id'), nullable=False)
+    detected_at = Column(DateTime, server_default=text('now()'), nullable=False)
+    action_taken = Column(String, default='detected')  # detected, replaced, ignored
+    created_at = Column(DateTime, server_default=text('now()'), nullable=False)
+
+class UserDataContribution(Base):
+    __tablename__ = 'user_data_contributions'
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False)
+    upload_id = Column(UUID(as_uuid=True), ForeignKey('statement_uploads.id'), nullable=False)
+    contribution_type = Column(String, nullable=False)  # upload, edit, approval, etc.
+    contribution_data = Column(JSON)  # Store contribution metadata
+    created_at = Column(DateTime, server_default=text('now()'), nullable=False)

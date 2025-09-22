@@ -20,12 +20,16 @@ import {
   BarChart3,
   RefreshCw,
   X,
-  SlidersHorizontal
+  SlidersHorizontal,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import EditCommissionModal from './EditCommissionModal';
 import MergeConfirmationModal from './MergeConfirmationModal';
 import { 
   useEarnedCommissionStats, 
+  useGlobalEarnedCommissionStats,
+  useGlobalCommissionData,
   useCarriersWithCommission, 
   useCarrierCommissionStats, 
   useCarrierCommissionData,
@@ -83,20 +87,34 @@ export default function EarnedCommissionTab() {
   const [minCommissionFilter, setMinCommissionFilter] = useState<string>('');
   const [maxCommissionFilter, setMaxCommissionFilter] = useState<string>('');
   const [selectedYear, setSelectedYear] = useState<number | null>(2025);
+  const [viewAllData, setViewAllData] = useState(false);
 
-  // Fetch data
-  const { stats: overallStats, loading: statsLoading, refetch: refetchStats } = useEarnedCommissionStats(selectedYear || undefined);
+  // Fetch data - use different endpoints based on view toggle
+  const { stats: userStats, loading: userStatsLoading, refetch: refetchUserStats } = useEarnedCommissionStats(selectedYear || undefined);
+  const { stats: globalStats, loading: globalStatsLoading, refetch: refetchGlobalStats } = useGlobalEarnedCommissionStats(selectedYear || undefined);
+  const { data: userData, loading: userDataLoading, refetch: refetchUserData } = useAllCommissionData(selectedYear || undefined);
+  const { data: globalData, loading: globalDataLoading, refetch: refetchGlobalData } = useGlobalCommissionData(selectedYear || undefined);
   const { carriers, loading: carriersLoading, refetch: refetchCarriers } = useCarriersWithCommission();
-  const { data: allData, loading: allDataLoading, refetch: refetchAllData } = useAllCommissionData(selectedYear || undefined);
   const { years: availableYears, loading: yearsLoading, refetch: refetchYears } = useAvailableYears();
+
+  // Use the appropriate data based on view toggle
+  const overallStats = viewAllData ? globalStats : userStats;
+  const statsLoading = viewAllData ? globalStatsLoading : userStatsLoading;
+  const allData = viewAllData ? globalData : userData;
+  const allDataLoading = viewAllData ? globalDataLoading : userDataLoading;
 
   // Refresh all data
   const refreshAllData = useCallback(() => {
-    refetchStats();
+    if (viewAllData) {
+      refetchGlobalStats();
+      refetchGlobalData();
+    } else {
+      refetchUserStats();
+      refetchUserData();
+    }
     refetchCarriers();
-    refetchAllData();
     refetchYears();
-  }, [refetchStats, refetchCarriers, refetchAllData, refetchYears]);
+  }, [viewAllData, refetchGlobalStats, refetchGlobalData, refetchUserStats, refetchUserData, refetchCarriers, refetchYears]);
 
   // Listen for global refresh events only
   useEffect(() => {
@@ -110,6 +128,9 @@ export default function EarnedCommissionTab() {
   // Filter and sort data
   const filteredData = useMemo(() => {
     let data = allData || [];
+    
+    // Note: The backend already filters data based on user role and view permissions
+    // viewAllData toggle is for UI indication only - the actual filtering happens on the backend
     
     // Filter by search query (company name or carrier name)
     if (searchQuery) {
@@ -327,10 +348,42 @@ export default function EarnedCommissionTab() {
                     📅 Showing data for year {selectedYear}
                   </span>
                 )}
+                {viewAllData && (
+                  <span className="block mt-2 text-sm font-medium text-amber-600 bg-amber-50 px-3 py-1 rounded-full inline-block">
+                    🔒 Read-Only Mode - Viewing all company data
+                  </span>
+                )}
               </p>
         
-        {/* Refresh Button */}
-        <div className="flex justify-center">
+        {/* Controls */}
+        <div className="flex justify-center items-center gap-4">
+          {/* View Toggle */}
+          <div className="flex items-center gap-3 bg-white/90 backdrop-blur-xl rounded-2xl border border-white/50 shadow-lg p-2">
+            <button
+              onClick={() => setViewAllData(false)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-200 ${
+                !viewAllData
+                  ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg'
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <Eye className="w-4 h-4" />
+              My Data
+            </button>
+            <button
+              onClick={() => setViewAllData(true)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-200 ${
+                viewAllData
+                  ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg'
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <EyeOff className="w-4 h-4" />
+              All Data (Read-Only)
+            </button>
+          </div>
+
+          {/* Refresh Button */}
           <button
             onClick={refreshAllData}
             disabled={statsLoading || carriersLoading || allDataLoading}
@@ -727,8 +780,13 @@ export default function EarnedCommissionTab() {
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <button 
                         onClick={() => handleEditCommission(item)}
-                        className="text-blue-600 hover:text-blue-800 transition-colors p-2 hover:bg-blue-50 rounded-xl hover:scale-110"
-                        title="Edit commission data"
+                        disabled={viewAllData}
+                        className={`transition-colors p-2 rounded-xl hover:scale-110 ${
+                          viewAllData 
+                            ? 'text-slate-400 cursor-not-allowed opacity-50' 
+                            : 'text-blue-600 hover:text-blue-800 hover:bg-blue-50'
+                        }`}
+                        title={viewAllData ? "Read-only mode - switch to 'My Data' to edit" : "Edit commission data"}
                       >
                         <Edit size={16} />
                       </button>

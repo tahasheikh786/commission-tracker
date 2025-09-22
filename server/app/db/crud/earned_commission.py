@@ -194,6 +194,19 @@ async def get_all_earned_commissions(db: AsyncSession, year: Optional[int] = Non
     result = await db.execute(query)
     return result.all()
 
+async def get_earned_commissions_by_carriers(db: AsyncSession, carrier_ids: List[UUID], year: Optional[int] = None):
+    """Get earned commission records for specific carriers."""
+    query = select(EarnedCommission, Company.name.label('carrier_name'))\
+        .join(Company, EarnedCommission.carrier_id == Company.id)\
+        .where(EarnedCommission.carrier_id.in_(carrier_ids))
+    
+    if year is not None:
+        query = query.where(EarnedCommission.statement_year == year)
+    
+    query = query.order_by(Company.name.asc(), EarnedCommission.client_name.asc())
+    result = await db.execute(query)
+    return result.all()
+
 async def get_commission_record(db: AsyncSession, carrier_id: str, client_name: str, statement_date: datetime):
     """Get commission record by carrier, client, and statement date."""
     result = await db.execute(

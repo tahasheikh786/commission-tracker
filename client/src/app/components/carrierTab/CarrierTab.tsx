@@ -8,9 +8,10 @@ import StatementPreviewModal from "./StatementPreviewModal";
 import DatabaseFieldsManager from "./DatabaseFieldsManager";
 import PlanTypesManager from "./PlanTypesManager";
 import toast from 'react-hot-toast';
-import { TableLoader, CardLoader } from "@/app/upload/components/Loader";
-import { Database, Settings, Plus, Search, Filter, Sparkles, Building2, FileText, DollarSign, TrendingUp, Users } from "lucide-react";
+import { Database, Settings, Plus, Search, Filter, Sparkles, Building2, FileText, DollarSign, TrendingUp, Users, Eye, EyeOff } from "lucide-react";
 import { useSubmission } from "@/context/SubmissionContext";
+import { useUserSpecificCompanies } from "@/app/hooks/useDashboard";
+import { useAuth } from "@/context/AuthContext";
 
 type Carrier = { id: string; name: string };
 type Statement = {
@@ -22,6 +23,7 @@ type Statement = {
   field_config?: any[];
   raw_data?: any[];
   rejection_reason?: string;
+  selected_statement_date?: any;
 };
 
 interface CommissionStats {
@@ -34,6 +36,7 @@ interface CommissionStats {
 
 export default function CarrierTab() {
   const { triggerDashboardRefresh } = useSubmission();
+  const { permissions } = useAuth();
   const [carriers, setCarriers] = useState<Carrier[]>([]);
   const [selected, setSelected] = useState<Carrier | null>(null);
   const [statements, setStatements] = useState<Statement[]>([]);
@@ -47,21 +50,41 @@ export default function CarrierTab() {
   const [activeTab, setActiveTab] = useState<'carriers' | 'database-fields' | 'plan-types'>('carriers');
   const [commissionStats, setCommissionStats] = useState<CommissionStats | null>(null);
   const [loadingCommission, setLoadingCommission] = useState(false);
+  const [viewAllData, setViewAllData] = useState(false);
+  
+  // Determine if user can edit data (admin can edit even in "All Data" mode)
+  const canEditData = !viewAllData || permissions?.is_admin;
 
-  // Fetch carriers on mount
+  // Fetch user-specific companies
+  const { companies: userSpecificCompanies, loading: userCompaniesLoading, refetch: refetchUserCompanies } = useUserSpecificCompanies();
+
+  // Fetch carriers on mount and when view toggle changes
   useEffect(() => {
     setLoadingCarriers(true);
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/`)
-      .then(r => r.json())
-      .then((data) => {
-        // Sort carriers alphabetically by name
-        const sortedCarriers = data.sort((a: Carrier, b: Carrier) => 
+    
+    if (viewAllData) {
+      // Fetch all companies
+      fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/`)
+        .then(r => r.json())
+        .then((data) => {
+          // Sort carriers alphabetically by name
+          const sortedCarriers = data.sort((a: Carrier, b: Carrier) => 
+            a.name.localeCompare(b.name)
+          );
+          setCarriers(sortedCarriers);
+        })
+        .finally(() => setLoadingCarriers(false));
+    } else {
+      // Use user-specific companies
+      if (userSpecificCompanies !== null && userSpecificCompanies !== undefined) {
+        const sortedCarriers = userSpecificCompanies.sort((a: Carrier, b: Carrier) => 
           a.name.localeCompare(b.name)
         );
         setCarriers(sortedCarriers);
-      })
-      .finally(() => setLoadingCarriers(false));
-  }, []);
+        setLoadingCarriers(false);
+      }
+    }
+  }, [viewAllData, userSpecificCompanies]);
 
   // Fetch statements for selected carrier
   useEffect(() => {
@@ -71,11 +94,20 @@ export default function CarrierTab() {
       return;
     }
     setLoadingStatements(true);
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${selected.id}/statements/`)
+    
+    const endpoint = viewAllData 
+      ? `${process.env.NEXT_PUBLIC_API_URL}/companies/${selected.id}/statements/`
+      : `${process.env.NEXT_PUBLIC_API_URL}/companies/user-specific/${selected.id}/statements`;
+    
+    fetch(endpoint)
       .then(r => r.json())
-      .then(setStatements)
+      .then(data => setStatements(Array.isArray(data) ? data : []))
+      .catch(error => {
+        console.error('Error fetching statements:', error);
+        setStatements([]);
+      })
       .finally(() => setLoadingStatements(false));
-  }, [selected]);
+  }, [selected, viewAllData]);
 
   // Fetch commission data for selected carrier
   useEffect(() => {
@@ -196,7 +228,47 @@ export default function CarrierTab() {
         </div>
         <p className="text-lg text-slate-600 max-w-3xl mx-auto leading-relaxed">
           Manage carriers, statements, and configure field mappings for optimal data processing
+          {viewAllData && !permissions?.is_admin && (
+            <span className="block mt-2 text-sm font-medium text-amber-600 bg-amber-50 px-3 py-1 rounded-full inline-block">
+              🔒 Read-Only Mode - Viewing all company data
+            </span>
+          )}
+          {viewAllData && permissions?.is_admin && (
+            <span className="block mt-2 text-sm font-medium text-green-600 bg-green-50 px-3 py-1 rounded-full inline-block">
+              👑 Admin Mode - Full access to all company data
+            </span>
+          )}
         </p>
+
+        {/* View Toggle - Only show for carriers tab */}
+        {activeTab === 'carriers' && (
+          <div className="flex justify-center">
+            <div className="flex items-center gap-3 bg-white/90 backdrop-blur-xl rounded-2xl border border-white/50 shadow-lg p-2">
+              <button
+                onClick={() => setViewAllData(false)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-200 ${
+                  !viewAllData
+                    ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg'
+                    : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <Eye className="w-4 h-4" />
+                My Data
+              </button>
+              <button
+                onClick={() => setViewAllData(true)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-200 ${
+                  viewAllData
+                    ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg'
+                    : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <EyeOff className="w-4 h-4" />
+                All Data (Read-Only)
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Enhanced Tab Navigation */}
@@ -239,9 +311,10 @@ export default function CarrierTab() {
                 // Update the carrier in the list if name changed
                 setCarriers(prev => prev.map(car => car.id === c.id ? { ...car, name: c.name } : car));
               }}
-              loading={loadingCarriers}
+              loading={loadingCarriers || userCompaniesLoading}
               onDelete={handleCarrierDelete}
               deleting={deletingCarriers}
+              readOnly={!canEditData}
             />
           </div>
           
@@ -265,8 +338,14 @@ export default function CarrierTab() {
                   
                   {selected && (
                     <button
-                      className="inline-flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-violet-500 to-purple-600 text-white rounded-2xl hover:shadow-lg transition-all duration-200 hover:scale-105 font-semibold"
+                      disabled={!canEditData}
+                      className={`inline-flex items-center gap-3 px-6 py-3 rounded-2xl transition-all duration-200 font-semibold ${
+                        !canEditData
+                          ? 'bg-slate-300 text-slate-500 cursor-not-allowed opacity-50'
+                          : 'bg-gradient-to-r from-violet-500 to-purple-600 text-white hover:shadow-lg hover:scale-105'
+                      }`}
                       onClick={() => setShowEditMapping(true)}
+                      title={!canEditData ? "Read-only mode - switch to 'My Data' to edit" : "Edit carrier mappings"}
                     >
                       <Settings size={18} />
                       Edit Mappings
@@ -337,6 +416,7 @@ export default function CarrierTab() {
                     onCompare={setShowCompareIdx}
                     onDelete={handleDelete}
                     deleting={deletingStatements}
+                    readOnly={!canEditData}
                   />
                 ) : (
                   <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -406,8 +486,6 @@ export default function CarrierTab() {
         <CompareModal
           statement={statements[showCompareIdx]}
           onClose={() => setShowCompareIdx(null)}
-          // highlightedRow={highlightedRow}
-          // onRowHover={setHighlightedRow}
         />
       )}
     </div>

@@ -10,7 +10,10 @@ async def save_statement_upload(db, upload: StatementUpload):
     db_upload = StatementUploadModel(
         id=upload.id,
         company_id=upload.company_id,
+        user_id=upload.user_id,
         file_name=upload.file_name,
+        file_hash=upload.file_hash,
+        file_size=upload.file_size,
         uploaded_at=upload.uploaded_at,
         status=upload.status,
         current_step=upload.current_step,
@@ -29,7 +32,10 @@ async def create_statement_upload(db: AsyncSession, upload: StatementUploadCreat
     """
     db_upload = StatementUploadModel(
         company_id=upload.company_id,
+        user_id=upload.user_id,
         file_name=upload.file_name,
+        file_hash=upload.file_hash,
+        file_size=upload.file_size,
         status=upload.status,
         current_step=upload.current_step,
         progress_data=upload.progress_data,
@@ -74,6 +80,37 @@ async def get_pending_files_for_company(db: AsyncSession, company_id: UUID) -> L
     result = await db.execute(
         select(StatementUploadModel).where(
             StatementUploadModel.company_id == company_id,
+            StatementUploadModel.status == 'pending'
+        ).order_by(StatementUploadModel.last_updated.desc())
+    )
+    uploads = result.scalars().all()
+    
+    pending_files = []
+    for upload in uploads:
+        # Create human-readable progress summary
+        progress_summary = get_progress_summary(upload.current_step, upload.progress_data)
+        
+        pending_file = PendingFile(
+            id=upload.id,
+            company_id=upload.company_id,
+            file_name=upload.file_name,
+            uploaded_at=upload.uploaded_at,
+            current_step=upload.current_step,
+            last_updated=upload.last_updated,
+            progress_summary=progress_summary
+        )
+        pending_files.append(pending_file)
+    
+    return pending_files
+
+async def get_pending_files_for_company_by_user(db: AsyncSession, company_id: UUID, user_id: UUID) -> List[PendingFile]:
+    """
+    Get all pending files for a specific company filtered by user.
+    """
+    result = await db.execute(
+        select(StatementUploadModel).where(
+            StatementUploadModel.company_id == company_id,
+            StatementUploadModel.user_id == user_id,
             StatementUploadModel.status == 'pending'
         ).order_by(StatementUploadModel.last_updated.desc())
     )
@@ -280,6 +317,18 @@ async def delete_statement(db: AsyncSession, statement_id: str):
         # Remove this upload from earned commission records
         from .earned_commission import remove_upload_from_earned_commissions
         await remove_upload_from_earned_commissions(db, statement_id)
+        
+         # Delete user data contributions that reference this upload
+        await db.execute(
+            text("DELETE FROM user_data_contributions WHERE upload_id = :upload_id"),
+            {"upload_id": statement_id}
+        )
+        
+        # Delete file duplicate records that reference this upload
+        await db.execute(
+            text("DELETE FROM file_duplicates WHERE original_upload_id = :upload_id OR duplicate_upload_id = :upload_id"),
+            {"upload_id": statement_id}
+        )
         
         # Delete the statement
         await db.delete(statement)
