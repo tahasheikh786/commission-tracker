@@ -7,7 +7,23 @@ import DashboardTab from "./components/dashboardTab/DashboardTab";
 import CarrierTab from "./components/carrierTab/CarrierTab";
 import EarnedCommissionTab from "./components/dashboardTab/EarnedCommissionTab";
 
-import { Database, BarChart3, DollarSign, Settings, LogOut, ChevronDown, User } from "lucide-react";
+import { 
+  Database, 
+  BarChart3, 
+  DollarSign, 
+  Settings, 
+  LogOut, 
+  ChevronDown, 
+  User, 
+  Menu,
+  X,
+  Bell,
+  Search,
+  Moon,
+  Sun,
+  ChevronLeft,
+  ChevronRight
+} from "lucide-react";
 
 function HomePageContent() {
   const router = useRouter();
@@ -15,6 +31,8 @@ function HomePageContent() {
   const { user, logout } = useAuth();
   const [tab, setTab] = useState<"dashboard" | "carriers" | "earned-commission">("dashboard");
   const [showUserDropdown, setShowUserDropdown] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [darkMode, setDarkMode] = useState(false);
 
   // Handle URL parameters for tab selection
   useEffect(() => {
@@ -72,38 +90,105 @@ function HomePageContent() {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-100/50">
-      {/* Premium Header with Enhanced Navigation */}
-      <header className="bg-white/90 backdrop-blur-xl border-b border-slate-200/60 shadow-lg sticky top-0 z-50">
-        <div className="w-[90%] mx-auto px-6 py-4">
+    <div className={`min-h-screen flex ${darkMode ? 'dark' : ''}`}>
+      {/* Sidebar */}
+      <div className={`${sidebarCollapsed ? 'w-16' : 'w-80'} transition-all duration-300 bg-white border-r border-slate-200 flex flex-col shadow-xl`}>
+        {/* Sidebar Header */}
+        <div className="p-6 border-b border-slate-200">
           <div className="flex items-center justify-between">
-            {/* Enhanced Logo and Title */}
-            <div className="flex items-center gap-4">
-              <div className="relative">
-                <div className="w-12 h-12 bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
-                  <Database className="text-white" size={24} />
+            {!sidebarCollapsed && (
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <div className="w-10 h-10 bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
+                    <Database className="text-white" size={20} />
+                  </div>
+                  <div className="absolute -top-1 -right-1 w-3 h-3 bg-gradient-to-r from-emerald-400 to-teal-400 rounded-full border-2 border-white shadow-sm"></div>
                 </div>
-                <div className="absolute -top-1 -right-1 w-4 h-4 bg-gradient-to-r from-emerald-400 to-teal-400 rounded-full border-2 border-white shadow-sm"></div>
+                <div>
+                  <h1 className="font-bold text-lg bg-gradient-to-r from-slate-800 via-slate-700 to-slate-600 bg-clip-text text-transparent">
+                    Commission Tracker
+                  </h1>
+                  <p className="text-xs text-slate-500 font-medium">Professional SaaS</p>
+                </div>
               </div>
-              <div>
-                <h1 className="font-bold text-2xl bg-gradient-to-r from-slate-800 via-slate-700 to-slate-600 bg-clip-text text-transparent">
-                  Commission Tracker
-                </h1>
-                <p className="text-sm text-slate-500 font-medium">Professional Commission Management</p>
-              </div>
-            </div>
+            )}
+            <button
+              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+              className="p-2 rounded-lg hover:bg-slate-100 transition-colors"
+            >
+              {sidebarCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+            </button>
+          </div>
+        </div>
 
-            {/* User Avatar with Dropdown */}
-            <div className="relative">
+        {/* Navigation */}
+        <nav className="flex-1 p-4 space-y-2">
+          {tabConfig.map((tabItem) => {
+            const Icon = tabItem.icon;
+            const isActive = tab === tabItem.id;
+            
+            return (
               <button
-                onClick={() => setShowUserDropdown(!showUserDropdown)}
-                className="flex items-center gap-3 p-2 rounded-full hover:bg-slate-100/80 transition-all duration-200 group"
+                key={tabItem.id}
+                onClick={() => {
+                  if (tabItem.id === 'dashboard') {
+                    router.push('/');
+                  } else {
+                    router.push(`/?tab=${tabItem.id}`);
+                  }
+                }}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all duration-200 ${
+                  isActive 
+                    ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg' 
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                }`}
+                title={sidebarCollapsed ? tabItem.label : undefined}
               >
-                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-semibold shadow-lg">
-                  {user?.first_name?.[0] || user?.email?.[0]?.toUpperCase() || 'U'}
-                </div>
-                <div className="text-left hidden sm:block">
-                  <p className="text-sm font-medium text-slate-700">
+                <Icon size={20} />
+                {!sidebarCollapsed && (
+                  <>
+                    <span>{tabItem.label}</span>
+                    {isActive && (
+                      <div className="ml-auto w-2 h-2 bg-white rounded-full"></div>
+                    )}
+                  </>
+                )}
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* User Profile Section */}
+        <div className="p-4 border-t border-slate-200">
+          <div className="relative">
+            <button
+              onClick={() => setShowUserDropdown(!showUserDropdown)}
+              className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-slate-100 transition-colors"
+            >
+              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-semibold text-sm shadow-lg">
+                {user?.first_name?.[0] || user?.email?.[0]?.toUpperCase() || 'U'}
+              </div>
+              {!sidebarCollapsed && (
+                <>
+                  <div className="flex-1 text-left">
+                    <p className="text-sm font-medium text-slate-700 truncate">
+                      {user?.first_name && user?.last_name 
+                        ? `${user.first_name} ${user.last_name}`
+                        : user?.email
+                      }
+                    </p>
+                    <p className="text-xs text-slate-500 capitalize">{user?.role}</p>
+                  </div>
+                  <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform duration-200 ${showUserDropdown ? 'rotate-180' : ''}`} />
+                </>
+              )}
+            </button>
+
+            {/* Dropdown Menu */}
+            {showUserDropdown && !sidebarCollapsed && (
+              <div className="absolute bottom-full left-0 right-0 mb-2 bg-white rounded-xl shadow-xl border border-slate-200 z-50">
+                <div className="p-3 border-b border-slate-100">
+                  <p className="font-medium text-slate-900 text-sm">
                     {user?.first_name && user?.last_name 
                       ? `${user.first_name} ${user.last_name}`
                       : user?.email
@@ -111,92 +196,78 @@ function HomePageContent() {
                   </p>
                   <p className="text-xs text-slate-500 capitalize">{user?.role}</p>
                 </div>
-                <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform duration-200 ${showUserDropdown ? 'rotate-180' : ''}`} />
-              </button>
-
-              {/* Dropdown Menu */}
-              {showUserDropdown && (
-                <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-xl border border-slate-200/60 backdrop-blur-xl z-50">
-                  <div className="p-4 border-b border-slate-100">
-                    <p className="font-medium text-slate-900">
-                      {user?.first_name && user?.last_name 
-                        ? `${user.first_name} ${user.last_name}`
-                        : user?.email
-                      }
-                    </p>
-                    <p className="text-sm text-slate-500 capitalize">{user?.role}</p>
-                  </div>
-                  <div className="p-2">
-                    {user?.role === 'admin' && (
-                      <button
-                        onClick={() => {
-                          router.push('/admin/dashboard');
-                          setShowUserDropdown(false);
-                        }}
-                        className="w-full flex items-center gap-3 px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 rounded-lg transition-colors duration-200"
-                      >
-                        <Settings className="w-4 h-4" />
-                        Admin Dashboard
-                      </button>
-                    )}
+                <div className="p-2">
+                  <button
+                    onClick={() => setDarkMode(!darkMode)}
+                    className="w-full flex items-center gap-3 px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 rounded-lg transition-colors duration-200"
+                  >
+                    {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                    {darkMode ? 'Light Mode' : 'Dark Mode'}
+                  </button>
+                  {user?.role === 'admin' && (
                     <button
                       onClick={() => {
-                        logout();
+                        router.push('/admin/dashboard');
                         setShowUserDropdown(false);
                       }}
-                      className="w-full flex items-center gap-3 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors duration-200"
+                      className="w-full flex items-center gap-3 px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 rounded-lg transition-colors duration-200"
                     >
-                      <LogOut className="w-4 h-4" />
-                      Logout
+                      <Settings className="w-4 h-4" />
+                      Admin Dashboard
                     </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Enhanced Navigation Tabs */}
-            <nav className="flex items-center gap-2 bg-slate-100/80 backdrop-blur-sm rounded-2xl p-2 shadow-inner">
-              {tabConfig.map((tabItem) => {
-                const Icon = tabItem.icon;
-                const isActive = tab === tabItem.id;
-                
-                return (
+                  )}
                   <button
-                    key={tabItem.id}
                     onClick={() => {
-                      if (tabItem.id === 'dashboard') {
-                        router.push('/');
-                      } else {
-                        router.push(`/?tab=${tabItem.id}`);
-                      }
+                      logout();
+                      setShowUserDropdown(false);
                     }}
-                    className={`group relative flex items-center gap-3 px-6 py-3 rounded-xl font-semibold transition-all duration-300 ${
-                      isActive 
-                        ? `bg-gradient-to-r ${tabItem.gradient} text-white shadow-lg transform scale-105` 
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-white/70 hover:shadow-md'
-                    }`}
+                    className="w-full flex items-center gap-3 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors duration-200"
                   >
-                    <Icon size={18} className={`transition-transform duration-200 ${isActive ? 'scale-110' : 'group-hover:scale-105'}`} />
-                    <span className="hidden sm:inline font-medium">{tabItem.label}</span>
-                    {isActive && (
-                      <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-2 h-2 bg-white rounded-full shadow-sm"></div>
-                    )}
+                    <LogOut className="w-4 h-4" />
+                    Logout
                   </button>
-                );
-              })}
-            </nav>
+                </div>
+              </div>
+            )}
           </div>
         </div>
-      </header>
+      </div>
 
-      {/* Enhanced Main Content - 90% Width */}
-      <main className="w-[90%] mx-auto px-6 py-8">
-        <div className={`rounded-3xl p-8 bg-gradient-to-br ${tabConfig.find(t => t.id === tab)?.bgGradient} shadow-xl border border-white/50`}>
-          {tab === "dashboard" && <DashboardTab />}
-          {tab === "earned-commission" && <EarnedCommissionTab />}
-          {tab === "carriers" && <CarrierTab />}
-        </div>
-      </main>
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Top Header */}
+        <header className="bg-white border-b border-slate-200 px-6 py-4 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <h2 className="text-2xl font-bold text-slate-800">
+                {tabConfig.find(t => t.id === tab)?.label}
+              </h2>
+              <p className="text-sm text-slate-500">
+                {tabConfig.find(t => t.id === tab)?.description}
+              </p>
+            </div>
+            
+            <div className="flex items-center gap-3">
+              <button className="p-2 rounded-lg hover:bg-slate-100 transition-colors">
+                <Search className="w-5 h-5 text-slate-500" />
+              </button>
+              <button className="p-2 rounded-lg hover:bg-slate-100 transition-colors relative">
+                <Bell className="w-5 h-5 text-slate-500" />
+                <div className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></div>
+              </button>
+            </div>
+          </div>
+        </header>
+
+        {/* Main Content */}
+        <main className="flex-1 p-6 bg-slate-50 overflow-y-auto">
+          <div className="max-w-none">
+            {tab === "dashboard" && <DashboardTab />}
+            {tab === "earned-commission" && <EarnedCommissionTab />}
+            {tab === "carriers" && <CarrierTab />}
+          </div>
+        </main>
+      </div>
     </div>
   );
 }

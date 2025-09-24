@@ -38,34 +38,34 @@ export default function ProgressBar({ currentStep, steps = DEFAULT_STEPS }: Prog
   }))
 
   return (
-    <div className="w-full bg-white border-b border-gray-200 p-4 z-10 relative shadow-sm">
+    <div className="w-full bg-white border-b border-slate-200 p-6 z-10 relative shadow-sm">
       <div className="max-w-4xl mx-auto">
-        <div className="flex items-center justify-center space-x-4">
+        <div className="flex items-center justify-center gap-8">
           {updatedSteps.map((step, index) => (
             <div key={step.id} className="flex items-center">
-              <div className="flex items-center">
+              <div className="flex items-center gap-3">
                 <div className={`
-                  w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-200
+                  w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold transition-all duration-300 shadow-sm
                   ${step.status === 'completed' 
-                    ? 'bg-green-500 text-white' 
+                    ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-lg' 
                     : step.status === 'current' 
-                    ? 'bg-blue-500 text-white' 
-                    : 'bg-gray-300 text-gray-600'
+                    ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg' 
+                    : 'bg-slate-100 text-slate-500 border border-slate-200'
                   }
                 `}>
                   {step.status === 'completed' ? (
-                    <Check size={16} />
+                    <Check size={18} />
                   ) : (
                     index + 1
                   )}
                 </div>
                 <span className={`
-                  ml-2 text-sm font-medium transition-all duration-200
+                  text-sm font-semibold transition-all duration-300
                   ${step.status === 'completed' 
-                    ? 'text-green-600' 
+                    ? 'text-emerald-600' 
                     : step.status === 'current' 
                     ? 'text-blue-600' 
-                    : 'text-gray-500'
+                    : 'text-slate-500'
                   }
                 `}>
                   {step.label}
@@ -73,8 +73,8 @@ export default function ProgressBar({ currentStep, steps = DEFAULT_STEPS }: Prog
               </div>
               {index < updatedSteps.length - 1 && (
                 <div className={`
-                  w-12 h-1 mx-4 transition-all duration-200
-                  ${step.status === 'completed' ? 'bg-green-500' : 'bg-gray-300'}
+                  w-16 h-1 mx-6 transition-all duration-300 rounded-full
+                  ${step.status === 'completed' ? 'bg-gradient-to-r from-emerald-500 to-teal-600' : 'bg-slate-200'}
                 `} />
               )}
             </div>

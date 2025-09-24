@@ -87,26 +87,26 @@ export default function TableViewerModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-2xl max-w-7xl w-full max-h-[90vh] overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+        <div className="flex items-center justify-between p-6 border-b border-slate-200">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full flex items-center justify-center bg-green-100">
-              <Table className="text-green-600" size={20} />
+            <div className="w-10 h-10 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center">
+              <Table className="text-white" size={20} />
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-gray-800">{title}</h2>
-              <p className="text-sm text-gray-500">
+              <h2 className="text-2xl font-bold text-slate-800">{title}</h2>
+              <p className="text-sm text-slate-600">
                 Formatted and processed data
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
           >
-            <X size={24} className="text-gray-500" />
+            <X size={24} />
           </button>
         </div>
 
@@ -114,18 +114,24 @@ export default function TableViewerModal({
         <div className="p-6 overflow-y-auto max-h-[calc(90vh-180px)]">
           {loading ? (
             <div className="flex items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              <span className="ml-3 text-gray-600">Loading tables...</span>
+              <div className="w-8 h-8 border-2 border-slate-200 border-t-emerald-500 rounded-full animate-spin"></div>
+              <span className="ml-3 text-slate-600 font-medium">Loading tables...</span>
             </div>
           ) : error ? (
-            <div className="text-center py-12">
-              <FileText className="mx-auto text-gray-400" size={48} />
-              <p className="text-gray-500 mt-4">{error}</p>
+            <div className="text-center py-16">
+              <div className="w-16 h-16 bg-red-100 rounded-xl flex items-center justify-center mx-auto mb-4">
+                <FileText className="text-red-600" size={32} />
+              </div>
+              <h3 className="text-lg font-semibold text-slate-700 mb-2">Error Loading Tables</h3>
+              <p className="text-slate-500 text-sm">{error}</p>
             </div>
           ) : tables.length === 0 ? (
-            <div className="text-center py-12">
-              <Table className="mx-auto text-gray-400" size={48} />
-              <p className="text-gray-500 mt-4">No tables found</p>
+            <div className="text-center py-16">
+              <div className="w-16 h-16 bg-slate-100 rounded-xl flex items-center justify-center mx-auto mb-4">
+                <Table className="text-slate-400" size={32} />
+              </div>
+              <h3 className="text-lg font-semibold text-slate-700 mb-2">No tables found</h3>
+              <p className="text-slate-500 text-sm">This statement doesn&apos;t have any processed tables yet.</p>
             </div>
           ) : (
             <div className="space-y-6">

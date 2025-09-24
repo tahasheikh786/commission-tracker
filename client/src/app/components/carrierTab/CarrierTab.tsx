@@ -12,6 +12,7 @@ import { Database, Settings, Plus, Search, Filter, Sparkles, Building2, FileText
 import { useSubmission } from "@/context/SubmissionContext";
 import { useUserSpecificCompanies } from "@/app/hooks/useDashboard";
 import { useAuth } from "@/context/AuthContext";
+import axios from 'axios';
 
 type Carrier = { id: string; name: string };
 type Statement = {
@@ -63,15 +64,19 @@ export default function CarrierTab() {
     setLoadingCarriers(true);
     
     if (viewAllData) {
-      // Fetch all companies
-      fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/`)
-        .then(r => r.json())
-        .then((data) => {
+      // Fetch all companies using axios for proper authentication
+      axios.get(`${process.env.NEXT_PUBLIC_API_URL}/companies/`)
+        .then((response) => {
+          const data = response.data;
           // Sort carriers alphabetically by name
           const sortedCarriers = data.sort((a: Carrier, b: Carrier) => 
             a.name.localeCompare(b.name)
           );
           setCarriers(sortedCarriers);
+        })
+        .catch((error) => {
+          console.error('Error fetching all companies:', error);
+          setCarriers([]);
         })
         .finally(() => setLoadingCarriers(false));
     } else {
@@ -99,9 +104,11 @@ export default function CarrierTab() {
       ? `${process.env.NEXT_PUBLIC_API_URL}/companies/${selected.id}/statements/`
       : `${process.env.NEXT_PUBLIC_API_URL}/companies/user-specific/${selected.id}/statements`;
     
-    fetch(endpoint)
-      .then(r => r.json())
-      .then(data => setStatements(Array.isArray(data) ? data : []))
+    axios.get(endpoint)
+      .then(response => {
+        const data = response.data;
+        setStatements(Array.isArray(data) ? data : []);
+      })
       .catch(error => {
         console.error('Error fetching statements:', error);
         setStatements([]);
@@ -117,9 +124,13 @@ export default function CarrierTab() {
     }
     
     setLoadingCommission(true);
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/earned-commission/carrier/${selected.id}/stats`)
-      .then(r => r.json())
-      .then((data) => {
+    const endpoint = viewAllData 
+      ? `${process.env.NEXT_PUBLIC_API_URL}/earned-commission/carrier/${selected.id}/stats`
+      : `${process.env.NEXT_PUBLIC_API_URL}/earned-commission/carrier/user-specific/${selected.id}/stats`;
+    
+    axios.get(endpoint)
+      .then(response => {
+        const data = response.data;
         setCommissionStats(data);
       })
       .catch((error) => {
@@ -127,7 +138,7 @@ export default function CarrierTab() {
         setCommissionStats(null);
       })
       .finally(() => setLoadingCommission(false));
-  }, [selected]);
+  }, [selected, viewAllData]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -216,121 +227,125 @@ export default function CarrierTab() {
   ];
   
   return (
-    <div className="w-full space-y-8">
-      {/* Enhanced Header */}
-      <div className="text-center space-y-4">
-        <div className="flex items-center justify-center gap-3">
-          <Sparkles className="text-violet-500" size={24} />
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-slate-800 via-slate-700 to-slate-600 bg-clip-text text-transparent">
-            Carrier Management
-          </h1>
-          <Sparkles className="text-purple-500" size={24} />
+    <div className="w-full space-y-6">
+      {/* View Toggle - Only show for carriers tab */}
+      {activeTab === 'carriers' && (
+        <div className="flex justify-end">
+          <div className="flex items-center gap-2 bg-white rounded-xl border border-slate-200 shadow-sm p-1">
+            <button
+              onClick={() => setViewAllData(false)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+                !viewAllData
+                  ? 'bg-blue-500 text-white shadow-sm'
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <Eye className="w-4 h-4" />
+              My Data
+            </button>
+            <button
+              onClick={() => setViewAllData(true)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+                viewAllData
+                  ? 'bg-blue-500 text-white shadow-sm'
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <EyeOff className="w-4 h-4" />
+              All Data
+            </button>
+          </div>
         </div>
-        <p className="text-lg text-slate-600 max-w-3xl mx-auto leading-relaxed">
-          Manage carriers, statements, and configure field mappings for optimal data processing
-          {viewAllData && !permissions?.is_admin && (
-            <span className="block mt-2 text-sm font-medium text-amber-600 bg-amber-50 px-3 py-1 rounded-full inline-block">
-              🔒 Read-Only Mode - Viewing all company data
-            </span>
-          )}
-          {viewAllData && permissions?.is_admin && (
-            <span className="block mt-2 text-sm font-medium text-green-600 bg-green-50 px-3 py-1 rounded-full inline-block">
-              👑 Admin Mode - Full access to all company data
-            </span>
-          )}
-        </p>
+      )}
 
-        {/* View Toggle - Only show for carriers tab */}
-        {activeTab === 'carriers' && (
-          <div className="flex justify-center">
-            <div className="flex items-center gap-3 bg-white/90 backdrop-blur-xl rounded-2xl border border-white/50 shadow-lg p-2">
-              <button
-                onClick={() => setViewAllData(false)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-200 ${
-                  !viewAllData
-                    ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg'
-                    : 'text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                <Eye className="w-4 h-4" />
-                My Data
-              </button>
-              <button
-                onClick={() => setViewAllData(true)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-200 ${
-                  viewAllData
-                    ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg'
-                    : 'text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                <EyeOff className="w-4 h-4" />
-                All Data (Read-Only)
-              </button>
+      {/* Status Indicators */}
+      {viewAllData && !permissions?.is_admin && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center">
+              <span className="text-amber-600 text-sm">🔒</span>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-amber-800">Read-Only Mode</p>
+              <p className="text-xs text-amber-600">Viewing all company data</p>
             </div>
           </div>
-        )}
-      </div>
-
-      {/* Enhanced Tab Navigation */}
-      <div className="flex items-center justify-center">
-        <div className="flex items-center gap-2 bg-slate-100/80 backdrop-blur-sm rounded-2xl p-2 shadow-inner">
-          {tabConfig.map((tabItem) => {
-            const Icon = tabItem.icon;
-            const isActive = activeTab === tabItem.id;
-            
-            return (
-              <button
-                key={tabItem.id}
-                onClick={() => setActiveTab(tabItem.id)}
-                className={`group relative flex items-center gap-3 px-6 py-3 rounded-xl font-semibold transition-all duration-300 ${
-                  isActive 
-                    ? `bg-gradient-to-r ${tabItem.gradient} text-white shadow-lg transform scale-105` 
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/70 hover:shadow-md'
-                }`}
-              >
-                <Icon size={18} className={`transition-transform duration-200 ${isActive ? 'scale-110' : 'group-hover:scale-105'}`} />
-                <span>{tabItem.label}</span>
-                {isActive && (
-                  <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-2 h-2 bg-white rounded-full shadow-sm"></div>
-                )}
-              </button>
-            );
-          })}
         </div>
+      )}
+      {viewAllData && permissions?.is_admin && (
+        <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+              <span className="text-green-600 text-sm">👑</span>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-green-800">Admin Mode</p>
+              <p className="text-xs text-green-600">Full access to all company data</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tab Navigation */}
+      <div className="flex items-center gap-2 bg-white rounded-xl border border-slate-200 shadow-sm p-1">
+        {tabConfig.map((tabItem) => {
+          const Icon = tabItem.icon;
+          const isActive = activeTab === tabItem.id;
+          
+          return (
+            <button
+              key={tabItem.id}
+              onClick={() => setActiveTab(tabItem.id)}
+              className={`flex items-center gap-3 px-6 py-3 rounded-lg font-medium transition-all duration-200 ${
+                isActive 
+                  ? 'bg-blue-500 text-white shadow-sm' 
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <Icon size={18} />
+              <span>{tabItem.label}</span>
+            </button>
+          );
+        })}
       </div>
 
-      {activeTab === 'carriers' ? (
-        <div className="flex gap-8">
-          {/* Enhanced Carrier List - Wider Sidebar */}
-          <div className="w-96 flex-shrink-0">
-            <CarrierList
-              carriers={carriers}
-              selected={selected}
-              onSelect={c => {
-                setSelected(c);
-                // Update the carrier in the list if name changed
-                setCarriers(prev => prev.map(car => car.id === c.id ? { ...car, name: c.name } : car));
-              }}
-              loading={loadingCarriers || userCompaniesLoading}
-              onDelete={handleCarrierDelete}
-              deleting={deletingCarriers}
-              readOnly={!canEditData}
-            />
+              {activeTab === 'carriers' ? (
+                <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          {/* Carrier List */}
+          <div className="lg:col-span-1">
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="p-4 border-b border-slate-200">
+                <h3 className="text-lg font-semibold text-slate-800">Carriers</h3>
+              </div>
+              <CarrierList
+                carriers={carriers}
+                selected={selected}
+                onSelect={c => {
+                  setSelected(c);
+                  // Update the carrier in the list if name changed
+                  setCarriers(prev => prev.map(car => car.id === c.id ? { ...car, name: c.name } : car));
+                }}
+                loading={loadingCarriers || userCompaniesLoading}
+                onDelete={handleCarrierDelete}
+                deleting={deletingCarriers}
+                readOnly={!canEditData}
+              />
+            </div>
           </div>
           
-          {/* Enhanced Statements Panel - Main Content */}
-          <div className="flex-1 min-w-0">
-            <div className="bg-white/90 backdrop-blur-xl rounded-3xl border border-white/50 shadow-2xl overflow-hidden">
-              <div className="p-6 border-b border-slate-200/50 bg-gradient-to-r from-slate-50/50 to-slate-100/50">
+          {/* Statements Panel */}
+          <div className="lg:col-span-3">
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="p-6 border-b border-slate-200">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-3">
-                      <Building2 className="text-violet-600" size={24} />
+                    <h2 className="text-xl font-bold text-slate-800 flex items-center gap-3">
+                      <Building2 className="text-blue-600" size={20} />
                       {selected?.name || "Select a carrier"}
                     </h2>
                     {selected && (
-                      <p className="text-sm text-slate-600 mt-2 flex items-center gap-2">
-                        <FileText className="text-slate-400" size={16} />
+                      <p className="text-sm text-slate-600 mt-1 flex items-center gap-2">
+                        <FileText className="text-slate-400" size={14} />
                         {statements.length} statement{statements.length !== 1 ? 's' : ''} found
                       </p>
                     )}
@@ -339,15 +354,15 @@ export default function CarrierTab() {
                   {selected && (
                     <button
                       disabled={!canEditData}
-                      className={`inline-flex items-center gap-3 px-6 py-3 rounded-2xl transition-all duration-200 font-semibold ${
+                      className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-200 font-medium ${
                         !canEditData
-                          ? 'bg-slate-300 text-slate-500 cursor-not-allowed opacity-50'
-                          : 'bg-gradient-to-r from-violet-500 to-purple-600 text-white hover:shadow-lg hover:scale-105'
+                          ? 'bg-slate-200 text-slate-500 cursor-not-allowed opacity-50'
+                          : 'bg-blue-500 text-white hover:bg-blue-600'
                       }`}
                       onClick={() => setShowEditMapping(true)}
                       title={!canEditData ? "Read-only mode - switch to 'My Data' to edit" : "Edit carrier mappings"}
                     >
-                      <Settings size={18} />
+                      <Settings size={16} />
                       Edit Mappings
                     </button>
                   )}
@@ -356,7 +371,7 @@ export default function CarrierTab() {
               
               {/* Commission Stats Display */}
               {selected && (
-                <div className="px-6 py-4 border-b border-slate-200/50 bg-gradient-to-r from-green-50/50 to-blue-50/50">
+                <div className="px-6 py-4 border-b border-slate-200 bg-slate-50">
                   {loadingCommission ? (
                     <div className="flex items-center gap-3">
                       <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
@@ -365,7 +380,7 @@ export default function CarrierTab() {
                   ) : commissionStats ? (
                     <div className="grid grid-cols-3 gap-6">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                        <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
                           <DollarSign className="text-green-600" size={18} />
                         </div>
                         <div>
@@ -374,7 +389,7 @@ export default function CarrierTab() {
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                        <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
                           <TrendingUp className="text-blue-600" size={18} />
                         </div>
                         <div>
@@ -383,7 +398,7 @@ export default function CarrierTab() {
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
+                        <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
                           <Users className="text-purple-600" size={18} />
                         </div>
                         <div>
@@ -404,7 +419,7 @@ export default function CarrierTab() {
                 {loadingStatements ? (
                   <div className="flex items-center justify-center py-12">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 border-2 border-slate-200 border-t-violet-500 rounded-full animate-spin"></div>
+                      <div className="w-8 h-8 border-2 border-slate-200 border-t-blue-500 rounded-full animate-spin"></div>
                       <span className="text-slate-600 font-medium">Loading statements...</span>
                     </div>
                   </div>
@@ -420,42 +435,42 @@ export default function CarrierTab() {
                   />
                 ) : (
                   <div className="flex flex-col items-center justify-center py-16 text-center">
-                    <div className="w-20 h-20 bg-gradient-to-r from-violet-100 to-purple-100 rounded-3xl flex items-center justify-center mb-6">
-                      <Database className="text-violet-500" size={40} />
+                    <div className="w-16 h-16 bg-slate-100 rounded-xl flex items-center justify-center mb-4">
+                      <Database className="text-slate-400" size={32} />
                     </div>
-                    <h3 className="text-xl font-bold text-slate-700 mb-3">
+                    <h3 className="text-lg font-semibold text-slate-700 mb-2">
                       No Carrier Selected
                     </h3>
-                    <p className="text-slate-600 text-lg max-w-md leading-relaxed">
+                    <p className="text-slate-500 text-sm max-w-md">
                       Select a carrier from the list to view and manage their statements
                     </p>
                   </div>
                 )}
               </div>
             </div>
-          </div>
-        </div>
-      ) : activeTab === 'database-fields' ? (
-        <div className="bg-white/90 backdrop-blur-xl rounded-3xl border border-white/50 shadow-2xl overflow-hidden">
-          <div className="p-6 border-b border-slate-200/50 bg-gradient-to-r from-slate-50/50 to-slate-100/50">
-            <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-3">
-              <Settings className="text-blue-600" size={24} />
+                  </div>
+                </div>
+              ) : activeTab === 'database-fields' ? (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="p-6 border-b border-slate-200">
+            <h2 className="text-xl font-bold text-slate-800 flex items-center gap-3">
+              <Settings className="text-blue-600" size={20} />
               Database Fields Configuration
             </h2>
-            <p className="text-slate-600 mt-2">Configure field mappings for data extraction and processing</p>
+            <p className="text-slate-600 mt-1 text-sm">Configure field mappings for data extraction and processing</p>
           </div>
           <div className="p-6">
             <DatabaseFieldsManager />
           </div>
         </div>
       ) : (
-        <div className="bg-white/90 backdrop-blur-xl rounded-3xl border border-white/50 shadow-2xl overflow-hidden">
-          <div className="p-6 border-b border-slate-200/50 bg-gradient-to-r from-slate-50/50 to-slate-100/50">
-            <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-3">
-              <Plus className="text-emerald-600" size={24} />
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="p-6 border-b border-slate-200">
+            <h2 className="text-xl font-bold text-slate-800 flex items-center gap-3">
+              <Plus className="text-emerald-600" size={20} />
               Plan Types Management
             </h2>
-            <p className="text-slate-600 mt-2">Add and manage plan types for commission tracking</p>
+            <p className="text-slate-600 mt-1 text-sm">Add and manage plan types for commission tracking</p>
           </div>
           <div className="p-6">
             <PlanTypesManager />

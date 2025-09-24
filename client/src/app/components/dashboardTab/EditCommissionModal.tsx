@@ -124,21 +124,21 @@ export default function EditCommissionModal({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
-              <TrendingUp className="text-green-600" size={20} />
+        <div className="flex items-center justify-between p-6 border-b border-slate-200">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center shadow-lg">
+              <TrendingUp className="text-white" size={20} />
             </div>
             <div>
-              <h2 className="text-xl font-semibold text-gray-800">Edit Commission Data</h2>
-              <p className="text-sm text-gray-600">Update company and commission information</p>
+              <h2 className="text-xl font-bold text-slate-800">Edit Commission Data</h2>
+              <p className="text-sm text-slate-600">Update company and commission information</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
           >
             <X size={20} />
           </button>
@@ -148,7 +148,7 @@ export default function EditCommissionModal({
         <div className="p-6 space-y-6">
           {/* Company Name */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-semibold text-slate-700 mb-2">
               <Building2 className="inline mr-2" size={16} />
               Company Name
             </label>
@@ -156,8 +156,8 @@ export default function EditCommissionModal({
               type="text"
               value={formData.client_name}
               onChange={(e) => handleInputChange('client_name', e.target.value)}
-              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-colors ${
-                errors.client_name ? 'border-red-300' : 'border-gray-300'
+              className={`w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${
+                errors.client_name ? 'border-red-300' : 'border-slate-200'
               }`}
               placeholder="Enter company name"
             />
@@ -168,7 +168,7 @@ export default function EditCommissionModal({
 
           {/* Invoice Total */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-semibold text-slate-700 mb-2">
               <DollarSign className="inline mr-2" size={16} />
               Invoice Total
             </label>
@@ -176,13 +176,13 @@ export default function EditCommissionModal({
               type="text"
               value={formData.invoice_total}
               onChange={(e) => handleInputChange('invoice_total', formatCurrencyInput(e.target.value))}
-              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-colors ${
-                errors.invoice_total ? 'border-red-300' : 'border-gray-300'
+              className={`w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${
+                errors.invoice_total ? 'border-red-300' : 'border-slate-200'
               }`}
               placeholder="0.00"
             />
             {formData.invoice_total && (
-              <p className="mt-1 text-sm text-gray-500">
+              <p className="mt-1 text-sm text-slate-500">
                 {formatCurrencyDisplay(formData.invoice_total)}
               </p>
             )}
@@ -193,7 +193,7 @@ export default function EditCommissionModal({
 
           {/* Commission Earned */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-semibold text-slate-700 mb-2">
               <TrendingUp className="inline mr-2" size={16} />
               Commission Earned
             </label>
@@ -201,13 +201,13 @@ export default function EditCommissionModal({
               type="text"
               value={formData.commission_earned}
               onChange={(e) => handleInputChange('commission_earned', formatCurrencyInput(e.target.value))}
-              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-colors ${
-                errors.commission_earned ? 'border-red-300' : 'border-gray-300'
+              className={`w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 ${
+                errors.commission_earned ? 'border-red-300' : 'border-slate-200'
               }`}
               placeholder="0.00"
             />
             {formData.commission_earned && (
-              <p className="mt-1 text-sm text-gray-500">
+              <p className="mt-1 text-sm text-slate-500">
                 {formatCurrencyDisplay(formData.commission_earned)}
               </p>
             )}
@@ -217,14 +217,14 @@ export default function EditCommissionModal({
           </div>
 
           {/* Read-only Info */}
-          <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+          <div className="bg-slate-50 rounded-xl p-4 space-y-3">
             <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Statements:</span>
-              <span className="font-medium">{data.statement_count}</span>
+              <span className="text-slate-600 font-medium">Statements:</span>
+              <span className="font-semibold text-slate-800">{data.statement_count}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Last Updated:</span>
-              <span className="font-medium">
+              <span className="text-slate-600 font-medium">Last Updated:</span>
+              <span className="font-semibold text-slate-800">
                 {data.last_updated ? new Date(data.last_updated).toLocaleDateString() : 'N/A'}
               </span>
             </div>
@@ -232,10 +232,10 @@ export default function EditCommissionModal({
         </div>
 
         {/* Footer */}
-        <div className="flex gap-3 p-6 border-t border-gray-200">
+        <div className="flex gap-4 p-6 border-t border-slate-200">
           <button
             onClick={onClose}
-            className="flex-1 px-4 py-3 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium transition-colors"
+            className="flex-1 px-6 py-3 text-slate-700 bg-slate-200 hover:bg-slate-300 rounded-xl font-semibold transition-all duration-200"
             disabled={loading}
           >
             Cancel
@@ -243,7 +243,7 @@ export default function EditCommissionModal({
           <button
             onClick={handleSave}
             disabled={loading}
-            className="flex-1 px-4 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            className="flex-1 px-6 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white rounded-xl font-semibold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg hover:shadow-xl"
           >
             {loading ? (
               <>

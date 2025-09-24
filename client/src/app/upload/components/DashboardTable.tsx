@@ -238,74 +238,74 @@ export default function DashboardTable({
   }
 
   return (
-    <div className="shadow-lg rounded-2xl p-5 border bg-white overflow-x-auto w-full h-full flex flex-col">
+    <div className="shadow-lg rounded-2xl p-6 border border-slate-200 bg-white overflow-x-auto w-full h-full flex flex-col">
       {planTypes && planTypes.length > 0 && (
-        <div className="mb-4 flex flex-wrap gap-2 items-center">
-          <span className="font-semibold text-gray-700 text-base mr-2">Plan Types:</span>
+        <div className="mb-6 flex flex-wrap gap-3 items-center">
+          <span className="font-semibold text-slate-700 text-base">Plan Types:</span>
           {planTypes.map(pt => (
-            <span key={pt} className="inline-block px-3 py-1 rounded-full bg-blue-100 text-blue-700 font-medium text-sm border border-blue-300">
+            <span key={pt} className="inline-block px-4 py-2 rounded-lg bg-blue-50 text-blue-700 font-medium text-sm border border-blue-200">
               {pt.charAt(0).toUpperCase() + pt.slice(1)}
             </span>
           ))}
         </div>
       )}
-      <div className="flex items-center justify-between mb-2 flex-wrap gap-2 px-2">
-        <div className="flex items-center gap-2">
-          <label className="text-sm font-medium">Rows per page:</label>
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-4 px-2">
+        <div className="flex items-center gap-3">
+          <label className="text-sm font-medium text-slate-700">Rows per page:</label>
           <select
             value={rowsPerPage}
             onChange={e => { setRowsPerPage(Number(e.target.value)); setPage(1) }}
-            className="border rounded px-2 py-1 text-sm shadow-sm focus:ring-2 focus:ring-blue-200"
+            className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             {ROWS_OPTIONS.map(opt => (
               <option key={opt} value={opt}>{opt}</option>
             ))}
           </select>
         </div>
-        <div className="text-sm text-gray-600">
-          Showing <span className="font-semibold">{(page - 1) * rowsPerPage + 1}-{Math.min(page * rowsPerPage, dataRows.length)}</span> of <span className="font-semibold">{dataRows.length}</span> items
+        <div className="text-sm text-slate-600">
+          Showing <span className="font-semibold text-slate-800">{(page - 1) * rowsPerPage + 1}-{Math.min(page * rowsPerPage, dataRows.length)}</span> of <span className="font-semibold text-slate-800">{dataRows.length}</span> items
         </div>
         {!readOnly && (
-          <>
+          <div className="flex items-center gap-3">
             <button
               className={clsx(
-                "flex items-center px-3 py-1.5 rounded bg-red-600 text-white font-medium shadow hover:bg-red-700 transition",
-                selectedRows.size > 0 ? "" : "opacity-50 cursor-not-allowed"
+                "flex items-center gap-2 px-4 py-2 rounded-lg bg-red-500 text-white font-medium shadow-lg hover:shadow-xl transition-all duration-200",
+                selectedRows.size > 0 ? "hover:bg-red-600" : "opacity-50 cursor-not-allowed"
               )}
               disabled={selectedRows.size === 0}
               onClick={deleteSelectedRowsOnPage}
             >
-              <Trash2 size={16} className="mr-1" />
+              <Trash2 size={16} />
               Delete selected
             </button>
             <button
               onClick={onEditMapping}
-              className="px-4 py-2 rounded bg-gradient-to-br from-blue-600 to-indigo-500 text-white font-semibold shadow hover:scale-105 transition"
+              className="px-4 py-2 rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105"
             >
               Edit Field Mapping
             </button>
             {onSendToPending && (
               <button
                 onClick={onSendToPending}
-                className="px-4 py-2 rounded bg-gradient-to-br from-orange-500 to-red-500 text-white font-semibold shadow hover:scale-105 transition flex items-center gap-2"
+                className="px-4 py-2 rounded-lg bg-gradient-to-r from-amber-500 to-orange-600 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105 flex items-center gap-2"
               >
                 <Clock size={16} />
                 Send to Pending
               </button>
             )}
-          </>
+          </div>
         )}
        
       </div>
       <div className="flex-1 overflow-auto">
         <table className="min-w-full">
-        <thead className="bg-gradient-to-br from-blue-100 to-purple-50 sticky top-0">
+        <thead className="bg-gradient-to-r from-slate-50 to-blue-50 sticky top-0">
           {/* Render table name row only above the corresponding table's header */}
           {pagedRowsWithHeaders.map((item, i) => {
             if (item.type === 'header' && item.name) {
               return (
                 <tr key={`name-${item.groupIdx}-${i}`}>
-                  <td colSpan={fieldConfig.length + (!readOnly ? 2 : 1)} className="py-2 px-4 text-lg font-bold text-blue-700 bg-blue-50 border-b text-center">
+                  <td colSpan={fieldConfig.length + (!readOnly ? 2 : 1)} className="py-3 px-4 text-lg font-bold text-blue-700 bg-blue-50 border-b border-slate-200 text-center">
                     {item.name}
                   </td>
                 </tr>
@@ -315,7 +315,7 @@ export default function DashboardTable({
           })}
           <tr>
             {!readOnly && (
-              <th className="py-3 px-3 border-b w-8 text-center">
+              <th className="py-4 px-4 border-b border-slate-200 w-8 text-center">
                 <input
                   type="checkbox"
                   className="accent-blue-600 w-4 h-4"
@@ -327,19 +327,19 @@ export default function DashboardTable({
             )}
             {fieldConfig && fieldConfig.length > 0 ? (
               fieldConfig.map((f, idx) => (
-                <th key={f.field || idx} className="px-4 py-3 text-left font-bold text-gray-700 border-b">
+                <th key={f.field || idx} className="px-4 py-4 text-left font-bold text-slate-800 border-b border-slate-200">
                   {f.label}
                 </th>
               ))
             ) : (
               // Fallback headers when fieldConfig is not available
               rows[0]?.header?.map((header, idx) => (
-                <th key={idx} className="px-4 py-3 text-left font-bold text-gray-700 border-b">
+                <th key={idx} className="px-4 py-4 text-left font-bold text-slate-800 border-b border-slate-200">
                   {header}
                 </th>
               )) || []
             )}
-            {!readOnly && <th className="py-3 px-2 border-b w-40">Actions</th>}
+            {!readOnly && <th className="py-4 px-4 border-b border-slate-200 w-40 text-slate-800 font-bold">Actions</th>}
           </tr>
         </thead>
         <tbody>
@@ -350,9 +350,9 @@ export default function DashboardTable({
               const globalIdx = item.globalRowIdx
               const isEditing = editRowIdx === globalIdx
               return (
-                <tr key={globalIdx} className={isEditing ? "bg-blue-50" : "hover:bg-gray-50"}>
+                <tr key={globalIdx} className={isEditing ? "bg-blue-50" : "hover:bg-slate-50 transition-colors"}>
                   {!readOnly && (
-                    <td className="py-2 px-3 border-b align-top text-center">
+                    <td className="py-3 px-4 border-b border-slate-200 align-top text-center">
                       <input
                         type="checkbox"
                         className="accent-blue-600 w-4 h-4"
@@ -364,39 +364,39 @@ export default function DashboardTable({
                   )}
                   {Array.isArray(row) 
                     ? row.map((val: string, colIdx: number) => (
-                        <td key={colIdx} className="py-2 px-4 border-b align-top">
+                        <td key={colIdx} className="py-3 px-4 border-b border-slate-200 align-top">
                           {isEditing
                             ? (
                               <input
                                 value={editValues[colIdx] ?? ""}
                                 onChange={e => onEditCell(colIdx, e.target.value)}
-                                className="border rounded px-2 py-1 w-full text-sm"
+                                className="border border-slate-200 rounded-lg px-3 py-1 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                               />
                             )
                             : (
                               (val && val.trim())
-                                ? <span className="text-gray-800 text-sm">{fixPercent(val)}</span>
-                                : <span className="text-gray-400">-</span>
+                                ? <span className="text-slate-800 text-sm">{fixPercent(val)}</span>
+                                : <span className="text-slate-400">-</span>
                             )
                           }
                         </td>
                       ))
                     : fieldConfig.map((field, colIdx) => (
-                        <td key={colIdx} className="py-2 px-4 border-b align-top">
+                        <td key={colIdx} className="py-3 px-4 border-b border-slate-200 align-top">
                           {isEditing
                             ? (
                               <input
                                 value={editValues[colIdx] ?? ""}
                                 onChange={e => onEditCell(colIdx, e.target.value)}
-                                className="border rounded px-2 py-1 w-full text-sm"
+                                className="border border-slate-200 rounded-lg px-3 py-1 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                               />
                             )
                             : (
                               (() => {
                                 const val = (row as Record<string, string>)[field.field] || '';
                                 return (val && val.trim())
-                                  ? <span className="text-gray-800 text-sm">{fixPercent(val)}</span>
-                                  : <span className="text-gray-400">-</span>;
+                                  ? <span className="text-slate-800 text-sm">{fixPercent(val)}</span>
+                                  : <span className="text-slate-400">-</span>;
                               })()
                             )
                           }
@@ -404,23 +404,23 @@ export default function DashboardTable({
                       ))
                   }
                   {!readOnly && (
-                    <td className="py-2 px-2 border-b align-top">
+                    <td className="py-3 px-4 border-b border-slate-200 align-top">
                       {!isEditing ? (
-                        <div className="flex flex-wrap gap-2">
-                          <button className="p-1 text-blue-500 hover:bg-blue-50 rounded" onClick={() => startEdit(globalIdx)} title="Edit">
-                            <Pencil size={18} />
+                        <div className="flex gap-2">
+                          <button className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors" onClick={() => startEdit(globalIdx)} title="Edit">
+                            <Pencil size={16} />
                           </button>
-                          <button className="p-1 text-red-500 hover:bg-red-50 rounded" onClick={() => deleteRow(globalIdx)} title="Delete">
-                            <Trash2 size={18} />
+                          <button className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors" onClick={() => deleteRow(globalIdx)} title="Delete">
+                            <Trash2 size={16} />
                           </button>
                         </div>
                       ) : (
-                        <div className="flex space-x-2">
-                          <button className="p-1 text-green-600 hover:bg-green-100 rounded" onClick={saveEdit} title="Save">
-                            <Check size={20} />
+                        <div className="flex gap-2">
+                          <button className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors" onClick={saveEdit} title="Save">
+                            <Check size={18} />
                           </button>
-                          <button className="p-1 text-gray-600 hover:bg-gray-200 rounded" onClick={cancelEdit} title="Cancel">
-                            <X size={20} />
+                          <button className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors" onClick={cancelEdit} title="Cancel">
+                            <X size={18} />
                           </button>
                         </div>
                       )}

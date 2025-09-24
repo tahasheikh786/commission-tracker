@@ -253,8 +253,8 @@ export default function AdminDashboard() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-100/50 flex items-center justify-center">
         <div className="text-center">
-          <div className="w-16 h-16 bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg animate-pulse">
-            <Shield className="text-white" size={32} />
+          <div className="w-16 h-16 bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg">
+            <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
           </div>
           <p className="mt-6 text-slate-600 font-medium">Loading Admin Dashboard...</p>
         </div>
@@ -272,7 +272,7 @@ export default function AdminDashboard() {
           <p className="mt-6 text-slate-600 font-medium">Error loading dashboard</p>
           <button
             onClick={fetchAdminData}
-            className="mt-4 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="mt-4 px-6 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105"
           >
             Try Again
           </button>
@@ -336,7 +336,7 @@ export default function AdminDashboard() {
     <ProtectedRoute requireAuth={true} requireAdmin={true}>
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-100/50">
       {/* Header */}
-      <header className="bg-white/90 backdrop-blur-xl border-b border-slate-200/60 shadow-lg sticky top-0 z-50">
+      <header className="bg-white/95 backdrop-blur-xl border-b border-slate-200 shadow-xl sticky top-0 z-50">
         <div className="w-[90%] mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -363,7 +363,7 @@ export default function AdminDashboard() {
             <div className="flex items-center gap-4">
               <button
                 onClick={logout}
-                className="flex items-center gap-2 px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-xl transition-colors duration-200"
+                className="flex items-center gap-2 px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-xl transition-colors duration-200 font-medium"
               >
                 <Settings className="w-4 h-4" />
                 Logout
@@ -375,11 +375,11 @@ export default function AdminDashboard() {
 
       {/* Tab Navigation */}
       <div className="w-[90%] mx-auto px-6 py-4">
-        <div className="bg-white/90 backdrop-blur-xl rounded-2xl border border-white/50 shadow-lg p-2">
+        <div className="bg-white/95 backdrop-blur-xl rounded-2xl border border-slate-200 shadow-lg p-2">
           <div className="flex space-x-2">
             <button
               onClick={() => setActiveTab('overview')}
-              className={`flex-1 px-4 py-2 rounded-xl font-medium transition-all duration-200 ${
+              className={`flex-1 px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${
                 activeTab === 'overview'
                   ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg'
                   : 'text-slate-600 hover:bg-slate-100'
@@ -392,7 +392,7 @@ export default function AdminDashboard() {
             </button>
             <button
               onClick={() => setActiveTab('domains')}
-              className={`flex-1 px-4 py-2 rounded-xl font-medium transition-all duration-200 ${
+              className={`flex-1 px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${
                 activeTab === 'domains'
                   ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg'
                   : 'text-slate-600 hover:bg-slate-100'
@@ -418,14 +418,14 @@ export default function AdminDashboard() {
             {statCards.map((card, i) => {
               const Icon = card.icon;
               return (
-                <div key={i} className="bg-white/90 backdrop-blur-xl rounded-2xl border border-white/50 shadow-lg p-6 hover:shadow-xl transition-all duration-300">
+                <div key={i} className="bg-white/95 backdrop-blur-xl rounded-2xl border border-slate-200 shadow-lg p-6 hover:shadow-xl transition-all duration-300 hover:scale-105">
                   <div className="flex items-center justify-between mb-4">
                     <div className={`w-12 h-12 bg-gradient-to-br ${card.gradient} rounded-xl flex items-center justify-center shadow-lg`}>
                       <Icon className="text-white" size={24} />
                     </div>
                   </div>
                   <div>
-                    <p className="text-sm text-slate-600 font-medium mb-1">{card.label}</p>
+                    <p className="text-sm text-slate-600 font-semibold mb-1">{card.label}</p>
                     <p className="text-2xl font-bold text-slate-800 mb-1">{card.value}</p>
                     <p className="text-xs text-slate-500">{card.description}</p>
                   </div>
@@ -436,7 +436,7 @@ export default function AdminDashboard() {
         </div>
 
         {/* Users Table */}
-        <div className="bg-white/90 backdrop-blur-xl rounded-2xl border border-white/50 shadow-lg p-6">
+        <div className="bg-white/95 backdrop-blur-xl rounded-2xl border border-slate-200 shadow-lg p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-bold text-slate-800">Company Users</h2>
           </div>
@@ -444,15 +444,15 @@ export default function AdminDashboard() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-slate-200">
-                  <th className="text-left py-3 px-4 font-semibold text-slate-700">User</th>
-                  <th className="text-left py-3 px-4 font-semibold text-slate-700">Role</th>
-                  <th className="text-left py-3 px-4 font-semibold text-slate-700">Status</th>
-                  <th className="text-left py-3 px-4 font-semibold text-slate-700">Uploads</th>
-                  <th className="text-left py-3 px-4 font-semibold text-slate-700">Carriers</th>
-                  <th className="text-left py-3 px-4 font-semibold text-slate-700">Commission</th>
-                  <th className="text-left py-3 px-4 font-semibold text-slate-700">Last Login</th>
-                  <th className="text-left py-3 px-4 font-semibold text-slate-700">Actions</th>
+                <tr className="border-b border-slate-200 bg-slate-50">
+                  <th className="text-left py-4 px-4 font-bold text-slate-800">User</th>
+                  <th className="text-left py-4 px-4 font-bold text-slate-800">Role</th>
+                  <th className="text-left py-4 px-4 font-bold text-slate-800">Status</th>
+                  <th className="text-left py-4 px-4 font-bold text-slate-800">Uploads</th>
+                  <th className="text-left py-4 px-4 font-bold text-slate-800">Carriers</th>
+                  <th className="text-left py-4 px-4 font-bold text-slate-800">Commission</th>
+                  <th className="text-left py-4 px-4 font-bold text-slate-800">Last Login</th>
+                  <th className="text-left py-4 px-4 font-bold text-slate-800">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -475,15 +475,15 @@ export default function AdminDashboard() {
                       </div>
                     </td>
                     <td className="py-4 px-4">
-                      <select
+                        <select
                         value={user.role}
                         onChange={(e) => updateUserRole(user.id, e.target.value)}
-                        className={`px-3 py-1 rounded-full text-sm font-medium capitalize border-0 focus:ring-2 focus:ring-blue-500 ${
+                        className={`px-3 py-1 rounded-full text-sm font-semibold capitalize border-0 focus:ring-2 focus:ring-blue-500 transition-all duration-200 ${
                           user.role === 'admin' 
-                            ? 'bg-purple-100 text-purple-800' 
+                            ? 'bg-purple-100 text-purple-800 border border-purple-200' 
                             : user.role === 'user'
-                            ? 'bg-blue-100 text-blue-800'
-                            : 'bg-gray-100 text-gray-800'
+                            ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                            : 'bg-slate-100 text-slate-800 border border-slate-200'
                         }`}
                       >
                         <option value="user">User</option>
@@ -492,10 +492,10 @@ export default function AdminDashboard() {
                       </select>
                     </td>
                     <td className="py-4 px-4">
-                      <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                      <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
                         user.is_active 
-                          ? 'bg-emerald-100 text-emerald-800' 
-                          : 'bg-red-100 text-red-800'
+                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' 
+                          : 'bg-red-100 text-red-800 border border-red-200'
                       }`}>
                         {user.is_active ? 'Active' : 'Inactive'}
                       </span>
@@ -535,14 +535,14 @@ export default function AdminDashboard() {
                         </button>
                         
                         {openDropdown === user.id && (
-                          <div className="absolute right-0 top-10 bg-white border border-slate-200 rounded-lg shadow-lg z-10 min-w-[200px]">
+                          <div className="absolute right-0 top-10 bg-white border border-slate-200 rounded-xl shadow-xl z-10 min-w-[200px]">
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
                                 resetUserData(user.id);
                                 setOpenDropdown(null);
                               }}
-                              className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                              className="w-full px-4 py-3 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors rounded-t-xl"
                             >
                               <RotateCcw className="w-4 h-4" />
                               Reset User Data
@@ -553,7 +553,7 @@ export default function AdminDashboard() {
                                 deleteUser(user.id);
                                 setOpenDropdown(null);
                               }}
-                              className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                              className="w-full px-4 py-3 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors rounded-b-xl"
                             >
                               <UserX className="w-4 h-4" />
                               Delete User
@@ -579,12 +579,12 @@ export default function AdminDashboard() {
         )}
 
         {activeTab === 'domains' && (
-          <div className="bg-white/90 backdrop-blur-xl rounded-2xl border border-white/50 shadow-lg p-6">
+          <div className="bg-white/95 backdrop-blur-xl rounded-2xl border border-slate-200 shadow-lg p-6">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-bold text-slate-800">Domain Management</h2>
               <button
                 onClick={() => setShowAddDomain(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-xl hover:shadow-lg transition-all duration-200"
+                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105"
               >
                 <Plus className="w-4 h-4" />
                 Add Domain
@@ -593,7 +593,7 @@ export default function AdminDashboard() {
 
             {/* Add Domain Form */}
             {showAddDomain && (
-              <div className="mb-6 p-4 bg-slate-50 rounded-xl border border-slate-200">
+              <div className="mb-6 p-6 bg-slate-50 rounded-xl border border-slate-200">
                 <h3 className="text-lg font-semibold text-slate-800 mb-4">Add New Domain</h3>
                 <div className="flex gap-4">
                   <input
@@ -601,11 +601,11 @@ export default function AdminDashboard() {
                     placeholder="Enter domain (e.g., company.com)"
                     value={newDomain}
                     onChange={(e) => setNewDomain(e.target.value)}
-                    className="flex-1 px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="flex-1 px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200"
                   />
                   <button
                     onClick={addDomain}
-                    className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    className="px-6 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105"
                   >
                     Add
                   </button>
@@ -614,7 +614,7 @@ export default function AdminDashboard() {
                       setShowAddDomain(false);
                       setNewDomain('');
                     }}
-                    className="px-6 py-2 bg-slate-500 text-white rounded-lg hover:bg-slate-600 transition-colors"
+                    className="px-6 py-3 bg-slate-500 text-white rounded-xl font-semibold hover:bg-slate-600 transition-all duration-200"
                   >
                     Cancel
                   </button>
@@ -634,11 +634,11 @@ export default function AdminDashboard() {
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
-                    <tr className="border-b border-slate-200">
-                      <th className="text-left py-3 px-4 font-semibold text-slate-700">Domain</th>
-                      <th className="text-left py-3 px-4 font-semibold text-slate-700">Status</th>
-                      <th className="text-left py-3 px-4 font-semibold text-slate-700">Created</th>
-                      <th className="text-left py-3 px-4 font-semibold text-slate-700">Actions</th>
+                    <tr className="border-b border-slate-200 bg-slate-50">
+                      <th className="text-left py-4 px-4 font-bold text-slate-800">Domain</th>
+                      <th className="text-left py-4 px-4 font-bold text-slate-800">Status</th>
+                      <th className="text-left py-4 px-4 font-bold text-slate-800">Created</th>
+                      <th className="text-left py-4 px-4 font-bold text-slate-800">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -657,10 +657,10 @@ export default function AdminDashboard() {
                         <td className="py-4 px-4">
                           <button
                             onClick={() => toggleDomainStatus(domain.id, domain.is_active)}
-                            className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
+                            className={`px-3 py-1 rounded-full text-sm font-semibold transition-colors ${
                               domain.is_active
-                                ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
-                                : 'bg-red-100 text-red-800 hover:bg-red-200'
+                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-200 hover:bg-emerald-200'
+                                : 'bg-red-100 text-red-800 border border-red-200 hover:bg-red-200'
                             }`}
                           >
                             {domain.is_active ? 'Active' : 'Inactive'}

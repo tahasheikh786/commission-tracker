@@ -263,18 +263,18 @@ export default function DashboardTableFullPage({
       <ProgressBar currentStep="dashboard" />
 
       {/* Main Content */}
-      <div className="flex-1 overflow-y-auto bg-gray-50">
+      <div className="flex-1 overflow-y-auto bg-slate-50">
         {/* Compact Table Controls */}
-        <div className="bg-white border-b border-gray-200 p-3">
+        <div className="bg-white border-b border-slate-200 p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <span className="text-sm text-gray-500">
+              <span className="text-sm text-slate-600 font-medium">
                 Showing {startIdx + 1}-{Math.min(endIdx, allRows.length)} of {allRows.length} items
               </span>
               <select
                 value={rowsPerPage}
                 onChange={(e) => setRowsPerPage(Number(e.target.value))}
-                className="border border-gray-300 rounded px-2 py-1 text-sm"
+                className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 {ROWS_OPTIONS.map(option => (
                   <option key={option} value={option}>Rows per page: {option}</option>
@@ -301,7 +301,7 @@ export default function DashboardTableFullPage({
                     setRows(newRows)
                     setSelectedRows(new Set())
                   }}
-                  className="flex items-center gap-2 px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors text-sm"
+                  className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-all duration-200 shadow-lg hover:shadow-xl text-sm font-medium"
                 >
                   <Trash2 size={16} />
                   Delete selected ({selectedRows.size})
@@ -309,7 +309,7 @@ export default function DashboardTableFullPage({
               )}
               <button
                 onClick={onEditMapping}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm"
+                className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all duration-200 shadow-lg hover:shadow-xl text-sm font-medium"
               >
                 <Pencil size={16} />
                 Edit Field Mapping
@@ -322,13 +322,13 @@ export default function DashboardTableFullPage({
         <div className="bg-white overflow-hidden">
           <div className="overflow-auto">
             <table className="min-w-full">
-              <thead className="bg-gradient-to-br from-blue-100 to-purple-50 sticky top-0">
+              <thead className="bg-gradient-to-r from-slate-50 to-blue-50 sticky top-0">
                 {/* Render table name row only above the corresponding table's header */}
                 {pagedRowsWithHeaders.map((item, i) => {
                   if (item.type === 'header' && item.name) {
                     return (
                       <tr key={`name-${item.groupIdx}-${i}`}>
-                        <td colSpan={fieldConfig.length + (!readOnly ? 2 : 1)} className="py-2 px-4 text-lg font-bold text-blue-700 bg-blue-50 border-b text-center">
+                        <td colSpan={fieldConfig.length + (!readOnly ? 2 : 1)} className="py-3 px-4 text-lg font-bold text-blue-700 bg-blue-50 border-b border-slate-200 text-center">
                           {item.name}
                         </td>
                       </tr>
@@ -338,7 +338,7 @@ export default function DashboardTableFullPage({
                 })}
                 <tr>
                   {!readOnly && (
-                    <th className="py-3 px-3 border-b w-8 text-center">
+                    <th className="py-4 px-4 border-b border-slate-200 w-8 text-center">
                       <input
                         type="checkbox"
                         className="accent-blue-600 w-4 h-4"
@@ -350,19 +350,19 @@ export default function DashboardTableFullPage({
                   )}
                   {fieldConfig && fieldConfig.length > 0 ? (
                     fieldConfig.map((f, idx) => (
-                      <th key={f.field || idx} className="px-4 py-3 text-left font-bold text-gray-700 border-b">
+                      <th key={f.field || idx} className="px-4 py-4 text-left font-bold text-slate-800 border-b border-slate-200">
                         {f.label}
                       </th>
                     ))
                   ) : (
                     // Fallback headers when fieldConfig is not available
                     rows[0]?.header?.map((header, idx) => (
-                      <th key={idx} className="px-4 py-3 text-left font-bold text-gray-700 border-b">
+                      <th key={idx} className="px-4 py-4 text-left font-bold text-slate-800 border-b border-slate-200">
                         {header}
                       </th>
                     )) || []
                   )}
-                  {!readOnly && <th className="py-3 px-2 border-b w-40">Actions</th>}
+                  {!readOnly && <th className="py-4 px-4 border-b border-slate-200 w-40 text-slate-800 font-bold">Actions</th>}
                 </tr>
               </thead>
               <tbody>
@@ -372,9 +372,9 @@ export default function DashboardTableFullPage({
                     const globalIdx = item.globalRowIdx
                     const isEditing = editRowIdx === globalIdx
                     return (
-                      <tr key={globalIdx} className={isEditing ? "bg-blue-50" : "hover:bg-gray-50"}>
+                      <tr key={globalIdx} className={isEditing ? "bg-blue-50" : "hover:bg-slate-50 transition-colors"}>
                         {!readOnly && (
-                          <td className="py-2 px-3 border-b align-top text-center">
+                          <td className="py-3 px-4 border-b border-slate-200 align-top text-center">
                             <input
                               type="checkbox"
                               className="accent-blue-600 w-4 h-4"
@@ -387,19 +387,19 @@ export default function DashboardTableFullPage({
                         {Array.isArray(row) ? (
                           // Handle array format (legacy)
                           row.map((val: string, colIdx: number) => (
-                            <td key={colIdx} className="py-2 px-4 border-b align-top">
+                            <td key={colIdx} className="py-3 px-4 border-b border-slate-200 align-top">
                               {isEditing
                                 ? (
                                   <input
                                     value={editValues[colIdx] ?? ""}
                                     onChange={e => onEditCell(colIdx, e.target.value)}
-                                    className="border rounded px-2 py-1 w-full text-sm"
+                                    className="border border-slate-200 rounded-lg px-3 py-1 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                   />
                                 )
                                 : (
                                   (val && val.trim())
-                                    ? <span className="text-gray-800 text-sm">{fixPercent(val)}</span>
-                                    : <span className="text-gray-400">-</span>
+                                    ? <span className="text-slate-800 text-sm">{fixPercent(val)}</span>
+                                    : <span className="text-slate-400">-</span>
                                   )
                               }
                             </td>
@@ -409,19 +409,19 @@ export default function DashboardTableFullPage({
                           fieldConfig.map((field, colIdx: number) => {
                             const val = (row as Record<string, string>)[field.field] || ''
                             return (
-                              <td key={colIdx} className="py-2 px-4 border-b align-top">
+                              <td key={colIdx} className="py-3 px-4 border-b border-slate-200 align-top">
                                 {isEditing
                                   ? (
                                     <input
                                       value={editValues[colIdx] ?? ""}
                                       onChange={e => onEditCell(colIdx, e.target.value)}
-                                      className="border rounded px-2 py-1 w-full text-sm"
+                                      className="border border-slate-200 rounded-lg px-3 py-1 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                     />
                                   )
                                   : (
                                     (val && val.trim())
-                                      ? <span className="text-gray-800 text-sm">{fixPercent(val)}</span>
-                                      : <span className="text-gray-400">-</span>
+                                      ? <span className="text-slate-800 text-sm">{fixPercent(val)}</span>
+                                      : <span className="text-slate-400">-</span>
                                     )
                                 }
                               </td>
@@ -429,23 +429,23 @@ export default function DashboardTableFullPage({
                           })
                         )}
                         {!readOnly && (
-                          <td className="py-2 px-2 border-b align-top">
+                          <td className="py-3 px-4 border-b border-slate-200 align-top">
                             {!isEditing ? (
-                              <div className="flex flex-wrap gap-2">
-                                <button className="p-1 text-blue-500 hover:bg-blue-50 rounded" onClick={() => startEdit(globalIdx)} title="Edit">
-                                  <Pencil size={18} />
+                              <div className="flex gap-2">
+                                <button className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors" onClick={() => startEdit(globalIdx)} title="Edit">
+                                  <Pencil size={16} />
                                 </button>
-                                <button className="p-1 text-red-500 hover:bg-red-50 rounded" onClick={() => deleteRow(globalIdx)} title="Delete">
-                                  <Trash2 size={18} />
+                                <button className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors" onClick={() => deleteRow(globalIdx)} title="Delete">
+                                  <Trash2 size={16} />
                                 </button>
                               </div>
                             ) : (
-                              <div className="flex space-x-2">
-                                <button className="p-1 text-green-600 hover:bg-green-100 rounded" onClick={saveEdit} title="Save">
-                                  <Check size={20} />
+                              <div className="flex gap-2">
+                                <button className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors" onClick={saveEdit} title="Save">
+                                  <Check size={18} />
                                 </button>
-                                <button className="p-1 text-gray-600 hover:bg-gray-200 rounded" onClick={cancelEdit} title="Cancel">
-                                  <X size={20} />
+                                <button className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors" onClick={cancelEdit} title="Cancel">
+                                  <X size={18} />
                                 </button>
                               </div>
                             )}
@@ -470,21 +470,35 @@ export default function DashboardTableFullPage({
       </div>
 
       {/* Action Buttons - Fixed at bottom */}
-      <div className="flex-shrink-0 bg-white border-t border-gray-200 p-6">
+      <div className="flex-shrink-0 bg-white border-t border-slate-200 p-6">
         <div className="flex justify-center gap-6">
           <button
             onClick={onReject}
-            className="px-6 py-3 bg-gradient-to-r from-red-500 to-rose-600 text-white rounded-2xl hover:shadow-lg transition-all duration-200 hover:scale-105 font-semibold"
+            className="px-8 py-3 bg-gradient-to-r from-red-500 to-rose-600 text-white rounded-xl hover:shadow-xl transition-all duration-200 hover:scale-105 font-semibold"
             disabled={submitting}
           >
-            {submitting ? 'Processing...' : 'Reject'}
+            {submitting ? (
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                Processing...
+              </div>
+            ) : (
+              'Reject'
+            )}
           </button>
           <button
             onClick={onApprove}
-            className="px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-2xl hover:shadow-lg transition-all duration-200 hover:scale-105 font-semibold"
+            className="px-8 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-xl hover:shadow-xl transition-all duration-200 hover:scale-105 font-semibold"
             disabled={submitting}
           >
-            {submitting ? 'Processing...' : 'Approve'}
+            {submitting ? (
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                Processing...
+              </div>
+            ) : (
+              'Approve'
+            )}
           </button>
         </div>
       </div>

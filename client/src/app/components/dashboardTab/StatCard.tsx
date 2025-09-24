@@ -63,7 +63,7 @@ export default function StatCard({
   };
 
   const cardClasses = `
-    group relative bg-white/90 backdrop-blur-xl rounded-2xl border border-white/50 shadow-lg hover:shadow-2xl p-6
+    group relative bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-lg p-6
     transition-all duration-300 cursor-pointer
     ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:scale-105 hover:-translate-y-1'}
   `;
@@ -75,7 +75,7 @@ export default function StatCard({
       title={disabled ? "Coming soon" : undefined}
     >
       {/* Background Gradient Overlay */}
-      <div className={`absolute inset-0 bg-gradient-to-br ${gradient} opacity-0 group-hover:opacity-5 transition-opacity duration-300 rounded-2xl`}></div>
+      <div className={`absolute inset-0 bg-gradient-to-br ${gradient} opacity-0 group-hover:opacity-5 transition-opacity duration-300 rounded-xl`}></div>
       
       {/* Content */}
       <div className="relative z-10">
@@ -124,7 +124,7 @@ export default function StatCard({
       </div>
       
       {/* Hover Border Effect */}
-      <div className={`absolute inset-0 rounded-2xl border-2 border-transparent group-hover:border-gradient-to-r ${gradient} opacity-0 group-hover:opacity-20 transition-all duration-300`}></div>
+      <div className={`absolute inset-0 rounded-xl border-2 border-transparent group-hover:border-gradient-to-r ${gradient} opacity-0 group-hover:opacity-20 transition-all duration-300`}></div>
     </div>
   );
 }

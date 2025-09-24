@@ -55,19 +55,19 @@ export default function FieldMapperSection({
     <>
       {savingMapping && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-8 shadow-xl">
+          <div className="bg-white rounded-xl p-8 shadow-2xl">
             <div className="flex flex-col items-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
-              <p className="text-lg font-semibold text-gray-800 mb-2">Saving Field Mapping</p>
-              <p className="text-gray-600 text-center">Please wait while we save your mapping and prepare the dashboard...</p>
+              <div className="w-12 h-12 border-2 border-slate-200 border-t-blue-500 rounded-full animate-spin mb-4"></div>
+              <p className="text-lg font-semibold text-slate-800 mb-2">Saving Field Mapping</p>
+              <p className="text-slate-600 text-center">Please wait while we save your mapping and prepare the dashboard...</p>
             </div>
           </div>
         </div>
       )}
       
       <div className="w-full">
-        <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6 max-w-none">
-          <h1 className="text-xl font-semibold text-gray-900 mb-4 text-center">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 max-w-none">
+          <h1 className="text-2xl font-bold text-slate-800 mb-6 text-center">
             {fetchingMapping ? 'Loading Field Mapping...' : `Map Fields for ${company?.name || 'Unknown Company'}`}
           </h1>
           
@@ -77,8 +77,8 @@ export default function FieldMapperSection({
             {fetchingMapping && (
               <div className="flex items-center justify-center py-12">
                 <div className="text-center">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                  <p className="text-gray-600">Loading saved field mapping...</p>
+                  <div className="w-12 h-12 border-2 border-slate-200 border-t-blue-500 rounded-full animate-spin mx-auto mb-4"></div>
+                  <p className="text-slate-600 font-medium">Loading saved field mapping...</p>
                 </div>
               </div>
             )}
@@ -86,16 +86,16 @@ export default function FieldMapperSection({
             {/* Field Mapper Section */}
             {!fetchingMapping && (
               <div>
-                <div className="mb-4">
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-600 to-indigo-400 flex items-center justify-center shadow text-white text-sm font-bold">
+                <div className="mb-6">
+                  <div className="flex items-center gap-4 mb-3">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg text-white text-sm font-bold">
                       <span>1</span>
                     </div>
-                    <span className="text-xl font-semibold text-gray-800 tracking-tight">
+                    <span className="text-xl font-bold text-slate-800">
                       Map Your Data Fields
                     </span>
                   </div>
-                  <p className="text-gray-500 text-sm pl-1">
+                  <p className="text-slate-600 text-sm pl-14">
                     Match each required field to the correct column in your uploaded table. Helps us standardize your commission statement.
                   </p>
                 </div>
@@ -142,20 +142,20 @@ export default function FieldMapperSection({
 
             {/* Extracted Tables Section */}
             <div>
-              <div className="mb-4">
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-green-600 to-emerald-400 flex items-center justify-center shadow text-white text-sm font-bold">
+              <div className="mb-6">
+                <div className="flex items-center gap-4 mb-3">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 flex items-center justify-center shadow-lg text-white text-sm font-bold">
                     <span>2</span>
                   </div>
-                  <span className="text-xl font-semibold text-gray-800 tracking-tight">
+                  <span className="text-xl font-bold text-slate-800">
                     Extracted Table Preview
                   </span>
                 </div>
-                <p className="text-gray-500 text-sm pl-1">
+                <p className="text-slate-600 text-sm pl-14">
                   Review the extracted data from your uploaded PDF. You can edit, delete, or modify the data as needed.
                 </p>
               </div>
-              <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                 <ExtractedTables 
                   tables={tablesToUse} 
                   onTablesChange={onTablesChange} 
@@ -167,12 +167,12 @@ export default function FieldMapperSection({
           <div className="flex justify-center gap-4 mt-8">
             <button 
               onClick={onGoToTableEditor} 
-              className="px-6 py-3 rounded-lg bg-blue-600 text-white hover:bg-blue-700 flex items-center gap-2 font-semibold shadow-lg transition-colors"
+              className="px-6 py-3 rounded-lg bg-blue-600 text-white hover:bg-blue-700 flex items-center gap-2 font-semibold shadow-lg hover:shadow-xl transition-all duration-200"
             >
               <Pencil className="w-4 h-4" />
               Back to Table Editor
             </button>
-            <button onClick={onReset} className="px-6 py-3 rounded-lg bg-gray-300 text-gray-700 hover:bg-gray-400 font-semibold transition-colors">
+            <button onClick={onReset} className="px-6 py-3 rounded-lg bg-slate-200 text-slate-700 hover:bg-slate-300 font-semibold shadow-lg hover:shadow-xl transition-all duration-200">
               Start Over
             </button>
           </div>

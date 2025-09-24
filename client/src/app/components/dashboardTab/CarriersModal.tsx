@@ -30,19 +30,24 @@ export default function CarriersModal({ isOpen, onClose, carriers, loading = fal
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[80vh] overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+        <div className="flex items-center justify-between p-6 border-b border-slate-200">
           <div className="flex items-center gap-3">
-            <Database className="text-blue-600" size={28} />
-            <h2 className="text-2xl font-bold text-gray-800">All Carriers</h2>
+            <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
+              <Database className="text-white" size={24} />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold text-slate-800">All Carriers</h2>
+              <p className="text-sm text-slate-600">{carriers.length} total carriers</p>
+            </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
           >
-            <X size={24} className="text-gray-500" />
+            <X size={24} />
           </button>
         </div>
 
@@ -50,35 +55,40 @@ export default function CarriersModal({ isOpen, onClose, carriers, loading = fal
         <div className="p-6 overflow-y-auto max-h-[calc(80vh-180px)]">
           {loading ? (
             <div className="flex items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              <span className="ml-3 text-gray-600">Loading carriers...</span>
+              <div className="w-8 h-8 border-2 border-slate-200 border-t-blue-500 rounded-full animate-spin"></div>
+              <span className="ml-3 text-slate-600 font-medium">Loading carriers...</span>
             </div>
           ) : carriers.length === 0 ? (
-            <div className="text-center py-12">
-              <Database className="mx-auto text-gray-400" size={48} />
-              <p className="text-gray-500 mt-4">No carriers found</p>
+            <div className="text-center py-16">
+              <div className="w-16 h-16 bg-slate-100 rounded-xl flex items-center justify-center mx-auto mb-4">
+                <Database className="text-slate-400" size={32} />
+              </div>
+              <h3 className="text-lg font-semibold text-slate-700 mb-2">No carriers found</h3>
+              <p className="text-slate-500 text-sm">No carriers have been added yet.</p>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-3">
               {paginatedCarriers.map((carrier) => (
                 <div
                   key={carrier.id}
-                  className="flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors"
+                  className="flex items-center justify-between p-4 bg-slate-50 rounded-xl hover:bg-slate-100 transition-colors border border-slate-200"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                      <span className="text-blue-600 font-semibold text-sm">
+                    <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
+                      <span className="text-white font-semibold text-sm">
                         {carrier.name.charAt(0).toUpperCase()}
                       </span>
                     </div>
                     <div>
-                      <h3 className="font-semibold text-gray-800">{carrier.name}</h3>
-                      <p className="text-sm text-gray-500">Carrier ID: {carrier.id}</p>
+                      <h3 className="font-semibold text-slate-800">{carrier.name}</h3>
+                      <p className="text-sm text-slate-500">ID: {carrier.id.slice(0, 8)}...</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <FileText className="text-gray-400" size={20} />
-                    <span className="font-semibold text-gray-800">
+                    <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center">
+                      <FileText className="text-emerald-600" size={16} />
+                    </div>
+                    <span className="font-semibold text-slate-800">
                       {carrier.statement_count} statement{carrier.statement_count !== 1 ? 's' : ''}
                     </span>
                   </div>
@@ -90,16 +100,16 @@ export default function CarriersModal({ isOpen, onClose, carriers, loading = fal
 
         {/* Pagination */}
         {carriers.length > itemsPerPage && (
-          <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
+          <div className="px-6 py-4 border-t border-slate-200 bg-slate-50">
             <div className="flex items-center justify-between">
-              <div className="text-sm text-gray-600">
+              <div className="text-sm text-slate-600 font-medium">
                 Showing {startIndex + 1} to {Math.min(endIndex, carriers.length)} of {carriers.length} carriers
               </div>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => handlePageChange(currentPage - 1)}
                   disabled={currentPage === 1}
-                  className="flex items-center gap-1 px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="flex items-center gap-1 px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   <ChevronLeft size={16} />
                   Previous
@@ -125,7 +135,7 @@ export default function CarriersModal({ isOpen, onClose, carriers, loading = fal
                         className={`px-3 py-2 text-sm rounded-lg transition-colors ${
                           currentPage === pageNum
                             ? 'bg-blue-600 text-white'
-                            : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                            : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'
                         }`}
                       >
                         {pageNum}
@@ -137,7 +147,7 @@ export default function CarriersModal({ isOpen, onClose, carriers, loading = fal
                 <button
                   onClick={() => handlePageChange(currentPage + 1)}
                   disabled={currentPage === totalPages}
-                  className="flex items-center gap-1 px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="flex items-center gap-1 px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   Next
                   <ChevronRight size={16} />
@@ -148,14 +158,14 @@ export default function CarriersModal({ isOpen, onClose, carriers, loading = fal
         )}
 
         {/* Footer */}
-        <div className="p-6 border-t border-gray-200 bg-gray-50">
+        <div className="p-6 border-t border-slate-200 bg-slate-50">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-slate-600 font-medium">
               Total: {carriers.length} carrier{carriers.length !== 1 ? 's' : ''}
             </p>
             <button
               onClick={onClose}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-medium"
             >
               Close
             </button>

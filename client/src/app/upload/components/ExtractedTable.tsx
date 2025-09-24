@@ -284,15 +284,15 @@ export default function ExtractedTables({ tables: backendTables, onTablesChange,
   return (
     <div className="w-full">
       {/* Tabs for multiple tables */}
-      <div className="flex space-x-2 border-b mb-4 overflow-x-auto" role="tablist" aria-label="Extracted tables">
+      <div className="flex space-x-2 border-b border-slate-200 mb-6 overflow-x-auto" role="tablist" aria-label="Extracted tables">
         {tables.map((tbl, idx) => (
           <div key={idx} className="relative flex items-center">
             <button
               className={clsx(
-                "py-2 px-4 rounded-t-lg font-semibold transition-all flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-blue-400",
+                "py-3 px-6 rounded-t-xl font-semibold transition-all flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-blue-400",
                 tab === idx
-                  ? "bg-gradient-to-br from-blue-600 to-purple-600 text-white shadow"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  ? "bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
               )}
               onClick={() => setTab(idx)}
               role="tab"
@@ -306,7 +306,7 @@ export default function ExtractedTables({ tables: backendTables, onTablesChange,
             {/* Delete table button OUTSIDE the tab button */}
             {tables.length > 1 && (
               <button
-                className="ml-2 text-red-500 hover:bg-red-100 rounded p-1 absolute right-0 top-1/2 -translate-y-1/2"
+                className="ml-2 text-red-500 hover:bg-red-100 rounded-lg p-1 absolute right-0 top-1/2 -translate-y-1/2 transition-colors"
                 title="Delete this table"
                 onClick={e => {
                   e.stopPropagation();
@@ -322,7 +322,7 @@ export default function ExtractedTables({ tables: backendTables, onTablesChange,
           </div>
         ))}
         <button
-          className="ml-auto px-3 py-2 rounded bg-blue-50 text-blue-700 hover:bg-blue-100 flex items-center gap-1 text-sm font-medium"
+          className="ml-auto px-4 py-2 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 flex items-center gap-2 text-sm font-medium transition-colors"
           onClick={() => downloadCSV(tables[tab], tables[tab].name || `table${tab + 1}`)}
           aria-label="Download as CSV"
         >
@@ -330,24 +330,24 @@ export default function ExtractedTables({ tables: backendTables, onTablesChange,
         </button>
       </div>
       {/* Table name input */}
-      <div className="mb-2 flex items-center gap-2">
-        <label className="text-sm font-medium">Table Name (optional):</label>
+      <div className="mb-4 flex items-center gap-3">
+        <label className="text-sm font-medium text-slate-700">Table Name (optional):</label>
         <input
           type="text"
-          className="border rounded px-2 py-1 text-sm shadow-sm focus:ring-2 focus:ring-blue-200"
+          className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           value={tables[tab].name || ''}
           onChange={e => handleTableNameChange(tab, e.target.value)}
           placeholder={`Table ${tab + 1}`}
           aria-label="Table name"
         />
       </div>
-      <div className="flex items-center justify-between mb-2 flex-wrap gap-2 px-2">
-        <div className="flex items-center gap-2">
-          <label className="text-sm font-medium">Rows per page:</label>
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-4 px-2">
+        <div className="flex items-center gap-3">
+          <label className="text-sm font-medium text-slate-700">Rows per page:</label>
           <select
             value={currentRowsPerPage}
             onChange={e => setRowsPerPage(tab, Number(e.target.value))}
-            className="border rounded px-2 py-1 text-sm shadow-sm focus:ring-2 focus:ring-blue-200"
+            className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             aria-label="Rows per page"
           >
             {ROWS_OPTIONS.map(opt => (
@@ -355,27 +355,27 @@ export default function ExtractedTables({ tables: backendTables, onTablesChange,
             ))}
           </select>
         </div>
-        <div className="text-sm text-gray-600">
-          Showing <span className="font-semibold">{showingFrom}-{showingTo}</span> of <span className="font-semibold">{totalItems}</span> items
+        <div className="text-sm text-slate-600">
+          Showing <span className="font-semibold text-slate-800">{showingFrom}-{showingTo}</span> of <span className="font-semibold text-slate-800">{totalItems}</span> items
         </div>
         <button
           className={clsx(
-            "flex items-center px-3 py-1.5 rounded bg-red-600 text-white font-medium shadow hover:bg-red-700 transition",
-            (selectedRows[tab]?.size ?? 0) > 0 ? "" : "opacity-50 cursor-not-allowed"
+            "flex items-center gap-2 px-4 py-2 rounded-lg bg-red-500 text-white font-medium shadow-lg hover:shadow-xl transition-all duration-200",
+            (selectedRows[tab]?.size ?? 0) > 0 ? "hover:bg-red-600" : "opacity-50 cursor-not-allowed"
           )}
           disabled={(selectedRows[tab]?.size ?? 0) === 0}
           onClick={deleteSelectedRowsOnPage}
           aria-label="Delete selected rows"
         >
-          <Trash2 size={16} className="mr-1" />
+          <Trash2 size={16} />
           Delete selected
         </button>
       </div>
-      <div className="rounded-xl border shadow-lg overflow-x-auto bg-white">
+      <div className="rounded-xl border border-slate-200 shadow-lg overflow-x-auto bg-white">
         <table className="min-w-full" role="table" aria-label={`Extracted table ${tab + 1}`}> 
-          <thead className="bg-gradient-to-br from-blue-50 to-purple-50 sticky top-0 z-10">
+          <thead className="bg-gradient-to-r from-slate-50 to-blue-50 sticky top-0 z-10">
             <tr>
-              <th className="py-3 px-3 border-b w-8 text-center sticky left-0 bg-gradient-to-br from-blue-50 to-purple-50 z-20">
+              <th className="py-4 px-4 border-b border-slate-200 w-8 text-center sticky left-0 bg-gradient-to-r from-slate-50 to-blue-50 z-20">
                 <input
                   type="checkbox"
                   className="accent-blue-600 w-4 h-4"
@@ -387,16 +387,16 @@ export default function ExtractedTables({ tables: backendTables, onTablesChange,
               {tables[tab].header.map((col, i) => (
                 <th
                   key={i}
-                  className="py-3 px-4 text-sm font-bold border-b sticky top-0 bg-gradient-to-br from-blue-50 to-purple-50 z-10 group"
+                  className="py-4 px-4 text-sm font-bold text-slate-800 border-b border-slate-200 sticky top-0 bg-gradient-to-r from-slate-50 to-blue-50 z-10 group"
                   style={{ minWidth: colWidths[tab][i], maxWidth: 400, position: 'relative' }}
                   tabIndex={0}
                   aria-sort={sort && sort.col === i ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
                 >
-                  <div className="flex items-center gap-1 cursor-pointer select-none" onClick={() => handleSort(i)}>
+                  <div className="flex items-center gap-2 cursor-pointer select-none" onClick={() => handleSort(i)}>
                     {fixPercent(col)}
                     {sort && sort.col === i ? (
-                      sort.dir === 'asc' ? <ArrowUp size={16} /> : <ArrowDown size={16} />
-                    ) : <ArrowUpDown size={14} className="opacity-40 group-hover:opacity-80" />}
+                      sort.dir === 'asc' ? <ArrowUp size={16} className="text-blue-600" /> : <ArrowDown size={16} className="text-blue-600" />
+                    ) : <ArrowUpDown size={14} className="opacity-40 group-hover:opacity-80 text-slate-500" />}
                   </div>
                   {/* Column resize handle */}
                   <span
@@ -407,7 +407,7 @@ export default function ExtractedTables({ tables: backendTables, onTablesChange,
                   />
                 </th>
               ))}
-              <th className="py-3 px-2 border-b w-24 sticky right-0 bg-gradient-to-br from-blue-50 to-purple-50 z-20">Actions</th>
+              <th className="py-4 px-4 border-b border-slate-200 w-24 sticky right-0 bg-gradient-to-r from-slate-50 to-blue-50 z-20 text-slate-800 font-bold">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -418,12 +418,12 @@ export default function ExtractedTables({ tables: backendTables, onTablesChange,
               const isHighlighted = highlightedRow && highlightedRow.tableIdx === tab && highlightedRow.rowIdx === globalIdx;
               if (headerLike) {
                 return (
-                  <tr key={globalIdx} className="bg-blue-100">
-                    <th className="py-2 px-3 border-b align-top"></th>
+                  <tr key={globalIdx} className="bg-blue-50">
+                    <th className="py-3 px-4 border-b border-slate-200 align-top"></th>
                     {row.map((val, i) => (
-                      <th key={i} className="py-2 px-4 border-b align-top font-bold text-gray-900">{val}</th>
+                      <th key={i} className="py-3 px-4 border-b border-slate-200 align-top font-bold text-slate-800">{val}</th>
                     ))}
-                    <th className="py-2 px-2 border-b align-top"></th>
+                    <th className="py-3 px-4 border-b border-slate-200 align-top"></th>
                   </tr>
                 );
               }
@@ -431,7 +431,7 @@ export default function ExtractedTables({ tables: backendTables, onTablesChange,
                 <tr
                   key={globalIdx}
                   className={clsx(
-                    isEditing ? "bg-blue-50" : isHighlighted ? "bg-yellow-100 ring-2 ring-yellow-400" : "hover:bg-gray-50",
+                    isEditing ? "bg-blue-50" : isHighlighted ? "bg-amber-50 ring-2 ring-amber-400" : "hover:bg-slate-50",
                     "transition-colors"
                   )}
                   tabIndex={0}
@@ -439,7 +439,7 @@ export default function ExtractedTables({ tables: backendTables, onTablesChange,
                   onMouseEnter={() => onRowHover && onRowHover(tab, globalIdx)}
                   onMouseLeave={() => onRowHover && onRowHover(tab, null)}
                 >
-                  <td className="py-2 px-3 border-b align-top text-center sticky left-0 bg-white z-10">
+                  <td className="py-3 px-4 border-b border-slate-200 align-top text-center sticky left-0 bg-white z-10">
                     <input
                       type="checkbox"
                       className="accent-blue-600 w-4 h-4"
@@ -451,7 +451,7 @@ export default function ExtractedTables({ tables: backendTables, onTablesChange,
                   {row.map((val, i) => (
                     <td
                       key={i}
-                      className="py-2 px-4 border-b align-top"
+                      className="py-3 px-4 border-b border-slate-200 align-top"
                       style={{ minWidth: colWidths[tab][i], maxWidth: 400 }}
                     >
                       {isEditing
@@ -459,30 +459,30 @@ export default function ExtractedTables({ tables: backendTables, onTablesChange,
                           <input
                             value={editValues[i]}
                             onChange={e => onEditCell(i, e.target.value)}
-                            className="border rounded px-2 py-1 w-full text-sm"
+                            className="border border-slate-200 rounded-lg px-3 py-1 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                           />
                         )
-                        : <span className="text-gray-800 text-sm">{fixPercent(val)}</span>
+                        : <span className="text-slate-800 text-sm">{fixPercent(val)}</span>
                       }
                     </td>
                   ))}
-                  <td className="py-2 px-2 border-b align-top sticky right-0 bg-white z-10">
+                  <td className="py-3 px-4 border-b border-slate-200 align-top sticky right-0 bg-white z-10">
                     {!isEditing ? (
-                      <div className="flex space-x-2">
-                        <button className="p-1 text-blue-500 hover:bg-blue-50 rounded" onClick={() => startEdit(tab, globalIdx)} title="Edit" aria-label="Edit row">
-                          <Pencil size={18} />
+                      <div className="flex gap-2">
+                        <button className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors" onClick={() => startEdit(tab, globalIdx)} title="Edit" aria-label="Edit row">
+                          <Pencil size={16} />
                         </button>
-                        <button className="p-1 text-red-500 hover:bg-red-50 rounded" onClick={() => deleteRow(tab, globalIdx)} title="Delete" aria-label="Delete row">
-                          <Trash2 size={18} />
+                        <button className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors" onClick={() => deleteRow(tab, globalIdx)} title="Delete" aria-label="Delete row">
+                          <Trash2 size={16} />
                         </button>
                       </div>
                     ) : (
-                      <div className="flex space-x-2">
-                        <button className="p-1 text-green-600 hover:bg-green-100 rounded" onClick={saveEdit} title="Save" aria-label="Save edit">
-                          <Check size={20} />
+                      <div className="flex gap-2">
+                        <button className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors" onClick={saveEdit} title="Save" aria-label="Save edit">
+                          <Check size={18} />
                         </button>
-                        <button className="p-1 text-gray-600 hover:bg-gray-200 rounded" onClick={cancelEdit} title="Cancel" aria-label="Cancel edit">
-                          <X size={20} />
+                        <button className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors" onClick={cancelEdit} title="Cancel" aria-label="Cancel edit">
+                          <X size={18} />
                         </button>
                       </div>
                     )}

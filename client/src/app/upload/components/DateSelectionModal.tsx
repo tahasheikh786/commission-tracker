@@ -107,7 +107,7 @@ export default function DateSelectionModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={() => {
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => {
         if (onCloseWithoutSelection) {
           onCloseWithoutSelection()
         }
@@ -117,14 +117,14 @@ export default function DateSelectionModal({
       {/* Modal */}
       <div className="relative bg-white rounded-2xl shadow-2xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-purple-50">
+        <div className="flex items-center justify-between p-6 border-b border-slate-200 bg-gradient-to-r from-blue-50 to-indigo-50">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <Calendar className="w-6 h-6 text-blue-600" />
+            <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
+              <Calendar className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-gray-900">Select Statement Date</h2>
-              <p className="text-sm text-gray-600">{fileName}</p>
+              <h2 className="text-xl font-bold text-slate-800">Select Statement Date</h2>
+              <p className="text-sm text-slate-600">{fileName}</p>
             </div>
           </div>
           <button
@@ -134,7 +134,7 @@ export default function DateSelectionModal({
               }
               onClose()
             }}
-            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -144,75 +144,77 @@ export default function DateSelectionModal({
         <div className="p-6 overflow-y-auto max-h-[60vh]">
           {loading ? (
             <div className="flex items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              <span className="ml-3 text-gray-600">Extracting dates...</span>
+              <div className="w-8 h-8 border-2 border-slate-200 border-t-blue-500 rounded-full animate-spin"></div>
+              <span className="ml-3 text-slate-600 font-medium">Extracting dates...</span>
             </div>
           ) : extractedDates.length === 0 ? (
-            <div className="text-center py-8">
-              <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No dates found</h3>
-              <p className="text-gray-600 mb-4">We couldn&apos;t automatically detect any dates in your document.</p>
+            <div className="text-center py-12">
+              <div className="w-16 h-16 bg-amber-100 rounded-xl flex items-center justify-center mx-auto mb-4">
+                <AlertCircle className="w-8 h-8 text-amber-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-slate-700 mb-2">No dates found</h3>
+              <p className="text-slate-600 mb-6">We couldn&apos;t automatically detect any dates in your document.</p>
               
               {/* Show date picker directly */}
-              <div className="mt-6 p-4 bg-gray-50 rounded-lg max-w-md mx-auto">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+              <div className="mt-6 p-6 bg-slate-50 rounded-xl max-w-md mx-auto border border-slate-200">
+                <label className="block text-sm font-medium text-slate-700 mb-3">
                   Select statement date manually:
                 </label>
                 <input
                   type="date"
                   value={fallbackDate}
                   onChange={(e) => setFallbackDate(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
                 />
               </div>
             </div>
           ) : (
-            <div className="space-y-4">
-              <div className="mb-4">
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+            <div className="space-y-6">
+              <div className="mb-6">
+                <h3 className="text-lg font-semibold text-slate-800 mb-2">
                   Found {extractedDates.length} date{extractedDates.length !== 1 ? 's' : ''}
                 </h3>
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-slate-600">
                   Select the most appropriate statement date from the options below:
                 </p>
               </div>
 
               {/* Extracted Dates */}
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {extractedDates.map((date, index) => (
                   <div
                     key={index}
-                    className={`p-4 border-2 rounded-lg cursor-pointer transition-all hover:shadow-md ${
+                    className={`p-5 border-2 rounded-xl cursor-pointer transition-all duration-200 hover:shadow-lg ${
                       selectedDate === date.date_value && selectedDateType === date.date_type
-                        ? 'border-blue-500 bg-blue-50'
-                        : 'border-gray-200 hover:border-gray-300'
+                        ? 'border-blue-500 bg-blue-50 shadow-md'
+                        : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
                     }`}
                     onClick={() => handleDateSelect(date.date_value, date.date_type)}
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="font-semibold text-gray-900">
+                        <div className="flex items-center gap-3 mb-3">
+                          <span className="font-semibold text-slate-800">
                             {getDateTypeLabel(date.date_type)}
                           </span>
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${getConfidenceColor(date.confidence)}`}>
+                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${getConfidenceColor(date.confidence)}`}>
                             {getConfidenceLabel(date.confidence)} Confidence
                           </span>
                         </div>
-                        <div className="text-lg font-bold text-blue-600 mb-1">
+                        <div className="text-xl font-bold text-blue-600 mb-2">
                           {date.date_value}
                         </div>
-                        <div className="text-sm text-gray-600 mb-2">
+                        <div className="text-sm text-slate-600 mb-3">
                           <strong>Label:</strong> {date.label}
                         </div>
                         {date.context && (
-                          <div className="text-xs text-gray-500 bg-gray-50 p-2 rounded">
+                          <div className="text-xs text-slate-500 bg-slate-100 p-3 rounded-lg">
                             <strong>Context:</strong> {date.context}
                           </div>
                         )}
                       </div>
                       {selectedDate === date.date_value && selectedDateType === date.date_type && (
-                        <div className="ml-4 p-2 bg-blue-500 rounded-full">
+                        <div className="ml-4 p-2 bg-blue-500 rounded-full shadow-lg">
                           <Check className="w-4 h-4 text-white" />
                         </div>
                       )}
@@ -222,25 +224,25 @@ export default function DateSelectionModal({
               </div>
 
               {/* Fallback Option */}
-              <div className="border-t border-gray-200 pt-4">
+              <div className="border-t border-slate-200 pt-6">
                 <button
                   onClick={() => setShowFallback(!showFallback)}
-                  className="flex items-center gap-2 text-blue-600 hover:text-blue-700 font-medium"
+                  className="flex items-center gap-2 text-blue-600 hover:text-blue-700 font-medium transition-colors"
                 >
                   <AlertCircle className="w-4 h-4" />
                   Didn&apos;t find the correct date?
                 </button>
                 
                 {showFallback && (
-                  <div className="mt-3 p-4 bg-gray-50 rounded-lg">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <div className="mt-4 p-5 bg-slate-50 rounded-xl border border-slate-200">
+                    <label className="block text-sm font-medium text-slate-700 mb-3">
                       Select date manually:
                     </label>
                     <input
                       type="date"
                       value={fallbackDate}
                       onChange={(e) => setFallbackDate(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
                     />
                   </div>
                 )}
@@ -250,10 +252,10 @@ export default function DateSelectionModal({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between p-6 border-t border-gray-200 bg-gray-50">
+        <div className="flex items-center justify-between p-6 border-t border-slate-200 bg-slate-50">
           <button
             onClick={handleSkip}
-            className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+            className="px-4 py-2 text-slate-600 hover:text-slate-800 transition-colors font-medium"
           >
             Skip for now
           </button>
@@ -262,7 +264,7 @@ export default function DateSelectionModal({
             {showFallback && fallbackDate && (
               <button
                 onClick={handleFallbackSelect}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                className="px-6 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-lg hover:shadow-lg transition-all duration-200 font-semibold"
               >
                 Use Selected Date
               </button>
@@ -271,7 +273,7 @@ export default function DateSelectionModal({
             {selectedDate && extractedDates.length > 0 && (
               <button
                 onClick={handleConfirm}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                className="px-6 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg hover:shadow-lg transition-all duration-200 font-semibold"
               >
                 Confirm Selection
               </button>

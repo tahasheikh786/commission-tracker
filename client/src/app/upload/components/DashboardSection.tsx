@@ -73,11 +73,11 @@ export default function DashboardSection({
         <ProgressBar currentStep="dashboard" />
 
         {/* Header */}
-        <div className="flex-shrink-0 bg-white border-b border-gray-200 p-6">
+        <div className="flex-shrink-0 bg-white border-b border-slate-200 p-6">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-xl font-semibold text-gray-800">Review Statement Data</h2>
-              <p className="text-gray-600 text-sm mt-1">
+              <h2 className="text-2xl font-bold text-slate-800">Review Statement Data</h2>
+              <p className="text-slate-600 mt-1">
                 Review the processed data and approve or reject the statement.
               </p>
             </div>
@@ -85,7 +85,7 @@ export default function DashboardSection({
         </div>
 
         {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
+        <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
           <div className="w-[90%] mx-auto">
             <DashboardTable
               tables={finalTables}
@@ -105,11 +105,11 @@ export default function DashboardSection({
         </div>
 
         {/* Action Buttons - Fixed at bottom */}
-        <div className="flex-shrink-0 bg-white border-t border-gray-200 p-6">
+        <div className="flex-shrink-0 bg-white border-t border-slate-200 p-6">
           <div className="w-[90%] mx-auto">
             <div className="flex justify-center gap-6">
               <button
-                className="bg-green-600 text-white px-8 py-3 rounded-xl font-semibold shadow hover:bg-green-700 transition text-lg"
+                className="px-8 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105"
                 onClick={() => {
                   console.log('🔘 Approve button clicked')
                   onApprove()
@@ -118,7 +118,7 @@ export default function DashboardSection({
                 Approve
               </button>
               <button
-                className="bg-red-600 text-white px-8 py-3 rounded-xl font-semibold shadow hover:bg-red-700 transition text-lg"
+                className="px-8 py-3 bg-gradient-to-r from-red-500 to-rose-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105"
                 onClick={onReject}
               >
                 Reject
@@ -130,24 +130,31 @@ export default function DashboardSection({
 
       {showRejectModal && (
         <Modal onClose={onCloseRejectModal}>
-          <div>
-            <div className="mb-2 font-bold text-lg text-gray-800">Reject Submission</div>
+          <div className="p-6">
+            <div className="mb-4">
+              <h3 className="text-xl font-bold text-slate-800 mb-2">Reject Submission</h3>
+              <p className="text-slate-600 text-sm">Please provide a reason for rejecting this submission.</p>
+            </div>
             <input
-              className="border rounded px-2 py-1 w-full mb-3"
+              className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent mb-4"
               placeholder="Enter rejection reason"
               value={rejectReason}
               onChange={e => onRejectReasonChange(e.target.value)}
             />
-            <div className="flex gap-3 mt-4">
+            <div className="flex gap-3 justify-end">
               <button
-                className="bg-red-600 text-white px-4 py-2 rounded font-semibold"
+                className="px-6 py-2 border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors font-medium"
+                onClick={onCloseRejectModal}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-6 py-2 bg-gradient-to-r from-red-500 to-rose-600 text-white rounded-lg hover:shadow-lg transition-all duration-200 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled={!rejectReason.trim()}
                 onClick={onRejectSubmit}
-              >Submit</button>
-              <button
-                className="bg-gray-300 text-gray-800 px-4 py-2 rounded"
-                onClick={onCloseRejectModal}
-              >Cancel</button>
+              >
+                Submit
+              </button>
             </div>
           </div>
         </Modal>

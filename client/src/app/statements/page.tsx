@@ -17,6 +17,7 @@ import {
 import { useRouter } from 'next/navigation';
 import { useStatements, useCarriers } from '../hooks/useDashboard';
 import StatementPreviewModal from '../components/carrierTab/StatementPreviewModal';
+import axios from 'axios';
 
 interface Statement {
   id: string;
@@ -68,57 +69,70 @@ export default function StatementsPage() {
     }
   }, []);
 
-  // Fetch all statements on component mount for tab counts
+  // Fetch statements based on active tab
   useEffect(() => {
-    const fetchAllStatements = async () => {
+    const fetchStatements = async () => {
       setStatementsLoading(true);
       try {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/dashboard/statements`);
-        if (response.ok) {
-          const data = await response.json();
-          setAllStatements(data);
+        let endpoint = `${process.env.NEXT_PUBLIC_API_URL}/dashboard/statements`;
+        
+        // Use server-side filtering for better performance and accuracy
+        if (activeTab !== 'all') {
+          const statusMapping = {
+            'pending': 'pending',
+            'approved': 'approved', 
+            'rejected': 'rejected'
+          };
+          const statusParam = statusMapping[activeTab as keyof typeof statusMapping];
+          if (statusParam) {
+            endpoint = `${process.env.NEXT_PUBLIC_API_URL}/dashboard/statements/${statusParam}`;
+          }
         }
+        
+        const response = await axios.get(endpoint);
+        const data = response.data;
+        setAllStatements(data);
+        setFilteredStatements(data);
       } catch (error) {
-        console.error('Error fetching all statements:', error);
+        console.error('Error fetching statements:', error);
       } finally {
         setStatementsLoading(false);
       }
     };
-    fetchAllStatements();
-  }, []);
+    fetchStatements();
+  }, [activeTab]);
 
   // Fetch carriers
   useEffect(() => {
     fetchCarriers();
   }, [fetchCarriers]);
 
-  // Filter statements based on active tab (client-side filtering)
-  useEffect(() => {
+  // Filter carriers based on active tab to show only carriers with statements in that status
+  const filteredCarriersByTab = useMemo(() => {
     if (activeTab === 'all') {
-      setFilteredStatements(allStatements);
-    } else {
-      // Filter by status client-side
-      const statusMapping = {
-        'pending': ['extracted', 'success', 'pending'],
-        'approved': ['completed', 'Approved'],
-        'rejected': ['rejected']
-      };
-      
-      const targetStatuses = statusMapping[activeTab as keyof typeof statusMapping] || [];
-      const filtered = allStatements.filter(statement => 
-        targetStatuses.includes(statement.status)
-      );
-      setFilteredStatements(filtered);
+      return carriers;
     }
-  }, [activeTab, allStatements]);
-
-  // Filter carriers based on search query
-  const filteredCarriers = useMemo(() => {
-    if (!searchQuery.trim()) return carriers;
+    
+    // Get unique company names from filtered statements
+    const companyNamesWithStatements = new Set(
+      filteredStatements.map(statement => statement.company_name)
+    );
+    
+    // Filter carriers to only show those with statements in the current tab
     return carriers.filter(carrier => 
+      companyNamesWithStatements.has(carrier.name)
+    );
+  }, [carriers, filteredStatements, activeTab]);
+
+  // Filter carriers based on search query and tab
+  const filteredCarriers = useMemo(() => {
+    const baseCarriers = filteredCarriersByTab;
+    
+    if (!searchQuery.trim()) return baseCarriers;
+    return baseCarriers.filter(carrier => 
       carrier.name.toLowerCase().includes(searchQuery.toLowerCase())
     );
-  }, [carriers, searchQuery]);
+  }, [filteredCarriersByTab, searchQuery]);
 
   // Filter statements based on selected carrier and status
   const finalFilteredStatements = useMemo(() => {

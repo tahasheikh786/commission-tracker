@@ -100,16 +100,16 @@ export default function CompanyNameMapping({
 
   return (
     <div className="space-y-6">
-      <Card className="p-6">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-600 to-indigo-400 flex items-center justify-center shadow text-white text-sm font-bold">
-            <CheckCircle size={16} />
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+        <div className="flex items-center gap-4 mb-6">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg">
+            <CheckCircle className="text-white" size={20} />
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-gray-800">
+            <h3 className="text-xl font-bold text-slate-800">
               Company Name Detection
             </h3>
-            <p className="text-sm text-gray-600">
+            <p className="text-slate-600 mt-1">
               We detected {detectedCompanies.length} company names in your document. Please review and validate them.
             </p>
           </div>
@@ -117,61 +117,60 @@ export default function CompanyNameMapping({
 
         <div className="space-y-4">
           {validatedCompanies.map((company, index) => (
-            <div key={index} className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg">
-              <div className="flex-1">
-                {editingIndex === index ? (
-                  <Input
-                    value={company}
-                    onChange={(e) => handleCompanyChange(index, e.target.value)}
-                    onBlur={() => setEditingIndex(null)}
-                    onKeyPress={(e) => {
-                      if (e.key === 'Enter') {
-                        setEditingIndex(null)
-                      }
-                    }}
-                    autoFocus
-                    className="text-sm"
-                  />
-                ) : (
-                  <div 
-                    className="text-sm text-gray-700 cursor-pointer hover:bg-gray-50 p-2 rounded"
-                    onClick={() => setEditingIndex(index)}
+            <div key={index} className="p-4 border border-slate-200 rounded-xl hover:border-slate-300 transition-colors">
+              <div className="flex items-center gap-4">
+                <div className="flex-1">
+                  {editingIndex === index ? (
+                    <input
+                      value={company}
+                      onChange={(e) => handleCompanyChange(index, e.target.value)}
+                      onBlur={() => setEditingIndex(null)}
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter') {
+                          setEditingIndex(null)
+                        }
+                      }}
+                      autoFocus
+                      className="w-full px-4 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  ) : (
+                    <div 
+                      className="text-sm text-slate-700 cursor-pointer hover:bg-slate-50 p-3 rounded-lg transition-colors"
+                      onClick={() => setEditingIndex(index)}
+                    >
+                      {company || 'Click to edit company name'}
+                    </div>
+                  )}
+                </div>
+                
+                <div className="flex items-center gap-3">
+                  {getValidationIcon(index)}
+                  
+                  <button
+                    className="px-3 py-1.5 text-sm bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={() => handleValidation(index)}
+                    disabled={!company || isLoading}
                   >
-                    {company || 'Click to edit company name'}
-                  </div>
-                )}
-              </div>
-              
-              <div className="flex items-center gap-2">
-                {getValidationIcon(index)}
-                
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => handleValidation(index)}
-                  disabled={!company || isLoading}
-                >
-                  Validate
-                </Button>
-                
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => removeCompany(index)}
-                  className="text-red-600 hover:text-red-700"
-                >
-                  <X size={14} />
-                </Button>
+                    Validate
+                  </button>
+                  
+                  <button
+                    className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                    onClick={() => removeCompany(index)}
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
               </div>
               
               {validationResults[index] && (
-                <div className="mt-2 text-xs">
+                <div className="mt-3 p-3 rounded-lg text-sm">
                   {validationResults[index].is_valid ? (
-                    <div className="text-green-600">
+                    <div className="text-emerald-700 bg-emerald-50 border border-emerald-200">
                       ✓ Valid company name (Confidence: {Math.round(validationResults[index].confidence * 100)}%)
                     </div>
                   ) : (
-                    <div className="text-red-600">
+                    <div className="text-red-700 bg-red-50 border border-red-200">
                       ⚠ Issues: {validationResults[index].issues.join(', ')}
                     </div>
                   )}
@@ -180,31 +179,37 @@ export default function CompanyNameMapping({
             </div>
           ))}
           
-          <Button
-            variant="outline"
+          <button
             onClick={addCompany}
-            className="w-full"
+            className="w-full p-4 border-2 border-dashed border-slate-300 rounded-xl text-slate-600 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50 transition-all duration-200 font-medium"
           >
             + Add Company Name
-          </Button>
+          </button>
         </div>
-      </Card>
+      </div>
 
-      <div className="flex justify-end gap-3">
-        <Button
-          variant="outline"
+      <div className="flex justify-end gap-4">
+        <button
           onClick={onSkip}
           disabled={isLoading}
+          className="px-6 py-3 border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Skip
-        </Button>
-        <Button
+        </button>
+        <button
           onClick={handleComplete}
           disabled={isLoading || validatedCompanies.length === 0}
-          className="bg-blue-600 hover:bg-blue-700"
+          className="px-6 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg hover:shadow-lg transition-all duration-200 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {isLoading ? 'Processing...' : 'Continue with Company Names'}
-        </Button>
+          {isLoading ? (
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              Processing...
+            </div>
+          ) : (
+            'Continue with Company Names'
+          )}
+        </button>
       </div>
     </div>
   )

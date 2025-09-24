@@ -920,14 +920,14 @@ export default function TableEditor({
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: scrollbarStyles }} />
-      <div className="fixed inset-0 bg-gradient-to-br from-gray-50 to-blue-50 z-50">
+      <div className="fixed inset-0 bg-gradient-to-br from-slate-50 to-blue-50 z-50">
       {/* Full-screen loader overlays */}
       {isUsingAnotherExtraction && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-8 shadow-xl flex flex-col items-center gap-4">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-            <div className="text-lg font-semibold text-gray-800">Re-extracting with Docling...</div>
-            <div className="text-sm text-gray-600 text-center">
+          <div className="bg-white rounded-xl p-8 shadow-2xl flex flex-col items-center gap-4">
+            <div className="w-12 h-12 border-2 border-slate-200 border-t-blue-500 rounded-full animate-spin"></div>
+            <div className="text-lg font-semibold text-slate-800">Re-extracting with Docling...</div>
+            <div className="text-sm text-slate-600 text-center">
               Please wait while we process your document with a different extraction method.
             </div>
           </div>
@@ -973,18 +973,18 @@ export default function TableEditor({
         <ProgressBar currentStep="table_editor" />
         
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-purple-50 flex items-center justify-between">
+        <div className="px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-blue-50 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <h2 className="text-xl font-bold text-gray-900">Table Editor</h2>
+            <h2 className="text-2xl font-bold text-slate-800">Table Editor</h2>
             {uploaded && (
-              <span className="text-sm text-gray-500 bg-white px-3 py-1 rounded-full border">
+              <span className="text-sm text-slate-600 bg-white px-4 py-2 rounded-lg border border-slate-200 shadow-sm">
                 {uploaded.file_name}
               </span>
             )}
             {selectedStatementDate && (
-              <div className="flex items-center gap-2 bg-green-100 px-3 py-1 rounded-full border border-green-200">
-                <Calendar className="w-4 h-4 text-green-600" />
-                <span className="text-sm text-green-700 font-medium">
+              <div className="flex items-center gap-2 bg-emerald-50 px-4 py-2 rounded-lg border border-emerald-200">
+                <Calendar className="w-4 h-4 text-emerald-600" />
+                <span className="text-sm text-emerald-700 font-medium">
                   Statement Date: {selectedStatementDate.date}
                 </span>
                 <button
@@ -1000,7 +1000,7 @@ export default function TableEditor({
                     setShowDateModal(false)
                     toast.success('Date selection reset. You can extract dates again.')
                   }}
-                  className="ml-1 p-1 text-green-600 hover:text-green-800 hover:bg-green-200 rounded-full transition-colors"
+                  className="ml-1 p-1 text-emerald-600 hover:text-emerald-800 hover:bg-emerald-200 rounded-lg transition-colors"
                   title="Reset date selection"
                 >
                   <X className="w-3 h-3" />
@@ -1235,9 +1235,9 @@ export default function TableEditor({
                       >
                         <table className="w-full min-w-full">
                         <thead className="sticky top-0 z-10">
-                          <tr className="bg-gray-50">
+                          <tr className="bg-slate-50">
                             {/* Checkbox column for multiple selection */}
-                            <th className="px-3 py-3 text-left text-xs font-medium text-gray-900 border-b border-gray-200 w-12 whitespace-nowrap">
+                            <th className="px-4 py-4 text-left text-xs font-bold text-slate-800 border-b border-slate-200 w-12 whitespace-nowrap">
                               <input
                                 type="checkbox"
                                 checked={selectedRows.size === getDisplayRows(currentTableIdx).length && getDisplayRows(currentTableIdx).length > 0}
@@ -1318,18 +1318,18 @@ export default function TableEditor({
                             return (
                               <tr 
                                 key={originalRowIdx} 
-                                className={`hover:bg-gray-50 group relative ${
+                                className={`hover:bg-slate-50 group relative transition-colors ${
                                   isSummaryRow(currentTable, originalRowIdx) 
                                     ? 'bg-orange-50 border-l-4 border-orange-400' 
                                     : rightFormatRow && rightFormatRow.tableIdx === currentTableIdx && rightFormatRow.rowIdx === originalRowIdx
-                                    ? 'bg-green-50 border-l-4 border-green-400'
+                                    ? 'bg-emerald-50 border-l-4 border-emerald-400'
                                     : formatValidationResults[originalRowIdx] && !formatValidationResults[originalRowIdx].isValid
                                     ? 'bg-red-50 border-l-4 border-red-400'
                                     : ''
                                 }`}
                               >
                                 {/* Checkbox column for multiple selection */}
-                                <td className="px-3 py-3 text-xs text-gray-900 border-b border-gray-100 whitespace-nowrap">
+                                <td className="px-4 py-3 text-xs text-slate-900 border-b border-slate-200 whitespace-nowrap">
                                   <input
                                     type="checkbox"
                                     checked={selectedRows.has(originalRowIdx)}

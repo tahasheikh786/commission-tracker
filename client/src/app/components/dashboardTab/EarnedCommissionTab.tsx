@@ -331,78 +331,82 @@ export default function EarnedCommissionTab() {
   };
 
   return (
-    <div className="w-full space-y-8">
-      {/* Enhanced Header */}
-      <div className="text-center space-y-4">
-        <div className="flex items-center justify-center gap-3">
-          <Sparkles className="text-emerald-500" size={24} />
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-slate-800 via-slate-700 to-slate-600 bg-clip-text text-transparent">
-            Earned Commission Dashboard
-          </h1>
-          <Sparkles className="text-teal-500" size={24} />
-        </div>
-                      <p className="text-lg text-slate-600 max-w-3xl mx-auto leading-relaxed">
-                Track and analyze commission earnings across all carriers and clients with comprehensive insights
-                {selectedYear && selectedYear !== 2025 && (
-                  <span className="block mt-2 text-sm font-medium text-emerald-600">
-                    📅 Showing data for year {selectedYear}
-                  </span>
-                )}
-                {viewAllData && (
-                  <span className="block mt-2 text-sm font-medium text-amber-600 bg-amber-50 px-3 py-1 rounded-full inline-block">
-                    🔒 Read-Only Mode - Viewing all company data
-                  </span>
-                )}
-              </p>
-        
-        {/* Controls */}
-        <div className="flex justify-center items-center gap-4">
-          {/* View Toggle */}
-          <div className="flex items-center gap-3 bg-white/90 backdrop-blur-xl rounded-2xl border border-white/50 shadow-lg p-2">
-            <button
-              onClick={() => setViewAllData(false)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-200 ${
-                !viewAllData
-                  ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg'
-                  : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              <Eye className="w-4 h-4" />
-              My Data
-            </button>
-            <button
-              onClick={() => setViewAllData(true)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-200 ${
-                viewAllData
-                  ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg'
-                  : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              <EyeOff className="w-4 h-4" />
-              All Data (Read-Only)
-            </button>
-          </div>
-
-          {/* Refresh Button */}
+    <div className="w-full space-y-6">
+      {/* Controls */}
+      <div className="flex justify-between items-center">
+        {/* View Toggle */}
+        <div className="flex items-center gap-2 bg-white rounded-xl border border-slate-200 shadow-sm p-1">
           <button
-            onClick={refreshAllData}
-            disabled={statsLoading || carriersLoading || allDataLoading}
-            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-2xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={() => setViewAllData(false)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+              !viewAllData
+                ? 'bg-blue-500 text-white shadow-sm'
+                : 'text-slate-600 hover:bg-slate-100'
+            }`}
           >
-            <RefreshCw size={18} className={statsLoading || carriersLoading || allDataLoading ? 'animate-spin' : ''} />
-            Refresh Data
+            <Eye className="w-4 h-4" />
+            My Data
+          </button>
+          <button
+            onClick={() => setViewAllData(true)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+              viewAllData
+                ? 'bg-blue-500 text-white shadow-sm'
+                : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <EyeOff className="w-4 h-4" />
+            All Data
           </button>
         </div>
+
+        {/* Refresh Button */}
+        <button
+          onClick={refreshAllData}
+          disabled={statsLoading || carriersLoading || allDataLoading}
+          className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-lg font-medium shadow-sm hover:bg-emerald-600 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <RefreshCw size={16} className={statsLoading || carriersLoading || allDataLoading ? 'animate-spin' : ''} />
+          Refresh Data
+        </button>
       </div>
+
+      {/* Status Indicators */}
+      {selectedYear && selectedYear !== 2025 && (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+              <span className="text-blue-600 text-sm">📅</span>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-blue-800">Year Filter Active</p>
+              <p className="text-xs text-blue-600">Showing data for year {selectedYear}</p>
+            </div>
+          </div>
+        </div>
+      )}
+      {viewAllData && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center">
+              <span className="text-amber-600 text-sm">🔒</span>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-amber-800">Read-Only Mode</p>
+              <p className="text-xs text-amber-600">Viewing all company data</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       
 
-        {/* Enhanced Stats Cards */}
-        <div className="grid gap-6 mb-8 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
-        <div className="bg-white/90 backdrop-blur-xl rounded-3xl shadow-xl border border-white/50 p-6">
+      {/* Stats Cards */}
+      <div className="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="font-semibold text-slate-600 text-sm">Total Invoice Amount</p>
+              <p className="font-medium text-slate-600 text-sm">Total Invoice Amount</p>
               <div className="font-bold text-slate-800 text-2xl">
                 {statsLoading ? (
                   <div className="flex items-center gap-2">
@@ -412,16 +416,16 @@ export default function EarnedCommissionTab() {
                 ) : formatCurrency(overallStats?.total_invoice || 0)}
               </div>
             </div>
-            <div className="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl p-3 shadow-lg">
-              <DollarSign className="text-white" size={24} />
+            <div className="bg-blue-100 rounded-lg p-3">
+              <DollarSign className="text-blue-600" size={24} />
             </div>
           </div>
         </div>
 
-        <div className="bg-white/90 backdrop-blur-xl rounded-3xl shadow-xl border border-white/50 p-6">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="font-semibold text-slate-600 text-sm">Total Commission Earned</p>
+              <p className="font-medium text-slate-600 text-sm">Total Commission Earned</p>
               <p className="font-bold text-emerald-600 text-2xl">
                 {statsLoading ? (
                   <div className="flex items-center gap-2">
@@ -431,16 +435,16 @@ export default function EarnedCommissionTab() {
                 ) : formatCurrency(overallStats?.total_commission || 0)}
               </p>
             </div>
-            <div className="bg-gradient-to-r from-emerald-500 to-teal-600 rounded-2xl p-3 shadow-lg">
-              <TrendingUp className="text-white" size={24} />
+            <div className="bg-emerald-100 rounded-lg p-3">
+              <TrendingUp className="text-emerald-600" size={24} />
             </div>
           </div>
         </div>
 
-        <div className="bg-white/90 backdrop-blur-xl rounded-3xl shadow-xl border border-white/50 p-6">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="font-semibold text-slate-600 text-sm">Total Carriers</p>
+              <p className="font-medium text-slate-600 text-sm">Total Carriers</p>
               <p className="font-bold text-purple-600 text-2xl">
                 {statsLoading ? (
                   <div className="flex items-center gap-2">
@@ -450,16 +454,16 @@ export default function EarnedCommissionTab() {
                 ) : overallStats?.total_carriers || 0}
               </p>
             </div>
-            <div className="bg-gradient-to-r from-purple-500 to-violet-600 rounded-2xl p-3 shadow-lg">
-              <Building2 className="text-white" size={24} />
+            <div className="bg-purple-100 rounded-lg p-3">
+              <Building2 className="text-purple-600" size={24} />
             </div>
           </div>
         </div>
 
-        <div className="bg-white/90 backdrop-blur-xl rounded-3xl shadow-xl border border-white/50 p-6">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="font-semibold text-slate-600 text-sm">Total Companies</p>
+              <p className="font-medium text-slate-600 text-sm">Total Companies</p>
               <p className="font-bold text-orange-600 text-2xl">
                 {statsLoading ? (
                   <div className="flex items-center gap-2">
@@ -469,21 +473,21 @@ export default function EarnedCommissionTab() {
                 ) : overallStats?.total_companies || 0}
               </p>
             </div>
-            <div className="bg-gradient-to-r from-orange-500 to-amber-600 rounded-2xl p-3 shadow-lg">
-              <Users className="text-white" size={24} />
+            <div className="bg-orange-100 rounded-lg p-3">
+              <Users className="text-orange-600" size={24} />
             </div>
           </div>
         </div>
       </div>
 
-      {/* Enhanced Data Table - Full Width */}
-      <div className="bg-white/90 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/50 overflow-hidden">
-        {/* Enhanced Table Header */}
-        <div className="p-6 border-b border-slate-200/50 bg-gradient-to-r from-slate-50/50 to-slate-100/50">
+      {/* Data Table */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        {/* Table Header */}
+        <div className="p-6 border-b border-slate-200">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-                <BarChart3 className="text-emerald-600" size={20} />
+              <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                <BarChart3 className="text-emerald-600" size={18} />
                 Commission Data by Company
               </h3>
               <p className="text-sm text-slate-600 mt-1">
@@ -493,52 +497,52 @@ export default function EarnedCommissionTab() {
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setShowFilters(!showFilters)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all duration-200 ${
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-200 ${
                   showFilters 
-                    ? 'bg-emerald-500 text-white shadow-lg' 
-                    : 'bg-white/80 text-slate-700 hover:bg-slate-100/80'
+                    ? 'bg-emerald-500 text-white shadow-sm' 
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                 }`}
               >
-                <SlidersHorizontal size={16} />
-                <span className="text-sm font-medium">Advanced Filters</span>
+                <SlidersHorizontal size={14} />
+                <span className="text-sm font-medium">Filters</span>
                 {(minCommissionFilter || maxCommissionFilter) && (
                   <div className="w-2 h-2 bg-red-500 rounded-full"></div>
                 )}
               </button>
-              <button className="p-3 text-slate-500 hover:text-slate-700 hover:bg-slate-100/80 rounded-xl transition-all duration-200 hover:scale-105">
-                <Download size={18} />
+              <button className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-all duration-200">
+                <Download size={16} />
               </button>
             </div>
           </div>
 
-          {/* Combined Search and Filter Row */}
+          {/* Search and Filter Row */}
           <div className="space-y-4 mb-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="relative">
-                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={16} />
                 <input
                   type="text"
                   placeholder="Search by company..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3 text-sm bg-white/80 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200"
+                  className="w-full pl-10 pr-4 py-2 text-sm bg-white rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200"
                 />
               </div>
               <div className="relative">
-                <Building2 className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} />
+                <Building2 className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={16} />
                 <input
                   type="text"
                   placeholder="Search by carrier..."
                   value={carrierFilter}
                   onChange={(e) => setCarrierFilter(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3 text-sm bg-white/80 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200"
+                  className="w-full pl-10 pr-4 py-2 text-sm bg-white rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200"
                 />
               </div>
               <div>
                 <select
                   value={selectedYear || 2025}
                   onChange={(e) => setSelectedYear(e.target.value ? parseInt(e.target.value) : null)}
-                  className="w-full px-4 py-3 text-sm bg-white/80 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200"
+                  className="w-full px-4 py-2 text-sm bg-white rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200"
                 >
                   <option value="">All Years</option>
                   {yearsLoading ? (
@@ -557,9 +561,9 @@ export default function EarnedCommissionTab() {
               <div className="flex justify-center">
                 <button
                   onClick={clearFilters}
-                  className="flex items-center gap-2 px-4 py-2 text-sm bg-red-100 text-red-600 rounded-xl hover:bg-red-200 transition-colors font-medium"
+                  className="flex items-center gap-2 px-3 py-1 text-sm bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors font-medium"
                 >
-                  <X size={16} />
+                  <X size={14} />
                   Clear All Filters
                 </button>
               </div>
@@ -568,18 +572,18 @@ export default function EarnedCommissionTab() {
 
           {/* Advanced Filters Panel */}
           {showFilters && (
-            <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-4 mb-4 border border-slate-200/50">
+            <div className="bg-slate-50 rounded-lg p-4 mb-4 border border-slate-200">
               <div className="flex items-center justify-between mb-4">
-                <h4 className="font-semibold text-slate-800 flex items-center gap-2">
-                  <Filter size={16} />
+                <h4 className="font-medium text-slate-800 flex items-center gap-2">
+                  <Filter size={14} />
                   Advanced Filters
                 </h4>
                 {hasActiveFilters && (
                   <button
                     onClick={clearFilters}
-                    className="flex items-center gap-1 px-3 py-1 text-xs bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
+                    className="flex items-center gap-1 px-2 py-1 text-xs bg-red-100 text-red-600 rounded hover:bg-red-200 transition-colors"
                   >
-                    <X size={12} />
+                    <X size={10} />
                     Clear All
                   </button>
                 )}
@@ -593,7 +597,7 @@ export default function EarnedCommissionTab() {
                     placeholder="Min amount..."
                     value={minCommissionFilter}
                     onChange={(e) => setMinCommissionFilter(e.target.value)}
-                    className="w-full px-3 py-2 text-sm bg-white/80 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    className="w-full px-3 py-2 text-sm bg-white rounded border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                   />
                 </div>
                 <div>
@@ -603,7 +607,7 @@ export default function EarnedCommissionTab() {
                     placeholder="Max amount..."
                     value={maxCommissionFilter}
                     onChange={(e) => setMaxCommissionFilter(e.target.value)}
-                    className="w-full px-3 py-2 text-sm bg-white/80 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    className="w-full px-3 py-2 text-sm bg-white rounded border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                   />
                 </div>
               </div>
@@ -611,10 +615,10 @@ export default function EarnedCommissionTab() {
           )}
         </div>
 
-        {/* Enhanced Table */}
+        {/* Table */}
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-gradient-to-r from-slate-50/80 to-slate-100/80">
+            <thead className="bg-slate-50">
               <tr>
                 <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">
                   <button
@@ -798,9 +802,9 @@ export default function EarnedCommissionTab() {
           </table>
         </div>
 
-        {/* Enhanced Pagination */}
+        {/* Pagination */}
         {totalPages > 1 && (
-          <div className="px-6 py-4 border-t border-slate-200/50 bg-gradient-to-r from-slate-50/50 to-slate-100/50">
+          <div className="px-6 py-4 border-t border-slate-200 bg-slate-50">
             <div className="flex items-center justify-between">
               <div className="text-sm text-slate-700 font-medium">
                 Showing {((currentPage - 1) * ITEMS_PER_PAGE) + 1} to {Math.min(currentPage * ITEMS_PER_PAGE, filteredData.length)} of {filteredData.length} results
@@ -809,17 +813,17 @@ export default function EarnedCommissionTab() {
                 <button
                   onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                   disabled={currentPage === 1}
-                  className="px-4 py-2 text-sm bg-white/80 backdrop-blur-sm border border-slate-300 rounded-xl hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-medium"
+                  className="px-4 py-2 text-sm bg-white border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-medium"
                 >
                   Previous
                 </button>
-                <span className="px-4 py-2 text-sm text-slate-700 font-semibold bg-white/80 backdrop-blur-sm rounded-xl">
+                <span className="px-4 py-2 text-sm text-slate-700 font-semibold bg-white rounded-lg">
                   Page {currentPage} of {totalPages}
                 </span>
                 <button
                   onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
                   disabled={currentPage === totalPages}
-                  className="px-4 py-2 text-sm bg-white/80 backdrop-blur-sm border border-slate-300 rounded-xl hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-medium"
+                  className="px-4 py-2 text-sm bg-white border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-medium"
                 >
                   Next
                 </button>

@@ -566,31 +566,31 @@ export default function DashboardTab() {
   // Render full-page dashboard table if we have final tables
   if (finalTables.length > 0 && !showFieldMapper && !showTableEditor) {
     return (
-                        <DashboardTableFullPage
-          tables={finalTables}
-          fieldConfig={fieldConfig}
-          onEditMapping={() => {
-            setShowFieldMapper(true);
-            setSkipped(false);
-          }}
-          onApprove={handleApprove}
-          onReject={handleReject}
-          onReset={handleReset}
-          company={company}
-          fileName={uploaded?.file_name || "uploaded.pdf"}
-          fileUrl={uploaded?.file?.url || null}
-          readOnly={false}
-          onTableChange={setFinalTables}
-          planTypes={planTypes}
-          uploadId={uploaded?.upload_id}
-          submitting={submitting}
-          showRejectModal={showRejectModal}
-          rejectReason={rejectReason}
-          onRejectReasonChange={setRejectReason}
-          onRejectSubmit={handleRejectSubmit}
-          onCloseRejectModal={() => setShowRejectModal(false)}
-          selectedStatementDate={selectedStatementDate}
-        />
+      <DashboardTableFullPage
+        tables={finalTables}
+        fieldConfig={fieldConfig}
+        onEditMapping={() => {
+          setShowFieldMapper(true);
+          setSkipped(false);
+        }}
+        onApprove={handleApprove}
+        onReject={handleReject}
+        onReset={handleReset}
+        company={company}
+        fileName={uploaded?.file_name || "uploaded.pdf"}
+        fileUrl={uploaded?.file?.url || null}
+        readOnly={false}
+        onTableChange={setFinalTables}
+        planTypes={planTypes}
+        uploadId={uploaded?.upload_id}
+        submitting={submitting}
+        showRejectModal={showRejectModal}
+        rejectReason={rejectReason}
+        onRejectReasonChange={setRejectReason}
+        onRejectSubmit={handleRejectSubmit}
+        onCloseRejectModal={() => setShowRejectModal(false)}
+        selectedStatementDate={selectedStatementDate}
+      />
     );
   }
 
@@ -607,22 +607,7 @@ export default function DashboardTab() {
         }}
       />
       <div className="w-full space-y-8">
-      {/* Enhanced Header */}
-      <div className="text-center space-y-4">
-        <div className="flex items-center justify-center gap-3">
-          <Sparkles className="text-blue-500" size={24} />
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-slate-800 via-slate-700 to-slate-600 bg-clip-text text-transparent">
-            Dashboard Overview
-          </h1>
-          <Sparkles className="text-purple-500" size={24} />
-        </div>
-        <p className="text-lg text-slate-600 max-w-2xl mx-auto leading-relaxed">
-          Monitor your commission tracking system performance and manage statements
-        </p>
-      </div>
-      
-      
-      {/* Enhanced Stats Grid - Full Width */}
+      {/* Premium Stats Grid - Full Width */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
         {statCards.map((card, i) => (
           <div 
@@ -646,38 +631,50 @@ export default function DashboardTab() {
       </div>
 
       {/* Upload and Processing Section */}
-      <div className="bg-white/90 backdrop-blur-xl rounded-3xl border border-white/50 shadow-2xl p-8">
-        <div className="text-center mb-8">
-          <h2 className="text-3xl font-bold text-slate-800 mb-3 flex items-center justify-center gap-3">
-            <Upload className="text-sky-600" size={28} />
-            <span className="bg-gradient-to-r from-sky-600 to-blue-600 bg-clip-text text-transparent">
-              Upload & Process Statements
-            </span>
-          </h2>
-          <p className="text-slate-600 text-lg">
-            Upload new commission statements (PDF or Excel) and process them with AI-powered extraction
-          </p>
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-lg overflow-hidden">
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 px-8 py-6 border-b border-slate-200">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
+              <Upload className="text-white" size={24} />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold text-slate-800">
+                Upload & Process Statements
+              </h2>
+              <p className="text-slate-600">
+                Upload new commission statements (PDF or Excel) and process them with AI-powered extraction
+              </p>
+            </div>
+          </div>
         </div>
 
-        {/* Upload Interface */}
-        {!company || !uploaded ? (
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+        <div className="p-8">
+          {/* Upload Interface */}
+          {!company || !uploaded ? (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               {/* Carrier Selection */}
-              <div className="bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 rounded-3xl p-8 border border-blue-200/50 shadow-lg">
-                <h3 className="text-2xl font-bold text-slate-800 mb-6 flex items-center gap-3">
-                  <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg">
-                    <Building2 className="text-white" size={20} />
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center">
+                    <Building2 className="text-white" size={16} />
                   </div>
-                  <span className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                  <h3 className="text-lg font-semibold text-slate-800">
                     Select or Add Carrier
-                  </span>
-                </h3>
+                  </h3>
+                </div>
                 <CompanySelect value={company?.id} onChange={setCompany} />
               </div>
               
               {/* Upload Zone */}
-              <div className="flex flex-col h-full min-h-[300px]">
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-lg flex items-center justify-center">
+                    <Upload className="text-white" size={16} />
+                  </div>
+                  <h3 className="text-lg font-semibold text-slate-800">
+                    Upload Document
+                  </h3>
+                </div>
                 <AdvancedUploadZone
                   onParsed={handleUploadResult}
                   disabled={!company}
@@ -685,8 +682,7 @@ export default function DashboardTab() {
                 />
               </div>
             </div>
-          </div>
-        ) : (
+          ) : (
           /* Final Dashboard Table with Approve/Reject - Full Page */
           <div className="space-y-6">
             {/* Progress Indicator */}
@@ -708,7 +704,7 @@ export default function DashboardTab() {
             </div>
 
             {/* Dashboard Table */}
-            <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-white/50 shadow-lg p-6">
+            <div className="bg-slate-50 rounded-xl border border-slate-200 p-6">
               <DashboardTable
                 tables={finalTables}
                 fieldConfig={fieldConfig}
@@ -724,26 +720,27 @@ export default function DashboardTab() {
                 planTypes={planTypes}
                 onSendToPending={() => {}}
                 uploadId={uploaded?.upload_id}
+                selectedStatementDate={selectedStatementDate}
               />
             </div>
 
             {/* Action Buttons */}
-            <div className="flex justify-center gap-6">
+            <div className="flex justify-center gap-4">
               <button
                 onClick={handleReset}
-                className="px-6 py-3 bg-gradient-to-r from-slate-500 to-gray-600 text-white rounded-2xl hover:shadow-lg transition-all duration-200 hover:scale-105 font-semibold"
+                className="px-6 py-3 bg-slate-200 text-slate-700 rounded-xl hover:bg-slate-300 transition-all duration-200 font-semibold"
               >
                 Upload Another PDF
               </button>
               <button
-                className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-8 py-3 rounded-2xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105 text-lg"
+                className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-8 py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105"
                 onClick={handleApprove}
                 disabled={submitting}
               >
                 {submitting ? 'Processing...' : 'Approve'}
               </button>
               <button
-                className="bg-gradient-to-r from-red-500 to-rose-600 text-white px-8 py-3 rounded-2xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105 text-lg"
+                className="bg-gradient-to-r from-red-500 to-rose-600 text-white px-8 py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105"
                 onClick={handleReject}
                 disabled={submitting}
               >
@@ -752,12 +749,13 @@ export default function DashboardTab() {
             </div>
           </div>
         )}
+        </div>
       </div>
 
       {/* Reject Modal */}
       {showRejectModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-3xl p-8 shadow-2xl max-w-md w-full mx-4">
+          <div className="bg-white rounded-2xl p-8 shadow-2xl max-w-md w-full mx-4">
             <h3 className="text-xl font-bold text-slate-800 mb-4">Reject Submission</h3>
             <input
               className="w-full border border-slate-200 rounded-xl px-4 py-3 mb-6 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"

@@ -420,19 +420,19 @@ export default function FieldMapper({
       )}
 
       {/* Header */}
-      <div className="flex-shrink-0 bg-white border-b border-gray-200 p-6">
+      <div className="flex-shrink-0 bg-white border-b border-slate-200 p-6">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="text-xl font-semibold text-gray-800">Field Mapping</h2>
-            <p className="text-gray-600 text-sm mt-1">
+            <h2 className="text-2xl font-bold text-slate-800">Field Mapping</h2>
+            <p className="text-slate-600 mt-1">
               Map your extracted columns to the correct database fields.
             </p>
           </div>
           
           {/* Statement Date Indicator */}
           {selectedStatementDate && (
-            <div className="flex items-center gap-2 px-3 py-2 bg-green-100 text-green-800 rounded-lg border border-green-200">
-              <Calendar className="w-4 h-4 text-green-600" />
+            <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-800 rounded-lg border border-emerald-200">
+              <Calendar className="w-4 h-4 text-emerald-600" />
               <span className="text-sm font-medium">
                 Statement Date: {selectedStatementDate.date}
               </span>
@@ -443,8 +443,8 @@ export default function FieldMapper({
           {mappingSource !== 'manual' && (
             <div className="flex items-center gap-2">
               {mappingSource === 'learned' && (
-                <div className="flex items-center gap-2 px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm">
-                  <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-800 rounded-lg text-sm border border-emerald-200">
+                  <span className="w-2 h-2 bg-emerald-500 rounded-full"></span>
                   Auto-mapped from learned format
                 </div>
               )}
@@ -454,7 +454,7 @@ export default function FieldMapper({
 
         {/* Apply Learned Mapping Button */}
         {learnedMapping && Object.keys(learnedMapping).length > 0 && mappingSource !== 'learned' && (
-          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-xl">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-blue-800">Learned format available</p>
@@ -466,7 +466,7 @@ export default function FieldMapper({
                   setMappingSource('learned')
                   toast.success('Applied learned field mappings!')
                 }}
-                className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition"
+                className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors font-medium"
               >
                 Apply Learned
               </button>
@@ -476,46 +476,46 @@ export default function FieldMapper({
       </div>
 
       {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
+      <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
         <div className="w-[90%] mx-auto">
           {/* Plan Type Selection */}
-          <div className="mb-6 bg-white rounded-lg border border-gray-200 p-6">
-            <label className="block text-lg font-semibold text-gray-800 mb-3">Plan Types</label>
+          <div className="mb-6 bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+            <label className="block text-lg font-semibold text-slate-800 mb-4">Plan Types</label>
             {loadingPlanTypes ? (
               <div className="flex items-center justify-center py-4">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-                <span className="ml-2 text-gray-600">Loading plan types...</span>
+                <div className="w-6 h-6 border-2 border-slate-200 border-t-blue-500 rounded-full animate-spin"></div>
+                <span className="ml-2 text-slate-600 font-medium">Loading plan types...</span>
               </div>
             ) : (
               <>
                 <div className="flex flex-wrap gap-3">
                   {availablePlanTypes.map((pt: PlanType) => (
                     <label key={pt.plan_key} className={
-                      `inline-flex items-center px-4 py-2 rounded-lg border border-gray-300 bg-white shadow-sm cursor-pointer transition-all hover:shadow-md ${planTypes.includes(pt.plan_key) ? 'ring-2 ring-blue-400 bg-blue-50' : ''}`
+                      `inline-flex items-center px-4 py-3 rounded-lg border border-slate-200 bg-white shadow-sm cursor-pointer transition-all hover:shadow-md ${planTypes.includes(pt.plan_key) ? 'ring-2 ring-blue-400 bg-blue-50 border-blue-200' : 'hover:border-slate-300'}`
                     }>
                       <input
                         type="checkbox"
-                        className="form-checkbox accent-blue-600 mr-2 h-4 w-4"
+                        className="form-checkbox accent-blue-600 mr-3 h-4 w-4"
                         checked={planTypes.includes(pt.plan_key)}
                         onChange={() => handlePlanTypeChange(pt.plan_key)}
                       />
-                      <span className="text-sm font-medium text-gray-800">{pt.display_name}</span>
+                      <span className="text-sm font-medium text-slate-800">{pt.display_name}</span>
                     </label>
                   ))}
                 </div>
-                <div className="text-sm text-gray-500 mt-2">Select all plan types included in this statement. You can select multiple.</div>
+                <div className="text-sm text-slate-500 mt-3">Select all plan types included in this statement. You can select multiple.</div>
               </>
             )}
           </div>
 
           {/* Add Database Field - Moved above the table */}
-          <div className="mb-6 bg-white rounded-lg border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-3">Add Database Field</h3>
-            <div className="mb-3">
+          <div className="mb-6 bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+            <h3 className="text-lg font-semibold text-slate-800 mb-4">Add Database Field</h3>
+            <div className="mb-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Field Name</label>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Field Name</label>
                 <input
-                  className="border border-gray-300 rounded-md px-3 py-2 w-full text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="border border-slate-200 rounded-lg px-4 py-3 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="e.g., Group Id"
                   value={newFieldName}
                   onChange={e => setNewFieldName(e.target.value)}
@@ -524,7 +524,7 @@ export default function FieldMapper({
             </div>
             <button
               type="button"
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-blue-600 text-white font-medium shadow hover:bg-blue-700 transition"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white font-medium shadow-lg hover:shadow-xl hover:bg-blue-700 transition-all duration-200"
               onClick={handleAddDatabaseField}
             >
               <Plus size={16} /> Add Database Field
@@ -532,16 +532,16 @@ export default function FieldMapper({
           </div>
 
           {/* Field Mapping Table */}
-          <div className="mb-6 bg-white rounded-lg border border-gray-200 overflow-hidden">
-            <div className="p-4 border-b border-gray-200 bg-gray-50">
-              <h3 className="text-lg font-semibold text-gray-800">Database Field Mapping</h3>
-              <p className="text-gray-600 text-sm mt-1">Drag to reorder and map extracted columns to database fields</p>
+          <div className="mb-6 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-slate-200 bg-slate-50">
+              <h3 className="text-lg font-semibold text-slate-800">Database Field Mapping</h3>
+              <p className="text-slate-600 text-sm mt-1">Drag to reorder and map extracted columns to database fields</p>
             </div>
 
             {loadingFields ? (
               <div className="flex items-center justify-center py-12">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                <span className="ml-3 text-gray-600">Loading database fields...</span>
+                <div className="w-8 h-8 border-2 border-slate-200 border-t-blue-500 rounded-full animate-spin"></div>
+                <span className="ml-3 text-slate-600 font-medium">Loading database fields...</span>
               </div>
             ) : (
               <>
@@ -556,14 +556,14 @@ export default function FieldMapper({
                   >
                     <div className="overflow-x-auto max-h-96 overflow-y-auto">
                       <table className="w-full">
-                        <thead className="bg-gray-50 sticky top-0">
+                        <thead className="bg-slate-50 sticky top-0">
                           <tr>
                             <th className="w-12 p-0"></th>
-                            <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Database Field</th>
-                            <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Extracted Column</th>
+                            <th className="text-left py-4 px-4 text-sm font-bold text-slate-800">Database Field</th>
+                            <th className="text-left py-4 px-4 text-sm font-bold text-slate-800">Extracted Column</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-200">
+                        <tbody className="divide-y divide-slate-200">
                           {fields.length === 0 ? (
                             <tr>
                               <td colSpan={3} className="py-8 text-center">
@@ -598,8 +598,8 @@ export default function FieldMapper({
                                     <td className="w-2/3 py-3 px-4 align-middle">
                                       <select
                                         key={`select-${f.field}`}
-                                        className="border border-gray-300 rounded-md px-3 py-2 w-full min-w-[140px] text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                        style={mapping[f.field] ? { backgroundColor: '#f3f4f6', color: '#6b7280' } : {}}
+                                        className="border border-slate-200 rounded-lg px-3 py-2 w-full min-w-[140px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                        style={mapping[f.field] ? { backgroundColor: '#f8fafc', color: '#64748b' } : {}}
                                         value={mapping[f.field] || ""}
                                         onChange={e => setFieldMap(f.field, e.target.value)}
                                       >
@@ -699,15 +699,15 @@ export default function FieldMapper({
       </div>
 
       {/* Action Buttons - Fixed at bottom */}
-      <div className="flex-shrink-0 bg-white border-t border-gray-200 p-6">
+      <div className="flex-shrink-0 bg-white border-t border-slate-200 p-6">
         <div className="w-[90%] mx-auto">
-          <div className="flex gap-3">
+          <div className="flex gap-4">
             {onGoToTableEditor && (
               <button
                 type="button"
                 onClick={onGoToTableEditor}
                 disabled={saving || isLoading}
-                className="px-6 py-2 rounded-md bg-gray-500 text-white font-semibold shadow hover:bg-gray-600 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="px-6 py-3 rounded-lg bg-slate-500 text-white font-semibold shadow-lg hover:shadow-xl hover:bg-slate-600 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -720,16 +720,23 @@ export default function FieldMapper({
                 handleSave()
               }}
               disabled={saving || isLoading}
-              className="px-6 py-2 rounded-md bg-blue-600 text-white font-semibold shadow hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-6 py-3 rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {(saving || isLoading) ? "Saving..." : "Save Mapping"}
+              {(saving || isLoading) ? (
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  Saving...
+                </div>
+              ) : (
+                'Save Mapping'
+              )}
             </button>
             {onSkip && (
               <button
                 type="button"
                 onClick={onSkip}
                 disabled={saving || isLoading}
-                className="px-6 py-2 rounded-md bg-gray-300 text-gray-700 font-semibold shadow hover:bg-gray-400 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-6 py-3 rounded-lg bg-slate-200 text-slate-700 font-semibold shadow-lg hover:shadow-xl hover:bg-slate-300 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Skip and Use Extracted Table
               </button>

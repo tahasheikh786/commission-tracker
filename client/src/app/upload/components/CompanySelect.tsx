@@ -96,11 +96,11 @@ export default function CompanySelect({
   if (!isClient) {
     return (
       <div className="my-8">
-        <label className="block mb-2 font-semibold text-gray-700 text-lg">
+        <label className="block mb-3 font-semibold text-slate-800 text-lg">
           Select or Add Carrier
         </label>
         <div className="relative">
-          <div className="border px-4 py-2 rounded bg-gray-100 text-gray-500">
+          <div className="w-full px-4 py-3 rounded-lg bg-slate-100 text-slate-500 border border-slate-200">
             Loading carriers...
           </div>
         </div>
@@ -110,7 +110,7 @@ export default function CompanySelect({
 
   return (
     <div className="my-8">
-      <label className="block mb-2 font-semibold text-gray-700 text-lg">
+      <label className="block mb-3 font-semibold text-slate-800 text-lg">
         Select or Add Carrier
       </label>
 
@@ -130,21 +130,47 @@ export default function CompanySelect({
           instanceId="company-select" // Add consistent instance ID
           styles={{
             container: base => ({ ...base, width: '100%', marginBottom: 16 }),
-            menu: base => ({ ...base, zIndex: 50 })
+            menu: base => ({ ...base, zIndex: 50 }),
+            control: (base, state) => ({
+              ...base,
+              minHeight: '48px',
+              border: state.isFocused ? '2px solid #3b82f6' : '1px solid #e2e8f0',
+              borderRadius: '8px',
+              boxShadow: state.isFocused ? '0 0 0 3px rgba(59, 130, 246, 0.1)' : 'none',
+              '&:hover': {
+                border: '1px solid #cbd5e1'
+              }
+            }),
+            placeholder: base => ({
+              ...base,
+              color: '#64748b'
+            }),
+            singleValue: base => ({
+              ...base,
+              color: '#1e293b'
+            }),
+            option: (base, state) => ({
+              ...base,
+              backgroundColor: state.isSelected ? '#3b82f6' : state.isFocused ? '#f1f5f9' : 'white',
+              color: state.isSelected ? 'white' : '#1e293b',
+              '&:hover': {
+                backgroundColor: state.isSelected ? '#3b82f6' : '#f1f5f9'
+              }
+            })
           }}
         />
         {loading && (
-          <div className="absolute top-0 left-0 right-0 bottom-0 flex items-center justify-center bg-white/70 z-10 rounded">
+          <div className="absolute top-0 left-0 right-0 bottom-0 flex items-center justify-center bg-white/70 z-10 rounded-lg">
             <Loader message="Loading carriers..." className="py-4" />
           </div>
         )}
       </div>
 
-      <div className="text-sm text-gray-500">
+      <div className="text-sm text-slate-600 mb-4">
         {selectedCompany ? (
           <button
             onClick={() => onChange(null)}
-            className="text-blue-700 underline hover:text-blue-900"
+            className="text-blue-600 hover:text-blue-700 underline font-medium transition-colors"
           >
             Clear selection to add/select another Carrier
           </button>
@@ -153,21 +179,28 @@ export default function CompanySelect({
         )}
       </div>
 
-      <div className="flex items-center gap-2 mt-5">
+      <div className="flex items-center gap-3 mt-6">
         <input
           type="text"
           placeholder="New carrier name"
           value={newCompany}
           onChange={e => setNewCompany(e.target.value)}
-          className="border px-4 py-2 rounded flex-1 bg-white shadow-inner text-lg"
+          className="w-full px-4 py-3 rounded-lg border border-slate-200 bg-white text-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 disabled:opacity-50 disabled:bg-slate-50"
           disabled={!!selectedCompany || addLoading || loading}
         />
         <button
-          className="bg-blue-600 text-white px-6 py-2 rounded-xl font-medium shadow hover:bg-blue-700 transition disabled:opacity-50 text-lg"
+          className="px-6 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
           onClick={handleAdd}
           disabled={!newCompany.trim() || !!selectedCompany || addLoading || loading}
         >
-          {addLoading ? 'Adding...' : 'Add'}
+          {addLoading ? (
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              Adding...
+            </div>
+          ) : (
+            'Add'
+          )}
         </button>
       </div>
     </div>

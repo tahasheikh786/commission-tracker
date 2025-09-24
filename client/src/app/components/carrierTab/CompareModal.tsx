@@ -39,30 +39,37 @@ export default function CompareModal({ statement, onClose }: Props) {
     <Modal onClose={onClose}>
       <div className="flex flex-col h-full w-full max-h-full min-h-0 min-w-0">
         {/* Sticky Header */}
-        <header className="sticky top-0 z-20 bg-gradient-to-r from-blue-50 to-purple-50 shadow-md rounded-t-2xl flex items-center justify-between px-6 py-4 border-b">
-          <div className="text-xl font-bold text-blue-900 flex items-center gap-2">
-            <span>Compare Statement</span>
-            <span className="text-base font-normal text-gray-500">({statement.file_name})</span>
+        <header className="sticky top-0 z-20 bg-gradient-to-r from-blue-50 to-indigo-50 shadow-sm rounded-t-2xl flex items-center justify-between px-6 py-4 border-b border-slate-200">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-slate-800">Compare Statement</h2>
+              <p className="text-sm text-slate-600">{statement.file_name}</p>
+            </div>
           </div>
           <nav aria-label="PDF toolbar" className="flex gap-2">
             <button
               onClick={handleZoomOut}
               aria-label="Zoom out"
-              className="p-2 rounded hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-400"
+              className="p-2 rounded-lg hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
             >
               <ZoomOut size={20} />
             </button>
             <button
               onClick={handleZoomIn}
               aria-label="Zoom in"
-              className="p-2 rounded hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-400"
+              className="p-2 rounded-lg hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
             >
               <ZoomIn size={20} />
             </button>
             <button
               onClick={handleDownload}
               aria-label="Download PDF"
-              className="p-2 rounded hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-400"
+              className="p-2 rounded-lg hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
             >
               <Download size={20} />
             </button>
@@ -71,18 +78,25 @@ export default function CompareModal({ statement, onClose }: Props) {
               target="_blank"
               rel="noopener noreferrer"
               aria-label="Open PDF in new tab"
-              className="p-2 rounded hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-400"
+              className="p-2 rounded-lg hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
             >
               <ExternalLink size={20} />
             </a>
           </nav>
         </header>
         {/* Card Layout */}
-        <div className="flex-1 flex flex-col lg:flex-row gap-6 w-full h-full max-h-full min-h-0 min-w-0 bg-gradient-to-br from-white via-blue-50 to-purple-50 p-6 rounded-b-2xl">
+        <div className="flex-1 flex flex-col lg:flex-row gap-6 w-full h-full max-h-full min-h-0 min-w-0 bg-slate-50 p-6 rounded-b-2xl">
           {/* PDF Card */}
-          <section className="flex-1 min-w-0 min-h-0 flex flex-col rounded-2xl shadow-xl bg-white border border-blue-100 overflow-hidden relative">
-            <div className="sticky top-0 z-10 bg-white/90 px-4 py-2 border-b font-semibold text-blue-700 flex items-center gap-2">
-              Original PDF
+          <section className="flex-1 min-w-0 min-h-0 flex flex-col rounded-xl shadow-sm bg-white border border-slate-200 overflow-hidden relative">
+            <div className="sticky top-0 z-10 bg-white px-6 py-4 border-b border-slate-200">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                  <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                </div>
+                <h3 className="font-semibold text-slate-800">Original PDF</h3>
+              </div>
             </div>
             <div className="flex-1 min-h-0 min-w-0 flex flex-col items-center justify-center">
               {pdfUrl ? (
@@ -100,26 +114,43 @@ export default function CompareModal({ statement, onClose }: Props) {
                     style={{ minHeight: 0, minWidth: 0, flex: 1, transform: `scale(${zoom})`, transformOrigin: 'top left' }}
                     aria-label="PDF preview"
                   />
-                  <div className="text-xs text-gray-500 mt-2 px-2 text-center">
+                  <div className="text-xs text-slate-500 mt-2 px-2 text-center bg-slate-50 rounded-lg p-3">
                     If the PDF is blank, <b>your browser may block cross-origin (CORS) PDF previews for presigned URLs</b>.<br />
-                    <a href={pdfUrl} className="underline" target="_blank" rel="noopener noreferrer">Open PDF in a new tab</a> to view or download.
+                    <a href={pdfUrl} className="text-blue-600 hover:text-blue-700 underline font-medium" target="_blank" rel="noopener noreferrer">Open PDF in a new tab</a> to view or download.
                   </div>
                 </div>
               ) : (
-                <div className="text-gray-400 text-sm flex items-center justify-center h-full">No PDF file found.</div>
+                <div className="text-slate-400 text-sm flex items-center justify-center h-full">No PDF file found.</div>
               )}
             </div>
           </section>
           {/* Extracted Table Card */}
-          <section className="flex-1 min-w-0 min-h-0 flex flex-col rounded-2xl shadow-xl bg-white border border-purple-100 overflow-hidden">
-            <div className="sticky top-0 z-10 bg-white/90 px-4 py-2 border-b font-semibold text-purple-700 flex items-center gap-2">
-              {statement.edited_tables && statement.edited_tables.length > 0 ? 'Formatted Table(s)' : 'Extracted Table(s)'}
+          <section className="flex-1 min-w-0 min-h-0 flex flex-col rounded-xl shadow-sm bg-white border border-slate-200 overflow-hidden">
+            <div className="sticky top-0 z-10 bg-white px-6 py-4 border-b border-slate-200">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                  <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18m-9-4v8m-7 0V4a1 1 0 011-1h16a1 1 0 011 1v16a1 1 0 01-1 1H4a1 1 0 01-1-1z" />
+                  </svg>
+                </div>
+                <h3 className="font-semibold text-slate-800">
+                  {statement.edited_tables && statement.edited_tables.length > 0 ? 'Formatted Table(s)' : 'Extracted Table(s)'}
+                </h3>
+              </div>
             </div>
             <div className="flex-1 min-h-0 min-w-0 overflow-auto">
               {(statement.edited_tables && statement.edited_tables.length > 0) || (statement.raw_data && statement.raw_data.length > 0) ? (
                 <ExtractedTable tables={statement.edited_tables || statement.raw_data} />
               ) : (
-                <div className="text-gray-500 text-center flex items-center justify-center h-full">No extracted data found.</div>
+                <div className="text-center py-16">
+                  <div className="w-16 h-16 bg-slate-100 rounded-xl flex items-center justify-center mx-auto mb-4">
+                    <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18m-9-4v8m-7 0V4a1 1 0 011-1h16a1 1 0 011 1v16a1 1 0 01-1 1H4a1 1 0 01-1-1z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-semibold text-slate-700 mb-2">No extracted data found</h3>
+                  <p className="text-slate-500 text-sm">This statement doesn&apos;t have any processed data yet.</p>
+                </div>
               )}
             </div>
           </section>

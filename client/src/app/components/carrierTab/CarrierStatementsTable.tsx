@@ -10,6 +10,9 @@ type Statement = {
   status: string;
   rejection_reason?: string;
   selected_statement_date?: any;
+  raw_data?: any;
+  edited_tables?: any;
+  final_data?: any;
 };
 
 type Props = {
@@ -161,10 +164,10 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
   return (
     <div className="overflow-hidden relative">
       {deleting && (
-        <div className="absolute inset-0 bg-white/90 backdrop-blur-sm flex items-center justify-center z-10">
+        <div className="absolute inset-0 bg-white/90 backdrop-blur-sm flex items-center justify-center z-10 rounded-xl">
           <div className="flex items-center space-x-3">
-            <div className="loading-spinner w-6 h-6"></div>
-            <span className="text-gray-700 font-medium">Deleting statements...</span>
+            <div className="w-6 h-6 border-2 border-slate-200 border-t-red-500 rounded-full animate-spin"></div>
+            <span className="text-slate-700 font-medium">Deleting statements...</span>
           </div>
         </div>
       )}
@@ -182,9 +185,9 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
             <button
               onClick={handleDelete}
               disabled={deleting}
-              className="btn btn-destructive px-4 py-2"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-lg font-medium shadow-sm hover:bg-red-600 transition-all duration-200 disabled:opacity-50"
             >
-              <Trash2 size={16} className="mr-2" />
+              <Trash2 size={16} />
               {deleting ? 'Deleting...' : 'Delete Selected'}
             </button>
           </div>
@@ -206,30 +209,30 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
       )}
 
       {/* Enhanced Table */}
-      <div className="card overflow-hidden w-full">
-        <table className="table w-full">
-          <thead>
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden w-full">
+        <table className="w-full border-collapse">
+          <thead className="bg-slate-50">
             <tr>
-              <th className="p-4 w-12">
+              <th className="px-6 py-4 w-12">
                 <input
                   type="checkbox"
                   checked={selectAll}
                   onChange={handleSelectAllChange}
                   disabled={deleting || readOnly}
-                  className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+                  className="w-4 h-4 text-blue-500 border-slate-300 rounded focus:ring-blue-500"
                 />
               </th>
-              <th className="p-4 text-left">
+              <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">
                 <div className="flex items-center gap-2">
-                  <FileText size={16} className="text-gray-500" />
+                  <FileText size={16} className="text-slate-500" />
                   Statement
                 </div>
               </th>
-              <th className="p-4 text-left">Uploaded On</th>
-              <th className="p-4 text-left">Statement Date</th>
-              <th className="p-4 text-left">Status</th>
-              <th className="p-4 text-left">Rejection Reason</th>
-              <th className="p-4 text-center">Actions</th>
+              <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Uploaded On</th>
+              <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Statement Date</th>
+              <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Status</th>
+              <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">Rejection Reason</th>
+              <th className="px-6 py-4 text-center text-xs font-bold text-slate-600 uppercase tracking-wider">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -240,66 +243,66 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
               return (
                 <tr 
                   key={statement.id} 
-                  className="hover:bg-gray-50 transition-colors duration-200 animate-fade-in"
+                  className="hover:bg-slate-50/50 transition-colors duration-200 animate-fade-in"
                   style={{ animationDelay: `${idx * 50}ms` }}
                 >
-                  <td className="p-4">
+                  <td className="px-6 py-4">
                     <input
                       type="checkbox"
                       checked={selectedStatements.has(statement.id)}
                       onChange={() => handleCheckboxChange(statement.id)}
                       disabled={deleting || readOnly}
-                      className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+                      className="w-4 h-4 text-blue-500 border-slate-300 rounded focus:ring-blue-500"
                     />
                   </td>
-                  <td className="p-4">
+                  <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center">
-                        <FileText size={16} className="text-primary" />
+                      <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                        <FileText size={16} className="text-blue-600" />
                       </div>
                       <div>
-                        <div className="font-medium text-gray-900">{normalizeFileName(statement.file_name)}</div>
-                        <div className="text-sm text-gray-500">ID: {statement.id.slice(0, 8)}...</div>
+                        <div className="font-semibold text-slate-900">{normalizeFileName(statement.file_name)}</div>
+                        <div className="text-sm text-slate-500">ID: {statement.id.slice(0, 8)}...</div>
                       </div>
                     </div>
                   </td>
-                  <td className="p-4">
-                    <div className="text-sm text-gray-900">
+                  <td className="px-6 py-4">
+                    <div className="text-sm text-slate-900">
                       {new Date(statement.uploaded_at).toLocaleDateString()}
                     </div>
-                    <div className="text-xs text-gray-500">
+                    <div className="text-xs text-slate-500">
                       {new Date(statement.uploaded_at).toLocaleTimeString()}
                     </div>
                   </td>
-                  <td className="p-4">
-                    <div className="text-sm text-gray-900">
+                  <td className="px-6 py-4">
+                    <div className="text-sm text-slate-900">
                       {formatStatementDate(statement.selected_statement_date)}
                     </div>
                   </td>
-                  <td className="p-4">
+                  <td className="px-6 py-4">
                     <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium border ${statusInfo.bgColor} ${statusInfo.textColor} ${statusInfo.borderColor}`}>
                       <StatusIcon size={14} />
                       {statusInfo.label}
                     </div>
                   </td>
-                  <td className="p-4">
+                  <td className="px-6 py-4">
                     <div className="max-w-xs">
                       {statement.rejection_reason ? (
-                        <div className="text-sm text-gray-600 bg-red-50 p-2 rounded border border-red-200">
+                        <div className="text-sm text-slate-600 bg-red-50 p-2 rounded-lg border border-red-200">
                           {statement.rejection_reason}
                         </div>
                       ) : (
-                        <span className="text-gray-400">—</span>
+                        <span className="text-slate-400">—</span>
                       )}
                     </div>
                   </td>
-                  <td className="p-4">
+                  <td className="px-6 py-4">
                     <div className="flex items-center justify-center gap-2">
                       {/* Show eye icon only for approved/rejected statements */}
                       {(statement.status === "Approved" || statement.status === "completed" || statement.status === "Rejected" || statement.status === "rejected") && (
                         <button
                           title="View mapped table"
-                          className="btn btn-ghost p-2 text-primary hover:bg-primary/10"
+                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                           onClick={() => onPreview(startIndex + idx)}
                         >
                           <Eye size={16} />
@@ -308,7 +311,7 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
                       
                       <button
                         title="Compare mapped & extracted"
-                        className="btn btn-ghost p-2 text-secondary hover:bg-secondary/10"
+                        className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
                         onClick={() => onCompare(startIndex + idx)}
                       >
                         <LayoutList size={16} />
@@ -317,7 +320,7 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
                       {/* Formatted table viewing button */}
                       <button
                         title="View formatted tables"
-                        className="btn btn-ghost p-2 text-green-600 hover:bg-green-50"
+                        className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
                         onClick={() => handleViewFormattedTables(statement.id)}
                       >
                         <Table size={16} />
@@ -326,10 +329,10 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
                       {(statement.status === "Pending" || statement.status === "pending" || statement.status === "extracted" || statement.status === "success") && (
                         <button
                           onClick={() => router.push(`/upload?resume=${statement.id}`)}
-                          className="btn btn-primary px-3 py-2 text-sm"
+                          className="inline-flex items-center gap-1 px-3 py-2 bg-blue-500 text-white rounded-lg font-medium shadow-sm hover:bg-blue-600 transition-all duration-200 text-sm"
                           title="Complete Review"
                         >
-                          <ExternalLink size={14} className="mr-1" />
+                          <ExternalLink size={14} />
                           Review
                         </button>
                       )}
@@ -343,40 +346,40 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
         
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 sm:px-6">
+          <div className="flex items-center justify-between px-6 py-4 border-t border-slate-200">
             <div className="flex-1 flex justify-between sm:hidden">
               <button
                 onClick={() => handlePageChange(currentPage - 1)}
                 disabled={currentPage === 1}
-                className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                className="inline-flex items-center px-4 py-2 border border-slate-300 text-sm font-medium rounded-lg text-slate-700 bg-white hover:bg-slate-50 transition-colors disabled:opacity-50"
               >
                 Previous
               </button>
               <button
                 onClick={() => handlePageChange(currentPage + 1)}
                 disabled={currentPage === totalPages}
-                className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                className="ml-3 inline-flex items-center px-4 py-2 border border-slate-300 text-sm font-medium rounded-lg text-slate-700 bg-white hover:bg-slate-50 transition-colors disabled:opacity-50"
               >
                 Next
               </button>
             </div>
             <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-              <div className="flex gap-2">
+              <div className="flex items-center gap-3">
                 <button
                   onClick={() => handlePageChange(currentPage - 1)}
                   disabled={currentPage === 1}
-                  className="relative inline-flex items-center px-2 py-2 border border-gray-300 bg-white text-sm font-medium rounded-md text-gray-500 hover:bg-gray-50"
+                  className="inline-flex items-center px-3 py-2 border border-slate-300 bg-white text-sm font-medium rounded-lg text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-50"
                 >
                   <ChevronLeft className="h-5 w-5" />
                 </button>
-                <span className="text-sm text-gray-700">
-                  Page <span className="font-medium">{currentPage}</span> of{' '}
-                  <span className="font-medium">{totalPages}</span>
+                <span className="text-sm text-slate-700 font-medium">
+                  Page <span className="font-semibold">{currentPage}</span> of{' '}
+                  <span className="font-semibold">{totalPages}</span>
                 </span>
                 <button
                   onClick={() => handlePageChange(currentPage + 1)}
                   disabled={currentPage === totalPages}
-                  className="relative inline-flex items-center px-2 py-2 border border-gray-300 bg-white text-sm font-medium rounded-md text-gray-500 hover:bg-gray-50"
+                  className="inline-flex items-center px-3 py-2 border border-slate-300 bg-white text-sm font-medium rounded-lg text-slate-500 hover:bg-slate-50 transition-colors disabled:opacity-50"
                 >
                   <ChevronRight className="h-5 w-5" />
                 </button>
@@ -387,10 +390,12 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
 
         {/* Empty State */}
         {(statements?.length || 0) === 0 && (
-          <div className="text-center py-12">
-            <FileText className="mx-auto h-12 w-12 text-gray-300 mb-4" />
-            <h3 className="text-lg font-medium text-gray-600 mb-2">No statements found</h3>
-            <p className="text-gray-500">
+          <div className="text-center py-16">
+            <div className="w-16 h-16 bg-slate-100 rounded-xl flex items-center justify-center mx-auto mb-4">
+              <FileText className="h-8 w-8 text-slate-400" />
+            </div>
+            <h3 className="text-lg font-semibold text-slate-700 mb-2">No statements found</h3>
+            <p className="text-slate-500 text-sm">
               Upload statements to see them listed here
             </p>
           </div>

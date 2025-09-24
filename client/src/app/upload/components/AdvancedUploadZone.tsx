@@ -3,7 +3,7 @@ import { useDropzone } from 'react-dropzone'
 import toast from 'react-hot-toast'
 import { useCallback, useState } from 'react'
 import clsx from 'clsx'
-import { Calendar } from 'lucide-react' // Added import for Calendar icon
+import { Calendar, Upload } from 'lucide-react' // Added import for Calendar and Upload icons
 import { ExtractionLoader } from '../../components/ui/FullScreenLoader'
 import axios from 'axios'
 
@@ -83,27 +83,27 @@ function AdvancedTablePreview({ tables, qualitySummary }: { tables: TableData[],
   if (!tables.length) return null
 
   return (
-    <div className="mt-8 space-y-8">
+    <div className="mt-6 space-y-6">
       {/* Quality Summary */}
       {qualitySummary && (
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 shadow rounded-xl p-6">
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-6">
           <h3 className="text-lg font-semibold text-blue-800 mb-4">Extraction Quality Summary</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="text-center">
               <div className="text-2xl font-bold text-blue-600">{qualitySummary.total_tables}</div>
-              <div className="text-sm text-gray-600">Total Tables</div>
+              <div className="text-sm text-slate-600">Total Tables</div>
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-green-600">{qualitySummary.valid_tables}</div>
-              <div className="text-sm text-gray-600">Valid Tables</div>
+              <div className="text-sm text-slate-600">Valid Tables</div>
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-purple-600">{(qualitySummary.average_quality_score * 100).toFixed(1)}%</div>
-              <div className="text-sm text-gray-600">Avg Quality</div>
+              <div className="text-sm text-slate-600">Avg Quality</div>
             </div>
             <div className="text-center">
               <QualityIndicator score={qualitySummary.average_quality_score} level={qualitySummary.overall_confidence} />
-              <div className="text-sm text-gray-600 mt-1">Confidence</div>
+              <div className="text-sm text-slate-600 mt-1">Confidence</div>
             </div>
           </div>
           
@@ -143,16 +143,16 @@ function AdvancedTablePreview({ tables, qualitySummary }: { tables: TableData[],
 
       {/* Tables */}
       {tables.map((table, idx) => (
-        <div key={idx} className="bg-white border shadow rounded-xl p-4 overflow-x-auto">
+        <div key={idx} className="bg-white border border-slate-200 rounded-xl p-4 overflow-x-auto">
           <div className="flex items-center justify-between mb-4">
-            <div className="font-bold text-lg text-blue-700">Extracted Table {idx + 1}</div>
+            <div className="font-semibold text-lg text-slate-800">Extracted Table {idx + 1}</div>
             {table.metadata?.quality_metrics && (
               <div className="flex items-center gap-2">
                 <QualityIndicator 
                   score={table.metadata.quality_metrics.overall_score} 
                   level={table.metadata.quality_metrics.confidence_level} 
                 />
-                <span className="text-sm text-gray-500">
+                <span className="text-sm text-slate-500">
                   Score: {(table.metadata.quality_metrics.overall_score * 100).toFixed(1)}%
                 </span>
               </div>
@@ -161,26 +161,26 @@ function AdvancedTablePreview({ tables, qualitySummary }: { tables: TableData[],
           
           {/* Quality Metrics Details */}
           {table.metadata?.quality_metrics && (
-            <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+            <div className="mb-4 p-3 bg-slate-50 rounded-lg">
               <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs">
                 <div>
-                  <div className="font-semibold text-gray-700">Completeness</div>
+                  <div className="font-medium text-slate-700">Completeness</div>
                   <div className="text-blue-600">{(table.metadata.quality_metrics.completeness * 100).toFixed(1)}%</div>
                 </div>
                 <div>
-                  <div className="font-semibold text-gray-700">Consistency</div>
+                  <div className="font-medium text-slate-700">Consistency</div>
                   <div className="text-blue-600">{(table.metadata.quality_metrics.consistency * 100).toFixed(1)}%</div>
                 </div>
                 <div>
-                  <div className="font-semibold text-gray-700">Accuracy</div>
+                  <div className="font-medium text-slate-700">Accuracy</div>
                   <div className="text-blue-600">{(table.metadata.quality_metrics.accuracy * 100).toFixed(1)}%</div>
                 </div>
                 <div>
-                  <div className="font-semibold text-gray-700">Structure</div>
+                  <div className="font-medium text-slate-700">Structure</div>
                   <div className="text-blue-600">{(table.metadata.quality_metrics.structure_quality * 100).toFixed(1)}%</div>
                 </div>
                 <div>
-                  <div className="font-semibold text-gray-700">Data Quality</div>
+                  <div className="font-medium text-slate-700">Data Quality</div>
                   <div className="text-blue-600">{(table.metadata.quality_metrics.data_quality * 100).toFixed(1)}%</div>
                 </div>
               </div>
@@ -207,22 +207,22 @@ function AdvancedTablePreview({ tables, qualitySummary }: { tables: TableData[],
             <thead>
               <tr>
                 {table.header.map((h, i) => (
-                  <th key={i} className="border-b px-3 py-2 bg-blue-50 font-semibold text-gray-700">{h}</th>
+                  <th key={i} className="border-b border-slate-200 px-3 py-2 bg-slate-50 font-medium text-slate-700">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {table.rows.slice(0, 10).map((row, ridx) => (
-                <tr key={ridx}>
+                <tr key={ridx} className="hover:bg-slate-50">
                   {row.map((cell, cidx) => (
-                    <td key={cidx} className="px-3 py-1 border-b text-gray-800">{cell}</td>
+                    <td key={cidx} className="px-3 py-2 border-b border-slate-100 text-slate-800">{cell}</td>
                   ))}
                 </tr>
               ))}
             </tbody>
           </table>
           {table.rows.length > 10 && (
-            <div className="text-xs text-gray-400 mt-1">
+            <div className="text-xs text-slate-500 mt-2 text-center">
               Showing first 10 of {table.rows.length} rows...
             </div>
           )}
@@ -414,20 +414,28 @@ export default function AdvancedUploadZone({
       <div
         {...getRootProps()}
         className={clsx(
-          "border-4 border-dashed rounded-2xl p-10 bg-gradient-to-br from-blue-400 via-indigo-400 to-purple-400 shadow-2xl flex flex-col items-center justify-center text-white cursor-pointer transition-transform duration-300 group",
-          "hover:scale-105 hover:shadow-3xl",
-          isDragActive && "border-blue-600 bg-blue-100 text-blue-800",
+          "border-2 border-dashed rounded-xl p-8 bg-white border-slate-300 flex flex-col items-center justify-center cursor-pointer transition-all duration-300 group",
+          "hover:border-blue-400 hover:bg-blue-50",
+          isDragActive && "border-blue-500 bg-blue-100",
           disabled && "opacity-60 pointer-events-none"
         )}
-        style={{ minHeight: 240 }}
+        style={{ minHeight: 200 }}
       >
         <input {...getInputProps()} />
-        <div className="flex flex-col items-center space-y-5">
-          <div className="text-6xl drop-shadow-lg group-hover:animate-bounce transition-all">📊</div>
-          <div className="text-2xl font-bold tracking-wide">AI-Powered Document Processing</div>
-          <div className="text-base opacity-80 font-medium">Drop your commission statement here</div>
-          <div className="text-sm opacity-70 italic">
-            Supports PDF & Excel • Up to <span className="font-semibold">50MB</span> • Multi-sheet processing
+        <div className="flex flex-col items-center space-y-4 text-center">
+          <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
+            <Upload className="text-white" size={24} />
+          </div>
+          <div>
+            <div className="text-lg font-semibold text-slate-800 mb-1">
+              {isDragActive ? "Drop files here" : "Upload Document"}
+            </div>
+            <div className="text-sm text-slate-600">
+              Drag and drop your PDF or Excel file here, or click to browse
+            </div>
+          </div>
+          <div className="text-xs text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
+            Supports PDF & Excel • Up to 50MB
           </div>
         </div>
       </div>
