@@ -4,15 +4,17 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { motion } from 'framer-motion';
-import { Eye, EyeOff, Mail, Lock, Building2, ArrowRight } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, Building2, ArrowRight, AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
+import { isEmailAuthorized, getAuthorizedEmails } from '@/utils/emailValidation';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isEmailValid, setIsEmailValid] = useState(true);
   const { login, isAuthenticated, user } = useAuth();
   const router = useRouter();
 
@@ -23,8 +25,24 @@ export default function LoginPage() {
     }
   }, [isAuthenticated, user, router]);
 
+  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setEmail(value);
+    
+    // Validate email in real-time
+    const emailValid = value.trim() === '' || isEmailAuthorized(value);
+    setIsEmailValid(emailValid);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Check email authorization before attempting login
+    if (!isEmailAuthorized(email)) {
+      toast.error('This email address is not authorized for login');
+      return;
+    }
+    
     setIsLoading(true);
 
     try {
@@ -85,18 +103,41 @@ export default function LoginPage() {
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Mail className="h-5 w-5 text-gray-400" />
+                  <Mail className={`h-5 w-5 ${!isEmailValid && email ? 'text-red-400' : 'text-gray-400'}`} />
                 </div>
                 <input
                   id="email"
                   type="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                  onChange={handleEmailChange}
+                  className={`block w-full pl-10 pr-3 py-3 border rounded-lg focus:ring-2 focus:border-transparent transition-all duration-200 ${
+                    !isEmailValid && email 
+                      ? 'border-red-300 focus:ring-red-500 bg-red-50' 
+                      : 'border-gray-300 focus:ring-blue-500'
+                  }`}
                   placeholder="Enter your email"
                   required
                 />
+                {!isEmailValid && email && (
+                  <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                    <AlertCircle className="h-5 w-5 text-red-400" />
+                  </div>
+                )}
               </div>
+              {!isEmailValid && email && (
+                <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <div className="flex items-start">
+                    <AlertCircle className="h-4 w-4 text-red-400 mt-0.5 mr-2 flex-shrink-0" />
+                    <div className="text-sm text-red-700">
+                      <p className="font-medium">Email not authorized</p>
+                      <p className="mt-1">Only authorized email addresses can login. Contact your administrator for access.</p>
+                      <p className="mt-2 text-xs">
+                        <strong>Authorized emails:</strong> {getAuthorizedEmails().join(', ')}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Password Field */}
@@ -134,7 +175,7 @@ export default function LoginPage() {
             {/* Submit Button */}
             <motion.button
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || (!isEmailValid && email !== '')}
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-3 px-4 rounded-lg font-medium hover:from-blue-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center"
