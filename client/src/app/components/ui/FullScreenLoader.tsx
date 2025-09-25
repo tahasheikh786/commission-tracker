@@ -341,3 +341,30 @@ export function DOCAIExtractionLoader({ isVisible, progress, onCancel }: {
     />
   );
 }
+
+export function MistralExtractionLoader({ isVisible, progress, onCancel }: {
+  isVisible: boolean;
+  progress?: number;
+  onCancel?: () => void;
+}) {
+  const steps = [
+    { id: 'prepare', label: 'Initializing Mistral Document AI', status: 'completed' as const },
+    { id: 'analyze', label: 'Analyzing document with QnA', status: progress && progress > 25 ? 'completed' as const : 'active' as const },
+    { id: 'extract', label: 'Extracting tables using Mistral QnA', status: progress && progress > 50 ? 'completed' as const : progress && progress > 25 ? 'active' as const : 'pending' as const },
+    { id: 'process', label: 'Processing extracted data', status: progress && progress > 75 ? 'completed' as const : progress && progress > 50 ? 'active' as const : 'pending' as const },
+    { id: 'validate', label: 'Validating extraction results', status: progress === 100 ? 'completed' as const : progress && progress > 75 ? 'active' as const : 'pending' as const }
+  ];
+
+  return (
+    <FullScreenLoader
+      isVisible={isVisible}
+      title="Mistral Document AI Extraction"
+      subtitle="Using Mistral's advanced QnA to extract tables from your document"
+      type="extraction"
+      progress={progress}
+      steps={steps}
+      onCancel={onCancel}
+      showCancelButton={true}
+    />
+  );
+}

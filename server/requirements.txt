@@ -47,6 +47,9 @@ xlrd>=2.0.0,<3.0.0
 # OpenAI GPT-5 Vision API
 openai>=1.0.0,<2.0.0
 
+# Mistral Document AI API
+mistralai>=1.0.0,<2.0.0
+
 # ===== ADVANCED DOCLING SETUP =====
 docling>=2.0.0,<3.0.0
 

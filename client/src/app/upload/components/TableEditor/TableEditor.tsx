@@ -32,7 +32,7 @@ import TableHeader from './components/TableHeader'
 import TableControls from './components/TableControls'
 import DateSelectionModal from '../DateSelectionModal'
 import { dateExtractionService, ExtractedDate } from '../../services/dateExtractionService'
-import { GPTCorrectionLoader, GPTExtractionLoader, DOCAIExtractionLoader } from '../../../components/ui/FullScreenLoader'
+import { GPTCorrectionLoader, GPTExtractionLoader, DOCAIExtractionLoader, MistralExtractionLoader } from '../../../components/ui/FullScreenLoader'
 
 import ProgressBar from '../ProgressBar'
 
@@ -96,8 +96,10 @@ export default function TableEditor({
   // Extraction handlers state
   const [isExtractingWithGPT, setIsExtractingWithGPT] = useState(false)
   const [isExtractingWithGoogleDocAI, setIsExtractingWithGoogleDocAI] = useState(false)
+  const [isExtractingWithMistral, setIsExtractingWithMistral] = useState(false)
   const [gptServiceAvailable, setGptServiceAvailable] = useState(true)
   const [googleDocAIServiceAvailable, setGoogleDocAIServiceAvailable] = useState(true)
+  const [mistralServiceAvailable, setMistralServiceAvailable] = useState(true)
 
   // Extraction handlers
   const handleExtractWithGPT = async () => {
@@ -219,6 +221,66 @@ export default function TableEditor({
       toast.error(`Google DOC AI extraction failed: ${errorMessage}`, { id: 'extract-google' })
     } finally {
       setIsExtractingWithGoogleDocAI(false)
+    }
+  }
+
+  const handleExtractWithMistral = async () => {
+    // Always show loading state
+    setIsExtractingWithMistral(true)
+    toast.loading('Extracting with Mistral Document AI...', { id: 'extract-mistral' })
+
+    try {
+      // Get upload ID from any possible field
+      const uploadId = uploaded?.upload_id || uploaded?.id || uploaded?.extraction_id
+      const currentCompanyId = companyId
+      
+      if (!uploadId || !currentCompanyId) {
+        throw new Error('Missing upload or company information')
+      }
+
+      const formData = new FormData()
+      formData.append('upload_id', uploadId)
+      formData.append('company_id', currentCompanyId)
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/extract-tables-mistral-frontend/`, {
+        method: 'POST',
+        body: formData
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        const errorMessage = errorData.detail || `HTTP error! status: ${response.status}`
+        
+        // Handle specific Mistral service error
+        if (errorMessage.includes("Mistral Document AI service not available")) {
+          setMistralServiceAvailable(false)
+          throw new Error('Mistral Document AI service is not available. Please check configuration.')
+        }
+        
+        throw new Error(errorMessage)
+      }
+
+      const result = await response.json()
+      
+      if (result.success) {
+        // Update tables with new extraction result
+        const extractedTables = result.tables || []
+        onTablesChange(extractedTables)
+        
+        if (extractedTables.length === 0) {
+          toast('Mistral extraction completed but no tables were found in the document.', { id: 'extract-mistral' })
+        } else {
+          toast.success(`Mistral extraction completed! ${extractedTables.length} tables extracted.`, { id: 'extract-mistral' })
+        }
+      } else {
+        throw new Error(result.error || 'Mistral extraction failed')
+      }
+    } catch (error) {
+      console.error('❌ Error in Mistral extraction:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      toast.error(`Mistral extraction failed: ${errorMessage}`, { id: 'extract-mistral' })
+    } finally {
+      setIsExtractingWithMistral(false)
     }
   }
   
@@ -966,6 +1028,17 @@ export default function TableEditor({
           toast.error("Google DOC AI extraction cancelled")
         }}
       />
+
+      {/* Mistral Extraction Full-Screen Loader */}
+      <MistralExtractionLoader 
+        isVisible={isExtractingWithMistral}
+        progress={isExtractingWithMistral ? 60 : 0}
+        onCancel={() => {
+          setIsExtractingWithMistral(false)
+          toast.dismiss('extract-mistral')
+          toast.error("Mistral extraction cancelled")
+        }}
+      />
       
       {/* Main Content - Side by Side Layout */}
       <div className="flex flex-col h-full">
@@ -1065,6 +1138,17 @@ export default function TableEditor({
             >
               <FileText className="w-4 h-4" />
               {isExtractingWithGoogleDocAI ? 'Extracting with DOC AI...' : !googleDocAIServiceAvailable ? 'DOC AI Service Unavailable' : 'Extract with Google DOC AI'}
+            </button>
+
+            {/* Extract with Mistral Button */}
+            <button
+              onClick={handleExtractWithMistral}
+              disabled={isExtractingWithMistral || loading || !mistralServiceAvailable}
+              className="px-3 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50 flex items-center gap-2 text-sm"
+              title="Extract tables using Mistral Document AI"
+            >
+              <FileText className="w-4 h-4" />
+              {isExtractingWithMistral ? 'Extracting with Mistral...' : !mistralServiceAvailable ? 'Mistral Service Unavailable' : 'Extract with Mistral'}
             </button>
 
 
