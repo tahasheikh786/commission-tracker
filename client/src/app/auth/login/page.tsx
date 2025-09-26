@@ -3,8 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import { motion } from 'framer-motion';
-import { Eye, EyeOff, Mail, Lock, Building2, ArrowRight, AlertCircle } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Mail, Building2, ArrowRight, AlertCircle, Lock, Eye, EyeOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
 import { isEmailAuthorized, getAuthorizedEmails } from '@/utils/emailValidation';
@@ -15,7 +15,7 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isEmailValid, setIsEmailValid] = useState(true);
-  const { login, isAuthenticated, user } = useAuth();
+  const { requestOTP, isAuthenticated, user } = useAuth();
   const router = useRouter();
 
   // Redirect if already authenticated
@@ -34,6 +34,14 @@ export default function LoginPage() {
     setIsEmailValid(emailValid);
   };
 
+  const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setPassword(e.target.value);
+  };
+
+  const togglePasswordVisibility = () => {
+    setShowPassword(!showPassword);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -42,21 +50,28 @@ export default function LoginPage() {
       toast.error('This email address is not authorized for login');
       return;
     }
+
+    // Validate required fields
+    if (!email || !password) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
     
     setIsLoading(true);
 
     try {
-      await login({ email, password });
-      toast.success('Login successful!');
-      
-      // Redirect to home page
-      router.push('/');
+      // Always request OTP for login (mandatory)
+      await requestOTP({ email, purpose: 'login' });
+      toast.success('Verification code sent to your email!');
+      // Redirect to OTP verification page
+      router.push(`/auth/verify-otp?email=${encodeURIComponent(email)}&purpose=login`);
     } catch (error: any) {
       toast.error(error.message || 'Login failed');
     } finally {
       setIsLoading(false);
     }
   };
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-100/50 flex items-center justify-center p-4">
@@ -86,14 +101,15 @@ export default function LoginPage() {
           transition={{ duration: 0.6, delay: 0.2 }}
           className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl p-8 border border-slate-200"
         >
-          <div className="mb-6">
+            <div className="mb-6">
             <h2 className="text-2xl font-bold text-slate-800 mb-2">
               Welcome Back
             </h2>
             <p className="text-slate-600">
-              Sign in to your account to continue
+              Enter your credentials to continue
             </p>
           </div>
+
 
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Email Field */}
@@ -151,22 +167,22 @@ export default function LoginPage() {
                 </div>
                 <input
                   id="password"
-                  type={showPassword ? 'text' : 'password'}
+                  type={showPassword ? "text" : "password"}
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="block w-full pl-10 pr-10 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                  onChange={handlePasswordChange}
+                  className="block w-full pl-10 pr-12 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
                   placeholder="Enter your password"
                   required
                 />
                 <button
                   type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                  onClick={togglePasswordVisibility}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 transition-colors"
                 >
                   {showPassword ? (
-                    <EyeOff className="h-5 w-5 text-slate-400 hover:text-slate-600" />
+                    <EyeOff className="h-5 w-5" />
                   ) : (
-                    <Eye className="h-5 w-5 text-slate-400 hover:text-slate-600" />
+                    <Eye className="h-5 w-5" />
                   )}
                 </button>
               </div>
@@ -175,7 +191,7 @@ export default function LoginPage() {
             {/* Submit Button */}
             <motion.button
               type="submit"
-              disabled={isLoading || (!isEmailValid && email !== '')}
+              disabled={isLoading || (!isEmailValid && email !== '') || !email || !password}
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-3 px-4 rounded-xl font-semibold hover:from-blue-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center shadow-lg hover:shadow-xl"
@@ -184,12 +200,13 @@ export default function LoginPage() {
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
               ) : (
                 <>
-                  Sign In
+                  Login
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </>
               )}
             </motion.button>
           </form>
+
 
           {/* Signup Link */}
           <div className="mt-6 pt-6 border-t border-slate-200">
@@ -208,7 +225,7 @@ export default function LoginPage() {
           {/* Footer */}
           <div className="mt-4">
             <p className="text-center text-xs text-slate-500">
-              Secure access with domain-based authentication
+              Secure access with OTP verification and domain-based authentication
             </p>
           </div>
         </motion.div>

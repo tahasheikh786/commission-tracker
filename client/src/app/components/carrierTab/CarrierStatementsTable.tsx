@@ -31,17 +31,42 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
   const [currentPage, setCurrentPage] = useState(1);
   const [tableViewerOpen, setTableViewerOpen] = useState(false);
   const [selectedStatementId, setSelectedStatementId] = useState<string>('');
+  const [activeStatusTab, setActiveStatusTab] = useState<'all' | 'approved' | 'pending' | 'rejected'>('all');
   const itemsPerPage = 10;
   const router = useRouter();
 
-  const totalPages = Math.ceil((statements?.length || 0) / itemsPerPage);
+  // Filter statements based on active status tab
+  const filteredStatements = (statements || []).filter(statement => {
+    if (activeStatusTab === 'all') return true;
+    
+    const status = statement.status.toLowerCase();
+    switch (activeStatusTab) {
+      case 'approved':
+        return status === 'approved' || status === 'completed';
+      case 'pending':
+        return status === 'pending' || status === 'extracted' || status === 'success';
+      case 'rejected':
+        return status === 'rejected';
+      default:
+        return true;
+    }
+  });
+
+  const totalPages = Math.ceil(filteredStatements.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
-  const paginatedStatements = (statements || []).slice(startIndex, endIndex);
+  const paginatedStatements = filteredStatements.slice(startIndex, endIndex);
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
     setSelectedStatements(new Set()); // Clear selections when changing pages
+    setSelectAll(false);
+  };
+
+  const handleStatusTabChange = (tab: 'all' | 'approved' | 'pending' | 'rejected') => {
+    setActiveStatusTab(tab);
+    setCurrentPage(1); // Reset to first page when changing tabs
+    setSelectedStatements(new Set()); // Clear selections when changing tabs
     setSelectAll(false);
   };
 
@@ -207,6 +232,67 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
           </div>
         </div>
       )}
+
+      {/* Status Tabs */}
+      <div className="mb-6">
+        <div className="flex items-center gap-2 bg-white rounded-xl border border-slate-200 shadow-sm p-1">
+          <button
+            onClick={() => handleStatusTabChange('all')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+              activeStatusTab === 'all'
+                ? 'bg-blue-500 text-white shadow-sm'
+                : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <span>All</span>
+            <span className="text-xs bg-slate-200 text-slate-600 px-2 py-1 rounded-full">
+              {statements?.length || 0}
+            </span>
+          </button>
+          <button
+            onClick={() => handleStatusTabChange('approved')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+              activeStatusTab === 'approved'
+                ? 'bg-green-500 text-white shadow-sm'
+                : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <CheckCircle size={16} />
+            <span>Approved</span>
+            <span className="text-xs bg-slate-200 text-slate-600 px-2 py-1 rounded-full">
+              {(statements || []).filter(s => s.status.toLowerCase() === 'approved' || s.status.toLowerCase() === 'completed').length}
+            </span>
+          </button>
+          <button
+            onClick={() => handleStatusTabChange('pending')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+              activeStatusTab === 'pending'
+                ? 'bg-orange-500 text-white shadow-sm'
+                : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <Clock size={16} />
+            <span>Pending</span>
+            <span className="text-xs bg-slate-200 text-slate-600 px-2 py-1 rounded-full">
+              {(statements || []).filter(s => ['pending', 'extracted', 'success'].includes(s.status.toLowerCase())).length}
+            </span>
+          </button>
+          <button
+            onClick={() => handleStatusTabChange('rejected')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+              activeStatusTab === 'rejected'
+                ? 'bg-red-500 text-white shadow-sm'
+                : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <XCircle size={16} />
+            <span>Rejected</span>
+            <span className="text-xs bg-slate-200 text-slate-600 px-2 py-1 rounded-full">
+              {(statements || []).filter(s => s.status.toLowerCase() === 'rejected').length}
+            </span>
+          </button>
+        </div>
+      </div>
 
       {/* Enhanced Table */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden w-full">
@@ -389,14 +475,19 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
         )}
 
         {/* Empty State */}
-        {(statements?.length || 0) === 0 && (
+        {filteredStatements.length === 0 && (
           <div className="text-center py-16">
             <div className="w-16 h-16 bg-slate-100 rounded-xl flex items-center justify-center mx-auto mb-4">
               <FileText className="h-8 w-8 text-slate-400" />
             </div>
-            <h3 className="text-lg font-semibold text-slate-700 mb-2">No statements found</h3>
+            <h3 className="text-lg font-semibold text-slate-700 mb-2">
+              {activeStatusTab === 'all' ? 'No statements found' : `No ${activeStatusTab} statements found`}
+            </h3>
             <p className="text-slate-500 text-sm">
-              Upload statements to see them listed here
+              {activeStatusTab === 'all' 
+                ? 'Upload statements to see them listed here'
+                : `Try selecting a different status tab to view other statements`
+              }
             </p>
           </div>
         )}

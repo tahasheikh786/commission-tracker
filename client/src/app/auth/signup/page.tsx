@@ -3,8 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import { motion } from 'framer-motion';
-import { Eye, EyeOff, Mail, Lock, Building2, User, ArrowRight, ArrowLeft, AlertCircle } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Mail, Building2, User, ArrowRight, ArrowLeft, AlertCircle, Lock, Eye, EyeOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
 import { isEmailAuthorized, getAuthorizedEmails } from '@/utils/emailValidation';
@@ -12,17 +12,15 @@ import { isEmailAuthorized, getAuthorizedEmails } from '@/utils/emailValidation'
 export default function SignupPage() {
   const [formData, setFormData] = useState({
     email: '',
-    password: '',
-    confirmPassword: '',
     firstName: '',
-    lastName: ''
+    lastName: '',
+    companyName: '',
+    password: ''
   });
   const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isEmailValid, setIsEmailValid] = useState(true);
-  
-  const { signup, isAuthenticated } = useAuth();
+  const { requestOTP, isAuthenticated } = useAuth();
   const router = useRouter();
 
   // Redirect if already authenticated
@@ -46,19 +44,18 @@ export default function SignupPage() {
     }
   };
 
+  const togglePasswordVisibility = () => {
+    setShowPassword(!showPassword);
+  };
+
   const validateForm = () => {
-    if (!formData.email || !formData.password || !formData.firstName || !formData.lastName) {
+    if (!formData.email || !formData.firstName || !formData.lastName || !formData.password) {
       toast.error('Please fill in all required fields');
       return false;
     }
 
     if (!isEmailAuthorized(formData.email)) {
       toast.error('This email address is not authorized for registration');
-      return false;
-    }
-
-    if (formData.password !== formData.confirmPassword) {
-      toast.error('Passwords do not match');
       return false;
     }
 
@@ -80,24 +77,26 @@ export default function SignupPage() {
     setIsLoading(true);
 
     try {
-      await signup({
+      // Always request OTP for registration (mandatory)
+      await requestOTP({ email: formData.email, purpose: 'registration' });
+      toast.success('Verification code sent to your email!');
+      // Redirect to OTP verification page with user data
+      const params = new URLSearchParams({
         email: formData.email,
-        password: formData.password,
-        first_name: formData.firstName,
-        last_name: formData.lastName
+        purpose: 'registration',
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        companyName: formData.companyName || '',
+        password: formData.password
       });
-      
-      toast.success('Account created successfully!');
-      
-      // Redirect to home page
-      router.push('/');
-      
+      router.push(`/auth/verify-otp?${params.toString()}`);
     } catch (error: any) {
       toast.error(error.message || 'Signup failed');
     } finally {
       setIsLoading(false);
     }
   };
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-100/50 flex items-center justify-center p-4">
@@ -132,9 +131,10 @@ export default function SignupPage() {
               Create Account
             </h2>
             <p className="text-slate-600">
-              Sign up to access your business dashboard
+              Create your account to get started
             </p>
           </div>
+
 
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Name Fields */}
@@ -178,6 +178,27 @@ export default function SignupPage() {
                     required
                   />
                 </div>
+              </div>
+            </div>
+
+            {/* Company Name Field */}
+            <div>
+              <label htmlFor="companyName" className="block text-sm font-semibold text-slate-700 mb-2">
+                Company Name
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Building2 className="h-5 w-5 text-slate-400" />
+                </div>
+                <input
+                  id="companyName"
+                  name="companyName"
+                  type="text"
+                  value={formData.companyName}
+                  onChange={handleInputChange}
+                  className="block w-full pl-10 pr-3 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                  placeholder="Your company name"
+                />
               </div>
             </div>
 
@@ -238,55 +259,22 @@ export default function SignupPage() {
                 <input
                   id="password"
                   name="password"
-                  type={showPassword ? 'text' : 'password'}
+                  type={showPassword ? "text" : "password"}
                   value={formData.password}
                   onChange={handleInputChange}
-                  className="block w-full pl-10 pr-10 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                  placeholder="Create a password"
+                  className="block w-full pl-10 pr-12 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                  placeholder="Create a password (min. 6 characters)"
                   required
                 />
                 <button
                   type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                  onClick={togglePasswordVisibility}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 transition-colors"
                 >
                   {showPassword ? (
-                    <EyeOff className="h-5 w-5 text-slate-400 hover:text-slate-600" />
+                    <EyeOff className="h-5 w-5" />
                   ) : (
-                    <Eye className="h-5 w-5 text-slate-400 hover:text-slate-600" />
-                  )}
-                </button>
-              </div>
-            </div>
-
-            {/* Confirm Password Field */}
-            <div>
-              <label htmlFor="confirmPassword" className="block text-sm font-semibold text-slate-700 mb-2">
-                Confirm Password *
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock className="h-5 w-5 text-slate-400" />
-                </div>
-                <input
-                  id="confirmPassword"
-                  name="confirmPassword"
-                  type={showConfirmPassword ? 'text' : 'password'}
-                  value={formData.confirmPassword}
-                  onChange={handleInputChange}
-                  className="block w-full pl-10 pr-10 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                  placeholder="Confirm your password"
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
-                >
-                  {showConfirmPassword ? (
-                    <EyeOff className="h-5 w-5 text-slate-400 hover:text-slate-600" />
-                  ) : (
-                    <Eye className="h-5 w-5 text-slate-400 hover:text-slate-600" />
+                    <Eye className="h-5 w-5" />
                   )}
                 </button>
               </div>
@@ -295,7 +283,7 @@ export default function SignupPage() {
             {/* Submit Button */}
             <motion.button
               type="submit"
-              disabled={isLoading || (!isEmailValid && formData.email !== '')}
+              disabled={isLoading || (!isEmailValid && formData.email !== '') || !formData.email || !formData.firstName || !formData.lastName || !formData.password}
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-3 px-4 rounded-xl font-semibold hover:from-blue-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center shadow-lg hover:shadow-xl"
@@ -304,12 +292,13 @@ export default function SignupPage() {
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
               ) : (
                 <>
-                  Create Account
+                  Register
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </>
               )}
             </motion.button>
           </form>
+
 
           {/* Login Link */}
           <div className="mt-6 pt-6 border-t border-slate-200">
@@ -328,7 +317,7 @@ export default function SignupPage() {
           {/* Footer */}
           <div className="mt-4">
             <p className="text-center text-xs text-slate-500">
-              Secure access with domain-based authentication
+              Secure access with OTP verification and domain-based authentication
             </p>
           </div>
         </motion.div>

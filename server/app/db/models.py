@@ -232,6 +232,13 @@ class User(Base):
     is_verified = Column(Integer, default=0)  # 1 for verified, 0 for unverified
     company_id = Column(UUID(as_uuid=True), ForeignKey('companies.id'), nullable=True)
     last_login = Column(DateTime, nullable=True)
+    
+    # OTP Authentication fields
+    email_domain = Column(String, nullable=True)  # Extracted from email for faster queries
+    is_email_verified = Column(Integer, default=0)  # 1 for verified, 0 for unverified
+    auth_method = Column(String, default='password')  # password, otp, both
+    access_level = Column(String, default='basic')  # basic, advanced, full
+    
     created_at = Column(DateTime, server_default=text('now()'), nullable=False)
     updated_at = Column(DateTime, server_default=text('now()'), onupdate=text('now()'), nullable=False)
 
@@ -273,3 +280,17 @@ class UserDataContribution(Base):
     contribution_type = Column(String, nullable=False)  # upload, edit, approval, etc.
     contribution_data = Column(JSON)  # Store contribution metadata
     created_at = Column(DateTime, server_default=text('now()'), nullable=False)
+
+class OTPRequest(Base):
+    __tablename__ = 'otp_requests'
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    email = Column(String, nullable=False, index=True)
+    otp_code = Column(String, nullable=False)  # Hashed OTP for security
+    purpose = Column(String, nullable=False)  # login, registration, password_reset
+    expires_at = Column(DateTime, nullable=False)
+    is_used = Column(Integer, default=0)  # 1 for used, 0 for unused
+    attempts = Column(Integer, default=0)  # Number of verification attempts
+    ip_address = Column(String, nullable=True)
+    user_agent = Column(String, nullable=True)
+    created_at = Column(DateTime, server_default=text('now()'), nullable=False)
+    used_at = Column(DateTime, nullable=True)

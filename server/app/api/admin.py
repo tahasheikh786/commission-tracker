@@ -4,8 +4,8 @@ from sqlalchemy import func, select, and_, or_, case, String, delete, update, te
 from app.db import crud, schemas
 from app.config import get_db
 from app.db.models import StatementUpload, Company, EarnedCommission, User, UserSession, AllowedDomain
-from app.api.auth import get_admin_user, get_current_user
-from app.db.auth_schemas import DomainManagementRequest, AllowedDomainResponse
+from app.dependencies.auth_dependencies import get_admin_user, get_current_user
+from app.db.schemas import DomainManagementRequest, AllowedDomainResponse
 from typing import List, Dict, Any, Optional
 from uuid import UUID
 from decimal import Decimal

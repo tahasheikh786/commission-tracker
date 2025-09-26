@@ -46,13 +46,27 @@ interface User {
 interface LoginRequest {
   email: string;
   password?: string;
+  otp?: string;
 }
 
 interface SignupRequest {
   email: string;
-  password: string;
+  password?: string;
   first_name: string;
   last_name: string;
+  company_name?: string;
+  otp?: string;
+}
+
+interface OTPRequest {
+  email: string;
+  purpose: 'login' | 'registration';
+}
+
+interface OTPVerification {
+  email: string;
+  otp: string;
+  purpose: 'login' | 'registration';
 }
 
 interface LoginResponse {
@@ -79,6 +93,9 @@ interface AuthContextType {
   logout: () => void;
   refreshUser: () => Promise<void>;
   checkPermissions: () => Promise<void>;
+  // OTP Methods
+  requestOTP: (otpRequest: OTPRequest) => Promise<void>;
+  verifyOTP: (otpVerification: OTPVerification) => Promise<LoginResponse>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -88,6 +105,7 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 // Configure axios defaults
 axios.defaults.baseURL = API_BASE_URL;
+axios.defaults.withCredentials = true; // Include cookies in requests
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -97,12 +115,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const isAuthenticated = !!user;
 
-  const logout = () => {
-    // Clear token from cookie
-    deleteCookie('access_token');
-    
-    // Remove axios default header
-    delete axios.defaults.headers.common['Authorization'];
+  const logout = async () => {
+    try {
+      // Call logout endpoint to clear httpOnly cookies
+      await axios.post('/auth/otp/logout');
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
 
     // Clear state
     setUser(null);
@@ -114,10 +133,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Set up axios interceptor for auth token
   useEffect(() => {
-    const token = getCookie('access_token');
-    if (token) {
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-    }
+    // For OTP authentication, we don't need to set Authorization header
+    // as tokens are handled via httpOnly cookies
 
     // Response interceptor to handle token expiration
     const responseInterceptor = axios.interceptors.response.use(
@@ -138,19 +155,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // Check if user is logged in on mount
   useEffect(() => {
     const checkAuth = async () => {
-      const token = getCookie('access_token');
-      console.log('Auth check - token found:', !!token);
-      if (token) {
-        try {
-          console.log('Attempting to refresh user...');
-          await refreshUser();
-          console.log('User refreshed successfully');
-        } catch (error) {
-          console.error('Auth check failed:', error);
-          logout();
+      try {
+        console.log('Checking auth status...');
+        // Use OTP status endpoint to check authentication
+        const response = await axios.get('/auth/otp/status');
+        if (response.data.is_authenticated) {
+          console.log('User is authenticated');
+          setUser(response.data.user);
+          await checkPermissions();
+        } else {
+          console.log('User not authenticated');
+          setUser(null);
         }
-      } else {
-        console.log('No token found, user not authenticated');
+      } catch (error) {
+        console.error('Auth check failed:', error);
+        setUser(null);
       }
       setIsLoading(false);
     };
@@ -229,6 +248,36 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
+  // OTP Methods
+  const requestOTP = async (otpRequest: OTPRequest) => {
+    try {
+      const response = await axios.post('/auth/otp/request', otpRequest);
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.detail || 'Failed to send OTP';
+      throw new Error(errorMessage);
+    }
+  };
+
+  const verifyOTP = async (otpVerification: OTPVerification): Promise<LoginResponse> => {
+    try {
+      const response = await axios.post<LoginResponse>('/auth/otp/verify', otpVerification);
+      const { user: userData } = response.data;
+
+      // For OTP authentication, tokens are set as httpOnly cookies by the server
+      // We don't need to manually set them here
+      
+      // Set user data
+      setUser(userData);
+      await checkPermissions();
+      
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.detail || 'OTP verification failed';
+      throw new Error(errorMessage);
+    }
+  };
+
   const value: AuthContextType = {
     user,
     permissions,
@@ -239,6 +288,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     logout,
     refreshUser,
     checkPermissions,
+    requestOTP,
+    verifyOTP,
   };
 
   return (

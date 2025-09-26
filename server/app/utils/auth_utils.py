@@ -7,7 +7,11 @@ from passlib.context import CryptContext
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.models import User, AllowedDomain, UserSession
-from app.db.auth_schemas import TokenData
+from typing import TypedDict
+
+class TokenData(TypedDict):
+    user_id: str
+    email: str
 
 # Configuration
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")

@@ -89,3 +89,8 @@ mypy>=1.7.0,<2.0.0
 python-jose[cryptography]>=3.3.0,<4.0.0
 passlib[bcrypt]>=1.7.4,<2.0.0
 python-multipart>=0.0.6,<1.0.0
+
+# Email and OTP Authentication
+redis>=5.0.0,<6.0.0
+aiosmtplib>=3.0.0,<4.0.0
+email-validator>=2.1.0,<3.0.0

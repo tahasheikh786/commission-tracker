@@ -407,9 +407,13 @@ export default function CarrierTab() {
                         </div>
                       </div>
                     </div>
+                  ) : statements.length === 0 ? (
+                    <div className="text-center py-2">
+                      <p className="text-slate-500 text-sm">No statements found for this carrier</p>
+                    </div>
                   ) : (
                     <div className="text-center py-2">
-                      <p className="text-slate-500 text-sm">No commission data available for this carrier</p>
+                      <p className="text-slate-500 text-sm">Commission data will be calculated after statements are processed</p>
                     </div>
                   )}
                 </div>

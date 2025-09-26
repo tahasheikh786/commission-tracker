@@ -9,6 +9,8 @@ from app.db import crud
 from app.services.date_extraction_service import get_date_extraction_service
 from app.config import get_db
 from app.utils.db_retry import with_db_retry
+from app.dependencies.auth_dependencies import get_current_user_hybrid
+from app.db.models import User
 import os
 import asyncio
 from datetime import datetime
@@ -39,6 +41,7 @@ async def extract_dates(
     file: UploadFile = File(...),
     company_id: str = Form(...),
     max_pages: int = Form(1),  # Default to first page only
+    current_user: User = Depends(get_current_user_hybrid),
     db: AsyncSession = Depends(get_db)
 ):
     """

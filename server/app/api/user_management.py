@@ -12,7 +12,7 @@ from uuid import UUID
 
 from app.db.database import get_db
 from app.db.models import User
-from app.api.auth import get_current_user
+from app.dependencies.auth_dependencies import get_current_user
 from app.services.user_profile_service import UserProfileService
 from app.services.duplicate_detection_service import DuplicateDetectionService
 from app.db.schemas import UserProfile, UserStats

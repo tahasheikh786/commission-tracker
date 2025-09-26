@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Any, List, Optional, Dict
 from uuid import UUID
 from datetime import datetime
@@ -14,7 +14,7 @@ class Company(CompanyBase):
     created_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class CompanyFieldMappingBase(BaseModel):
     display_name: str
@@ -29,7 +29,7 @@ class CompanyFieldMapping(CompanyFieldMappingBase):
     updated_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class CompanyConfigurationBase(BaseModel):
     field_config: Optional[List[Dict[str, str]]] = None
@@ -49,7 +49,7 @@ class CompanyConfiguration(CompanyConfigurationBase):
     updated_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class CarrierFormatLearningBase(BaseModel):
     format_signature: str
@@ -88,7 +88,7 @@ class CarrierFormatLearning(CarrierFormatLearningBase):
     updated_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class StatementUpload(BaseModel):
     id: UUID
@@ -126,7 +126,7 @@ class StatementUpload(BaseModel):
     auto_save_enabled: bool = True
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class StatementUploadCreate(BaseModel):
     company_id: UUID
@@ -169,7 +169,7 @@ class Extraction(ExtractionCreate):
     created_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 # app/api/schemas.py
 
@@ -201,7 +201,7 @@ class PendingFile(BaseModel):
     progress_summary: Optional[str] = None  # Human-readable summary of progress
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class MappingConfig(BaseModel):
     mapping: Dict[str, str]
@@ -228,7 +228,7 @@ class DatabaseField(DatabaseFieldBase):
     updated_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class PlanTypeBase(BaseModel):
     display_name: str
@@ -249,7 +249,7 @@ class PlanType(PlanTypeBase):
     updated_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class EarnedCommissionBase(BaseModel):
     carrier_id: UUID
@@ -304,7 +304,7 @@ class EarnedCommission(EarnedCommissionBase):
     created_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 # New schemas for multi-user functionality
 class FileDuplicateBase(BaseModel):
@@ -322,7 +322,7 @@ class FileDuplicate(FileDuplicateBase):
     created_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class UserDataContributionBase(BaseModel):
     user_id: UUID
@@ -338,7 +338,7 @@ class UserDataContribution(UserDataContributionBase):
     created_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 # User profile and statistics schemas
 class UserProfile(BaseModel):
@@ -355,7 +355,7 @@ class UserProfile(BaseModel):
     updated_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class UserStats(BaseModel):
     user_id: UUID
@@ -368,6 +368,32 @@ class UserStats(BaseModel):
     data_contribution_percentage: float  # Percentage of total system data
 
     class Config:
-        orm_mode = True
+        from_attributes = True
+
+
+# Admin schemas
+class DomainManagementRequest(BaseModel):
+    domain: str
+    company_id: Optional[UUID] = None
+    is_active: bool = True
+
+class AllowedDomainResponse(BaseModel):
+    id: UUID
+    domain: str
+    company_id: Optional[UUID]
+    is_active: bool
+    created_by: UUID
+    created_at: datetime
+    updated_at: datetime
+
+    @field_validator('is_active', mode='before')
+    @classmethod
+    def convert_is_active(cls, v):
+        if isinstance(v, int):
+            return bool(v)
+        return v
+
+    class Config:
+        from_attributes = True
 
 

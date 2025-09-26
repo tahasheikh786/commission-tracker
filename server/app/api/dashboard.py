@@ -4,7 +4,7 @@ from sqlalchemy import func, select, and_
 from app.db import crud, schemas
 from app.config import get_db
 from app.db.models import StatementUpload, Company, EarnedCommission, User
-from app.api.auth import get_current_user
+from app.dependencies.auth_dependencies import get_current_user_hybrid
 from typing import List, Dict, Any, Optional
 from uuid import UUID
 from decimal import Decimal
@@ -14,7 +14,7 @@ router = APIRouter()
 
 @router.get("/dashboard/stats")
 async def get_dashboard_stats(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_hybrid),
     db: AsyncSession = Depends(get_db)
 ):
     """Get dashboard statistics - automatically filters by user data for regular users, global for admins"""
@@ -88,7 +88,7 @@ async def get_dashboard_stats(
 
 @router.get("/dashboard/statements")
 async def get_all_statements(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_hybrid),
     db: AsyncSession = Depends(get_db)
 ):
     """Get all statements with company information - automatically filters by user data for regular users"""
@@ -134,7 +134,7 @@ async def get_all_statements(
 @router.get("/dashboard/statements/{status}")
 async def get_statements_by_status(
     status: str, 
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_hybrid),
     db: AsyncSession = Depends(get_db)
 ):
     """Get statements filtered by status (pending, approved, rejected) - automatically filters by user data"""
@@ -191,7 +191,7 @@ async def get_statements_by_status(
 
 @router.get("/dashboard/carriers")
 async def get_carriers_with_statement_counts(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_hybrid),
     db: AsyncSession = Depends(get_db)
 ):
     """Get carriers with their statement counts - automatically filters by user data for regular users"""
@@ -346,7 +346,7 @@ async def get_statements_by_carrier_and_status(
 
 @router.get("/companies/user-specific")
 async def get_user_specific_companies(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_hybrid),
     db: AsyncSession = Depends(get_db)
 ):
     """Get companies that the current user has worked with"""
@@ -383,7 +383,7 @@ async def get_user_specific_companies(
 @router.get("/companies/user-specific/{company_id}/statements")
 async def get_user_specific_company_statements(
     company_id: UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_hybrid),
     db: AsyncSession = Depends(get_db)
 ):
     """Get statements for a specific company that the current user has uploaded"""
@@ -422,7 +422,7 @@ async def get_user_specific_company_statements(
 @router.get("/dashboard/earned-commissions")
 async def get_all_earned_commissions(
     year: Optional[int] = None, 
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_hybrid),
     db: AsyncSession = Depends(get_db)
 ):
     """Get earned commission data - user-specific for regular users, global for admins"""
@@ -573,7 +573,7 @@ async def get_earned_commissions_summary(db: AsyncSession = Depends(get_db)):
 @router.get("/earned-commission/stats")
 async def get_earned_commission_stats(
     year: Optional[int] = None, 
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_hybrid),
     db: AsyncSession = Depends(get_db)
 ):
     """Get earned commission statistics - user-specific for regular users, global for admins"""
@@ -666,7 +666,7 @@ async def get_earned_commission_stats(
 @router.get("/earned-commission/global/stats")
 async def get_global_earned_commission_stats(
     year: Optional[int] = None, 
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_hybrid),
     db: AsyncSession = Depends(get_db)
 ):
     """Get global earned commission statistics (all data) - requires admin or explicit permission"""
@@ -735,7 +735,7 @@ async def get_global_earned_commission_stats(
 @router.get("/earned-commission/global/data")
 async def get_global_earned_commissions(
     year: Optional[int] = None, 
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_hybrid),
     db: AsyncSession = Depends(get_db)
 ):
     """Get global earned commission data (all data) - requires admin or explicit permission"""

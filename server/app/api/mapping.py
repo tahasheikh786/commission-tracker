@@ -4,6 +4,8 @@ from app.db import crud, schemas
 from app.config import get_db
 from app.utils.db_retry import with_db_retry
 from app.services.format_learning_service import FormatLearningService
+from app.dependencies.auth_dependencies import get_current_user_hybrid
+from app.db.models import User
 from typing import List, Dict, Any
 from datetime import datetime
 import re
@@ -54,7 +56,12 @@ async def get_company_mapping(company_id: str, db: AsyncSession = Depends(get_db
     )
 
 @router.post("/companies/{company_id}/mapping/")
-async def update_company_mapping(company_id: str, config: MappingConfig, db: AsyncSession = Depends(get_db)):
+async def update_company_mapping(
+    company_id: str, 
+    config: MappingConfig, 
+    current_user: User = Depends(get_current_user_hybrid),
+    db: AsyncSession = Depends(get_db)
+):
     logger.info(f"🎯 Mapping API: Received mapping request for company {company_id}")
     logger.info(f"🎯 Mapping API: Config received - mapping keys: {list(config.mapping.keys()) if config.mapping else 'None'}")
     logger.info(f"🎯 Mapping API: Selected statement date: {config.selected_statement_date}")

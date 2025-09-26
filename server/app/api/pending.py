@@ -10,7 +10,7 @@ from app.db import crud
 from app.config import get_db
 from app.db.schemas import PendingFile, StatementUploadUpdate
 from app.db.models import User
-from app.api.auth import get_current_user
+from app.dependencies.auth_dependencies import get_current_user
 from uuid import UUID
 
 # Configure logging

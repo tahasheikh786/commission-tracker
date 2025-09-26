@@ -10,7 +10,7 @@ from app.db import crud, schemas
 from app.services.new_extraction_service import get_new_extraction_service
 from app.config import get_db
 from app.utils.db_retry import with_db_retry
-from app.api.auth import get_current_user
+from app.dependencies.auth_dependencies import get_current_user_hybrid
 from app.db.models import User
 from app.services.duplicate_detection_service import DuplicateDetectionService
 from app.services.user_profile_service import UserProfileService
@@ -125,7 +125,7 @@ async def get_new_extraction_service_instance():
 async def extract_tables_smart(
     file: UploadFile = File(...),
     company_id: str = Form(...),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_hybrid),
     db: AsyncSession = Depends(get_db)
 ):
     """
