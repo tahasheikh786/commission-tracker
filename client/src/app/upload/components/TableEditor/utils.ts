@@ -7,8 +7,21 @@ export function getPdfUrl(uploaded: any) {
     return null;
   }
   const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, '');
+  // Handle GCS keys that start with "statements/" - these are full paths
+  if (uploaded.file_name.startsWith("statements/")) {
+    const url = `${baseUrl}/pdfs/${encodeURIComponent(uploaded.file_name)}`;
+    console.log('getPdfUrl (GCS key):', {
+      file_name: uploaded.file_name,
+      NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
+      baseUrl: baseUrl,
+      encoded: encodeURIComponent(uploaded.file_name),
+      finalUrl: url
+    });
+    return url;
+  }
+  // Handle regular filenames
   const url = `${baseUrl}/pdfs/${encodeURIComponent(uploaded.file_name)}`;
-  console.log('getPdfUrl:', {
+  console.log('getPdfUrl (regular filename):', {
     file_name: uploaded.file_name,
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
     baseUrl: baseUrl,
