@@ -135,7 +135,7 @@ export default function VerifyOTPPage() {
               Enter Verification Code
             </h2>
             <p className="text-slate-600">
-              We've sent a 6-digit verification code to
+              We&apos;ve sent a 6-digit verification code to
             </p>
             <p className="text-slate-800 font-semibold mt-1">
               {formatEmail(email)}
@@ -226,7 +226,7 @@ export default function VerifyOTPPage() {
             <div className="flex items-start">
               <CheckCircle className="h-5 w-5 text-blue-500 mt-0.5 mr-3 flex-shrink-0" />
               <div className="text-sm text-blue-700">
-                <p className="font-medium">Didn't receive the code?</p>
+                <p className="font-medium">Didn&apos;t receive the code?</p>
                 <ul className="mt-2 space-y-1 text-xs">
                   <li>• Check your spam/junk folder</li>
                   <li>• Make sure you entered the correct email address</li>

@@ -547,7 +547,7 @@ export default function TableEditor({
     }
     
     extractDates()
-  }, [tables.length, uploaded?.file_name, companyId, disableAutoDateExtraction, hasExtractedDates, extractedDates.length, selectedStatementDate])
+  }, [tables.length, uploaded?.file_name, uploaded?.file, companyId, disableAutoDateExtraction, hasExtractedDates, extractedDates.length, selectedStatementDate, dateExtractionLoading])
 
   // Cleanup effect that only runs on unmount
   useEffect(() => {

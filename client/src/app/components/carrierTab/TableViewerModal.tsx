@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { X, Database, Table, Download, Eye, FileText } from 'lucide-react';
 
 interface TableData {
@@ -35,13 +35,7 @@ export default function TableViewerModal({
   const [error, setError] = useState<string | null>(null);
   const [currentTableIndex, setCurrentTableIndex] = useState(0);
 
-  useEffect(() => {
-    if (isOpen && statement) {
-      loadTablesFromStatement();
-    }
-  }, [isOpen, statement]);
-
-  const loadTablesFromStatement = () => {
+  const loadTablesFromStatement = useCallback(() => {
     setLoading(true);
     setError(null);
     
@@ -63,7 +57,13 @@ export default function TableViewerModal({
     } finally {
       setLoading(false);
     }
-  };
+  }, [statement]);
+
+  useEffect(() => {
+    if (isOpen && statement) {
+      loadTablesFromStatement();
+    }
+  }, [isOpen, statement, loadTablesFromStatement]);
 
   const downloadCSV = (table: TableData) => {
     const csvContent = [

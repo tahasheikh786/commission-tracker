@@ -174,7 +174,7 @@ export function useUploadPage() {
         })
       }
     }
-  }, [uploaded?.tables, company, databaseFields])
+  }, [uploaded?.tables, company, databaseFields, fetchingMapping, fieldConfig, getLabelFromDatabaseFields])
 
   // Fetch database fields from backend
   useEffect(() => {
