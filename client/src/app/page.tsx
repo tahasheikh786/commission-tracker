@@ -125,13 +125,15 @@ function HomePageContent() {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 p-4 space-y-2">
+        <nav className={`flex-1 space-y-2 transition-all duration-300 ${
+          sidebarCollapsed ? 'p-2' : 'p-4'
+        }`}>
           {tabConfig.map((tabItem) => {
             const Icon = tabItem.icon;
             const isActive = tab === tabItem.id;
             
             return (
-              <div key={tabItem.id} className="relative group">
+              <div key={tabItem.id} className="relative group flex justify-center">
                 <button
                   onClick={() => {
                     if (tabItem.id === 'dashboard') {
@@ -140,16 +142,20 @@ function HomePageContent() {
                       router.push(`/?tab=${tabItem.id}`);
                     }
                   }}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all duration-200 ${
+                  className={`flex items-center rounded-xl font-medium transition-all duration-200 ${
+                    sidebarCollapsed 
+                      ? 'w-12 h-12 justify-center items-center' // Fixed size and center when collapsed
+                      : 'w-full gap-3 px-4 py-3' // Normal layout when expanded
+                  } ${
                     isActive 
                       ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg' 
                       : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                   }`}
                   style={{
-                    minHeight: '48px' // Ensure consistent height for proper background coverage
+                    minHeight: sidebarCollapsed ? '48px' : '48px' // Ensure consistent height
                   }}
                 >
-                  <Icon size={20} className="flex-shrink-0 flex items-center justify-center" />
+                  <Icon size={20} className="flex-shrink-0" />
                   <span className={`transition-opacity duration-300 ${
                     sidebarCollapsed ? 'opacity-0 w-0 overflow-hidden' : 'opacity-100'
                   }`}>

@@ -22,7 +22,9 @@ import {
   X,
   SlidersHorizontal,
   Eye,
-  EyeOff
+  EyeOff,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import EditCommissionModal from './EditCommissionModal';
 import MergeConfirmationModal from './MergeConfirmationModal';
@@ -66,6 +68,307 @@ interface CommissionData {
   created_at?: string;
 }
 
+interface CarrierGroup {
+  carrierName: string;
+  companies: CommissionData[];
+  totalCommission: number;
+  totalInvoice: number;
+  companyCount: number;
+  statementCount: number;
+}
+
+interface CarrierCardProps {
+  carrierGroup: CarrierGroup;
+  isExpanded: boolean;
+  showMonthlyDetails: boolean;
+  onToggleExpand: () => void;
+  onToggleMonthlyDetails: () => void;
+  onEditCompany: (data: CommissionData) => void;
+  viewAllData: boolean;
+}
+
+
+// Component definitions for the new full-width table view
+
+const CarrierCard: React.FC<CarrierCardProps> = ({ 
+  carrierGroup, 
+  isExpanded, 
+  showMonthlyDetails, 
+  onToggleExpand, 
+  onToggleMonthlyDetails, 
+  onEditCompany,
+  viewAllData 
+}) => {
+  
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(amount);
+  };
+  
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all duration-300">
+      {/* Card Header */}
+      <div 
+        className="p-4 md:p-6 cursor-pointer hover:bg-slate-50 transition-colors duration-200"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          onToggleExpand(); // This should call toggleCarrierExpansion(carrierGroup.carrierName)
+        }}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onToggleExpand();
+          }
+        }}
+        aria-expanded={isExpanded}
+        aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${carrierGroup.carrierName} details`}
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3 md:gap-4 min-w-0 flex-1">
+            {/* Carrier Logo Placeholder */}
+            <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white font-bold text-sm md:text-lg flex-shrink-0">
+              {carrierGroup.carrierName.charAt(0).toUpperCase()}
+            </div>
+            
+            {/* Carrier Info */}
+            <div className="min-w-0 flex-1">
+              <h3 className="text-lg md:text-xl font-bold text-slate-800 truncate">{carrierGroup.carrierName}</h3>
+              <p className="text-xs md:text-sm text-slate-600">{carrierGroup.companyCount} companies • {carrierGroup.statementCount} statements</p>
+            </div>
+          </div>
+
+          {/* Key Metrics */}
+          <div className="text-right ml-2">
+            <p className="text-lg md:text-2xl font-bold text-emerald-600">{formatCurrency(carrierGroup.totalCommission)}</p>
+            <p className="text-xs md:text-sm text-slate-600 hidden md:block">Total Commission</p>
+            <p className="text-xs text-slate-500 hidden lg:block">Invoice: {formatCurrency(carrierGroup.totalInvoice)}</p>
+          </div>
+
+          {/* Expand/Collapse Icon */}
+          <div className="ml-2 flex-shrink-0">
+            {isExpanded ? (
+              <ChevronUp className="w-5 h-5 md:w-6 md:h-6 text-slate-400" />
+            ) : (
+              <ChevronDown className="w-5 h-5 md:w-6 md:h-6 text-slate-400" />
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Card Content - Simple clickable card, no expansion */}
+      <div className="px-4 md:px-6 pb-4 md:pb-6">
+        <div className="pt-2">
+          <div className="text-xs text-slate-500 text-center">
+            Click to view all {carrierGroup.companyCount} companies
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const CarrierFullTableView: React.FC<{
+  carrier: CarrierGroup;
+  onBack: () => void;
+  onEditCompany: (data: CommissionData) => void;
+  viewAllData: boolean;
+  searchQuery: string;
+  onSearchChange: (query: string) => void;
+  expandedCompanies: Set<string>;
+  onToggleCompanyExpansion: (companyId: string) => void;
+}> = ({ 
+  carrier, 
+  onBack, 
+  onEditCompany, 
+  viewAllData, 
+  searchQuery, 
+  onSearchChange,
+  expandedCompanies,
+  onToggleCompanyExpansion 
+}) => {
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(amount);
+  };
+
+  // Filter companies based on search
+  const filteredCompanies = useMemo(() => {
+    if (!searchQuery) return carrier.companies;
+    return carrier.companies.filter(company => 
+      company.client_name.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [carrier.companies, searchQuery]);
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
+      {/* Header with Back Button */}
+      <div className="p-6 border-b border-slate-200">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={onBack}
+              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
+            >
+              <ChevronLeft size={16} />
+              Back to Carriers
+            </button>
+            <div className="h-6 w-px bg-slate-300" />
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white font-bold text-lg">
+                {carrier.carrierName.charAt(0).toUpperCase()}
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-slate-800">{carrier.carrierName}</h2>
+                <p className="text-sm text-slate-600">
+                  {carrier.companyCount} companies • {formatCurrency(carrier.totalCommission)} total commission
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Search Bar */}
+        <div className="relative max-w-md">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={16} />
+          <input
+            type="text"
+            placeholder={`Search companies in ${carrier.carrierName}...`}
+            value={searchQuery}
+            onChange={(e) => onSearchChange(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 text-sm bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200"
+          />
+        </div>
+      </div>
+
+      {/* Companies Table */}
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead className="bg-slate-50 border-b border-slate-200">
+            <tr>
+              <th className="text-left py-3 px-6 font-semibold text-slate-700">Company Name</th>
+              <th className="text-right py-3 px-4 font-semibold text-slate-700">Total Commission</th>
+              <th className="text-right py-3 px-4 font-semibold text-slate-700">Total Invoice</th>
+              <th className="text-center py-3 px-4 font-semibold text-slate-700">Statements</th>
+              <th className="text-center py-3 px-4 font-semibold text-slate-700">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredCompanies.map((company) => (
+              <React.Fragment key={company.id}>
+                {/* Company Row */}
+                <tr 
+                  className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer transition-colors"
+                  onClick={() => onToggleCompanyExpansion(company.id)}
+                >
+                  <td className="py-4 px-6">
+                    <div className="flex items-center gap-3">
+                      {expandedCompanies.has(company.id) ? (
+                        <ChevronDown size={16} className="text-slate-400" />
+                      ) : (
+                        <ChevronRight size={16} className="text-slate-400" />
+                      )}
+                      <div>
+                        <div className="font-semibold text-slate-900">{company.client_name}</div>
+                        <div className="text-xs text-slate-500">Year: {company.statement_year || 'N/A'}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="py-4 px-4 text-right">
+                    <span className="font-bold text-emerald-600">{formatCurrency(company.commission_earned)}</span>
+                  </td>
+                  <td className="py-4 px-4 text-right">
+                    <span className="font-medium text-slate-700">{formatCurrency(company.invoice_total)}</span>
+                  </td>
+                  <td className="py-4 px-4 text-center">
+                    <span className="text-slate-600">{company.statement_count}</span>
+                  </td>
+                  <td className="py-4 px-4 text-center">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onEditCompany(company);
+                      }}
+                      disabled={viewAllData}
+                      className={`p-2 rounded-lg transition-colors ${ 
+                        viewAllData 
+                          ? 'text-slate-400 cursor-not-allowed opacity-50' 
+                          : 'text-blue-600 hover:text-blue-800 hover:bg-blue-50'
+                      }`}
+                      title={viewAllData ? 'Read-only mode - switch to My Data to edit' : 'Edit commission data'}
+                    >
+                      <Edit size={16} />
+                    </button>
+                  </td>
+                </tr>
+
+                {/* Expanded Monthly Breakdown Row */}
+                {expandedCompanies.has(company.id) && (
+                  <tr>
+                    <td colSpan={5} className="py-4 px-6 bg-slate-50">
+                      <div className="space-y-3">
+                        <h4 className="font-semibold text-slate-800 flex items-center gap-2">
+                          <BarChart3 size={16} />
+                          Monthly Breakdown for {company.client_name}
+                        </h4>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="border-b border-slate-200">
+                                {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map(month => (
+                                  <th key={month} className="text-center py-2 px-3 font-medium text-slate-600 min-w-[80px]">
+                                    {month}
+                                  </th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <tr>
+                                {['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'].map(month => (
+                                  <td key={month} className="text-center py-2 px-3 text-slate-700">
+                                    {company.monthly_breakdown?.[month as keyof typeof company.monthly_breakdown] 
+                                      ? formatCurrency(company.monthly_breakdown[month as keyof typeof company.monthly_breakdown])
+                                      : '-'
+                                    }
+                                  </td>
+                                ))}
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Footer */}
+      <div className="px-6 py-4 border-t border-slate-200 bg-slate-50">
+        <div className="flex items-center justify-between text-sm text-slate-600">
+          <span>Showing {filteredCompanies.length} of {carrier.companyCount} companies</span>
+          <span className="font-medium">
+            Total Commission: <span className="text-emerald-600 font-bold">{formatCurrency(carrier.totalCommission)}</span>
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function EarnedCommissionTab() {
   const { refreshTrigger } = useSubmission();
   const [searchQuery, setSearchQuery] = useState('');
@@ -88,6 +391,14 @@ export default function EarnedCommissionTab() {
   const [maxCommissionFilter, setMaxCommissionFilter] = useState<string>('');
   const [selectedYear, setSelectedYear] = useState<number | null>(2025);
   const [viewAllData, setViewAllData] = useState(false);
+  
+  // NEW state for carrier interface (simplified)
+  const [expandedCarriers, setExpandedCarriers] = useState<Set<string>>(new Set());
+  
+  // NEW state for full-width table view
+  const [selectedCarrierForFullView, setSelectedCarrierForFullView] = useState<string | null>(null);
+  const [expandedCompanies, setExpandedCompanies] = useState<Set<string>>(new Set());
+  const [carrierCompanySearch, setCarrierCompanySearch] = useState('');
 
   // Fetch data - use different endpoints based on view toggle
   const { stats: userStats, loading: userStatsLoading, refetch: refetchUserStats } = useEarnedCommissionStats(selectedYear || undefined);
@@ -182,6 +493,30 @@ export default function EarnedCommissionTab() {
     
     return data;
   }, [allData, searchQuery, sortField, sortDirection, carrierFilter, minCommissionFilter, maxCommissionFilter]);
+
+  // NEW: Transform data into carrier groups
+  const carrierGroups = useMemo(() => {
+    const groups = filteredData.reduce((groups, item: CommissionData) => {
+      const carrierName = item.carrier_name || 'Unknown Carrier';
+      if (!groups[carrierName]) {
+        groups[carrierName] = [];
+      }
+      groups[carrierName].push(item);
+      return groups;
+    }, {} as Record<string, CommissionData[]>);
+
+    return Object.entries(groups).map(([carrierName, companies]) => {
+      const typedCompanies = companies as CommissionData[];
+      return {
+        carrierName,
+        companies: typedCompanies,
+        totalCommission: typedCompanies.reduce((sum: number, company: CommissionData) => sum + company.commission_earned, 0),
+        totalInvoice: typedCompanies.reduce((sum: number, company: CommissionData) => sum + company.invoice_total, 0),
+        companyCount: typedCompanies.length,
+        statementCount: typedCompanies.reduce((sum: number, company: CommissionData) => sum + company.statement_count, 0),
+      };
+    }).sort((a, b) => b.totalCommission - a.totalCommission); // Sort by total commission descending
+  }, [filteredData]);
 
   // Pagination
   const totalPages = Math.ceil(filteredData.length / ITEMS_PER_PAGE);
@@ -300,6 +635,37 @@ export default function EarnedCommissionTab() {
     setCurrentPage(1);
   };
 
+  // NEW: Carrier management functions
+  const toggleCarrierExpansion = useCallback((carrierName: string) => {
+    if (selectedCarrierForFullView === carrierName) {
+      // Currently in full view - collapse back to cards
+      setSelectedCarrierForFullView(null);
+      setCarrierCompanySearch('');
+      setExpandedCompanies(new Set());
+    } else {
+      // Expand to full view
+      setSelectedCarrierForFullView(carrierName);
+      setCarrierCompanySearch('');
+      setExpandedCompanies(new Set());
+    }
+  }, [selectedCarrierForFullView]);
+
+
+  // NEW: Company expansion handler for full table view
+  const toggleCompanyExpansion = useCallback((companyId: string) => {
+    setExpandedCompanies(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(companyId)) {
+        newSet.delete(companyId);
+      } else {
+        newSet.add(companyId);
+      }
+      return newSet;
+    });
+  }, []);
+
+  // Debug logs to help troubleshoot
+
   // Check if any filters are active
   const hasActiveFilters = searchQuery || carrierFilter || minCommissionFilter || maxCommissionFilter || selectedYear !== 2025;
 
@@ -330,8 +696,17 @@ export default function EarnedCommissionTab() {
     });
   };
 
+
   return (
-    <div className="w-full space-y-6">
+    <div className="w-full space-y-6" style={{
+      '--primary-blue': '#3B82F6',
+      '--success-green': '#10B981',
+      '--warning-orange': '#F59E0B',
+      '--neutral-gray': '#6B7280',
+      '--background-white': '#FFFFFF',
+      '--card-background': '#F9FAFB',
+      '--border-color': '#E5E7EB'
+    } as React.CSSProperties}>
       {/* Controls */}
       <div className="flex justify-between items-center">
         {/* View Toggle */}
@@ -480,18 +855,18 @@ export default function EarnedCommissionTab() {
         </div>
       </div>
 
-      {/* Data Table */}
+      {/* Carrier-Centric Dashboard */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        {/* Table Header */}
+        {/* Dashboard Header */}
         <div className="p-6 border-b border-slate-200">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
                 <BarChart3 className="text-emerald-600" size={18} />
-                Commission Data by Company
+                Commission Data by Carrier
               </h3>
               <p className="text-sm text-slate-600 mt-1">
-                {filteredData.length} records found
+                {carrierGroups.length} carriers • {filteredData.length} total records
               </p>
             </div>
             <div className="flex items-center gap-3">
@@ -615,222 +990,79 @@ export default function EarnedCommissionTab() {
           )}
         </div>
 
-        {/* Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-slate-50">
-              <tr>
-                <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">
-                  <button
-                    onClick={() => handleSort('client_name')}
-                    className="flex items-center gap-1 hover:text-slate-800 transition-colors"
-                  >
-                    Company
-                    {sortField === 'client_name' && (
-                      sortDirection === 'asc' ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />
-                    )}
-                  </button>
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">
-                  <button
-                    onClick={() => handleSort('carrier_name')}
-                    className="flex items-center gap-1 hover:text-slate-800 transition-colors"
-                  >
-                    Carrier
-                    {sortField === 'carrier_name' && (
-                      sortDirection === 'asc' ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />
-                    )}
-                  </button>
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">
-                  Jan
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">
-                  Feb
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">
-                  Mar
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">
-                  Apr
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">
-                  May
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">
-                  Jun
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">
-                  Jul
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">
-                  Aug
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">
-                  Sep
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">
-                  Oct
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">
-                  Nov
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">
-                  Dec
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">
-                  Total
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">
-                  <button
-                    onClick={() => handleSort('invoice_total')}
-                    className="flex items-center gap-1 hover:text-slate-800 transition-colors"
-                  >
-                    Invoice Total
-                    {sortField === 'invoice_total' && (
-                      sortDirection === 'asc' ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />
-                    )}
-                  </button>
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">
-                  Statement Year
-                </th>
-                <th className="px-6 py-4 text-right text-xs font-bold text-slate-600 uppercase tracking-wider">
-                  Edit
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-slate-200/50">
+        {/* Conditional Rendering: Full Table View OR Card Grid View */}
+        <div className="p-6">
+          {selectedCarrierForFullView ? (
+            // FULL TABLE VIEW MODE
+            <CarrierFullTableView
+              carrier={carrierGroups.find(c => c.carrierName === selectedCarrierForFullView)!}
+              onBack={() => {
+                setSelectedCarrierForFullView(null);
+                setCarrierCompanySearch('');
+                setExpandedCompanies(new Set());
+              }}
+              onEditCompany={handleEditCommission}
+              viewAllData={viewAllData}
+              searchQuery={carrierCompanySearch}
+              onSearchChange={setCarrierCompanySearch}
+              expandedCompanies={expandedCompanies}
+              onToggleCompanyExpansion={toggleCompanyExpansion}
+            />
+          ) : (
+            // CARD GRID VIEW MODE (existing code)
+            <>
               {allDataLoading ? (
-                <tr>
-                  <td colSpan={18} className="px-6 py-12 text-center text-slate-500">
-                    <div className="flex items-center justify-center gap-3">
-                      <div className="w-8 h-8 border-2 border-slate-200 border-t-emerald-500 rounded-full animate-spin"></div>
-                      <span>Loading commission data...</span>
-                    </div>
-                  </td>
-                </tr>
-              ) : paginatedData.length === 0 ? (
-                <tr>
-                  <td colSpan={18} className="px-6 py-12 text-center text-slate-500">
-                    <div className="flex flex-col items-center gap-3">
-                      <BarChart3 className="text-slate-300" size={48} />
-                      <span>No commission data found</span>
-                      {hasActiveFilters && (
-                        <button
-                          onClick={clearFilters}
-                          className="text-sm text-emerald-600 hover:text-emerald-700 underline"
-                        >
-                          Clear filters to see all data
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
+                <div className="flex items-center justify-center py-12">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 border-2 border-slate-200 border-t-emerald-500 rounded-full animate-spin"></div>
+                    <span className="text-slate-500">Loading commission data...</span>
+                  </div>
+                </div>
+              ) : carrierGroups.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-slate-500">
+                  <BarChart3 className="text-slate-300 mb-4" size={48} />
+                  <p className="text-lg font-medium mb-2">No commission data found</p>
+                  {hasActiveFilters && (
+                    <button
+                      onClick={clearFilters}
+                      className="text-sm text-emerald-600 hover:text-emerald-700 underline"
+                    >
+                      Clear filters to see all data
+                    </button>
+                  )}
+                </div>
               ) : (
-                paginatedData.map((item: CommissionData) => (
-                  <tr key={item.id} className="hover:bg-slate-50/50 transition-colors duration-200">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-slate-900">
-                      {item.client_name}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900">
-                      {item.carrier_name || 'N/A'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900">
-                      {formatMonthlyValue(item.monthly_breakdown?.jan)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900">
-                      {formatMonthlyValue(item.monthly_breakdown?.feb)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900">
-                      {formatMonthlyValue(item.monthly_breakdown?.mar)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900">
-                      {formatMonthlyValue(item.monthly_breakdown?.apr)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900">
-                      {formatMonthlyValue(item.monthly_breakdown?.may)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900">
-                      {formatMonthlyValue(item.monthly_breakdown?.jun)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900">
-                      {formatMonthlyValue(item.monthly_breakdown?.jul)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900">
-                      {formatMonthlyValue(item.monthly_breakdown?.aug)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900">
-                      {formatMonthlyValue(item.monthly_breakdown?.sep)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900">
-                      {formatMonthlyValue(item.monthly_breakdown?.oct)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900">
-                      {formatMonthlyValue(item.monthly_breakdown?.nov)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900">
-                      {formatMonthlyValue(item.monthly_breakdown?.dec)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-emerald-600">
-                      {formatCurrency(item.commission_earned)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900">
-                      {formatCurrency(item.invoice_total)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
-                      {item.statement_year || 'N/A'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <button 
-                        onClick={() => handleEditCommission(item)}
-                        disabled={viewAllData}
-                        className={`transition-colors p-2 rounded-xl hover:scale-110 ${
-                          viewAllData 
-                            ? 'text-slate-400 cursor-not-allowed opacity-50' 
-                            : 'text-blue-600 hover:text-blue-800 hover:bg-blue-50'
-                        }`}
-                        title={viewAllData ? "Read-only mode - switch to 'My Data' to edit" : "Edit commission data"}
-                      >
-                        <Edit size={16} />
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                <div className="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                  {carrierGroups.map(carrierGroup => (
+                    <CarrierCard
+                      key={carrierGroup.carrierName}
+                      carrierGroup={carrierGroup}
+                      isExpanded={false} // Always false in card mode
+                      showMonthlyDetails={false} // Not used in card mode
+                      onToggleExpand={() => toggleCarrierExpansion(carrierGroup.carrierName)} // Now opens full table
+                      onToggleMonthlyDetails={() => {}} // Not used anymore
+                      onEditCompany={handleEditCommission}
+                      viewAllData={viewAllData}
+                    />
+                  ))}
+                </div>
               )}
-            </tbody>
-          </table>
+            </>
+          )}
         </div>
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="px-6 py-4 border-t border-slate-200 bg-slate-50">
-            <div className="flex items-center justify-between">
-              <div className="text-sm text-slate-700 font-medium">
-                Showing {((currentPage - 1) * ITEMS_PER_PAGE) + 1} to {Math.min(currentPage * ITEMS_PER_PAGE, filteredData.length)} of {filteredData.length} results
-              </div>
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                  disabled={currentPage === 1}
-                  className="px-4 py-2 text-sm bg-white border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-medium"
-                >
-                  Previous
-                </button>
-                <span className="px-4 py-2 text-sm text-slate-700 font-semibold bg-white rounded-lg">
-                  Page {currentPage} of {totalPages}
-                </span>
-                <button
-                  onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                  disabled={currentPage === totalPages}
-                  className="px-4 py-2 text-sm bg-white border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-medium"
-                >
-                  Next
-                </button>
-              </div>
+        {/* Summary Footer */}
+        <div className="px-6 py-4 border-t border-slate-200 bg-slate-50">
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-slate-700 font-medium">
+              Showing {carrierGroups.length} carriers with {filteredData.length} total records
+            </div>
+            <div className="flex items-center gap-4 text-sm text-slate-600">
+              <span>Total Commission: <span className="font-bold text-emerald-600">{formatCurrency(carrierGroups.reduce((sum, group) => sum + group.totalCommission, 0))}</span></span>
+              <span>Total Invoice: <span className="font-bold text-slate-800">{formatCurrency(carrierGroups.reduce((sum, group) => sum + group.totalInvoice, 0))}</span></span>
             </div>
           </div>
-        )}
+        </div>
       </div>
 
       {/* Edit Commission Modal */}
