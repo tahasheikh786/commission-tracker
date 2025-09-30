@@ -18,7 +18,7 @@ from app.services.gcs_utils import upload_file_to_gcs, get_gcs_file_url
 import logging
 from typing import Optional, Dict, Any
 
-router = APIRouter(tags=["date-extraction"])
+router = APIRouter(prefix="/api", tags=["date-extraction"])
 logger = logging.getLogger(__name__)
 
 UPLOAD_DIR = "pdfs"

@@ -53,8 +53,20 @@ export default function CarrierTab() {
   const [loadingCommission, setLoadingCommission] = useState(false);
   const [viewAllData, setViewAllData] = useState(false);
   
-  // Determine if user can edit data (admin can edit even in "All Data" mode)
-  const canEditData = !viewAllData || permissions?.is_admin;
+  // Simplified permission logic:
+  // My Data tab: All authenticated users can select and delete their own files
+  // All Data tab: Only admins can select and delete any files
+  // Add fallback permissions if not loaded yet
+  const safePermissions = permissions || {
+    can_upload: true,
+    can_edit: true,
+    is_admin: false,
+    is_read_only: false
+  };
+  
+  const canSelectFiles = viewAllData ? safePermissions.is_admin === true : true;
+  const canDeleteFiles = viewAllData ? safePermissions.is_admin === true : (safePermissions.can_edit === true || safePermissions.is_admin === true);
+
 
   // Fetch user-specific companies
   const { companies: userSpecificCompanies, loading: userCompaniesLoading, refetch: refetchUserCompanies } = useUserSpecificCompanies();
@@ -65,7 +77,9 @@ export default function CarrierTab() {
     
     if (viewAllData) {
       // Fetch all companies using axios for proper authentication
-      axios.get(`${process.env.NEXT_PUBLIC_API_URL}/companies/`)
+      axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/companies/`, {
+        withCredentials: true  // CRITICAL FIX: Ensure cookies are sent
+      })
         .then((response) => {
           const data = response.data;
           // Sort carriers alphabetically by name
@@ -101,10 +115,12 @@ export default function CarrierTab() {
     setLoadingStatements(true);
     
     const endpoint = viewAllData 
-      ? `${process.env.NEXT_PUBLIC_API_URL}/companies/${selected.id}/statements/`
-      : `${process.env.NEXT_PUBLIC_API_URL}/companies/user-specific/${selected.id}/statements`;
+      ? `${process.env.NEXT_PUBLIC_API_URL}/api/companies/${selected.id}/statements/`
+      : `${process.env.NEXT_PUBLIC_API_URL}/api/companies/user-specific/${selected.id}/statements`;
     
-    axios.get(endpoint)
+    axios.get(endpoint, {
+      withCredentials: true  // CRITICAL FIX: Ensure cookies are sent
+    })
       .then(response => {
         const data = response.data;
         setStatements(Array.isArray(data) ? data : []);
@@ -125,10 +141,12 @@ export default function CarrierTab() {
     
     setLoadingCommission(true);
     const endpoint = viewAllData 
-      ? `${process.env.NEXT_PUBLIC_API_URL}/earned-commission/carrier/${selected.id}/stats`
-      : `${process.env.NEXT_PUBLIC_API_URL}/earned-commission/carrier/user-specific/${selected.id}/stats`;
+      ? `${process.env.NEXT_PUBLIC_API_URL}/api/earned-commission/carrier/${selected.id}/stats`
+      : `${process.env.NEXT_PUBLIC_API_URL}/api/earned-commission/carrier/user-specific/${selected.id}/stats`;
     
-    axios.get(endpoint)
+    axios.get(endpoint, {
+      withCredentials: true  // CRITICAL FIX: Ensure cookies are sent
+    })
       .then(response => {
         const data = response.data;
         setCommissionStats(data);
@@ -152,7 +170,7 @@ export default function CarrierTab() {
   const handleDelete = (ids: string[]) => {
     if (!selected) return;
     setDeletingStatements(true);
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${selected.id}/statements/`, {
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/companies/${selected.id}/statements/`, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
@@ -177,7 +195,7 @@ export default function CarrierTab() {
 
   const handleCarrierDelete = (ids: string[]) => {
     setDeletingCarriers(true);
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/`, {
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/companies/`, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
@@ -328,7 +346,8 @@ export default function CarrierTab() {
                 loading={loadingCarriers || userCompaniesLoading}
                 onDelete={handleCarrierDelete}
                 deleting={deletingCarriers}
-                readOnly={!canEditData}
+                canSelectFiles={canSelectFiles}
+                canDeleteFiles={canDeleteFiles}
               />
             </div>
           </div>
@@ -353,14 +372,14 @@ export default function CarrierTab() {
                   
                   {selected && (
                     <button
-                      disabled={!canEditData}
+                      disabled={!canDeleteFiles}
                       className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-200 font-medium ${
-                        !canEditData
+                        !canDeleteFiles
                           ? 'bg-slate-200 text-slate-500 cursor-not-allowed opacity-50'
                           : 'bg-blue-500 text-white hover:bg-blue-600'
                       }`}
                       onClick={() => setShowEditMapping(true)}
-                      title={!canEditData ? "Read-only mode - switch to 'My Data' to edit" : "Edit carrier mappings"}
+                      title={!canDeleteFiles ? "Read-only mode - switch to 'My Data' to edit" : "Edit carrier mappings"}
                     >
                       <Settings size={16} />
                       Edit Mappings
@@ -435,7 +454,8 @@ export default function CarrierTab() {
                     onCompare={setShowCompareIdx}
                     onDelete={handleDelete}
                     deleting={deletingStatements}
-                    readOnly={!canEditData}
+                    canSelectFiles={canSelectFiles}
+                    canDeleteFiles={canDeleteFiles}
                   />
                 ) : (
                   <div className="flex flex-col items-center justify-center py-16 text-center">

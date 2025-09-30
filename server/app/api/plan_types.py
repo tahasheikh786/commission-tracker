@@ -5,7 +5,7 @@ from app.config import get_db
 from typing import List
 from uuid import UUID
 
-router = APIRouter()
+router = APIRouter(prefix="/api")
 
 @router.get("/plan-types/", response_model=List[dict])
 async def get_plan_types(

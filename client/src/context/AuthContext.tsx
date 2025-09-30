@@ -1,9 +1,57 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 // Using browser's built-in cookie handling instead of js-cookie
 import axios from 'axios';
+import { authService } from '../app/services/authService';
+
+// Token refresh manager to prevent race conditions
+class TokenRefreshManager {
+  private static instance: TokenRefreshManager;
+  private refreshPromise: Promise<void> | null = null;
+  private pendingRequests: Array<{ resolve: () => void, reject: (error: any) => void }> = [];
+
+  static getInstance(): TokenRefreshManager {
+    if (!TokenRefreshManager.instance) {
+      TokenRefreshManager.instance = new TokenRefreshManager();
+    }
+    return TokenRefreshManager.instance;
+  }
+
+  async refreshToken(): Promise<void> {
+    if (this.refreshPromise) {
+      // Return existing promise instead of creating new one
+      return this.refreshPromise;
+    }
+
+    this.refreshPromise = this.performRefresh();
+    
+    try {
+      await this.refreshPromise;
+      // Resolve all pending requests
+      this.pendingRequests.forEach(({ resolve }) => resolve());
+      this.pendingRequests = [];
+    } catch (error) {
+      // Reject all pending requests
+      this.pendingRequests.forEach(({ reject }) => reject(error));
+      this.pendingRequests = [];
+      throw error;
+    } finally {
+      this.refreshPromise = null;
+    }
+  }
+
+  private async performRefresh(): Promise<void> {
+      const response = await axios.post('/api/auth/otp/refresh', {}, {
+      withCredentials: true
+    });
+    
+    if (response.status !== 200) {
+      throw new Error('Refresh failed');
+    }
+  }
+}
 
 // Cookie utility functions
 const getCookie = (name: string): string | null => {
@@ -111,16 +159,27 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [user, setUser] = useState<User | null>(null);
   const [permissions, setPermissions] = useState<UserPermissions | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [lastActivity, setLastActivity] = useState<number>(Date.now());
   const router = useRouter();
 
   const isAuthenticated = !!user;
 
+  // Token refresh timer and manager
+  const refreshTimer = useRef<NodeJS.Timeout | null>(null);
+  const tokenRefreshManager = TokenRefreshManager.getInstance();
+
   const logout = useCallback(async () => {
     try {
-      // Call logout endpoint to clear httpOnly cookies
-      await axios.post('/auth/otp/logout');
+      // FIXED: Use authService which now has proper withCredentials
+      await authService.logout();
     } catch (error) {
       console.error('Logout error:', error);
+    }
+
+    // Clear refresh timer
+    if (refreshTimer.current) {
+      clearTimeout(refreshTimer.current);
+      refreshTimer.current = null;
     }
 
     // Clear state
@@ -131,17 +190,78 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     router.push('/auth/login');
   }, [router]);
 
+  // Proactive token refresh function
+  const scheduleTokenRefresh = useCallback(() => {
+    if (refreshTimer.current) {
+      clearTimeout(refreshTimer.current);
+    }
+
+    // Schedule refresh 5 minutes before token expires (55 minutes)
+    const refreshInterval = 55 * 60 * 1000; // 55 minutes in milliseconds
+    refreshTimer.current = setTimeout(async () => {
+      try {
+        console.log('Proactively refreshing token...');
+        
+        // FIXED: Use TokenRefreshManager instead of direct axios call
+        await tokenRefreshManager.refreshToken();
+        
+        console.log('Token refreshed successfully');
+        // Schedule the next refresh
+        scheduleTokenRefresh();
+      } catch (error) {
+        console.error('Proactive token refresh failed:', error);
+        // Clear the timer to prevent repeated failed attempts
+        if (refreshTimer.current) {
+          clearTimeout(refreshTimer.current);
+          refreshTimer.current = null;
+        }
+        // Don't logout immediately, let the interceptor handle it
+      }
+    }, refreshInterval);
+  }, [tokenRefreshManager]);  // Add tokenRefreshManager as dependency
+
   // Set up axios interceptor for auth token
   useEffect(() => {
     // For OTP authentication, we don't need to set Authorization header
     // as tokens are handled via httpOnly cookies
 
-    // Response interceptor to handle token expiration
+    // Response interceptor to handle token expiration and automatic refresh
     const responseInterceptor = axios.interceptors.response.use(
       (response) => response,
-      (error) => {
-        if (error.response?.status === 401) {
-          logout();
+      async (error) => {
+        const originalRequest = error.config;
+        
+        // Prevent infinite loops by checking if this is already a refresh request
+        if (error.response?.status === 401 && 
+            !originalRequest._retry && 
+            !originalRequest.url?.includes('/auth/otp/refresh') &&
+            !originalRequest.url?.includes('/auth/otp/logout') &&
+            !originalRequest.url?.includes('/auth/otp/status')) {
+          originalRequest._retry = true;
+          
+          try {
+            // Use TokenRefreshManager to prevent concurrent refresh attempts
+            await tokenRefreshManager.refreshToken();
+            // Retry the original request with credentials
+            return axios({
+              ...originalRequest,
+              withCredentials: true
+            });
+          } catch (refreshError) {
+            // Refresh failed - check if this is a file upload operation
+            console.log('Token refresh failed:', refreshError);
+            
+            // For file upload operations, don't immediately logout - show error instead
+            if (originalRequest.url?.includes('/extract-tables-smart/') || 
+                originalRequest.url?.includes('/extract-tables-')) {
+              console.log('File upload failed due to authentication - showing error instead of logout');
+              return Promise.reject(new Error('Your session has expired. Please refresh the page and try uploading again.'));
+            }
+            
+            // For other operations, logout user
+            logout();
+            return Promise.reject(refreshError);
+          }
         }
         return Promise.reject(error);
       }
@@ -152,24 +272,43 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
   }, [logout]);
 
+  // Cleanup effect for refresh timer
+  useEffect(() => {
+    return () => {
+      if (refreshTimer.current) {
+        clearTimeout(refreshTimer.current);
+      }
+    };
+  }, []);
+
   // Check if user is logged in on mount
   useEffect(() => {
+
     const checkAuth = async () => {
       try {
         console.log('Checking auth status...');
-        // Use OTP status endpoint to check authentication
-        const response = await axios.get('/auth/otp/status');
-        if (response.data.is_authenticated) {
+        
+        // FIXED: Use authService which now has proper withCredentials
+        const authStatus = await authService.checkAuthStatus();
+        
+        if (authStatus.is_authenticated) {
           console.log('User is authenticated');
-          setUser(response.data.user);
+          setUser(authStatus.user);
           await checkPermissions();
+          // Start proactive token refresh
+          scheduleTokenRefresh();
         } else {
           console.log('User not authenticated');
           setUser(null);
         }
       } catch (error) {
         console.error('Auth check failed:', error);
-        setUser(null);
+        // Don't immediately logout on error - retry logic needed
+        // Only set user to null if it's a clear authentication failure
+        if (error instanceof Error && error.message.includes('401')) {
+          setUser(null);
+        }
+        // For other errors (network, timeout), keep current state
       }
       setIsLoading(false);
     };
@@ -178,25 +317,78 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const timeoutId = setTimeout(() => {
       console.log('Auth check timeout, setting loading to false');
       setIsLoading(false);
-    }, 5000); // 5 second timeout
+    }, 5000); // Increased timeout to allow for proper auth check
 
     checkAuth().finally(() => {
       clearTimeout(timeoutId);
     });
   }, []);
 
+  // Inactivity timeout handling
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const INACTIVITY_TIMEOUT = 2 * 60 * 60 * 1000; // 2 hours in milliseconds (increased from 1 hour)
+    let inactivityTimer: NodeJS.Timeout;
+
+    const resetInactivityTimer = () => {
+      setLastActivity(Date.now());
+      clearTimeout(inactivityTimer);
+      inactivityTimer = setTimeout(() => {
+        // Show warning before logout
+        const warningTime = 5 * 60 * 1000; // 5 minutes warning
+        setTimeout(() => {
+          logout();
+        }, warningTime);
+      }, INACTIVITY_TIMEOUT);
+    };
+
+    // Activity event listeners
+    const activityEvents = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
+    
+    const handleActivity = () => {
+      resetInactivityTimer();
+    };
+
+    // Add event listeners
+    activityEvents.forEach(event => {
+      document.addEventListener(event, handleActivity, true);
+    });
+
+    // Initialize timer
+    resetInactivityTimer();
+
+    // Browser close/tab close detection
+    const handleBeforeUnload = () => {
+      // Call cleanup endpoint to invalidate session
+      navigator.sendBeacon(`${API_BASE_URL}/api/auth/otp/cleanup`);
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      clearTimeout(inactivityTimer);
+      activityEvents.forEach(event => {
+        document.removeEventListener(event, handleActivity, true);
+      });
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [isAuthenticated, logout]);
+
   const login = async (credentials: LoginRequest) => {
     try {
       console.log('Attempting login...');
-      const response = await axios.post<LoginResponse>('/auth/login', credentials);
+      const response = await axios.post<LoginResponse>('/api/auth/login', credentials);
       const { access_token, user: userData } = response.data;
 
       console.log('Login successful, storing token...');
       // Store token in cookie
       setCookie('access_token', access_token, 1); // 1 day
 
-      // Set axios default header
-      axios.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
+      // For OTP authentication, we don't set Authorization header
+      // as tokens are handled via httpOnly cookies
+      // Remove any existing Authorization header
+      delete axios.defaults.headers.common['Authorization'];
 
       setUser(userData);
       await checkPermissions();
@@ -210,14 +402,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const signup = async (credentials: SignupRequest) => {
     try {
-      const response = await axios.post<LoginResponse>('/auth/signup', credentials);
+      const response = await axios.post<LoginResponse>('/api/auth/signup', credentials);
       const { access_token, user: userData } = response.data;
 
       // Store token in cookie
       setCookie('access_token', access_token, 1); // 1 day
 
-      // Set axios default header
-      axios.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
+      // For OTP authentication, we don't set Authorization header
+      // as tokens are handled via httpOnly cookies
+      // Remove any existing Authorization header
+      delete axios.defaults.headers.common['Authorization'];
 
       setUser(userData);
       await checkPermissions();
@@ -229,9 +423,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const refreshUser = async () => {
     try {
-      const response = await axios.get<User>('/auth/me');
-      console.log('refreshUser: User data received:', response.data);
-      setUser(response.data);
+      // FIXED: Use authService which now has proper withCredentials
+      const userData = await authService.getUserProfile();
+      console.log('refreshUser: User data received:', userData);
+      setUser(userData);
       await checkPermissions();
     } catch (error) {
       console.error('refreshUser: Error:', error);
@@ -241,17 +436,26 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const checkPermissions = async () => {
     try {
-      const response = await axios.get<UserPermissions>('/auth/permissions');
-      setPermissions(response.data);
+      // FIXED: Use authService which now has proper withCredentials
+      const permissions = await authService.getUserPermissions();
+      setPermissions(permissions);
+      console.log('Permissions fetched successfully:', permissions);
     } catch (error) {
       console.error('Failed to fetch permissions:', error);
+      // Set default permissions if fetch fails
+      setPermissions({
+        can_upload: true,
+        can_edit: true,
+        is_admin: false,
+        is_read_only: false
+      });
     }
   };
 
   // OTP Methods
   const requestOTP = async (otpRequest: OTPRequest) => {
     try {
-      const response = await axios.post('/auth/otp/request', otpRequest);
+      const response = await axios.post('/api/auth/otp/request', otpRequest);
       return response.data;
     } catch (error: any) {
       const errorMessage = error.response?.data?.detail || 'Failed to send OTP';
@@ -261,7 +465,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const verifyOTP = async (otpVerification: OTPVerification): Promise<LoginResponse> => {
     try {
-      const response = await axios.post<LoginResponse>('/auth/otp/verify', otpVerification);
+      const response = await axios.post<LoginResponse>('/api/auth/otp/verify', otpVerification);
       const { user: userData } = response.data;
 
       // For OTP authentication, tokens are set as httpOnly cookies by the server
@@ -269,7 +473,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       
       // Set user data
       setUser(userData);
-      await checkPermissions();
+      
+      // Wait a moment for cookies to be set, then check permissions
+      setTimeout(async () => {
+        try {
+          await checkPermissions();
+          // Start proactive token refresh
+          scheduleTokenRefresh();
+        } catch (error) {
+          console.error('Failed to check permissions after OTP verification:', error);
+        }
+      }, 100);
       
       return response.data;
     } catch (error: any) {

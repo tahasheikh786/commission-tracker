@@ -52,7 +52,7 @@ export default function DatabaseFieldsManager() {
   const fetchFields = useCallback(async () => {
     try {
       setLoading(true)
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/database-fields/?active_only=true`)
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/database-fields/?active_only=true`)
       if (!response.ok) throw new Error('Failed to fetch fields')
       const data = await response.json()
       setFields(data)
@@ -73,7 +73,7 @@ export default function DatabaseFieldsManager() {
   // Create field
   const createField = async () => {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/database-fields/`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/database-fields/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(createForm)
@@ -92,7 +92,7 @@ export default function DatabaseFieldsManager() {
   // Update field
   const updateField = async (fieldId: string) => {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/database-fields/${fieldId}`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/database-fields/${fieldId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(editForm)
@@ -113,7 +113,7 @@ export default function DatabaseFieldsManager() {
     if (!confirm('Are you sure you want to delete this field?')) return
     
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/database-fields/${fieldId}`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/database-fields/${fieldId}`, {
         method: 'DELETE'
       })
       if (!response.ok) throw new Error('Failed to delete field')

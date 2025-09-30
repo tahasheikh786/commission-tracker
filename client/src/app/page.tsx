@@ -22,23 +22,24 @@ import {
   Moon,
   Sun,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Upload
 } from "lucide-react";
 
 function HomePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, logout } = useAuth();
-  const [tab, setTab] = useState<"dashboard" | "carriers" | "earned-commission">("dashboard");
+  const [tab, setTab] = useState<"dashboard" | "carriers" | "earned-commission" | "analytics">("dashboard");
   const [showUserDropdown, setShowUserDropdown] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [darkMode, setDarkMode] = useState(false);
 
   // Handle URL parameters for tab selection
   useEffect(() => {
-    const tabParam = searchParams.get('tab')
-    if (tabParam && ['dashboard', 'carriers', 'earned-commission'].includes(tabParam)) {
-      setTab(tabParam as "dashboard" | "carriers" | "earned-commission")
+    const tabParam = searchParams?.get('tab')
+    if (tabParam && ['dashboard', 'carriers', 'earned-commission', 'analytics'].includes(tabParam)) {
+      setTab(tabParam as "dashboard" | "carriers" | "earned-commission" | "analytics")
     } else {
       // Default to dashboard if no tab parameter or invalid tab
       setTab("dashboard")
@@ -65,59 +66,61 @@ function HomePageContent() {
   const tabConfig = [
     {
       id: "dashboard" as const,
-      label: "Dashboard",
-      icon: BarChart3,
-      description: "Overview & Analytics",
+      label: "Upload",
+      icon: Upload,
+      description: "Upload & Process Documents",
       gradient: "from-blue-600 via-indigo-600 to-purple-600",
       bgGradient: "from-blue-50 via-indigo-50 to-purple-50"
+    },
+    {
+      id: "analytics" as const,
+      label: "Analytics",
+      icon: BarChart3,
+      description: "Overview & Analytics",
+      gradient: "from-emerald-600 via-teal-600 to-cyan-600",
+      bgGradient: "from-emerald-50 via-teal-50 to-cyan-50"
     },
     {
       id: "earned-commission" as const,
       label: "Earned Commission",
       icon: DollarSign,
       description: "Commission Tracking & Analysis",
-      gradient: "from-emerald-600 via-teal-600 to-cyan-600",
-      bgGradient: "from-emerald-50 via-teal-50 to-cyan-50"
+      gradient: "from-violet-600 via-purple-600 to-fuchsia-600",
+      bgGradient: "from-violet-50 via-purple-50 to-fuchsia-50"
     },
     {
       id: "carriers" as const,
       label: "Carriers",
       icon: Database,
       description: "Manage Carriers & Statements",
-      gradient: "from-violet-600 via-purple-600 to-fuchsia-600",
-      bgGradient: "from-violet-50 via-purple-50 to-fuchsia-50"
+      gradient: "from-orange-600 via-red-600 to-pink-600",
+      bgGradient: "from-orange-50 via-red-50 to-pink-50"
     },
   ];
 
   return (
     <div className={`min-h-screen flex ${darkMode ? 'dark' : ''}`}>
       {/* Sidebar */}
-      <div className={`${sidebarCollapsed ? 'w-16' : 'w-80'} transition-all duration-300 bg-white border-r border-slate-200 flex flex-col shadow-xl`}>
+      <div 
+        className={`${sidebarCollapsed ? 'w-16 hover:w-80' : 'w-80'} transition-all duration-300 bg-white border-r border-slate-200 flex flex-col shadow-xl group`}
+        onMouseEnter={() => setSidebarCollapsed(false)}
+        onMouseLeave={() => setSidebarCollapsed(true)}
+      >
         {/* Sidebar Header */}
         <div className="p-6 border-b border-slate-200">
-          <div className="flex items-center justify-between">
-            {!sidebarCollapsed && (
-              <div className="flex items-center gap-3">
-                <div className="relative">
-                  <div className="w-10 h-10 bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
-                    <Database className="text-white" size={20} />
-                  </div>
-                  <div className="absolute -top-1 -right-1 w-3 h-3 bg-gradient-to-r from-emerald-400 to-teal-400 rounded-full border-2 border-white shadow-sm"></div>
-                </div>
-                <div>
-                  <h1 className="font-bold text-lg bg-gradient-to-r from-slate-800 via-slate-700 to-slate-600 bg-clip-text text-transparent">
-                    Commission Tracker
-                  </h1>
-                  <p className="text-xs text-slate-500 font-medium">Professional SaaS</p>
-                </div>
+          <div className="flex items-center justify-center">
+            <div className="relative">
+              <div className="w-10 h-10 bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
+                <Database className="text-white" size={20} />
               </div>
-            )}
-            <button
-              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-              className="p-2 rounded-lg hover:bg-slate-100 transition-colors"
-            >
-              {sidebarCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
-            </button>
+              <div className="absolute -top-1 -right-1 w-3 h-3 bg-gradient-to-r from-emerald-400 to-teal-400 rounded-full border-2 border-white shadow-sm"></div>
+            </div>
+            <div className={`ml-3 transition-opacity duration-300 ${sidebarCollapsed ? 'opacity-0 w-0 overflow-hidden' : 'opacity-100'}`}>
+              <h1 className="font-bold text-lg bg-gradient-to-r from-slate-800 via-slate-700 to-slate-600 bg-clip-text text-transparent whitespace-nowrap">
+                Commission Tracker
+              </h1>
+              <p className="text-xs text-slate-500 font-medium whitespace-nowrap">Professional SaaS</p>
+            </div>
           </div>
         </div>
 
@@ -128,61 +131,83 @@ function HomePageContent() {
             const isActive = tab === tabItem.id;
             
             return (
-              <button
-                key={tabItem.id}
-                onClick={() => {
-                  if (tabItem.id === 'dashboard') {
-                    router.push('/');
-                  } else {
-                    router.push(`/?tab=${tabItem.id}`);
-                  }
-                }}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all duration-200 ${
-                  isActive 
-                    ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg' 
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                }`}
-                title={sidebarCollapsed ? tabItem.label : undefined}
-              >
-                <Icon size={20} />
-                {!sidebarCollapsed && (
-                  <>
-                    <span>{tabItem.label}</span>
-                    {isActive && (
-                      <div className="ml-auto w-2 h-2 bg-white rounded-full"></div>
-                    )}
-                  </>
+              <div key={tabItem.id} className="relative group">
+                <button
+                  onClick={() => {
+                    if (tabItem.id === 'dashboard') {
+                      router.push('/');
+                    } else {
+                      router.push(`/?tab=${tabItem.id}`);
+                    }
+                  }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all duration-200 ${
+                    isActive 
+                      ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg' 
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                  }`}
+                  style={{
+                    minHeight: '48px' // Ensure consistent height for proper background coverage
+                  }}
+                >
+                  <Icon size={20} className="flex-shrink-0 flex items-center justify-center" />
+                  <span className={`transition-opacity duration-300 ${
+                    sidebarCollapsed ? 'opacity-0 w-0 overflow-hidden' : 'opacity-100'
+                  }`}>
+                    {tabItem.label}
+                  </span>
+                  {!sidebarCollapsed && isActive && (
+                    <div className="ml-auto w-2 h-2 bg-white rounded-full"></div>
+                  )}
+                </button>
+                
+                {/* Tooltip for collapsed state */}
+                {sidebarCollapsed && (
+                  <div className="absolute left-full ml-2 px-3 py-2 bg-slate-800 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
+                    {tabItem.label}
+                    <div className="absolute left-0 top-1/2 transform -translate-y-1/2 -translate-x-1 w-2 h-2 bg-slate-800 rotate-45"></div>
+                  </div>
                 )}
-              </button>
+              </div>
             );
           })}
         </nav>
 
         {/* User Profile Section */}
         <div className="p-4 border-t border-slate-200">
-          <div className="relative">
+          <div className="relative group">
             <button
               onClick={() => setShowUserDropdown(!showUserDropdown)}
               className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-slate-100 transition-colors"
             >
-              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-semibold text-sm shadow-lg">
+              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-semibold text-sm shadow-lg flex-shrink-0">
                 {user?.first_name?.[0] || user?.email?.[0]?.toUpperCase() || 'U'}
               </div>
+              <div className={`flex-1 text-left transition-opacity duration-300 ${
+                sidebarCollapsed ? 'opacity-0 w-0 overflow-hidden' : 'opacity-100'
+              }`}>
+                <p className="text-sm font-medium text-slate-700 truncate">
+                  {user?.first_name && user?.last_name 
+                    ? `${user.first_name} ${user.last_name}`
+                    : user?.email
+                  }
+                </p>
+                <p className="text-xs text-slate-500 capitalize">{user?.role}</p>
+              </div>
               {!sidebarCollapsed && (
-                <>
-                  <div className="flex-1 text-left">
-                    <p className="text-sm font-medium text-slate-700 truncate">
-                      {user?.first_name && user?.last_name 
-                        ? `${user.first_name} ${user.last_name}`
-                        : user?.email
-                      }
-                    </p>
-                    <p className="text-xs text-slate-500 capitalize">{user?.role}</p>
-                  </div>
-                  <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform duration-200 ${showUserDropdown ? 'rotate-180' : ''}`} />
-                </>
+                <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform duration-200 ${showUserDropdown ? 'rotate-180' : ''}`} />
               )}
             </button>
+            
+            {/* Tooltip for collapsed state */}
+            {sidebarCollapsed && (
+              <div className="absolute left-full ml-2 px-3 py-2 bg-slate-800 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
+                {user?.first_name && user?.last_name 
+                  ? `${user.first_name} ${user.last_name}`
+                  : user?.email
+                }
+                <div className="absolute left-0 top-1/2 transform -translate-y-1/2 -translate-x-1 w-2 h-2 bg-slate-800 rotate-45"></div>
+              </div>
+            )}
 
             {/* Dropdown Menu */}
             {showUserDropdown && !sidebarCollapsed && (
@@ -263,6 +288,7 @@ function HomePageContent() {
         <main className="flex-1 p-6 bg-slate-50 overflow-y-auto">
           <div className="max-w-none">
             {tab === "dashboard" && <DashboardTab />}
+            {tab === "analytics" && <DashboardTab showAnalytics={true} />}
             {tab === "earned-commission" && <EarnedCommissionTab />}
             {tab === "carriers" && <CarrierTab />}
           </div>

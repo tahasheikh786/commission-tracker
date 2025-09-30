@@ -1,12 +1,14 @@
 'use client'
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from 'next/navigation';
+import { motion } from 'framer-motion';
 import StatCard from "./StatCard";
 import CarriersModal from "./CarriersModal";
 import { useDashboardStats, useCarriers, useEarnedCommissionStats } from "../../hooks/useDashboard";
 import { TrendingUp, Upload, FileText, Users, Clock, CheckCircle, XCircle, AlertTriangle, ArrowRight, Sparkles, Building2, Database, Plus } from "lucide-react";
 import CompanySelect from "../../upload/components/CompanySelect";
-import AdvancedUploadZone from "../../upload/components/AdvancedUploadZone";
+import SimpleCarrierSelector from "../../upload/components/SimpleCarrierSelector";
+import BeautifulUploadZone from "../../upload/components/BeautifulUploadZone";
 import DashboardTable from "../../upload/components/DashboardTable";
 import DashboardTableFullPage from "@/app/upload/components/DashboardTableFullPage";
 import TableEditor from "../../upload/components/TableEditor/TableEditor";
@@ -14,16 +16,22 @@ import FieldMapper from "../../upload/components/FieldMapper";
 import toast from 'react-hot-toast';
 import { useSubmission } from "@/context/SubmissionContext";
 import { ApprovalLoader } from "../../components/ui/FullScreenLoader";
+import StepIndicator from "../../components/ui/StepIndicator";
 
 type FieldConfig = { field: string, label: string }
 
-export default function DashboardTab() {
+interface DashboardTabProps {
+  showAnalytics?: boolean;
+}
+
+export default function DashboardTab({ showAnalytics = false }: DashboardTabProps) {
   const router = useRouter();
   const { refreshTrigger } = useSubmission();
   
-  const { stats, loading, refetch: refetchStats } = useDashboardStats();
+  // Only fetch stats when analytics are needed
+  const { stats, loading, refetch: refetchStats } = useDashboardStats(showAnalytics);
   const { carriers, loading: carriersLoading, fetchCarriers } = useCarriers();
-  const { stats: earnedCommissionStats, loading: earnedCommissionLoading, refetch: refetchEarnedCommissionStats } = useEarnedCommissionStats();
+  const { stats: earnedCommissionStats, loading: earnedCommissionLoading, refetch: refetchEarnedCommissionStats } = useEarnedCommissionStats(undefined, showAnalytics);
   const [carriersModalOpen, setCarriersModalOpen] = useState(false);
 
   // Upload and processing states
@@ -50,25 +58,35 @@ export default function DashboardTab() {
   const [currentStep, setCurrentStep] = useState('upload');
   const [selectedStatementDate, setSelectedStatementDate] = useState<any>(null);
   const [approvalProgress, setApprovalProgress] = useState({ totalRows: 0, processedRows: 0 });
+  const [extractionMethod, setExtractionMethod] = useState('smart');
 
   const fetchMappingRef = useRef(false);
 
-  // Refresh earned commission stats when component mounts
+  // Refresh earned commission stats when component mounts (only if analytics are shown)
   useEffect(() => {
-    refetchEarnedCommissionStats();
-  }, [refetchEarnedCommissionStats]);
+    if (showAnalytics) {
+      refetchEarnedCommissionStats();
+    }
+  }, [refetchEarnedCommissionStats, showAnalytics]);
 
-  // Listen for global refresh events
+  // Listen for global refresh events (only if analytics are shown)
   useEffect(() => {
-    refetchStats();
-    refetchEarnedCommissionStats();
-  }, [refreshTrigger, refetchStats, refetchEarnedCommissionStats]);
+    if (showAnalytics) {
+      // Add a small delay to prevent race conditions with auth refresh
+      const timeoutId = setTimeout(() => {
+        refetchStats();
+        refetchEarnedCommissionStats();
+      }, 100);
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [refreshTrigger, refetchStats, refetchEarnedCommissionStats, showAnalytics]);
 
   // Load selected statement date from upload progress
   const loadSelectedStatementDate = useCallback(async () => {
     if (uploaded?.upload_id) {
       try {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/pending/progress/${uploaded.upload_id}/table_editor`);
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/pending/progress/${uploaded.upload_id}/table_editor`);
         if (response.ok) {
           const data = await response.json();
           if (data.success && data.progress_data?.selected_statement_date) {
@@ -119,7 +137,7 @@ export default function DashboardTab() {
     async function fetchDatabaseFields() {
       try {
         setLoadingFields(true);
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/database-fields/?active_only=true`);
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/database-fields/?active_only=true`);
         if (response.ok) {
           const data = await response.json();
           const fieldsFromBackend = data.map((field: any) => ({
@@ -252,7 +270,7 @@ export default function DashboardTab() {
         selected_statement_date: selectedStatementDate,
       };
       
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/review/approve/`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/review/approve/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestBody),
@@ -315,7 +333,7 @@ export default function DashboardTab() {
       };
       
       
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/review/reject/`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/review/reject/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestBody),
@@ -360,6 +378,7 @@ export default function DashboardTab() {
     setOriginalFile(null);
     setFormatLearning(null);
     setSelectedStatementDate(null);
+    setExtractionMethod('smart');
   }
 
   const statCards = [
@@ -446,7 +465,7 @@ export default function DashboardTab() {
                 }
                 
                 
-                const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/table-editor/save-tables/`, {
+                const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/table-editor/save-tables/`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify(requestBody),
@@ -517,7 +536,7 @@ export default function DashboardTab() {
               }
               
               
-              const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${company.id}/mapping/`, {
+              const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/companies/${company.id}/mapping/`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(config),
@@ -594,6 +613,36 @@ export default function DashboardTab() {
     );
   }
 
+  // If showing analytics, render the stats grid
+  if (showAnalytics) {
+    return (
+      <div className="w-full space-y-8">
+        {/* Premium Stats Grid - Full Width */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
+          {statCards.map((card, i) => (
+            <div 
+              key={i} 
+              className="animate-scale-in"
+              style={{ animationDelay: `${i * 100}ms` }}
+            >
+              <StatCard 
+                label={card.label} 
+                value={card.value} 
+                icon={card.icon}
+                onClick={() => handleCardClick(card.type)}
+                disabled={card.disabled}
+                loading={loading || earnedCommissionLoading}
+                color={card.color}
+                description={card.description}
+                gradient={card.gradient}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       <ApprovalLoader 
@@ -606,149 +655,179 @@ export default function DashboardTab() {
           toast.error("Approval process is already in progress and cannot be cancelled");
         }}
       />
-      <div className="w-full space-y-8">
-      {/* Premium Stats Grid - Full Width */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
-        {statCards.map((card, i) => (
-          <div 
-            key={i} 
-            className="animate-scale-in"
-            style={{ animationDelay: `${i * 100}ms` }}
+      
+      {/* Minimal Upload Interface */}
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-100/50 py-12 pb-32">
+        <div className="w-full max-w-4xl mx-auto px-6 flex flex-col items-center">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+            className="text-center mb-16"
           >
-            <StatCard 
-              label={card.label} 
-              value={card.value} 
-              icon={card.icon}
-              onClick={() => handleCardClick(card.type)}
-              disabled={card.disabled}
-              loading={loading || earnedCommissionLoading}
-              color={card.color}
-              description={card.description}
-              gradient={card.gradient}
-            />
-          </div>
-        ))}
-      </div>
+            <h1 className="text-5xl md:text-6xl font-bold bg-gradient-to-r from-slate-800 via-blue-600 to-indigo-600 bg-clip-text text-transparent mb-6">
+              Commission Tracker
+            </h1>
+            <p className="text-xl md:text-2xl text-slate-600 max-w-3xl mx-auto leading-relaxed">
+              Upload your commission statements and let AI extract the data automatically
+            </p>
+          </motion.div>
 
-      {/* Upload and Processing Section */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-lg overflow-hidden">
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 px-8 py-6 border-b border-slate-200">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
-              <Upload className="text-white" size={24} />
-            </div>
-            <div>
-              <h2 className="text-2xl font-bold text-slate-800">
-                Upload & Process Statements
-              </h2>
-              <p className="text-slate-600">
-                Upload new commission statements (PDF or Excel) and process them with AI-powered extraction
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="p-8">
-          {/* Upload Interface */}
-          {!company || !uploaded ? (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Carrier Selection */}
-              <div className="space-y-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center">
-                    <Building2 className="text-white" size={16} />
-                  </div>
-                  <h3 className="text-lg font-semibold text-slate-800">
-                    Select or Add Carrier
-                  </h3>
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.2 }}
+            className="bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-visible w-full max-w-2xl"
+          >
+            <div className="p-8 md:p-12">
+              {!company || !uploaded ? (
+                <div className="space-y-10">
+                  {/* Carrier Selection */}
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5, delay: 0.3 }}
+                    className="space-y-6 relative"
+                  >
+                    <div className="text-center">
+                      <h2 className="text-2xl font-bold text-slate-800 mb-3">
+                        Select Carrier
+                      </h2>
+                      <p className="text-slate-600 text-lg">
+                        Search for your carrier or create a new one
+                      </p>
+                    </div>
+                    <SimpleCarrierSelector
+                      value={company?.id || null}
+                      onChange={setCompany}
+                      placeholder="Search for a carrier..."
+                    />
+                  </motion.div>
+                  
+                  {/* Upload Document */}
+                  {company && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.5, delay: 0.4 }}
+                      className="space-y-6"
+                    >
+                      <div className="text-center">
+                        <h2 className="text-2xl font-bold text-slate-800 mb-3">
+                          Upload Document
+                        </h2>
+                        <p className="text-slate-600 text-lg">
+                          Upload your PDF or Excel commission statement
+                        </p>
+                      </div>
+                      <BeautifulUploadZone
+                        onParsed={handleUploadResult}
+                        disabled={!company}
+                        companyId={company?.id || ''}
+                        extractionMethod={extractionMethod}
+                        onExtractionMethodChange={setExtractionMethod}
+                        selectedStatementDate={selectedStatementDate}
+                      />
+                    </motion.div>
+                  )}
                 </div>
-                <CompanySelect value={company?.id} onChange={setCompany} />
-              </div>
-              
-              {/* Upload Zone */}
-              <div className="space-y-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-lg flex items-center justify-center">
-                    <Upload className="text-white" size={16} />
+              ) : (
+                /* Final Dashboard Table with Approve/Reject - Full Page */
+                <div className="space-y-6">
+                  {/* Enhanced Progress Indicator */}
+                  <StepIndicator
+                    steps={[
+                      {
+                        id: 'upload',
+                        title: 'Upload',
+                        description: 'Document uploaded',
+                        status: 'completed'
+                      },
+                      {
+                        id: 'process',
+                        title: 'Process',
+                        description: 'AI extraction complete',
+                        status: 'completed'
+                      },
+                      {
+                        id: 'review',
+                        title: 'Review',
+                        description: 'Ready for approval',
+                        status: 'active'
+                      }
+                    ]}
+                    currentStep="review"
+                    className="mb-8"
+                  />
+
+                  {/* Dashboard Table */}
+                  <div className="bg-slate-50 rounded-xl border border-slate-200 p-6">
+                    <DashboardTable
+                      tables={finalTables}
+                      fieldConfig={fieldConfig}
+                      onEditMapping={() => {
+                        setShowFieldMapper(true);
+                        setSkipped(false);
+                      }}
+                      company={company}
+                      fileName={uploaded?.file_name || "uploaded.pdf"}
+                      fileUrl={uploaded?.file?.url || null}
+                      readOnly={false}
+                      onTableChange={setFinalTables}
+                      planTypes={planTypes}
+                      onSendToPending={() => {}}
+                      uploadId={uploaded?.upload_id}
+                      selectedStatementDate={selectedStatementDate}
+                    />
                   </div>
-                  <h3 className="text-lg font-semibold text-slate-800">
-                    Upload Document
-                  </h3>
+
+                  {/* Enhanced Action Buttons */}
+                  <div className="flex flex-col sm:flex-row justify-center gap-4">
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={handleReset}
+                      className="px-6 py-3 bg-slate-200 text-slate-700 rounded-xl hover:bg-slate-300 transition-all duration-200 font-semibold shadow-md hover:shadow-lg"
+                    >
+                      Upload Another PDF
+                    </motion.button>
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-8 py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200"
+                      onClick={handleApprove}
+                      disabled={submitting}
+                    >
+                      {submitting ? (
+                        <div className="flex items-center gap-2">
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          Processing...
+                        </div>
+                      ) : (
+                        'Approve'
+                      )}
+                    </motion.button>
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      className="bg-gradient-to-r from-red-500 to-rose-600 text-white px-8 py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200"
+                      onClick={handleReject}
+                      disabled={submitting}
+                    >
+                      {submitting ? (
+                        <div className="flex items-center gap-2">
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          Processing...
+                        </div>
+                      ) : (
+                        'Reject'
+                      )}
+                    </motion.button>
+                  </div>
                 </div>
-                <AdvancedUploadZone
-                  onParsed={handleUploadResult}
-                  disabled={!company}
-                  companyId={company?.id || ''}
-                />
-              </div>
+              )}
             </div>
-          ) : (
-          /* Final Dashboard Table with Approve/Reject - Full Page */
-          <div className="space-y-6">
-            {/* Progress Indicator */}
-            <div className="flex items-center justify-center space-x-4 mb-6">
-              <div className="flex items-center">
-                <div className="w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center text-sm font-bold">1</div>
-                <span className="ml-2 text-sm text-slate-600">Upload</span>
-              </div>
-              <div className="w-8 h-1 bg-green-500"></div>
-              <div className="flex items-center">
-                <div className="w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center text-sm font-bold">2</div>
-                <span className="ml-2 text-sm text-slate-600">Process</span>
-              </div>
-              <div className="w-8 h-1 bg-green-500"></div>
-              <div className="flex items-center">
-                <div className="w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center text-sm font-bold">3</div>
-                <span className="ml-2 text-sm font-semibold text-green-600">Review</span>
-              </div>
-            </div>
-
-            {/* Dashboard Table */}
-            <div className="bg-slate-50 rounded-xl border border-slate-200 p-6">
-              <DashboardTable
-                tables={finalTables}
-                fieldConfig={fieldConfig}
-                onEditMapping={() => {
-                  setShowFieldMapper(true);
-                  setSkipped(false);
-                }}
-                company={company}
-                fileName={uploaded?.file_name || "uploaded.pdf"}
-                fileUrl={uploaded?.file?.url || null}
-                readOnly={false}
-                onTableChange={setFinalTables}
-                planTypes={planTypes}
-                onSendToPending={() => {}}
-                uploadId={uploaded?.upload_id}
-                selectedStatementDate={selectedStatementDate}
-              />
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex justify-center gap-4">
-              <button
-                onClick={handleReset}
-                className="px-6 py-3 bg-slate-200 text-slate-700 rounded-xl hover:bg-slate-300 transition-all duration-200 font-semibold"
-              >
-                Upload Another PDF
-              </button>
-              <button
-                className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-8 py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105"
-                onClick={handleApprove}
-                disabled={submitting}
-              >
-                {submitting ? 'Processing...' : 'Approve'}
-              </button>
-              <button
-                className="bg-gradient-to-r from-red-500 to-rose-600 text-white px-8 py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105"
-                onClick={handleReject}
-                disabled={submitting}
-              >
-                {submitting ? 'Processing...' : 'Reject'}
-              </button>
-            </div>
-          </div>
-        )}
+          </motion.div>
         </div>
       </div>
 
@@ -789,7 +868,6 @@ export default function DashboardTab() {
         carriers={carriers}
         loading={carriersLoading}
       />
-      </div>
     </>
   );
 }

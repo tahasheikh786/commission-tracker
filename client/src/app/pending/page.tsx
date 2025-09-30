@@ -33,7 +33,7 @@ export default function PendingFilesPage() {
       setError(null)
       
       // Get all companies first
-      const companiesResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/`)
+      const companiesResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/companies/`)
       if (!companiesResponse.ok) {
         throw new Error('Failed to fetch companies')
       }
@@ -45,7 +45,7 @@ export default function PendingFilesPage() {
       
       for (const company of companies) {
         try {
-          const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/pending/files/${company.id}`)
+          const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/pending/files/${company.id}`)
           if (response.ok) {
             const data = await response.json()
             if (data.success && data.pending_files) {
@@ -94,7 +94,7 @@ export default function PendingFilesPage() {
 
   const handleDeleteFile = async (fileId: string) => {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/pending/delete/${fileId}`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/pending/delete/${fileId}`, {
         method: 'DELETE'
       })
       

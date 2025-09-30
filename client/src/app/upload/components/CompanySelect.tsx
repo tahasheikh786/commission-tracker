@@ -26,7 +26,7 @@ export default function CompanySelect({
 
   useEffect(() => {
     setLoading(true)
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/`)
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/companies/`)
       .then(r => r.json())
       .then((data) => {
         // Sort companies alphabetically by name
@@ -55,7 +55,7 @@ export default function CompanySelect({
     }
     setAddLoading(true)
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/companies/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newCompany })

@@ -257,22 +257,22 @@ export function GPTCorrectionLoader({ isVisible, progress, onCancel }: {
   );
 }
 
-export function ApprovalLoader({ isVisible, progress, totalRows, processedRows, onCancel }: {
+const ApprovalLoaderComponent = ({ isVisible, progress, totalRows, processedRows, onCancel }: {
   isVisible: boolean;
   progress?: number;
   totalRows?: number;
   processedRows?: number;
   onCancel?: () => void;
-}) {
-  console.log('🎯 ApprovalLoader rendered:', { isVisible, progress, totalRows, processedRows })
+}) => {
+  // Removed console.log to prevent excessive logging on every render
   
-  const steps = [
+  const steps = React.useMemo(() => [
     { id: 'validate', label: 'Validating data integrity', status: 'completed' as const },
     { id: 'calculate', label: `Calculating commission totals${totalRows ? ` (${processedRows || 0}/${totalRows} rows)` : ''}`, status: 'active' as const },
     { id: 'process', label: 'Processing statement data', status: 'pending' as const },
     { id: 'save', label: 'Saving to database', status: 'pending' as const },
     { id: 'complete', label: 'Finalizing approval', status: 'pending' as const }
-  ];
+  ], [totalRows, processedRows]);
 
   return (
     <FullScreenLoader
@@ -286,7 +286,11 @@ export function ApprovalLoader({ isVisible, progress, totalRows, processedRows, 
       showCancelButton={false}
     />
   );
-}
+};
+
+ApprovalLoaderComponent.displayName = 'ApprovalLoader';
+
+export const ApprovalLoader = React.memo(ApprovalLoaderComponent);
 
 export function GPTExtractionLoader({ isVisible, progress, onCancel }: {
   isVisible: boolean;

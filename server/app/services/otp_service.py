@@ -63,6 +63,21 @@ class OTPService:
     async def validate_email_domain(self, email: str, db: AsyncSession) -> bool:
         """Validate if email domain is allowed using existing domain whitelist system"""
         from app.utils.auth_utils import is_domain_allowed
+        import os
+        
+        # In development, allow all domains if no domains are configured
+        if os.getenv("ENVIRONMENT", "development") == "development":
+            # Check if any domains are configured
+            from sqlalchemy import select, func
+            from app.db.models import AllowedDomain
+            result = await db.execute(select(func.count(AllowedDomain.id)))
+            domain_count = result.scalar()
+            
+            # If no domains configured, allow all in development
+            if domain_count == 0:
+                print(f"⚠️ No domains configured, allowing {email} in development mode")
+                return True
+        
         return await is_domain_allowed(db, email)
     
     async def check_rate_limit(self, email: str, db: AsyncSession) -> bool:

@@ -11,7 +11,7 @@ class CompanyIds(BaseModel):
 class CompanyUpdate(BaseModel):
     name: str
 
-router = APIRouter()
+router = APIRouter(prefix="/api")
 
 @router.get("/companies/", response_model=List[schemas.Company])
 async def list_companies(db: AsyncSession = Depends(get_db)):

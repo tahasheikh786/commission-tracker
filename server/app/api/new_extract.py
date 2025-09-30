@@ -8,6 +8,7 @@ from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import crud, schemas
 from app.services.new_extraction_service import get_new_extraction_service
+from app.services.enhanced_extraction_service import EnhancedExtractionService
 from app.config import get_db
 from app.utils.db_retry import with_db_retry
 from app.dependencies.auth_dependencies import get_current_user_hybrid
@@ -17,7 +18,7 @@ from app.services.user_profile_service import UserProfileService
 from app.services.audit_logging_service import AuditLoggingService
 import os
 from datetime import datetime
-from uuid import uuid4
+from uuid import uuid4, UUID
 from app.services.gcs_utils import upload_file_to_gcs, get_gcs_file_url, download_file_from_gcs
 import logging
 from typing import Optional, Dict, Any
@@ -25,7 +26,7 @@ from fastapi.responses import JSONResponse
 import uuid
 import hashlib
 
-router = APIRouter(tags=["new-extract"])
+router = APIRouter(prefix="/api", tags=["new-extract"])
 logger = logging.getLogger(__name__)
 
 UPLOAD_DIR = "pdfs"
@@ -110,6 +111,7 @@ def transform_gpt_extraction_response_to_client_format(gpt_result: Dict[str, Any
 
 # Initialize the new extraction service
 new_extraction_service = None
+enhanced_extraction_service = None
 
 async def get_new_extraction_service_instance():
     """Get or create the new extraction service instance."""
@@ -119,12 +121,21 @@ async def get_new_extraction_service_instance():
         new_extraction_service = get_new_extraction_service(config_path)
     return new_extraction_service
 
+async def get_enhanced_extraction_service_instance():
+    """Get or create the enhanced extraction service instance."""
+    global enhanced_extraction_service
+    if enhanced_extraction_service is None:
+        enhanced_extraction_service = EnhancedExtractionService()
+    return enhanced_extraction_service
+
 
 
 @router.post("/extract-tables-smart/")
 async def extract_tables_smart(
     file: UploadFile = File(...),
     company_id: str = Form(...),
+    extraction_method: str = Form("smart"),
+    upload_id: Optional[str] = Form(None),
     current_user: User = Depends(get_current_user_hybrid),
     db: AsyncSession = Depends(get_db)
 ):
@@ -133,15 +144,32 @@ async def extract_tables_smart(
     - Digital PDFs: Uses new advanced extraction pipeline (TableFormer + Docling)
     - Scanned PDFs: Uses existing extraction pipeline (Google DocAI + Docling)
     - Includes format learning integration for automatic settings application
+    - Supports real-time progress tracking via WebSocket
     """
     start_time = datetime.now()
+    # Generate a proper UUID for database operations
+    upload_id_uuid = uuid4()
+    
+    # Use provided upload_id for tracking or generate a new one
+    if upload_id:
+        # If upload_id is provided, use it as-is (it's already a string)
+        upload_id_str = upload_id
+    else:
+        # Generate a new tracking ID if none provided
+        upload_id_str = str(upload_id_uuid)
     
     # Validate file
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file uploaded")
     
-    if not file.filename.lower().endswith('.pdf'):
-        raise HTTPException(status_code=400, detail="Only PDF files are supported")
+    # Determine file type
+    file_ext = file.filename.lower().split('.')[-1]
+    allowed_extensions = ['pdf', 'xlsx', 'xls', 'xlsm', 'xlsb']
+    if file_ext not in allowed_extensions:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Unsupported file type. Allowed: {', '.join(allowed_extensions)}"
+        )
     
     # Save uploaded file
     file_path = os.path.join(UPLOAD_DIR, file.filename)
@@ -192,285 +220,103 @@ async def extract_tables_smart(
             raise HTTPException(status_code=500, detail="Failed to upload file to GCS.")
         gcs_url = get_gcs_file_url(gcs_key)
 
-        # Detect PDF type and page count for automatic routing
-        from app.services.extraction_utils import detect_pdf_type, get_pdf_page_count
-        pdf_type = detect_pdf_type(file_path)
-        page_count = get_pdf_page_count(file_path)
-        logger.info(f"🔍 PDF Analysis: {file.filename} - Type: {pdf_type}, Pages: {page_count}")
-        
-        # Log routing decision
-        if pdf_type == "digital":
-            logger.info(f"📄 Routing to Docling (Digital PDF): {file.filename}")
-        elif pdf_type == "scanned" and page_count <= 20:
-            logger.info(f"🤖 Routing to OpenAI GPT (Scanned PDF ≤ 20 pages): {file.filename}")
-        elif pdf_type == "scanned" and page_count > 20:
-            logger.info(f"🔍 Routing to DocAI (Scanned PDF > 20 pages): {file.filename}")
-        else:
-            logger.info(f"⚠️ Unknown PDF type, defaulting to DocAI: {file.filename}")
-        
-        extraction_result = None
-        extraction_method = None
-        
-        if pdf_type == "digital":
-            # Use new advanced extraction pipeline (Docling) for digital PDFs
-            logger.info(f"Using new advanced extraction pipeline (Docling) for digital PDF: {file.filename}")
-            extraction_service = await get_new_extraction_service_instance()
-            
-            extraction_result = await extraction_service.extract_tables_from_file(
-                file_path=file_path,
-                file_type="pdf",
-                confidence_threshold=0.6,
-                enable_ocr=True,
-                enable_multipage=True,
-                max_tables_per_page=10,
-                output_format="json"
-            )
-            extraction_method = "new_advanced_pipeline"
-            
-        elif pdf_type == "scanned":
-            # Automatic routing for scanned PDFs based on page count
-            if page_count <= 20:
-                # Use OpenAI GPT extraction for scanned PDFs ≤ 20 pages
-                logger.info(f"Using OpenAI GPT extraction for scanned PDF ≤ 20 pages: {file.filename} ({page_count} pages)")
-                from app.services.gpt4o_vision_service import GPT4oVisionService
-                
-                gpt4o_service = GPT4oVisionService()
-                if not gpt4o_service.is_available():
-                    logger.warning("GPT-4 Vision service not available, falling back to DocAI")
-                    # Fallback to DocAI if GPT service is not available
-                    from app.services.extractor_google_docai import GoogleDocAIExtractor
-                    extractor = GoogleDocAIExtractor()
-                    extraction_result = await extractor.extract_tables_async(file_path)
-                    extraction_method = "google_docai"
-                else:
-                    # Use GPT extraction with page count limit
-                    extraction_result = gpt4o_service.extract_commission_data(file_path, max_pages=page_count)
-                    extraction_method = "gpt4o_vision"
-            else:
-                # Use Google DocAI extraction for scanned PDFs > 20 pages
-                logger.info(f"Using Google DocAI extraction for scanned PDF > 20 pages: {file.filename} ({page_count} pages)")
-                from app.services.extractor_google_docai import GoogleDocAIExtractor
-                
-                extractor = GoogleDocAIExtractor()
-                extraction_result = await extractor.extract_tables_async(file_path)
-                extraction_method = "google_docai"
-        else:
-            # Unknown PDF type - default to DocAI
-            logger.warning(f"Unknown PDF type detected, defaulting to DocAI extraction: {file.filename}")
-            from app.services.extractor_google_docai import GoogleDocAIExtractor
-            
-            extractor = GoogleDocAIExtractor()
-            extraction_result = await extractor.extract_tables_async(file_path)
-            extraction_method = "google_docai"
-        
-        if not extraction_result.get("success"):
-            logger.error(f"❌ Extraction failed with {extraction_method}: {extraction_result.get('error', 'Unknown error')}")
-            raise HTTPException(
-                status_code=400, 
-                detail=f"Extraction failed: {extraction_result.get('error', 'Unknown error')}"
-            )
-        
-        logger.info(f"✅ Extraction successful with {extraction_method} for {file.filename}")
-        
-        # Transform response based on extraction method
-        if extraction_method == "new_advanced_pipeline":
-            client_response = transform_new_extraction_response_to_client_format(
-                extraction_result, file.filename, company_id
-            )
-        elif extraction_method == "gpt4o_vision":
-            # Transform GPT extraction result to client format
-            client_response = transform_gpt_extraction_response_to_client_format(
-                extraction_result, file.filename, company_id
-            )
-        else:
-            # Use existing transform function for existing pipeline (DocAI)
-            from app.services.extraction_utils import transform_pipeline_response_to_client_format
-            client_response = transform_pipeline_response_to_client_format(extraction_result, file.filename)
-        
-        # Apply format learning if tables are available
-        format_learning_data = None
-        if client_response.get("tables") and len(client_response["tables"]) > 0:
-            try:
-                logger.info(f"🎯 Applying format learning for company {company_id}")
-                from app.services.format_learning_service import FormatLearningService
-                format_learning_service = FormatLearningService()
-                
-                # Get the first table for format matching
-                first_table = client_response["tables"][0]
-                headers = first_table.get("header", [])
-                rows = first_table.get("rows", [])
-                
-                if headers and rows:
-                    # Analyze table structure
-                    table_structure = format_learning_service.analyze_table_structure(rows, headers)
-                    
-                    # Find matching format
-                    learned_format, match_score = await format_learning_service.find_matching_format(
-                        db=db,
-                        company_id=company_id,
-                        headers=headers,
-                        table_structure=table_structure
-                    )
-                    
-                    if learned_format and match_score > 0.5:  # Even more flexible confidence threshold
-                        logger.info(f"🎯 Found matching format with score {match_score}")
-                        logger.info(f"🎯 Learned format field_mapping: {learned_format.get('field_mapping', {})}")
-                        logger.info(f"🎯 Learned format table_editor_settings: {learned_format.get('table_editor_settings')}")
-                        
-                        format_learning_data = {
-                            "found_match": True,
-                            "match_score": match_score,
-                            "learned_format": learned_format,
-                            "suggested_mapping": learned_format.get("field_mapping", {}),
-                            "table_editor_settings": learned_format.get("table_editor_settings")
-                        }
-                        
-                        logger.info(f"🎯 Created format_learning_data: {format_learning_data}")
-                        
-                        # Apply table editor settings if available
-                        if learned_format.get("table_editor_settings"):
-                            table_editor_settings = learned_format["table_editor_settings"]
-                            logger.info(f"🎯 Applying table editor settings: {table_editor_settings}")
-                            
-                            # Apply learned headers with intelligent matching
-                            if table_editor_settings.get("headers"):
-                                learned_headers = table_editor_settings["headers"]
-                                current_headers = first_table.get("header", [])
-                                
-                                logger.info(f"🎯 Learned headers: {learned_headers}")
-                                logger.info(f"🎯 Current headers: {current_headers}")
-                                logger.info(f"🎯 Learned count: {len(learned_headers)}, Current count: {len(current_headers)}")
-                                
-                                # For financial tables, the learned headers are usually correct
-                                # Check if this looks like a financial table that needs header correction
-                                is_financial_table = any(keyword in ' '.join(current_headers).lower() for keyword in [
-                                    'premium', 'commission', 'billed', 'group', 'client', 'invoice',
-                                    'total', 'amount', 'due', 'paid', 'rate', 'percentage', 'period'
-                                ])
-                                
-                                if is_financial_table and match_score > 0.5:
-                                    # For financial tables with good match score, apply learned headers
-                                    # and adjust the data rows accordingly
-                                    logger.info(f"🎯 Financial table detected - applying learned headers")
-                                    
-                                    # Apply learned headers
-                                    first_table["header"] = learned_headers
-                                    logger.info(f"🎯 Applied learned headers: {learned_headers}")
-                                    
-                                    # Adjust data rows if column count changed
-                                    current_rows = first_table.get("rows", [])
-                                    if current_rows and len(learned_headers) != len(current_headers):
-                                        logger.info(f"🎯 Adjusting data rows for header correction")
-                                        adjusted_rows = []
-                                        
-                                        for row in current_rows:
-                                            if len(learned_headers) > len(current_headers):
-                                                # Add empty columns if learned has more columns
-                                                adjusted_row = row + [""] * (len(learned_headers) - len(current_headers))
-                                            else:
-                                                # Truncate row if learned has fewer columns
-                                                adjusted_row = row[:len(learned_headers)]
-                                            
-                                            adjusted_rows.append(adjusted_row)
-                                        
-                                        first_table["rows"] = adjusted_rows
-                                        logger.info(f"🎯 Adjusted {len(adjusted_rows)} rows to match {len(learned_headers)} columns")
-                                    
-                                else:
-                                    # For non-financial tables or low confidence, use length-based matching
-                                    if len(learned_headers) == len(current_headers):
-                                        # Apply headers directly if count matches
-                                        first_table["header"] = learned_headers
-                                        logger.info(f"🎯 Applied learned headers (length match): {learned_headers}")
-                                    elif len(learned_headers) > len(current_headers):
-                                        # Pad current headers if learned has more columns
-                                        padded_headers = current_headers + [f"Column_{i+1}" for i in range(len(current_headers), len(learned_headers))]
-                                        first_table["header"] = learned_headers[:len(padded_headers)]
-                                        logger.info(f"🎯 Applied learned headers with padding: {learned_headers[:len(padded_headers)]}")
-                                    else:
-                                        # Truncate learned headers if current has more columns
-                                        first_table["header"] = learned_headers + [f"Column_{i+1}" for i in range(len(learned_headers), len(current_headers))]
-                                        logger.info(f"🎯 Applied learned headers with truncation: {first_table['header']}")
-                            else:
-                                logger.info(f"🎯 No learned headers to apply")
-                            
-                            # Apply learned summary rows
-                            if table_editor_settings.get("summary_rows"):
-                                summary_rows_set = set(table_editor_settings["summary_rows"])
-                                first_table["summaryRows"] = summary_rows_set
-                                logger.info(f"🎯 Applied learned summary rows: {list(summary_rows_set)}")
-                            else:
-                                logger.info(f"🎯 No summary rows to apply")
-                        else:
-                            logger.info(f"🎯 No table editor settings found in learned format")
-                        
-                    else:
-                        logger.info(f"🎯 No matching format found (score: {match_score})")
-                        format_learning_data = {
-                            "found_match": False,
-                            "match_score": match_score or 0.0,
-                            "learned_format": None,
-                            "suggested_mapping": {},
-                            "table_editor_settings": None
-                        }
-                        
-            except Exception as e:
-                logger.error(f"🎯 Error applying format learning: {e}")
-                format_learning_data = {
-                    "found_match": False,
-                    "match_score": 0.0,
-                    "learned_format": None,
-                    "suggested_mapping": {},
-                    "table_editor_settings": None
-                }
-        
-        # Add extraction timing and metadata
-        extraction_time = (datetime.now() - start_time).total_seconds()
-        client_response["extraction_time_seconds"] = extraction_time
-        client_response["pdf_type"] = pdf_type
-        client_response["extraction_method"] = extraction_method
-        
-        # Add format learning data to response (always include it)
-        client_response["format_learning"] = format_learning_data or {
-            "found_match": False,
-            "match_score": 0.0,
-            "learned_format": None,
-            "suggested_mapping": {},
-            "table_editor_settings": None
-        }
-        
-        logger.info(f"🎯 Final format_learning in response: {client_response.get('format_learning')}")
-        
-        # Create statement upload record for database
-        upload_id = uuid4()
+        # Create statement upload record for progress tracking
         db_upload = schemas.StatementUpload(
-            id=upload_id,
+            id=upload_id_uuid,
             company_id=company_id,
             user_id=current_user.id,
             file_name=gcs_key,
             file_hash=file_hash,
             file_size=file_size,
             uploaded_at=datetime.utcnow(),
-            status="extracted",
-            current_step="extracted",
-            raw_data=extraction_result.get("tables", []),
-            mapping_used=None
+            status="processing",
+            current_step="extraction",
+            progress_data={
+                'extraction_method': extraction_method,
+                'file_type': file_ext,
+                'start_time': start_time.isoformat()
+            }
         )
         
         # Save statement upload with retry
         await with_db_retry(db, crud.save_statement_upload, upload=db_upload)
         
+        # Log the extraction start
+        audit_service = AuditLoggingService(db)
+        await audit_service.log_extraction_start(
+            user_id=current_user.id,
+            company_id=company_id,
+            file_name=file.filename,
+            extraction_method=extraction_method,
+            upload_id=upload_id_uuid
+        )
+        
+        # Get enhanced extraction service with websocket progress tracking
+        enhanced_service = await get_enhanced_extraction_service_instance()
+        
+        # Perform extraction with progress tracking
+        extraction_result = await enhanced_service.extract_tables_with_progress(
+            file_path=file_path,
+            company_id=company_id,
+            upload_id=upload_id_str,
+            file_type=file_ext,
+            extraction_method=extraction_method
+        )
+        
+        # Update upload record with results
+        update_data = schemas.StatementUploadUpdate(
+            status="extracted",
+            current_step="extracted",
+            raw_data=extraction_result.get('tables', []),
+            progress_data={
+                **db_upload.progress_data,
+                'extraction_completed': True,
+                'completion_time': datetime.utcnow().isoformat(),
+                'tables_count': len(extraction_result.get('tables', [])),
+                'extraction_method_used': extraction_method
+            }
+        )
+        
+        await with_db_retry(db, crud.update_statement_upload, upload_id=upload_id_uuid, update_data=update_data)
+        
+        # Log successful extraction
+        processing_time = (datetime.now() - start_time).total_seconds()
+        await audit_service.log_extraction_complete(
+            user_id=current_user.id,
+            company_id=company_id,
+            upload_id=upload_id_uuid,
+            processing_time=processing_time,
+            tables_count=len(extraction_result.get('tables', []))
+        )
+        
+        # Prepare client response
+        client_response = {
+            "success": True,
+            "upload_id": str(upload_id_uuid),
+            "tables": extraction_result.get('tables', []),
+            "file_name": file.filename,
+            "company_id": company_id,
+            "extraction_method": extraction_method,
+            "file_type": file_ext,
+            "processing_time": processing_time,
+            "quality_summary": extraction_result.get('quality_summary', {}),
+            "extraction_config": extraction_result.get('extraction_config', {}),
+            "format_learning": extraction_result.get('format_learning', {}),
+            "metadata": extraction_result.get('metadata', {}),
+            "message": f"Successfully extracted {len(extraction_result.get('tables', []))} tables using {extraction_method} method"
+        }
+        
         # Record user contribution
         profile_service = UserProfileService(db)
         await profile_service.record_user_contribution(
             user_id=current_user.id,
-            upload_id=upload_id,
+            upload_id=upload_id_uuid,
             contribution_type="upload",
             contribution_data={
                 "file_name": file.filename,
                 "file_size": file_size,
                 "file_hash": file_hash,
-                "extraction_method": "smart_extraction",
+                "extraction_method": extraction_method,
                 "confidence_threshold": 0.6,
                 "enable_ocr": True,
                 "enable_multipage": True
@@ -478,14 +324,13 @@ async def extract_tables_smart(
         )
         
         # Log file upload for audit
-        audit_service = AuditLoggingService(db)
         await audit_service.log_file_upload(
             user_id=current_user.id,
             file_name=file.filename,
             file_size=file_size,
             file_hash=file_hash,
             company_id=company_id,
-            upload_id=upload_id
+            upload_id=upload_id_uuid
         )
         
         # Clean up local file
@@ -494,8 +339,8 @@ async def extract_tables_smart(
         # Add server-specific fields to response
         client_response.update({
             "success": True,
-            "extraction_id": str(upload_id),
-            "upload_id": str(upload_id),
+            "extraction_id": str(upload_id_uuid),
+            "upload_id": str(upload_id_uuid),
             "gcs_url": gcs_url,
             "gcs_key": gcs_key
         })
@@ -1388,3 +1233,4 @@ async def extract_tables_mistral_frontend(
             status_code=500,
             detail=f"Mistral Document AI frontend extraction failed: {str(e)}"
         )
+

@@ -1,11 +1,33 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Upload, FileText, Shield } from 'lucide-react';
+import { ArrowLeft, Upload, Shield } from 'lucide-react';
+import BeautifulUploadZone from './BeautifulUploadZone';
+import { useAuth } from '@/context/AuthContext';
+import toast from 'react-hot-toast';
 
 export default function UploadPageContent() {
   const router = useRouter();
+  const { user } = useAuth();
+
+  const handleUploadResult = (result: {
+    tables: any[];
+    upload_id?: string;
+    file_name: string;
+    file: File;
+    quality_summary?: any;
+    extraction_config?: any;
+    format_learning?: any;
+    gcs_url?: string;
+    gcs_key?: string;
+  }) => {
+    // Handle successful upload
+    toast.success('Document uploaded and processed successfully!');
+    
+    // Navigate to dashboard or show results
+    router.push('/');
+  };
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -42,17 +64,12 @@ export default function UploadPageContent() {
               Upload your commission statements for AI-powered processing and analysis
             </p>
             
-            {/* Upload Area */}
-            <div className="border-2 border-dashed border-slate-300 rounded-2xl p-16 hover:border-blue-400 hover:bg-blue-50/30 transition-all duration-300 group">
-              <div className="w-16 h-16 bg-slate-100 rounded-xl flex items-center justify-center mx-auto mb-6 group-hover:bg-blue-100 transition-colors">
-                <FileText className="h-8 w-8 text-slate-400 group-hover:text-blue-600 transition-colors" />
-              </div>
-              <p className="text-xl font-semibold text-slate-900 mb-3">Drop files here or click to upload</p>
-              <p className="text-slate-500 mb-6">PDF, Excel, or other supported formats • Up to 50MB</p>
-              <button className="px-8 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105">
-                Choose Files
-              </button>
-            </div>
+            {/* Functional Upload Zone */}
+            <BeautifulUploadZone
+              onParsed={handleUploadResult}
+              disabled={false}
+              companyId={user?.company_id || ''}
+            />
 
             {/* Security Notice */}
             <div className="mt-8 p-6 bg-emerald-50 border border-emerald-200 rounded-xl">

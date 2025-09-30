@@ -7,7 +7,7 @@ from app.services.format_learning_service import FormatLearningService
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel
 
-router = APIRouter()
+router = APIRouter(prefix="/api")
 format_learning_service = FormatLearningService()
 
 class LearnFromFileRequest(BaseModel):

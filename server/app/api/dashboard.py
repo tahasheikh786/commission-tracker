@@ -10,7 +10,7 @@ from uuid import UUID
 from decimal import Decimal
 from datetime import datetime
 
-router = APIRouter()
+router = APIRouter(prefix="/api")
 
 @router.get("/dashboard/stats")
 async def get_dashboard_stats(
@@ -831,7 +831,112 @@ async def get_carrier_earned_commission_stats(carrier_id: UUID, db: AsyncSession
             "total_statements": total_statements
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching carrier earned commission stats: {str(e)}")
+        raise
+
+@router.get("/earned-commission/carrier/user-specific/{carrier_id}/stats")
+async def get_user_specific_carrier_earned_commission_stats(
+    carrier_id: UUID, 
+    current_user: User = Depends(get_current_user_hybrid),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get earned commission statistics for a specific carrier, filtered by user's uploaded statements"""
+    try:
+        # Get carrier name
+        carrier_result = await db.execute(
+            select(Company.name).where(Company.id == carrier_id)
+        )
+        carrier_name = carrier_result.scalar()
+        
+        if not carrier_name:
+            raise HTTPException(status_code=404, detail="Carrier not found")
+
+        # Check if user has uploaded statements for this carrier
+        user_carrier_check = await db.execute(
+            select(func.count(StatementUpload.id))
+            .where(
+                and_(
+                    StatementUpload.company_id == carrier_id,
+                    StatementUpload.user_id == current_user.id
+                )
+            )
+        )
+        user_has_statements = user_carrier_check.scalar() > 0
+
+        if not user_has_statements:
+            # User has no statements for this carrier, return zeros
+            return {
+                "carrier_name": carrier_name,
+                "total_invoice": 0.0,
+                "total_commission": 0.0,
+                "total_companies": 0,
+                "total_statements": 0
+            }
+
+        # Get user's statement upload IDs for this carrier
+        user_upload_ids_result = await db.execute(
+            select(StatementUpload.id)
+            .where(
+                and_(
+                    StatementUpload.company_id == carrier_id,
+                    StatementUpload.user_id == current_user.id
+                )
+            )
+        )
+        user_upload_ids = [str(row[0]) for row in user_upload_ids_result.all()]
+
+        if not user_upload_ids:
+            # User has no statements for this carrier, return zeros
+            return {
+                "carrier_name": carrier_name,
+                "total_invoice": 0.0,
+                "total_commission": 0.0,
+                "total_companies": 0,
+                "total_statements": 0
+            }
+
+        # Get total invoice amounts for this carrier (only from user's statements)
+        # We need to check if any of the user's upload_ids are in the EarnedCommission.upload_ids JSON array
+        total_invoice = 0.0
+        total_commission = 0.0
+        total_companies = 0
+        total_statements = len(user_upload_ids)
+
+        # Get all earned commissions for this carrier
+        earned_commissions_result = await db.execute(
+            select(EarnedCommission)
+            .where(EarnedCommission.carrier_id == carrier_id)
+        )
+        earned_commissions = earned_commissions_result.scalars().all()
+
+        # Filter by user's upload IDs and calculate totals
+        user_commission_data = []
+        for commission in earned_commissions:
+            if commission.upload_ids:
+                # Check if any of the user's upload IDs are in this commission's upload_ids
+                commission_upload_ids = commission.upload_ids if isinstance(commission.upload_ids, list) else []
+                if any(upload_id in commission_upload_ids for upload_id in user_upload_ids):
+                    user_commission_data.append(commission)
+
+        # Calculate totals from filtered data
+        for commission in user_commission_data:
+            total_invoice += float(commission.invoice_total or 0)
+            total_commission += float(commission.commission_earned or 0)
+
+        # Get unique companies from user's commission data
+        unique_companies = set()
+        for commission in user_commission_data:
+            unique_companies.add(commission.client_name)
+        total_companies = len(unique_companies)
+
+        return {
+            "carrier_name": carrier_name,
+            "total_invoice": total_invoice,
+            "total_commission": total_commission,
+            "total_companies": total_companies,
+            "total_statements": total_statements
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching user-specific carrier stats: {str(e)}")
 
 @router.get("/earned-commission/carriers")
 async def get_carriers_with_commission_data(db: AsyncSession = Depends(get_db)):

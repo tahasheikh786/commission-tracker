@@ -19,7 +19,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Create router
-router = APIRouter(prefix="/table-editor", tags=["table-editor"])
+router = APIRouter(prefix="/api/table-editor", tags=["table-editor"])
 format_learning_service = FormatLearningService()
 
 

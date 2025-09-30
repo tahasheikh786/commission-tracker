@@ -84,7 +84,7 @@ const PendingFiles = React.memo(function PendingFiles({
       setLoading(true)
       setError(null)
       
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/pending/files/${companyId}`)
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/pending/files/${companyId}`)
       
       if (!response.ok) {
         throw new Error('Failed to fetch pending files')
@@ -135,7 +135,7 @@ const PendingFiles = React.memo(function PendingFiles({
     if (!onDeleteFile) return
     
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/pending/delete/${fileId}`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/pending/delete/${fileId}`, {
         method: 'DELETE'
       })
       

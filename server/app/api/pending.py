@@ -18,7 +18,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Create router
-router = APIRouter(prefix="/pending", tags=["pending"])
+router = APIRouter(prefix="/api/pending", tags=["pending"])
 
 @router.get("/files/{company_id}")
 async def get_pending_files(

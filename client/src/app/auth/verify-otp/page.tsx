@@ -18,10 +18,10 @@ function VerifyOTPContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   
-  const email = searchParams.get('email');
-  const purpose = searchParams.get('purpose') as 'login' | 'registration';
-  const firstName = searchParams.get('firstName');
-  const lastName = searchParams.get('lastName');
+  const email = searchParams?.get('email');
+  const purpose = searchParams?.get('purpose') as 'login' | 'registration';
+  const firstName = searchParams?.get('firstName');
+  const lastName = searchParams?.get('lastName');
 
   // Redirect if already authenticated
   useEffect(() => {

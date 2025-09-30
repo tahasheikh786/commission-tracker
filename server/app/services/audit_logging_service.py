@@ -137,6 +137,34 @@ class AuditLoggingService:
             session_id=session_id
         )
     
+    async def log_extraction_start(
+        self,
+        user_id: UUID,
+        company_id: str,
+        file_name: str,
+        extraction_method: str,
+        upload_id: UUID,
+        ip_address: Optional[str] = None,
+        user_agent: Optional[str] = None,
+        session_id: Optional[str] = None
+    ) -> None:
+        """Log extraction start action."""
+        await self.log_action(
+            user_id=user_id,
+            action_type=AuditActionType.DATA_VIEW,  # Using DATA_VIEW as closest match
+            resource_type="extraction_process",
+            resource_id=str(upload_id),
+            details={
+                "file_name": file_name,
+                "extraction_method": extraction_method,
+                "company_id": company_id,
+                "upload_id": str(upload_id)
+            },
+            ip_address=ip_address,
+            user_agent=user_agent,
+            session_id=session_id
+        )
+    
     async def log_duplicate_detection(
         self,
         user_id: UUID,
@@ -240,6 +268,35 @@ class AuditLoggingService:
             resource_type="user_authentication",
             details=details,
             level=level,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            session_id=session_id
+        )
+    
+    async def log_extraction_complete(
+        self,
+        user_id: UUID,
+        company_id: str,
+        upload_id: UUID,
+        processing_time: float,
+        tables_count: int,
+        ip_address: Optional[str] = None,
+        user_agent: Optional[str] = None,
+        session_id: Optional[str] = None
+    ) -> None:
+        """Log extraction completion action."""
+        await self.log_action(
+            user_id=user_id,
+            action_type=AuditActionType.DATA_VIEW,  # Using DATA_VIEW as closest match
+            resource_type="extraction_complete",
+            resource_id=str(upload_id),
+            details={
+                "company_id": company_id,
+                "upload_id": str(upload_id),
+                "processing_time": processing_time,
+                "tables_count": tables_count,
+                "status": "completed"
+            },
             ip_address=ip_address,
             user_agent=user_agent,
             session_id=session_id

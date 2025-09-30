@@ -52,7 +52,7 @@ export default function PlanTypesManager() {
   const fetchPlanTypes = useCallback(async () => {
     try {
       setLoading(true)
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/plan-types/?active_only=true`)
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/plan-types/?active_only=true`)
       if (!response.ok) throw new Error('Failed to fetch plan types')
       const data = await response.json()
       setPlanTypes(data)
@@ -73,7 +73,7 @@ export default function PlanTypesManager() {
   // Create plan type
   const createPlanType = async () => {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/plan-types/`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/plan-types/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(createForm)
@@ -92,7 +92,7 @@ export default function PlanTypesManager() {
   // Update plan type
   const updatePlanType = async (planTypeId: string) => {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/plan-types/${planTypeId}`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/plan-types/${planTypeId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(editForm)
@@ -113,7 +113,7 @@ export default function PlanTypesManager() {
     if (!confirm('Are you sure you want to delete this plan type?')) return
     
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/plan-types/${planTypeId}`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/plan-types/${planTypeId}`, {
         method: 'DELETE'
       })
       if (!response.ok) throw new Error('Failed to delete plan type')
