@@ -8,14 +8,14 @@ interface LoaderProps {
   color?: 'primary' | 'secondary' | 'success' | 'warning' | 'destructive';
 }
 
-export default function Loader({ 
+const LoaderComponent = ({ 
   message = "Loading...", 
   className = '', 
   size = 'md',
   variant = 'spinner',
   color = 'primary'
-}: LoaderProps) {
-  console.log('🚀 Loader component rendered with message:', message)
+}: LoaderProps) => {
+  // Removed console.log to prevent excessive logging on every render
   
   const sizeClasses = {
     sm: 'h-4 w-4',
@@ -39,7 +39,13 @@ export default function Loader({
       </div>
     </div>
   )
-}
+};
+
+LoaderComponent.displayName = 'Loader';
+
+const Loader = React.memo(LoaderComponent);
+
+export default Loader;
 
 // Specialized loader components for different use cases
 export function TableLoader({ className = '' }: { className?: string }) {

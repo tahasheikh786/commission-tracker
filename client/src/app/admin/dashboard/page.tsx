@@ -112,7 +112,9 @@ export default function AdminDashboard() {
   const fetchAdminData = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/admin/dashboard`);
+      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/dashboard`, {
+        withCredentials: true  // CRITICAL FIX: Ensure cookies are sent
+      });
       setData(response.data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -125,7 +127,9 @@ export default function AdminDashboard() {
   const fetchDomains = async () => {
     try {
       setDomainLoading(true);
-      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/admin/domains`);
+      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/domains`, {
+        withCredentials: true  // CRITICAL FIX: Ensure cookies are sent
+      });
       setDomains(response.data);
     } catch (err) {
       toast.error('Failed to load domains');
@@ -141,9 +145,11 @@ export default function AdminDashboard() {
     }
 
     try {
-      await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/admin/domains`, {
+      await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/domains`, {
         domain: newDomain.trim(),
         is_active: true
+      }, {
+        withCredentials: true  // CRITICAL FIX: Ensure cookies are sent
       });
       toast.success('Domain added successfully');
       setNewDomain('');
@@ -160,7 +166,9 @@ export default function AdminDashboard() {
     }
 
     try {
-      await axios.delete(`${process.env.NEXT_PUBLIC_API_URL}/admin/domains/${domainId}`);
+      await axios.delete(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/domains/${domainId}`, {
+        withCredentials: true  // CRITICAL FIX: Ensure cookies are sent
+      });
       toast.success('Domain deleted successfully');
       fetchDomains();
     } catch (err) {
@@ -170,8 +178,10 @@ export default function AdminDashboard() {
 
   const toggleDomainStatus = async (domainId: string, isActive: boolean) => {
     try {
-      await axios.put(`${process.env.NEXT_PUBLIC_API_URL}/admin/domains/${domainId}`, {
+      await axios.put(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/domains/${domainId}`, {
         is_active: !isActive
+      }, {
+        withCredentials: true  // CRITICAL FIX: Ensure cookies are sent
       });
       toast.success('Domain status updated');
       fetchDomains();
@@ -186,7 +196,9 @@ export default function AdminDashboard() {
     }
 
     try {
-      await axios.delete(`${process.env.NEXT_PUBLIC_API_URL}/admin/users/${userId}`);
+      await axios.delete(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/users/${userId}`, {
+        withCredentials: true  // CRITICAL FIX: Ensure cookies are sent
+      });
       toast.success('User deleted successfully');
       fetchAdminData();
     } catch (err) {
@@ -200,7 +212,9 @@ export default function AdminDashboard() {
     }
 
     try {
-      await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/admin/users/${userId}/reset-data`);
+      await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/users/${userId}/reset-data`, {}, {
+        withCredentials: true  // CRITICAL FIX: Ensure cookies are sent
+      });
       toast.success('User data reset successfully');
       fetchAdminData();
     } catch (err) {
@@ -210,8 +224,10 @@ export default function AdminDashboard() {
 
   const updateUserRole = async (userId: string, newRole: string) => {
     try {
-      await axios.put(`${process.env.NEXT_PUBLIC_API_URL}/admin/users/${userId}/role`, {
+      await axios.put(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/users/${userId}/role`, {
         role: newRole
+      }, {
+        withCredentials: true  // CRITICAL FIX: Ensure cookies are sent
       });
       toast.success('User role updated successfully');
       fetchAdminData();

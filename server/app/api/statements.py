@@ -11,7 +11,7 @@ import os
 from app.services.gcs_utils import get_gcs_file_url, generate_gcs_signed_url
 from urllib.parse import unquote
 
-router = APIRouter()
+router = APIRouter(prefix="/api")
 
 class DeleteStatementsRequest(BaseModel):
     statement_ids: List[UUID]

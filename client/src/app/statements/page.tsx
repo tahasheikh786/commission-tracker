@@ -74,7 +74,7 @@ export default function StatementsPage() {
     const fetchStatements = async () => {
       setStatementsLoading(true);
       try {
-        let endpoint = `${process.env.NEXT_PUBLIC_API_URL}/dashboard/statements`;
+        let endpoint = `${process.env.NEXT_PUBLIC_API_URL}/api/dashboard/statements`;
         
         // Use server-side filtering for better performance and accuracy
         if (activeTab !== 'all') {
@@ -85,11 +85,13 @@ export default function StatementsPage() {
           };
           const statusParam = statusMapping[activeTab as keyof typeof statusMapping];
           if (statusParam) {
-            endpoint = `${process.env.NEXT_PUBLIC_API_URL}/dashboard/statements/${statusParam}`;
+            endpoint = `${process.env.NEXT_PUBLIC_API_URL}/api/dashboard/statements/${statusParam}`;
           }
         }
         
-        const response = await axios.get(endpoint);
+        const response = await axios.get(endpoint, {
+          withCredentials: true  // CRITICAL FIX: Ensure cookies are sent
+        });
         const data = response.data;
         setAllStatements(data);
         setFilteredStatements(data);
@@ -225,7 +227,7 @@ export default function StatementsPage() {
       const carrier = carriers.find(c => c.name === statement.company_name);
       
       if (carrier) {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${carrier.id}/statements/`);
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/companies/${carrier.id}/statements/`);
         if (response.ok) {
           const statements = await response.json();
           const fullStatement = statements.find((s: any) => s.id === statement.id);

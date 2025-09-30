@@ -22,10 +22,11 @@ type Props = {
   onCompare: (idx: number) => void;
   onDelete: (ids: string[]) => void;
   deleting?: boolean;
-  readOnly?: boolean;
+  canSelectFiles?: boolean;
+  canDeleteFiles?: boolean;
 };
 
-export default function CarrierStatementsTable({ statements, setStatements, onPreview, onCompare, onDelete, deleting, readOnly = false }: Props) {
+export default function CarrierStatementsTable({ statements, setStatements, onPreview, onCompare, onDelete, deleting, canSelectFiles = true, canDeleteFiles = true }: Props) {
   const [selectedStatements, setSelectedStatements] = useState<Set<string>>(new Set());
   const [selectAll, setSelectAll] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
@@ -44,7 +45,7 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
       case 'approved':
         return status === 'approved' || status === 'completed';
       case 'pending':
-        return status === 'pending' || status === 'extracted' || status === 'success';
+        return ['pending', 'extracted', 'success', 'processing'].includes(status);
       case 'rejected':
         return status === 'rejected';
       default:
@@ -71,13 +72,26 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
   };
 
   const handleCheckboxChange = (id: string) => {
-    const newSelectedStatements = new Set(selectedStatements);
-    if (newSelectedStatements.has(id)) {
-      newSelectedStatements.delete(id);
-    } else {
-      newSelectedStatements.add(id);
+   
+    
+    // Only block if user cannot select files, not based on deleting state
+    if (!canSelectFiles) {
+      console.log('Checkbox interaction blocked - user cannot select files');
+      return;
     }
-    setSelectedStatements(newSelectedStatements);
+    
+    setSelectedStatements(prevSelected => {
+      const newSelectedStatements = new Set(prevSelected);
+      if (newSelectedStatements.has(id)) {
+        newSelectedStatements.delete(id);
+        console.log('Removed statement from selection:', id);
+      } else {
+        newSelectedStatements.add(id);
+        console.log('Added statement to selection:', id);
+      }
+      console.log('Updated selectedStatements:', Array.from(newSelectedStatements));
+      return newSelectedStatements;
+    });
   };
 
   const handleDelete = () => {
@@ -198,7 +212,7 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
       )}
       
       {/* Enhanced Delete Button */}
-      {selectedStatements.size > 0 && !readOnly && (
+      {selectedStatements.size > 0 && canDeleteFiles && (
         <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -220,7 +234,7 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
       )}
 
       {/* Read-only mode indicator */}
-      {readOnly && (
+      {!canSelectFiles && (
         <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl">
           <div className="flex items-center gap-3">
             <div className="w-5 h-5 bg-amber-100 rounded-full flex items-center justify-center">
@@ -274,7 +288,7 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
             <Clock size={16} />
             <span>Pending</span>
             <span className="text-xs bg-slate-200 text-slate-600 px-2 py-1 rounded-full">
-              {(statements || []).filter(s => ['pending', 'extracted', 'success'].includes(s.status.toLowerCase())).length}
+              {(statements || []).filter(s => ['pending', 'extracted', 'success', 'processing'].includes(s.status.toLowerCase())).length}
             </span>
           </button>
           <button
@@ -300,13 +314,27 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
           <thead className="bg-slate-50">
             <tr>
               <th className="px-6 py-4 w-12">
-                <input
-                  type="checkbox"
-                  checked={selectAll}
-                  onChange={handleSelectAllChange}
-                  disabled={deleting || readOnly}
-                  className="w-4 h-4 text-blue-500 border-slate-300 rounded focus:ring-blue-500"
-                />
+                {canSelectFiles ? (
+                  <input
+                    type="checkbox"
+                    checked={selectAll}
+                    onChange={(e) => {
+                      console.log('Select All checkbox onChange triggered');
+                      e.stopPropagation();
+                      handleSelectAllChange();
+                    }}
+                    onClick={(e) => {
+                      console.log('Select All checkbox onClick triggered', 'current selectAll state:', selectAll);
+                      e.stopPropagation();
+                      // Since onChange might not be working, handle the toggle directly in onClick
+                      handleSelectAllChange();
+                    }}
+                    className="w-4 h-4 text-blue-500 border-slate-300 rounded focus:ring-blue-500 cursor-pointer"
+                    style={{ pointerEvents: 'auto', zIndex: 10 }}
+                  />
+                ) : (
+                  <div className="w-4 h-4 border border-slate-300 rounded bg-slate-100" title="Selection disabled"></div>
+                )}
               </th>
               <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">
                 <div className="flex items-center gap-2">
@@ -333,13 +361,27 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
                   style={{ animationDelay: `${idx * 50}ms` }}
                 >
                   <td className="px-6 py-4">
-                    <input
-                      type="checkbox"
-                      checked={selectedStatements.has(statement.id)}
-                      onChange={() => handleCheckboxChange(statement.id)}
-                      disabled={deleting || readOnly}
-                      className="w-4 h-4 text-blue-500 border-slate-300 rounded focus:ring-blue-500"
-                    />
+                    {canSelectFiles ? (
+                      <input
+                        type="checkbox"
+                        checked={selectedStatements.has(statement.id)}
+                        onChange={(e) => {
+                          console.log('Checkbox onChange triggered for:', statement.id, 'checked:', e.target.checked);
+                          e.stopPropagation();
+                          handleCheckboxChange(statement.id);
+                        }}
+                        onClick={(e) => {
+                          console.log('Checkbox onClick triggered for:', statement.id, 'current checked state:', selectedStatements.has(statement.id));
+                          e.stopPropagation();
+                          // Since onChange might not be working, handle the toggle directly in onClick
+                          handleCheckboxChange(statement.id);
+                        }}
+                        className="w-4 h-4 text-blue-500 border-slate-300 rounded focus:ring-blue-500 cursor-pointer"
+                        style={{ pointerEvents: 'auto', zIndex: 10 }}
+                      />
+                    ) : (
+                      <div className="w-4 h-4 border border-slate-300 rounded bg-slate-100" title="Selection disabled"></div>
+                    )}
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">

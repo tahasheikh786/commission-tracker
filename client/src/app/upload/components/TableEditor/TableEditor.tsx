@@ -120,7 +120,7 @@ export default function TableEditor({
       formData.append('upload_id', uploadId)
       formData.append('company_id', currentCompanyId)
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/extract-tables-gpt/`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/extract-tables-gpt/`, {
         method: 'POST',
         body: formData
       })
@@ -182,7 +182,7 @@ export default function TableEditor({
       formData.append('upload_id', uploadId)
       formData.append('company_id', currentCompanyId)
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/extract-tables-google-docai/`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/extract-tables-google-docai/`, {
         method: 'POST',
         body: formData
       })
@@ -242,7 +242,7 @@ export default function TableEditor({
       formData.append('upload_id', uploadId)
       formData.append('company_id', currentCompanyId)
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/extract-tables-mistral-frontend/`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/extract-tables-mistral-frontend/`, {
         method: 'POST',
         body: formData
       })
@@ -463,10 +463,23 @@ export default function TableEditor({
   useEffect(() => {
     if (!tables.length) return
 
-    const cleanedTables = tables.map(table => ({
-      ...table,
-      header: cleanColumnNames(table.header)
-    }))
+    console.log('TableEditor: Processing tables:', tables)
+    console.log('TableEditor: First table structure:', tables[0])
+
+    const cleanedTables = tables.map((table, index) => {
+      console.log(`TableEditor: Processing table ${index}:`, table)
+      
+      // Handle both 'header' and 'headers' properties for backward compatibility
+      const headers = table.header || (table as any).headers || []
+      console.log(`TableEditor: Headers for table ${index}:`, headers)
+      
+      return {
+        ...table,
+        header: cleanColumnNames(headers),
+        // Ensure headers property exists for consistency
+        headers: cleanColumnNames(headers)
+      }
+    })
 
     const hasChanges = JSON.stringify(cleanedTables) !== JSON.stringify(tables)
     

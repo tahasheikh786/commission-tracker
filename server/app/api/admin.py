@@ -11,7 +11,7 @@ from uuid import UUID
 from decimal import Decimal
 from datetime import datetime, timedelta
 
-router = APIRouter()
+router = APIRouter(prefix="/api")
 
 async def delete_user_related_data(db: AsyncSession, user_id: UUID, operation_name: str = "Operation"):
     """Helper function to delete all user-related data in the correct order"""

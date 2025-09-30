@@ -496,9 +496,27 @@ class DataFormattingService:
         unique_values = []
         seen = set()
         for value, value_type in extracted_values:
-            if value not in seen:
-                unique_values.append((value, value_type))
-                seen.add(value)
+            try:
+                # Ensure value is hashable (convert to string if it's a dict or other unhashable type)
+                if isinstance(value, dict):
+                    # Convert dict to a hashable string representation
+                    hashable_value = str(sorted(value.items())) if value else "{}"
+                elif isinstance(value, (list, set)):
+                    # Convert list/set to a hashable string representation
+                    hashable_value = str(sorted(value)) if value else "[]"
+                elif not isinstance(value, (str, int, float, bool, tuple)):
+                    # Convert any other unhashable type to string
+                    hashable_value = str(value)
+                else:
+                    hashable_value = value
+                
+                if hashable_value not in seen:
+                    unique_values.append((value, value_type))
+                    seen.add(hashable_value)
+            except Exception as e:
+                # If there's any issue with hashing, skip this value
+                logger.warning(f"Failed to hash value {value}: {e}")
+                continue
         
         return unique_values
     

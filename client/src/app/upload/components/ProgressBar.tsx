@@ -1,4 +1,5 @@
 'use client'
+import React from 'react'
 import { Check } from 'lucide-react'
 
 type ProgressStep = {
@@ -19,8 +20,8 @@ const DEFAULT_STEPS = [
   { id: 'dashboard', label: 'Review', status: 'pending' as const }
 ]
 
-export default function ProgressBar({ currentStep, steps = DEFAULT_STEPS }: ProgressBarProps) {
-  console.log('ProgressBar rendered with currentStep:', currentStep)
+const ProgressBarComponent = ({ currentStep, steps = DEFAULT_STEPS }: ProgressBarProps) => {
+  // Removed console.log to prevent excessive logging on every render
   
   const getStepStatus = (stepId: string): 'completed' | 'current' | 'pending' => {
     const stepOrder = ['upload', 'table_editor', 'field_mapper', 'dashboard']
@@ -83,4 +84,10 @@ export default function ProgressBar({ currentStep, steps = DEFAULT_STEPS }: Prog
       </div>
     </div>
   )
-}
+};
+
+ProgressBarComponent.displayName = 'ProgressBar';
+
+const ProgressBar = React.memo(ProgressBarComponent);
+
+export default ProgressBar;

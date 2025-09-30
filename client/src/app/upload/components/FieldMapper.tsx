@@ -171,7 +171,7 @@ export default function FieldMapper({
     async function fetchDatabaseFields() {
       try {
         setLoadingFields(true)
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/database-fields/?active_only=true`)
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/database-fields/?active_only=true`)
         if (response.ok) {
           const data = await response.json()
           const fieldsFromBackend = data.map((field: any) => ({
@@ -212,7 +212,7 @@ export default function FieldMapper({
     async function fetchPlanTypes() {
       try {
         setLoadingPlanTypes(true)
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/plan-types/?active_only=true`)
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/plan-types/?active_only=true`)
         if (response.ok) {
           const data = await response.json()
           setAvailablePlanTypes(data)
@@ -295,7 +295,7 @@ export default function FieldMapper({
     }
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/database-fields/`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/database-fields/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -1,14 +1,33 @@
 import { TableData, DataType, FormatValidationResult } from './types'
 
-// Copy exact strategy from CompareModal
+// Enhanced PDF URL function that prioritizes GCS URLs
 export function getPdfUrl(uploaded: any) {
   if (!uploaded?.file_name) {
     console.log('getPdfUrl: No file_name found in uploaded object:', uploaded);
     return null;
   }
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, '');
-  // Handle GCS keys that start with "statements/" - these are full paths
+
+  // Priority 1: Use GCS URL if available (from API response)
+  if (uploaded.gcs_url) {
+    console.log('getPdfUrl (GCS URL):', {
+      gcs_url: uploaded.gcs_url,
+      file_name: uploaded.file_name
+    });
+    return uploaded.gcs_url;
+  }
+
+  // Priority 2: Use fileUrl if available (alternative field name)
+  if (uploaded.fileUrl) {
+    console.log('getPdfUrl (fileUrl):', {
+      fileUrl: uploaded.fileUrl,
+      file_name: uploaded.file_name
+    });
+    return uploaded.fileUrl;
+  }
+
+  // Priority 3: Construct URL from GCS key if file_name is a GCS path
   if (uploaded.file_name.startsWith("statements/")) {
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, '');
     const url = `${baseUrl}/pdfs/${encodeURIComponent(uploaded.file_name)}`;
     console.log('getPdfUrl (GCS key):', {
       file_name: uploaded.file_name,
@@ -19,14 +38,17 @@ export function getPdfUrl(uploaded: any) {
     });
     return url;
   }
-  // Handle regular filenames
+
+  // Priority 4: Fallback to localhost construction (for development)
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, '');
   const url = `${baseUrl}/pdfs/${encodeURIComponent(uploaded.file_name)}`;
-  console.log('getPdfUrl (regular filename):', {
+  console.log('getPdfUrl (fallback localhost):', {
     file_name: uploaded.file_name,
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
     baseUrl: baseUrl,
     encoded: encodeURIComponent(uploaded.file_name),
-    finalUrl: url
+    finalUrl: url,
+    warning: 'Using localhost fallback - GCS URL not available'
   });
   return url;
 }
@@ -386,11 +408,13 @@ export const getCurrentExtractionMethod = (tables: TableData[]) => {
   
   if (extractors.length === 0) {
     const hasDoclingCharacteristics = tables.some(table => 
-      table.header.some(header => 
-        header.toLowerCase().includes('client') || 
-        header.toLowerCase().includes('agent') ||
-        header.toLowerCase().includes('policy') ||
-        header.toLowerCase().includes('commission')
+      table.header && Array.isArray(table.header) && table.header.some(header => 
+        header && typeof header === 'string' && (
+          header.toLowerCase().includes('client') || 
+          header.toLowerCase().includes('agent') ||
+          header.toLowerCase().includes('policy') ||
+          header.toLowerCase().includes('commission')
+        )
       )
     )
     return hasDoclingCharacteristics ? 'docling' : null

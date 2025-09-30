@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from typing import List, Dict, Any
 from app.services.company_name_service import CompanyNameDetectionService
 
-router = APIRouter(tags=["company-validation"])
+router = APIRouter(prefix="/api", tags=["company-validation"])
 
 company_detector = CompanyNameDetectionService()
 

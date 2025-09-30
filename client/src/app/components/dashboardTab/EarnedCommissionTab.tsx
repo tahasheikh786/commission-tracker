@@ -212,7 +212,7 @@ export default function EarnedCommissionTab() {
   const handleSaveCommission = async (updatedData: Partial<CommissionData>) => {
     setEditLoading(true);
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/earned-commission/${updatedData.id}`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/earned-commission/${updatedData.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -257,7 +257,7 @@ export default function EarnedCommissionTab() {
     
     setMergeLoading(true);
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/earned-commission/merge`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/earned-commission/merge`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

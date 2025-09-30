@@ -30,7 +30,7 @@ export default function EditMappingModal({
     async function fetchDatabaseFields() {
       try {
         setLoadingFields(true)
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/database-fields/?active_only=true`)
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/database-fields/?active_only=true`)
         if (response.ok) {
           const data = await response.json()
           const fieldsFromBackend = data.map((field: any) => ({
@@ -60,7 +60,7 @@ export default function EditMappingModal({
 
   // Fetch existing mapping
   useEffect(() => {
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${company.id}/mapping/`)
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/companies/${company.id}/mapping/`)
       .then(r => r.json())
       .then(mappingObj => {
         if (mappingObj && mappingObj.mapping) {

@@ -17,7 +17,7 @@ from app.services.user_profile_service import UserProfileService
 from app.services.duplicate_detection_service import DuplicateDetectionService
 from app.db.schemas import UserProfile, UserStats
 
-router = APIRouter(prefix="/user", tags=["user-management"])
+router = APIRouter(prefix="/api/user", tags=["user-management"])
 
 @router.get("/profile", response_model=UserProfile)
 async def get_user_profile(

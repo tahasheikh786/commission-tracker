@@ -11,7 +11,7 @@ from datetime import datetime
 import re
 import logging
 
-router = APIRouter()
+router = APIRouter(prefix="/api")
 format_learning_service = FormatLearningService()
 logger = logging.getLogger(__name__)
 

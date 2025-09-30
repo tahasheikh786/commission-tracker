@@ -21,7 +21,7 @@ from typing import Optional, Dict, Any, List
 from fastapi.responses import JSONResponse
 import uuid
 
-router = APIRouter(tags=["excel-extract"])
+router = APIRouter(prefix="/api", tags=["excel-extract"])
 logger = logging.getLogger(__name__)
 
 UPLOAD_DIR = "pdfs"  # Reuse existing upload directory

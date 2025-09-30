@@ -7,9 +7,7 @@ type Props = {
 };
 
 export default function StatementPreviewModal({ statement, onClose }: Props) {
-    console.log('StatementPreviewModal - statement:', statement);
-    console.log('StatementPreviewModal - final_data:', statement.final_data);
-    console.log('StatementPreviewModal - field_config:', statement.field_config);
+  
 
     // Transform final_data to the format expected by DashboardTable
     const transformTables = (finalData: any[]) => {

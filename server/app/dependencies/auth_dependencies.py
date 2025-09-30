@@ -6,7 +6,7 @@ from datetime import datetime
 
 from app.db.database import get_db
 from app.db.models import User
-from app.utils.auth_utils import get_user_by_email, verify_token
+from app.utils.auth_utils import get_user_by_email, verify_token, update_session_activity, check_session_inactivity
 from app.services.jwt_service import jwt_service
 
 # Security schemes
@@ -58,6 +58,23 @@ async def get_current_user_hybrid(
                 detail="Invalid or expired token"
             )
         email = payload["email"]
+        
+        # Check for session inactivity (for OTP auth with sessions)
+        session_token = request.cookies.get("session_token")
+        if session_token:
+            try:
+                is_inactive = await check_session_inactivity(db, session_token)
+                if is_inactive:
+                    raise HTTPException(
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail="Session expired due to inactivity"
+                    )
+                # Update session activity (non-blocking)
+                await update_session_activity(db, session_token)
+            except Exception as e:
+                # If session check fails, log but don't block the request
+                print(f"Session activity check failed: {e}")
+                # Continue with the request
     
     # Get user from database
     user = await get_user_by_email(db, email)

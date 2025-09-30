@@ -1,5 +1,6 @@
 export type TableData = {
   header: string[]
+  headers?: string[] // For backward compatibility with mistral extraction
   rows: string[][]
   name?: string
   id?: string

@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from app.config import get_db
 from app.db import crud, schemas
 
-router = APIRouter(prefix="/review", tags=["review"])
+router = APIRouter(prefix="/api/review", tags=["review"])
 
 # --- Pydantic payload models for request bodies ---
 

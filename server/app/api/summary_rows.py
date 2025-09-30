@@ -18,7 +18,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Create router
-router = APIRouter(prefix="/summary-rows", tags=["summary-rows"])
+router = APIRouter(prefix="/api/summary-rows", tags=["summary-rows"])
 
 # Enhanced summary row detection patterns
 SUMMARY_ROW_PATTERNS = [

@@ -29,7 +29,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Create router
-router = APIRouter(prefix="/improve-extraction", tags=["improve-extraction"])
+router = APIRouter(prefix="/api/improve-extraction", tags=["improve-extraction"])
 
 # Generic Value Type Inference System
 def infer_column_characteristics(reference_value: str, header: str) -> Dict[str, Any]:

@@ -5,7 +5,7 @@ from app.config import get_db
 from typing import List
 from uuid import UUID
 
-router = APIRouter()
+router = APIRouter(prefix="/api")
 
 @router.get("/database-fields/", response_model=List[schemas.DatabaseField])
 async def get_database_fields(

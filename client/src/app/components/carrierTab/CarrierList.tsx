@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import toast from 'react-hot-toast';
 import { CardLoader } from '@/app/upload/components/Loader';
-import { Search, Edit, Trash2, Plus, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Edit, Trash2, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
 
 type Carrier = { id: string; name: string };
 
@@ -12,10 +12,11 @@ type Props = {
   loading?: boolean;
   onDelete: (ids: string[]) => void;
   deleting?: boolean;
-  readOnly?: boolean;
+  canSelectFiles?: boolean;
+  canDeleteFiles?: boolean;
 };
 
-export default function CarrierList({ carriers, selected, onSelect, loading, onDelete, deleting, readOnly = false }: Props) {
+export default function CarrierList({ carriers, selected, onSelect, loading, onDelete, deleting, canSelectFiles = true, canDeleteFiles = true }: Props) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCarriers, setSelectedCarriers] = useState<Set<string>>(new Set());
   const [currentPage, setCurrentPage] = useState(1);
@@ -34,13 +35,26 @@ export default function CarrierList({ carriers, selected, onSelect, loading, onD
   );
 
   const handleCheckboxChange = (id: string) => {
-    const newSelectedCarriers = new Set(selectedCarriers);
-    if (newSelectedCarriers.has(id)) {
-      newSelectedCarriers.delete(id);
-    } else {
-      newSelectedCarriers.add(id);
+    console.log('CarrierList handleCheckboxChange called:', { id, canSelectFiles, deleting });
+    
+    // Only block if user cannot select files, not based on deleting state
+    if (!canSelectFiles) {
+      console.log('Checkbox interaction blocked - user cannot select files');
+      return;
     }
-    setSelectedCarriers(newSelectedCarriers);
+    
+    setSelectedCarriers(prevSelected => {
+      const newSelectedCarriers = new Set(prevSelected);
+      if (newSelectedCarriers.has(id)) {
+        newSelectedCarriers.delete(id);
+        console.log('Removed carrier from selection:', id);
+      } else {
+        newSelectedCarriers.add(id);
+        console.log('Added carrier to selection:', id);
+      }
+      console.log('Updated selectedCarriers:', Array.from(newSelectedCarriers));
+      return newSelectedCarriers;
+    });
   };
 
   const handleDelete = () => {
@@ -76,7 +90,7 @@ export default function CarrierList({ carriers, selected, onSelect, loading, onD
     }
     setUpdating(true);
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${carrier.id}`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/companies/${carrier.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: editName }),
@@ -116,7 +130,7 @@ export default function CarrierList({ carriers, selected, onSelect, loading, onD
             {carriers.length} total carrier{carriers.length !== 1 ? 's' : ''}
           </p>
         </div>
-        {!readOnly && (
+        {canDeleteFiles && (
           <button className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg font-medium shadow-sm hover:bg-blue-600 transition-all duration-200">
             <Plus size={16} />
             Add New
@@ -149,7 +163,7 @@ export default function CarrierList({ carriers, selected, onSelect, loading, onD
       </div>
 
       {/* Enhanced Delete Button */}
-      {selectedCarriers.size > 0 && !readOnly && (
+      {selectedCarriers.size > 0 && canDeleteFiles && (
         <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -186,14 +200,26 @@ export default function CarrierList({ carriers, selected, onSelect, loading, onD
               style={{ animationDelay: `${index * 50}ms` }}
             >
               <div className="flex items-center gap-3">
-                {!readOnly && (
+                {canSelectFiles ? (
                   <input
                     type="checkbox"
                     checked={selectedCarriers.has(carrier.id)}
-                    onChange={() => handleCheckboxChange(carrier.id)}
-                    disabled={deleting}
-                    className="w-4 h-4 text-blue-500 border-slate-300 rounded focus:ring-blue-500"
+                    onChange={(e) => {
+                      console.log('Carrier checkbox onChange triggered for:', carrier.id, 'checked:', e.target.checked);
+                      e.stopPropagation();
+                      handleCheckboxChange(carrier.id);
+                    }}
+                    onClick={(e) => {
+                      console.log('Carrier checkbox onClick triggered for:', carrier.id, 'current checked state:', selectedCarriers.has(carrier.id));
+                      e.stopPropagation();
+                      // Since onChange might not be working, handle the toggle directly in onClick
+                      handleCheckboxChange(carrier.id);
+                    }}
+                    className="w-4 h-4 text-blue-500 border-slate-300 rounded focus:ring-blue-500 cursor-pointer"
+                    style={{ pointerEvents: 'auto', zIndex: 10 }}
                   />
+                ) : (
+                  <div className="w-4 h-4 border border-slate-300 rounded bg-slate-100" title="Selection disabled"></div>
                 )}
                 
                 {editingCarrierId === carrier.id ? (
@@ -235,7 +261,7 @@ export default function CarrierList({ carriers, selected, onSelect, loading, onD
                       {carrier.name}
                     </button>
                     
-                    {!readOnly && (
+                    {canDeleteFiles && (
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
                           className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"

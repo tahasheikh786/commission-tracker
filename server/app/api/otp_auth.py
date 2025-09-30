@@ -5,6 +5,7 @@ from sqlalchemy import select, and_
 from datetime import datetime, timedelta
 from typing import Optional
 import uuid
+import os
 
 from app.db.database import get_db
 from app.db.models import User, AllowedDomain, UserSession, OTPRequest
@@ -15,11 +16,27 @@ from app.db.otp_schemas import (
 )
 from app.services.otp_service import otp_service
 from app.services.jwt_service import jwt_service
-from app.utils.auth_utils import get_user_by_email, create_user_session, invalidate_session
+from app.utils.auth_utils import get_user_by_email, create_user_session, invalidate_session, check_session_inactivity, update_session_activity
 from app.services.audit_logging_service import AuditLoggingService
 
-router = APIRouter(prefix="/auth/otp", tags=["OTP Authentication"])
+router = APIRouter(prefix="/api/auth/otp", tags=["OTP Authentication"])
 security = HTTPBearer()
+
+def set_secure_cookie(response: Response, key: str, value: str, max_age: int, request: Request):
+    """Set secure authentication cookie with proper security settings"""
+    is_production = os.getenv("ENVIRONMENT", "development") == "production"
+    is_https = request.url.scheme == "https"
+    
+    response.set_cookie(
+        key=key,
+        value=value,
+        max_age=max_age,
+        httponly=True,
+        secure=is_https,  # Always use HTTPS detection
+        samesite="strict" if is_production else "lax",  # Strict in production
+        path="/",
+        domain=None  # Let browser determine
+    )
 
 # Dependency to get current user from OTP authentication
 async def get_current_user_otp(
@@ -136,12 +153,28 @@ async def verify_otp(
     
     try:
         # Verify OTP
-        is_valid = await otp_service.verify_otp(
-            email=verification.email,
-            provided_otp=verification.otp,
-            purpose=verification.purpose,
-            db=db
-        )
+        try:
+            is_valid = await otp_service.verify_otp(
+                email=verification.email,
+                provided_otp=verification.otp,
+                purpose=verification.purpose,
+                db=db
+            )
+        except Exception as e:
+            print(f"OTP verification error: {e}")
+            # Log failed verification
+            await audit_service.log_user_authentication(
+                user_id=uuid.uuid4(),
+                action=f"otp_verify_{verification.purpose}",
+                success=False,
+                ip_address=client_ip,
+                user_agent=user_agent,
+                failure_reason=f"OTP verification error: {str(e)}"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="OTP verification failed. Please try again."
+            )
         
         if not is_valid:
             # Log failed verification
@@ -187,28 +220,14 @@ async def verify_otp(
         }
         tokens = jwt_service.create_token_pair(user_data)
         
-        # Set httpOnly cookies
-        response.set_cookie(
-            key="access_token",
-            value=tokens["access_token"],
-            httponly=True,
-            secure=True,
-            samesite="strict",
-            max_age=3600  # 1 hour
-        )
-        
-        response.set_cookie(
-            key="refresh_token",
-            value=tokens["refresh_token"],
-            httponly=True,
-            secure=True,
-            samesite="strict",
-            max_age=604800  # 1 week
-        )
-        
-        # Create session
+        # Create session first
         session_token = str(uuid.uuid4())
         await create_user_session(db, str(user.id), session_token)
+        
+        # Set httpOnly cookies with proper security settings
+        set_secure_cookie(response, "access_token", tokens["access_token"], 3600, request)  # 1 hour
+        set_secure_cookie(response, "refresh_token", tokens["refresh_token"], 604800, request)  # 1 week
+        set_secure_cookie(response, "session_token", session_token, 604800, request)  # 1 week
         
         # Log successful authentication
         await audit_service.log_user_authentication(
@@ -350,6 +369,22 @@ async def refresh_token(
             detail="User not found or inactive"
         )
     
+    # Check session token if present
+    session_token = request.cookies.get("session_token")
+    if session_token:
+        try:
+            is_inactive = await check_session_inactivity(db, session_token)
+            if is_inactive:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Session expired due to inactivity"
+                )
+            # Update session activity
+            await update_session_activity(db, session_token)
+        except Exception as e:
+            print(f"Session activity check failed during refresh: {e}")
+            # Continue with refresh even if session check fails
+    
     # Create new token pair
     user_data = {
         "sub": str(user.id),
@@ -360,24 +395,9 @@ async def refresh_token(
     }
     tokens = jwt_service.create_token_pair(user_data)
     
-    # Update cookies
-    response.set_cookie(
-        key="access_token",
-        value=tokens["access_token"],
-        httponly=True,
-        secure=True,
-        samesite="strict",
-        max_age=3600
-    )
-    
-    response.set_cookie(
-        key="refresh_token",
-        value=tokens["refresh_token"],
-        httponly=True,
-        secure=True,
-        samesite="strict",
-        max_age=604800
-    )
+    # Update cookies with proper security settings
+    set_secure_cookie(response, "access_token", tokens["access_token"], 3600, request)  # 1 hour
+    set_secure_cookie(response, "refresh_token", tokens["refresh_token"], 604800, request)  # 1 week
     
     return {"message": "Tokens refreshed successfully"}
 
@@ -389,20 +409,90 @@ async def logout(
     db: AsyncSession = Depends(get_db)
 ):
     """Logout user and invalidate session"""
-    # Get user from token before clearing cookies
+    # Get tokens from cookies
     access_token = request.cookies.get("access_token")
+    refresh_token = request.cookies.get("refresh_token")
+    
+    # Revoke tokens if they exist
+    if access_token:
+        jwt_service.revoke_token(access_token)
+    if refresh_token:
+        jwt_service.revoke_token(refresh_token)
+    
+    # Get user from token before clearing cookies
     if access_token:
         payload = jwt_service.verify_token(access_token, "access")
         if payload:
             # Invalidate user session
             await invalidate_session(db, payload["sub"])
     
-    # Clear cookies
-    response.delete_cookie("access_token")
-    response.delete_cookie("refresh_token")
+    # Clear all authentication cookies with proper security settings
+    is_production = os.getenv("ENVIRONMENT", "development") == "production"
+    is_https = request.url.scheme == "https"
+    
+    response.delete_cookie(
+        "access_token", 
+        httponly=True, 
+        secure=is_https, 
+        samesite="strict" if is_production else "lax",
+        path="/"
+    )
+    response.delete_cookie(
+        "refresh_token", 
+        httponly=True, 
+        secure=is_https, 
+        samesite="strict" if is_production else "lax",
+        path="/"
+    )
+    response.delete_cookie(
+        "session_token", 
+        httponly=True, 
+        secure=is_https, 
+        samesite="strict" if is_production else "lax",
+        path="/"
+    )
     
     return LogoutResponseSchema(message="Logged out successfully")
 
+
+@router.post("/cleanup")
+async def cleanup_session(
+    request: Request,
+    response: Response,
+    db: AsyncSession = Depends(get_db)
+):
+    """Clean up session on browser close/tab close"""
+    session_token = request.cookies.get("session_token")
+    if session_token:
+        await invalidate_session(db, session_token)
+    
+    # Clear cookies with proper security settings
+    is_production = os.getenv("ENVIRONMENT", "development") == "production"
+    is_https = request.url.scheme == "https"
+    
+    response.delete_cookie(
+        "access_token", 
+        httponly=True, 
+        secure=is_https, 
+        samesite="strict" if is_production else "lax",
+        path="/"
+    )
+    response.delete_cookie(
+        "refresh_token", 
+        httponly=True, 
+        secure=is_https, 
+        samesite="strict" if is_production else "lax",
+        path="/"
+    )
+    response.delete_cookie(
+        "session_token", 
+        httponly=True, 
+        secure=is_https, 
+        samesite="strict" if is_production else "lax",
+        path="/"
+    )
+    
+    return {"message": "Session cleaned up"}
 
 @router.get("/status", response_model=AuthStatusSchema)
 async def auth_status(
@@ -469,6 +559,7 @@ async def get_profile(
         created_at=current_user.created_at,
         updated_at=current_user.updated_at
     )
+
 
 
 async def create_user_from_email(email: str, db: AsyncSession) -> User:

@@ -32,28 +32,33 @@ interface Statement {
   final_data?: any;
 }
 
-export function useDashboardStats() {
+export function useDashboardStats(shouldFetch: boolean = true) {
   const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(shouldFetch);
   const [error, setError] = useState<string | null>(null);
 
   const fetchStats = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/dashboard/stats`);
+      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/dashboard/stats`);
       setStats(response.data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
-      console.error('Error fetching dashboard stats:', err);
+    } catch (err: any) {
+      // Don't set error for 401s as they're handled by auth interceptor
+      if (err.response?.status !== 401) {
+        setError(err instanceof Error ? err.message : 'An error occurred');
+        console.error('Error fetching dashboard stats:', err);
+      }
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchStats();
-  }, [fetchStats]);
+    if (shouldFetch) {
+      fetchStats();
+    }
+  }, [fetchStats, shouldFetch]);
 
   return { stats, loading, error, refetch: fetchStats };
 }
@@ -67,16 +72,19 @@ export function useCarriers() {
     setLoading(true);
     setError(null);
     try {
-      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/dashboard/carriers`);
+      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/dashboard/carriers`);
       const data = response.data;
       // Sort carriers alphabetically by name
       const sortedCarriers = data.sort((a: Carrier, b: Carrier) => 
         a.name.localeCompare(b.name)
       );
       setCarriers(sortedCarriers);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
-      console.error('Error fetching carriers:', err);
+    } catch (err: any) {
+      // Don't set error for 401s as they're handled by auth interceptor
+      if (err.response?.status !== 401) {
+        setError(err instanceof Error ? err.message : 'An error occurred');
+        console.error('Error fetching carriers:', err);
+      }
     } finally {
       setLoading(false);
     }
@@ -95,15 +103,18 @@ export function useStatements() {
     setError(null);
     try {
       const endpoint = status 
-        ? `${process.env.NEXT_PUBLIC_API_URL}/dashboard/statements/${status}`
-        : `${process.env.NEXT_PUBLIC_API_URL}/dashboard/statements`;
+        ? `${process.env.NEXT_PUBLIC_API_URL}/api/dashboard/statements/${status}`
+        : `${process.env.NEXT_PUBLIC_API_URL}/api/dashboard/statements`;
       
       const response = await axios.get(endpoint);
       const data = response.data;
       setStatements(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
-      console.error('Error fetching statements:', err);
+    } catch (err: any) {
+      // Don't set error for 401s as they're handled by auth interceptor
+      if (err.response?.status !== 401) {
+        setError(err instanceof Error ? err.message : 'An error occurred');
+        console.error('Error fetching statements:', err);
+      }
     } finally {
       setLoading(false);
     }
@@ -113,9 +124,9 @@ export function useStatements() {
 } 
 
 // Earned Commission Hooks
-export const useEarnedCommissionStats = (year?: number) => {
+export const useEarnedCommissionStats = (year?: number, shouldFetch: boolean = true) => {
   const [stats, setStats] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(shouldFetch);
   const [error, setError] = useState<string | null>(null);
 
   const fetchStats = useCallback(async () => {
@@ -123,21 +134,26 @@ export const useEarnedCommissionStats = (year?: number) => {
     setError(null);
     try {
       const url = year 
-        ? `${process.env.NEXT_PUBLIC_API_URL}/earned-commission/stats?year=${year}`
-        : `${process.env.NEXT_PUBLIC_API_URL}/earned-commission/stats`;
+        ? `${process.env.NEXT_PUBLIC_API_URL}/api/earned-commission/stats?year=${year}`
+        : `${process.env.NEXT_PUBLIC_API_URL}/api/earned-commission/stats`;
       const response = await axios.get(url);
       setStats(response.data);
-    } catch (err) {
-      console.error('❌ Error fetching earned commission stats:', err);
-      setError('Error fetching earned commission stats');
+    } catch (err: any) {
+      // Don't set error for 401s as they're handled by auth interceptor
+      if (err.response?.status !== 401) {
+        console.error('❌ Error fetching earned commission stats:', err);
+        setError('Error fetching earned commission stats');
+      }
     } finally {
       setLoading(false);
     }
   }, [year]);
 
   useEffect(() => {
-    fetchStats();
-  }, [fetchStats]);
+    if (shouldFetch) {
+      fetchStats();
+    }
+  }, [fetchStats, shouldFetch]);
 
   return { stats, loading, error, refetch: fetchStats };
 };
@@ -152,8 +168,8 @@ export const useGlobalEarnedCommissionStats = (year?: number) => {
     setError(null);
     try {
       const url = year 
-        ? `${process.env.NEXT_PUBLIC_API_URL}/earned-commission/global/stats?year=${year}`
-        : `${process.env.NEXT_PUBLIC_API_URL}/earned-commission/global/stats`;
+        ? `${process.env.NEXT_PUBLIC_API_URL}/api/earned-commission/global/stats?year=${year}`
+        : `${process.env.NEXT_PUBLIC_API_URL}/api/earned-commission/global/stats`;
       const response = await axios.get(url);
       setStats(response.data);
     } catch (err) {
@@ -181,8 +197,8 @@ export const useGlobalCommissionData = (year?: number) => {
     setError(null);
     try {
       const url = year 
-        ? `${process.env.NEXT_PUBLIC_API_URL}/earned-commission/global/data?year=${year}`
-        : `${process.env.NEXT_PUBLIC_API_URL}/earned-commission/global/data`;
+        ? `${process.env.NEXT_PUBLIC_API_URL}/api/earned-commission/global/data?year=${year}`
+        : `${process.env.NEXT_PUBLIC_API_URL}/api/earned-commission/global/data`;
       const response = await axios.get(url);
       setData(response.data);
     } catch (err) {
@@ -209,7 +225,7 @@ export const useUserSpecificCompanies = () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/companies/user-specific`);
+      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/companies/user-specific`);
       setCompanies(response.data);
     } catch (err) {
       console.error('❌ Error fetching user-specific companies:', err);
@@ -240,7 +256,7 @@ export const useCarrierCommissionStats = (carrierId: string | null) => {
     setLoading(true);
     setError(null);
     try {
-      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/earned-commission/carrier/${carrierId}/stats`);
+      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/earned-commission/carrier/${carrierId}/stats`);
       setStats(response.data);
     } catch (err) {
       setError('Error fetching carrier commission stats');
@@ -266,7 +282,7 @@ export const useCarriersWithCommission = () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/dashboard/carriers`);
+      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/dashboard/carriers`);
       setCarriers(response.data);
     } catch (err) {
       setError('Error fetching carriers with commission data');
@@ -297,7 +313,7 @@ export const useCarrierCommissionData = (carrierId: string | null) => {
     setLoading(true);
     setError(null);
     try {
-      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/dashboard/carriers/${carrierId}/earned-commissions`);
+      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/dashboard/carriers/${carrierId}/earned-commissions`);
       setData(response.data);
     } catch (err) {
       setError('Error fetching carrier commission data');
@@ -323,7 +339,7 @@ export const useAvailableYears = () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/dashboard/earned-commissions/years`);
+      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/dashboard/earned-commissions/years`);
       setYears(response.data.years || []);
     } catch (err) {
       console.error('❌ Error fetching available years:', err);
@@ -350,8 +366,8 @@ export const useAllCommissionData = (year?: number) => {
     setError(null);
     try {
       const url = year 
-        ? `${process.env.NEXT_PUBLIC_API_URL}/dashboard/earned-commissions?year=${year}`
-        : `${process.env.NEXT_PUBLIC_API_URL}/dashboard/earned-commissions`;
+        ? `${process.env.NEXT_PUBLIC_API_URL}/api/dashboard/earned-commissions?year=${year}`
+        : `${process.env.NEXT_PUBLIC_API_URL}/api/dashboard/earned-commissions`;
       const response = await axios.get(url);
       setData(response.data);
     } catch (err) {
