@@ -25,7 +25,14 @@ security = HTTPBearer()
 def set_secure_cookie(response: Response, key: str, value: str, max_age: int, request: Request):
     """Set secure authentication cookie with proper security settings for cross-origin scenarios"""
     is_production = os.getenv("ENVIRONMENT", "development") == "production"
-    is_https = request.url.scheme == "https"
+    
+    # Check for HTTPS - handle proxy/load balancer scenarios
+    is_https = (
+        request.url.scheme == "https" or 
+        request.headers.get("x-forwarded-proto") == "https" or
+        request.headers.get("x-forwarded-ssl") == "on" or
+        request.headers.get("x-forwarded-scheme") == "https"
+    )
     
     # For cross-origin scenarios between different domains (Vercel + Render),
     # use "none" samesite for production to allow cookies to work across domains
@@ -48,6 +55,14 @@ def set_secure_cookie(response: Response, key: str, value: str, max_age: int, re
     print(f"🍪   NODE_ENV: {os.getenv('NODE_ENV', 'not_set')}")
     print(f"🍪   RENDER: {os.getenv('RENDER', 'not_set')}")
     print(f"🍪   PORT: {os.getenv('PORT', 'not_set')}")
+    
+    # Debug: Print HTTPS detection details
+    print(f"🍪 HTTPS Detection:")
+    print(f"🍪   request.url.scheme: {request.url.scheme}")
+    print(f"🍪   x-forwarded-proto: {request.headers.get('x-forwarded-proto', 'not_set')}")
+    print(f"🍪   x-forwarded-ssl: {request.headers.get('x-forwarded-ssl', 'not_set')}")
+    print(f"🍪   x-forwarded-scheme: {request.headers.get('x-forwarded-scheme', 'not_set')}")
+    print(f"🍪   Final is_https: {is_https}")
     
     # Use "none" samesite for cross-origin requests or production
     # BUT: samesite=none requires secure=true, so we need to handle this carefully
@@ -532,7 +547,14 @@ async def logout(
     
     # Clear all authentication cookies with proper security settings
     is_production = os.getenv("ENVIRONMENT", "development") == "production"
-    is_https = request.url.scheme == "https"
+    
+    # Check for HTTPS - handle proxy/load balancer scenarios
+    is_https = (
+        request.url.scheme == "https" or 
+        request.headers.get("x-forwarded-proto") == "https" or
+        request.headers.get("x-forwarded-ssl") == "on" or
+        request.headers.get("x-forwarded-scheme") == "https"
+    )
     is_render = "onrender.com" in request.headers.get("host", "")
     
     # Check if this is a cross-origin request (different origin from host)
@@ -594,7 +616,14 @@ async def cleanup_session(
     
     # Clear cookies with proper security settings
     is_production = os.getenv("ENVIRONMENT", "development") == "production"
-    is_https = request.url.scheme == "https"
+    
+    # Check for HTTPS - handle proxy/load balancer scenarios
+    is_https = (
+        request.url.scheme == "https" or 
+        request.headers.get("x-forwarded-proto") == "https" or
+        request.headers.get("x-forwarded-ssl") == "on" or
+        request.headers.get("x-forwarded-scheme") == "https"
+    )
     is_render = "onrender.com" in request.headers.get("host", "")
     
     # Check if this is a cross-origin request (different origin from host)
