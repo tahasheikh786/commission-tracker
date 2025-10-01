@@ -49,6 +49,12 @@ async def get_current_user_otp(
 ) -> User:
     """Get current authenticated user from httpOnly cookies"""
     access_token = request.cookies.get("access_token")
+    
+    # Debug logging for cookie issues
+    all_cookies = dict(request.cookies)
+    print(f"🔍 Debug OTP - All cookies received: {list(all_cookies.keys())}")
+    print(f"🔍 Debug OTP - Access token present: {bool(access_token)}")
+    
     if not access_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

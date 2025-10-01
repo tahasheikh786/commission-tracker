@@ -258,6 +258,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               return Promise.reject(new Error('Your session has expired. Please refresh the page and try uploading again.'));
             }
             
+            // For permissions endpoint, don't logout immediately - this might be a timing issue
+            if (originalRequest.url?.includes('/auth/permissions')) {
+              console.log('Permissions check failed - not logging out, might be timing issue');
+              return Promise.reject(refreshError);
+            }
+            
             // For other operations, logout user
             logout();
             return Promise.reject(refreshError);
@@ -470,16 +476,42 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // Set user data
       setUser(userData);
       
-      // Wait a moment for cookies to be set, then check permissions
+      // Wait longer for cookies to be set, then check permissions with retry
       setTimeout(async () => {
         try {
-          await checkPermissions();
-          // Start proactive token refresh
-          scheduleTokenRefresh();
+          // Retry permissions check up to 3 times with increasing delays
+          let retryCount = 0;
+          const maxRetries = 3;
+          
+          while (retryCount < maxRetries) {
+            try {
+              await checkPermissions();
+              // Start proactive token refresh
+              scheduleTokenRefresh();
+              break; // Success, exit retry loop
+            } catch (error) {
+              retryCount++;
+              console.log(`Permissions check attempt ${retryCount} failed:`, error);
+              
+              if (retryCount < maxRetries) {
+                // Wait longer between retries
+                await new Promise(resolve => setTimeout(resolve, 500 * retryCount));
+              } else {
+                console.error('Failed to check permissions after OTP verification after all retries:', error);
+                // Don't logout on permissions failure - just set default permissions
+                setPermissions({
+                  can_upload: true,
+                  can_edit: true,
+                  is_admin: false,
+                  is_read_only: false
+                });
+              }
+            }
+          }
         } catch (error) {
           console.error('Failed to check permissions after OTP verification:', error);
         }
-      }, 100);
+      }, 500); // Increased delay from 100ms to 500ms
       
       return response.data;
     } catch (error: any) {
