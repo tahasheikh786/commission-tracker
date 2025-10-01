@@ -164,6 +164,36 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const isAuthenticated = !!user;
 
+  // Helper function to save auth state to localStorage (for persistence across refreshes)
+  const saveAuthState = useCallback((userData: User | null) => {
+    if (userData) {
+      try {
+        localStorage.setItem('auth_user', JSON.stringify(userData));
+      } catch (error) {
+        console.warn('Failed to save auth state to localStorage:', error);
+      }
+    } else {
+      try {
+        localStorage.removeItem('auth_user');
+      } catch (error) {
+        console.warn('Failed to clear auth state from localStorage:', error);
+      }
+    }
+  }, []);
+
+  // Helper function to load auth state from localStorage
+  const loadAuthState = useCallback((): User | null => {
+    try {
+      const savedUser = localStorage.getItem('auth_user');
+      if (savedUser) {
+        return JSON.parse(savedUser);
+      }
+    } catch (error) {
+      console.warn('Failed to load auth state from localStorage:', error);
+    }
+    return null;
+  }, []);
+
   // Token refresh timer and manager
   const refreshTimer = useRef<NodeJS.Timeout | null>(null);
   const tokenRefreshManager = TokenRefreshManager.getInstance();
@@ -182,13 +212,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       refreshTimer.current = null;
     }
 
-    // Clear state
+    // Clear state and localStorage
     setUser(null);
     setPermissions(null);
+    saveAuthState(null);
 
     // Redirect to login
     router.push('/auth/login');
-  }, [router]);
+  }, [router, saveAuthState]);
 
   // Proactive token refresh function
   const scheduleTokenRefresh = useCallback(() => {
@@ -258,6 +289,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               return Promise.reject(new Error('Your session has expired. Please refresh the page and try uploading again.'));
             }
             
+            // For permissions endpoint, don't logout immediately - this might be a timing issue
+            if (originalRequest.url?.includes('/auth/permissions')) {
+              console.log('Permissions check failed - not logging out, might be timing issue');
+              return Promise.reject(refreshError);
+            }
+            
             // For other operations, logout user
             logout();
             return Promise.reject(refreshError);
@@ -288,18 +325,42 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       try {
         console.log('Checking auth status...');
         
+        // First, try to load from localStorage as a fallback
+        const savedUser = loadAuthState();
+        if (savedUser) {
+          console.log('Found saved user in localStorage, setting as fallback');
+          setUser(savedUser);
+        }
+        
         // FIXED: Use authService which now has proper withCredentials
         const authStatus = await authService.checkAuthStatus();
         
         if (authStatus.is_authenticated) {
           console.log('User is authenticated');
           setUser(authStatus.user);
-          await checkPermissions();
+          saveAuthState(authStatus.user); // Save to localStorage
+          
+          // Don't block authentication on permissions check failure
+          // Try to get permissions but don't fail auth if it doesn't work
+          try {
+            await checkPermissions();
+          } catch (permError) {
+            console.log('Permissions check failed during auth, using defaults:', permError);
+            // Set default permissions instead of failing auth
+            setPermissions({
+              can_upload: true,
+              can_edit: true,
+              is_admin: false,
+              is_read_only: false
+            });
+          }
+          
           // Start proactive token refresh
           scheduleTokenRefresh();
         } else {
           console.log('User not authenticated');
           setUser(null);
+          saveAuthState(null); // Clear localStorage
         }
       } catch (error) {
         console.error('Auth check failed:', error);
@@ -307,8 +368,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // Only set user to null if it's a clear authentication failure
         if (error instanceof Error && error.message.includes('401')) {
           setUser(null);
+          saveAuthState(null); // Clear localStorage on auth failure
         }
-        // For other errors (network, timeout), keep current state
+        // For other errors (network, timeout), keep current state from localStorage
       }
       setIsLoading(false);
     };
@@ -374,7 +436,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const login = async (credentials: LoginRequest) => {
     try {
       console.log('Attempting login...');
-      const response = await axios.post<LoginResponse>('/api/auth/login', credentials);
+      const response = await axios.post<LoginResponse>('/api/auth/login', credentials, {
+        withCredentials: true
+      });
       const { access_token, user: userData } = response.data;
 
       console.log('Login successful, storing token...');
@@ -398,7 +462,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const signup = async (credentials: SignupRequest) => {
     try {
-      const response = await axios.post<LoginResponse>('/api/auth/signup', credentials);
+      const response = await axios.post<LoginResponse>('/api/auth/signup', credentials, {
+        withCredentials: true
+      });
       const { access_token, user: userData } = response.data;
 
       // Store token in cookie
@@ -451,7 +517,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // OTP Methods
   const requestOTP = async (otpRequest: OTPRequest) => {
     try {
-      const response = await axios.post('/api/auth/otp/request', otpRequest);
+      const response = await axios.post('/api/auth/otp/request', otpRequest, {
+        withCredentials: true
+      });
       return response.data;
     } catch (error: any) {
       const errorMessage = error.response?.data?.detail || 'Failed to send OTP';
@@ -461,7 +529,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const verifyOTP = async (otpVerification: OTPVerification): Promise<LoginResponse> => {
     try {
-      const response = await axios.post<LoginResponse>('/api/auth/otp/verify', otpVerification);
+      const response = await axios.post<LoginResponse>('/api/auth/otp/verify', otpVerification, {
+        withCredentials: true
+      });
       const { user: userData } = response.data;
 
       // For OTP authentication, tokens are set as httpOnly cookies by the server
@@ -469,17 +539,44 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       
       // Set user data
       setUser(userData);
+      saveAuthState(userData); // Save to localStorage for persistence
       
-      // Wait a moment for cookies to be set, then check permissions
+      // Wait longer for cookies to be set, then check permissions with retry
       setTimeout(async () => {
         try {
-          await checkPermissions();
-          // Start proactive token refresh
-          scheduleTokenRefresh();
+          // Retry permissions check up to 3 times with increasing delays
+          let retryCount = 0;
+          const maxRetries = 3;
+          
+          while (retryCount < maxRetries) {
+            try {
+              await checkPermissions();
+              // Start proactive token refresh
+              scheduleTokenRefresh();
+              break; // Success, exit retry loop
+            } catch (error) {
+              retryCount++;
+              console.log(`Permissions check attempt ${retryCount} failed:`, error);
+              
+              if (retryCount < maxRetries) {
+                // Wait longer between retries
+                await new Promise(resolve => setTimeout(resolve, 500 * retryCount));
+              } else {
+                console.error('Failed to check permissions after OTP verification after all retries:', error);
+                // Don't logout on permissions failure - just set default permissions
+                setPermissions({
+                  can_upload: true,
+                  can_edit: true,
+                  is_admin: false,
+                  is_read_only: false
+                });
+              }
+            }
+          }
         } catch (error) {
           console.error('Failed to check permissions after OTP verification:', error);
         }
-      }, 100);
+      }, 500); // Increased delay from 100ms to 500ms
       
       return response.data;
     } catch (error: any) {

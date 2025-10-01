@@ -23,9 +23,17 @@ router = APIRouter(prefix="/api/auth/otp", tags=["OTP Authentication"])
 security = HTTPBearer()
 
 def set_secure_cookie(response: Response, key: str, value: str, max_age: int, request: Request):
-    """Set secure authentication cookie with proper security settings"""
+    """Set secure authentication cookie with proper security settings for cross-origin scenarios"""
     is_production = os.getenv("ENVIRONMENT", "development") == "production"
     is_https = request.url.scheme == "https"
+    
+    # For cross-origin scenarios between different domains (Vercel + Render),
+    # use "none" samesite for production to allow cookies to work across domains
+    samesite_setting = "none" if is_production else "lax"
+    
+    # Don't set domain for cross-origin deployments - let browsers handle it
+    # Setting a domain that doesn't match the request origin causes browsers to reject cookies
+    cookie_domain = None
     
     response.set_cookie(
         key=key,
@@ -33,9 +41,9 @@ def set_secure_cookie(response: Response, key: str, value: str, max_age: int, re
         max_age=max_age,
         httponly=True,
         secure=is_https,  # Always use HTTPS detection
-        samesite="strict" if is_production else "lax",  # Strict in production
+        samesite=samesite_setting,  # Use "none" for production cross-origin
         path="/",
-        domain=None  # Let browser determine
+        # Don't set domain for cross-origin scenarios
     )
 
 # Dependency to get current user from OTP authentication
@@ -45,6 +53,12 @@ async def get_current_user_otp(
 ) -> User:
     """Get current authenticated user from httpOnly cookies"""
     access_token = request.cookies.get("access_token")
+    
+    # Debug logging for cookie issues
+    all_cookies = dict(request.cookies)
+    print(f"🔍 Debug OTP - All cookies received: {list(all_cookies.keys())}")
+    print(f"🔍 Debug OTP - Access token present: {bool(access_token)}")
+    
     if not access_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -429,26 +443,27 @@ async def logout(
     # Clear all authentication cookies with proper security settings
     is_production = os.getenv("ENVIRONMENT", "development") == "production"
     is_https = request.url.scheme == "https"
+    samesite_setting = "none" if is_production else "lax"  # Use same setting as cookie creation
     
     response.delete_cookie(
         "access_token", 
         httponly=True, 
         secure=is_https, 
-        samesite="strict" if is_production else "lax",
+        samesite=samesite_setting,
         path="/"
     )
     response.delete_cookie(
         "refresh_token", 
         httponly=True, 
         secure=is_https, 
-        samesite="strict" if is_production else "lax",
+        samesite=samesite_setting,
         path="/"
     )
     response.delete_cookie(
         "session_token", 
         httponly=True, 
         secure=is_https, 
-        samesite="strict" if is_production else "lax",
+        samesite=samesite_setting,
         path="/"
     )
     
@@ -469,26 +484,27 @@ async def cleanup_session(
     # Clear cookies with proper security settings
     is_production = os.getenv("ENVIRONMENT", "development") == "production"
     is_https = request.url.scheme == "https"
+    samesite_setting = "none" if is_production else "lax"  # Use same setting as cookie creation
     
     response.delete_cookie(
         "access_token", 
         httponly=True, 
         secure=is_https, 
-        samesite="strict" if is_production else "lax",
+        samesite=samesite_setting,
         path="/"
     )
     response.delete_cookie(
         "refresh_token", 
         httponly=True, 
         secure=is_https, 
-        samesite="strict" if is_production else "lax",
+        samesite=samesite_setting,
         path="/"
     )
     response.delete_cookie(
         "session_token", 
         httponly=True, 
         secure=is_https, 
-        samesite="strict" if is_production else "lax",
+        samesite=samesite_setting,
         path="/"
     )
     
@@ -501,6 +517,14 @@ async def auth_status(
 ):
     """Check authentication status"""
     access_token = request.cookies.get("access_token")
+    
+    # Debug logging for auth status check
+    all_cookies = dict(request.cookies)
+    print(f"🔍 Auth Status - All cookies: {list(all_cookies.keys())}")
+    print(f"🔍 Auth Status - Access token present: {bool(access_token)}")
+    print(f"🔍 Auth Status - Request host: {request.headers.get('host', 'unknown')}")
+    print(f"🔍 Auth Status - Request origin: {request.headers.get('origin', 'unknown')}")
+    
     if not access_token:
         return AuthStatusSchema(is_authenticated=False)
     

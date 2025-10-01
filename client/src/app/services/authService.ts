@@ -30,7 +30,26 @@ class AuthService {
             return response.data;
         } catch (error) {
             console.error('Auth status check failed:', error);
-            return { is_authenticated: false };
+            
+            // If it's a 401, user is definitely not authenticated
+            if (error && typeof error === 'object' && 'response' in error && 
+                error.response && typeof error.response === 'object' && 
+                'status' in error.response && error.response.status === 401) {
+                return { is_authenticated: false };
+            }
+            
+            // For other errors (network, timeout), retry once
+            try {
+                console.log('Retrying auth status check...');
+                const retryResponse: AxiosResponse<AuthStatus> = await axios.get('/api/auth/otp/status', {
+                    withCredentials: true,
+                    timeout: 5000
+                });
+                return retryResponse.data;
+            } catch (retryError) {
+                console.error('Auth status retry failed:', retryError);
+                return { is_authenticated: false };
+            }
         }
     }
 

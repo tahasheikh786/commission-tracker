@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from collections import defaultdict
 import time
+import os
 from app.api import company, mapping, review, statements, database_fields, plan_types, table_editor, improve_extraction, pending, dashboard, format_learning, new_extract, summary_rows, date_extraction, excel_extract, user_management, admin, otp_auth, auth, websocket
 from app.utils.auth_utils import cleanup_expired_sessions
 from app.db.database import get_db
@@ -39,24 +40,37 @@ async def security_status():
         "timestamp": time.time()
     }
 
+@app.get("/debug/cors")
+async def debug_cors():
+    """Debug endpoint to check CORS configuration"""
+    cors_config = get_cors_config()
+    return {
+        "cors_origins": cors_config["allow_origins"],
+        "cors_credentials": cors_config["allow_credentials"],
+        "cors_methods": cors_config["allow_methods"],
+        "cors_headers": cors_config["allow_headers"],
+        "environment": os.getenv("ENVIRONMENT", "development"),
+        "cors_origins_env": os.getenv("CORS_ORIGINS", "not_set")
+    }
+
 # Security Configuration
 cors_config = get_cors_config()
 trusted_hosts = get_trusted_hosts()
 security_headers = get_security_headers()
 
-# Security middleware
-app.add_middleware(
-    TrustedHostMiddleware, 
-    allowed_hosts=trusted_hosts
-)
-
+# Security middleware - CORS must be added first
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_config["allow_origins"],
     allow_credentials=cors_config["allow_credentials"],
     allow_methods=cors_config["allow_methods"],
     allow_headers=cors_config["allow_headers"],
-    expose_headers=["*"],  # Allow all headers to be exposed
+    expose_headers=["Set-Cookie", "Authorization", "Content-Type", "X-Process-Time"],  # Important for cookie visibility
+)
+
+app.add_middleware(
+    TrustedHostMiddleware, 
+    allowed_hosts=trusted_hosts
 )
 
 # Security headers middleware

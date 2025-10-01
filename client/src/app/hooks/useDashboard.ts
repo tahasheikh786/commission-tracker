@@ -41,7 +41,9 @@ export function useDashboardStats(shouldFetch: boolean = true) {
     setLoading(true);
     setError(null);
     try {
-      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/dashboard/stats`);
+      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/dashboard/stats`, {
+        withCredentials: true
+      });
       setStats(response.data);
     } catch (err: any) {
       // Don't set error for 401s as they're handled by auth interceptor
@@ -72,7 +74,9 @@ export function useCarriers() {
     setLoading(true);
     setError(null);
     try {
-      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/dashboard/carriers`);
+      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/dashboard/carriers`, {
+        withCredentials: true
+      });
       const data = response.data;
       // Sort carriers alphabetically by name
       const sortedCarriers = data.sort((a: Carrier, b: Carrier) => 
@@ -106,7 +110,9 @@ export function useStatements() {
         ? `${process.env.NEXT_PUBLIC_API_URL}/api/dashboard/statements/${status}`
         : `${process.env.NEXT_PUBLIC_API_URL}/api/dashboard/statements`;
       
-      const response = await axios.get(endpoint);
+      const response = await axios.get(endpoint, {
+        withCredentials: true
+      });
       const data = response.data;
       setStatements(data);
     } catch (err: any) {
@@ -136,7 +142,9 @@ export const useEarnedCommissionStats = (year?: number, shouldFetch: boolean = t
       const url = year 
         ? `${process.env.NEXT_PUBLIC_API_URL}/api/earned-commission/stats?year=${year}`
         : `${process.env.NEXT_PUBLIC_API_URL}/api/earned-commission/stats`;
-      const response = await axios.get(url);
+      const response = await axios.get(url, {
+        withCredentials: true
+      });
       setStats(response.data);
     } catch (err: any) {
       // Don't set error for 401s as they're handled by auth interceptor
@@ -170,7 +178,9 @@ export const useGlobalEarnedCommissionStats = (year?: number) => {
       const url = year 
         ? `${process.env.NEXT_PUBLIC_API_URL}/api/earned-commission/global/stats?year=${year}`
         : `${process.env.NEXT_PUBLIC_API_URL}/api/earned-commission/global/stats`;
-      const response = await axios.get(url);
+      const response = await axios.get(url, {
+        withCredentials: true
+      });
       setStats(response.data);
     } catch (err) {
       console.error('❌ Error fetching global earned commission stats:', err);
@@ -199,7 +209,9 @@ export const useGlobalCommissionData = (year?: number) => {
       const url = year 
         ? `${process.env.NEXT_PUBLIC_API_URL}/api/earned-commission/global/data?year=${year}`
         : `${process.env.NEXT_PUBLIC_API_URL}/api/earned-commission/global/data`;
-      const response = await axios.get(url);
+      const response = await axios.get(url, {
+        withCredentials: true
+      });
       setData(response.data);
     } catch (err) {
       console.error('❌ Error fetching global commission data:', err);
@@ -225,7 +237,9 @@ export const useUserSpecificCompanies = () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/companies/user-specific`);
+      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/companies/user-specific`, {
+        withCredentials: true
+      });
       setCompanies(response.data);
     } catch (err) {
       console.error('❌ Error fetching user-specific companies:', err);
@@ -256,7 +270,9 @@ export const useCarrierCommissionStats = (carrierId: string | null) => {
     setLoading(true);
     setError(null);
     try {
-      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/earned-commission/carrier/${carrierId}/stats`);
+      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/earned-commission/carrier/${carrierId}/stats`, {
+        withCredentials: true
+      });
       setStats(response.data);
     } catch (err) {
       setError('Error fetching carrier commission stats');
@@ -282,7 +298,9 @@ export const useCarriersWithCommission = () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/dashboard/carriers`);
+      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/dashboard/carriers`, {
+        withCredentials: true
+      });
       setCarriers(response.data);
     } catch (err) {
       setError('Error fetching carriers with commission data');
@@ -313,7 +331,9 @@ export const useCarrierCommissionData = (carrierId: string | null) => {
     setLoading(true);
     setError(null);
     try {
-      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/dashboard/carriers/${carrierId}/earned-commissions`);
+      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/dashboard/carriers/${carrierId}/earned-commissions`, {
+        withCredentials: true
+      });
       setData(response.data);
     } catch (err) {
       setError('Error fetching carrier commission data');
@@ -339,7 +359,9 @@ export const useAvailableYears = () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/dashboard/earned-commissions/years`);
+      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/dashboard/earned-commissions/years`, {
+        withCredentials: true
+      });
       setYears(response.data.years || []);
     } catch (err) {
       console.error('❌ Error fetching available years:', err);
@@ -368,7 +390,9 @@ export const useAllCommissionData = (year?: number) => {
       const url = year 
         ? `${process.env.NEXT_PUBLIC_API_URL}/api/dashboard/earned-commissions?year=${year}`
         : `${process.env.NEXT_PUBLIC_API_URL}/api/dashboard/earned-commissions`;
-      const response = await axios.get(url);
+      const response = await axios.get(url, {
+        withCredentials: true
+      });
       setData(response.data);
     } catch (err) {
       console.error('❌ Error fetching all commission data:', err);
