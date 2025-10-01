@@ -42,6 +42,13 @@ def set_secure_cookie(response: Response, key: str, value: str, max_age: int, re
     # Check if origin domain is different from host
     is_cross_origin = origin and host and origin_domain != host
     
+    # Debug: Print all environment variables that might affect cookie setting
+    print(f"🍪 Environment variables:")
+    print(f"🍪   ENVIRONMENT: {os.getenv('ENVIRONMENT', 'not_set')}")
+    print(f"🍪   NODE_ENV: {os.getenv('NODE_ENV', 'not_set')}")
+    print(f"🍪   RENDER: {os.getenv('RENDER', 'not_set')}")
+    print(f"🍪   PORT: {os.getenv('PORT', 'not_set')}")
+    
     # Use "none" samesite for cross-origin requests or production
     # BUT: samesite=none requires secure=true, so we need to handle this carefully
     if is_cross_origin and not is_https:
@@ -67,32 +74,50 @@ def set_secure_cookie(response: Response, key: str, value: str, max_age: int, re
     
     print(f"🍪 Setting cookie: {key} with samesite={samesite_setting}, secure={is_https}")
     
-    # For local development, we might need to be more permissive with cookie settings
-    if not is_https and not is_production:
-        # Local development - use more permissive settings
-        response.set_cookie(
-            key=key,
-            value=value,
-            max_age=max_age,
-            httponly=True,
-            secure=False,  # Allow non-secure cookies in development
-            samesite=samesite_setting,
-            path="/",
-        )
-    else:
-        # Production - use strict settings
-        response.set_cookie(
-            key=key,
-            value=value,
-            max_age=max_age,
-            httponly=True,
-            secure=is_https,  # Always use HTTPS detection
-            samesite=samesite_setting,
-            path="/",
-            # Don't set domain for cross-origin scenarios
-        )
-    
-    print(f"🍪 Cookie {key} set successfully")
+    try:
+        # For local development, we might need to be more permissive with cookie settings
+        if not is_https and not is_production:
+            # Local development - use more permissive settings
+            print(f"🍪 Using local development cookie settings for {key}")
+            response.set_cookie(
+                key=key,
+                value=value,
+                max_age=max_age,
+                httponly=True,
+                secure=False,  # Allow non-secure cookies in development
+                samesite=samesite_setting,
+                path="/",
+            )
+        else:
+            # Production - use strict settings
+            print(f"🍪 Using production cookie settings for {key}")
+            response.set_cookie(
+                key=key,
+                value=value,
+                max_age=max_age,
+                httponly=True,
+                secure=is_https,  # Always use HTTPS detection
+                samesite=samesite_setting,
+                path="/",
+                # Don't set domain for cross-origin scenarios
+            )
+        
+        print(f"🍪 Cookie {key} set successfully")
+        
+        # Debug: Check if the cookie was actually added to response headers
+        # Note: FastAPI might use different header names or multiple headers
+        all_headers = dict(response.headers)
+        cookie_headers = [v for k, v in all_headers.items() if k.lower() == 'set-cookie']
+        
+        if cookie_headers:
+            print(f"🍪 Set-Cookie headers for {key}: {cookie_headers}")
+        else:
+            print(f"⚠️  No Set-Cookie header found for {key}")
+            print(f"🍪 All response headers: {all_headers}")
+            
+    except Exception as e:
+        print(f"❌ Error setting cookie {key}: {e}")
+        raise
 
 # Dependency to get current user from OTP authentication
 async def get_current_user_otp(
@@ -290,12 +315,23 @@ async def verify_otp(
         print(f"🍪 Setting cookies for user {user.email}")
         print(f"🍪 Request origin: {request.headers.get('origin', 'unknown')}")
         print(f"🍪 Request host: {request.headers.get('host', 'unknown')}")
+        print(f"🍪 Request URL: {request.url}")
+        print(f"🍪 Request scheme: {request.url.scheme}")
+        
+        # Debug: Check if response object is valid
+        print(f"🍪 Response object type: {type(response)}")
+        print(f"🍪 Response has set_cookie method: {hasattr(response, 'set_cookie')}")
+        print(f"🍪 Response headers before: {dict(response.headers)}")
+        print(f"🍪 Response status code: {response.status_code}")
         
         set_secure_cookie(response, "access_token", tokens["access_token"], 3600, request)  # 1 hour
         set_secure_cookie(response, "refresh_token", tokens["refresh_token"], 604800, request)  # 1 week
         set_secure_cookie(response, "session_token", session_token, 604800, request)  # 1 week
         
         print(f"🍪 Cookies set successfully")
+        
+        # Debug: Check if cookies were actually set
+        print(f"🍪 Response headers after setting cookies: {dict(response.headers)}")
         
         # Log successful authentication
         await audit_service.log_user_authentication(
@@ -686,6 +722,33 @@ async def get_profile(
         created_at=current_user.created_at,
         updated_at=current_user.updated_at
     )
+
+@router.post("/test-cookies")
+async def test_cookies(
+    request: Request,
+    response: Response
+):
+    """Test endpoint to verify cookie setting works"""
+    print("🧪 Testing cookie setting...")
+    
+    # Test setting a simple cookie
+    test_cookie_value = "test_value_123"
+    
+    try:
+        set_secure_cookie(response, "test_cookie", test_cookie_value, 3600, request)
+        print("✅ Test cookie set successfully")
+        
+        return {
+            "message": "Test cookie set",
+            "cookie_value": test_cookie_value,
+            "response_headers": dict(response.headers)
+        }
+    except Exception as e:
+        print(f"❌ Error setting test cookie: {e}")
+        return {
+            "error": str(e),
+            "response_headers": dict(response.headers)
+        }
 
 
 
