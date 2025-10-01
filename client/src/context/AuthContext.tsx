@@ -67,13 +67,33 @@ const setCookie = (name: string, value: string, days: number) => {
   const expires = new Date();
   expires.setTime(expires.getTime() + (days * 24 * 60 * 60 * 1000));
   const isSecure = window.location.protocol === 'https:';
-  // Use lax samesite for development to avoid issues
-  document.cookie = `${name}=${value};expires=${expires.toUTCString()};path=/;${isSecure ? 'secure;' : ''}samesite=lax`;
+  
+  // Check if we're in production (cross-origin scenario)
+  const isProduction = process.env.NODE_ENV === 'production' || 
+                      window.location.hostname.includes('vercel.app') ||
+                      window.location.hostname.includes('onrender.com');
+  
+  // Use "none" samesite for production cross-origin scenarios, "lax" for development
+  const samesiteSetting = isProduction ? 'none' : 'lax';
+  
+  console.log(`🍪 Client setting cookie: ${name}, isProduction=${isProduction}, samesite=${samesiteSetting}, secure=${isSecure}`);
+  
+  document.cookie = `${name}=${value};expires=${expires.toUTCString()};path=/;${isSecure ? 'secure;' : ''}samesite=${samesiteSetting}`;
 };
 
 const deleteCookie = (name: string) => {
   if (typeof document === 'undefined') return;
-  document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/;`;
+  const isSecure = window.location.protocol === 'https:';
+  
+  // Check if we're in production (cross-origin scenario)
+  const isProduction = process.env.NODE_ENV === 'production' || 
+                      window.location.hostname.includes('vercel.app') ||
+                      window.location.hostname.includes('onrender.com');
+  
+  // Use "none" samesite for production cross-origin scenarios, "lax" for development
+  const samesiteSetting = isProduction ? 'none' : 'lax';
+  
+  document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/;${isSecure ? 'secure;' : ''}samesite=${samesiteSetting}`;
 };
 
 // Types
@@ -91,20 +111,8 @@ interface User {
   updated_at: string;
 }
 
-interface LoginRequest {
-  email: string;
-  password?: string;
-  otp?: string;
-}
-
-interface SignupRequest {
-  email: string;
-  password?: string;
-  first_name: string;
-  last_name: string;
-  company_name?: string;
-  otp?: string;
-}
+// Note: LoginRequest and SignupRequest interfaces removed as they're not used
+// The application uses OTP authentication with OTPRequest and OTPVerification interfaces
 
 interface OTPRequest {
   email: string;
@@ -136,8 +144,6 @@ interface AuthContextType {
   permissions: UserPermissions | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (credentials: LoginRequest) => Promise<void>;
-  signup: (credentials: SignupRequest) => Promise<void>;
   logout: () => void;
   refreshUser: () => Promise<void>;
   checkPermissions: () => Promise<void>;
@@ -333,10 +339,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
         
         // FIXED: Use authService which now has proper withCredentials
+        console.log('🔍 Checking auth status with server...');
         const authStatus = await authService.checkAuthStatus();
+        console.log('📊 Auth status response:', authStatus);
         
         if (authStatus.is_authenticated) {
-          console.log('User is authenticated');
+          console.log('✅ User is authenticated');
           setUser(authStatus.user);
           saveAuthState(authStatus.user); // Save to localStorage
           
@@ -433,55 +441,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
   }, [isAuthenticated, logout]);
 
-  const login = async (credentials: LoginRequest) => {
-    try {
-      console.log('Attempting login...');
-      const response = await axios.post<LoginResponse>('/api/auth/login', credentials, {
-        withCredentials: true
-      });
-      const { access_token, user: userData } = response.data;
-
-      console.log('Login successful, storing token...');
-      // Store token in cookie
-      setCookie('access_token', access_token, 1); // 1 day
-
-      // For OTP authentication, we don't set Authorization header
-      // as tokens are handled via httpOnly cookies
-      // Remove any existing Authorization header
-      delete axios.defaults.headers.common['Authorization'];
-
-      setUser(userData);
-      await checkPermissions();
-      console.log('Login completed successfully');
-    } catch (error: any) {
-      console.error('Login failed:', error);
-      const errorMessage = error.response?.data?.detail || 'Login failed';
-      throw new Error(errorMessage);
-    }
-  };
-
-  const signup = async (credentials: SignupRequest) => {
-    try {
-      const response = await axios.post<LoginResponse>('/api/auth/signup', credentials, {
-        withCredentials: true
-      });
-      const { access_token, user: userData } = response.data;
-
-      // Store token in cookie
-      setCookie('access_token', access_token, 1); // 1 day
-
-      // For OTP authentication, we don't set Authorization header
-      // as tokens are handled via httpOnly cookies
-      // Remove any existing Authorization header
-      delete axios.defaults.headers.common['Authorization'];
-
-      setUser(userData);
-      await checkPermissions();
-    } catch (error: any) {
-      const errorMessage = error.response?.data?.detail || 'Signup failed';
-      throw new Error(errorMessage);
-    }
-  };
+  // Note: login and signup functions removed as they were calling non-existent endpoints
+  // The application uses OTP authentication via requestOTP and verifyOTP functions
 
   const refreshUser = async () => {
     try {
@@ -498,12 +459,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const checkPermissions = async () => {
     try {
+      console.log('🔐 Checking user permissions...');
       // FIXED: Use authService which now has proper withCredentials
       const permissions = await authService.getUserPermissions();
       setPermissions(permissions);
-      console.log('Permissions fetched successfully:', permissions);
+      console.log('✅ Permissions fetched successfully:', permissions);
     } catch (error) {
-      console.error('Failed to fetch permissions:', error);
+      console.error('❌ Failed to fetch permissions:', error);
       // Set default permissions if fetch fails
       setPermissions({
         can_upload: true,
@@ -529,17 +491,26 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const verifyOTP = async (otpVerification: OTPVerification): Promise<LoginResponse> => {
     try {
+      console.log('🔐 Starting OTP verification...');
       const response = await axios.post<LoginResponse>('/api/auth/otp/verify', otpVerification, {
         withCredentials: true
       });
       const { user: userData } = response.data;
 
+      console.log('✅ OTP verification successful, user data received:', userData);
+      
       // For OTP authentication, tokens are set as httpOnly cookies by the server
       // We don't need to manually set them here
       
       // Set user data
       setUser(userData);
       saveAuthState(userData); // Save to localStorage for persistence
+      
+      console.log('💾 User data saved to state and localStorage');
+      
+      // Debug: Check if cookies are being set (we can't read httpOnly cookies, but we can check the response)
+      console.log('🍪 Response headers:', response.headers);
+      console.log('🍪 Set-Cookie headers:', response.headers['set-cookie']);
       
       // Wait longer for cookies to be set, then check permissions with retry
       setTimeout(async () => {
@@ -590,8 +561,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     permissions,
     isLoading,
     isAuthenticated,
-    login,
-    signup,
     logout,
     refreshUser,
     checkPermissions,

@@ -29,22 +29,70 @@ def set_secure_cookie(response: Response, key: str, value: str, max_age: int, re
     
     # For cross-origin scenarios between different domains (Vercel + Render),
     # use "none" samesite for production to allow cookies to work across domains
-    samesite_setting = "none" if is_production else "lax"
+    # Also check if we're on Render (which indicates production deployment)
+    is_render = "onrender.com" in request.headers.get("host", "")
+    
+    # Check if this is a cross-origin request (different origin from host)
+    origin = request.headers.get("origin", "")
+    host = request.headers.get("host", "")
+    
+    # Extract domain from origin (e.g., "https://commission-tracker-ochre.vercel.app" -> "commission-tracker-ochre.vercel.app")
+    origin_domain = origin.replace("https://", "").replace("http://", "") if origin else ""
+    
+    # Check if origin domain is different from host
+    is_cross_origin = origin and host and origin_domain != host
+    
+    # Use "none" samesite for cross-origin requests or production
+    # BUT: samesite=none requires secure=true, so we need to handle this carefully
+    if is_cross_origin and not is_https:
+        # For local development cross-origin (localhost:3000 -> localhost:8000), use "lax"
+        samesite_setting = "lax"
+    elif is_production or is_render or (is_cross_origin and is_https):
+        # For production or HTTPS cross-origin, use "none"
+        samesite_setting = "none"
+    else:
+        # For same-origin requests, use "lax"
+        samesite_setting = "lax"
+    
+    print(f"🍪 Environment check: is_production={is_production}, is_render={is_render}, is_https={is_https}")
+    print(f"🍪 Cross-origin check: origin={origin}, host={host}, origin_domain={origin_domain}, is_cross_origin={is_cross_origin}")
+    print(f"🍪 Using samesite={samesite_setting}")
+    
+    if is_cross_origin and not is_https:
+        print("⚠️  Local development cross-origin detected - using samesite=lax (samesite=none requires HTTPS)")
     
     # Don't set domain for cross-origin deployments - let browsers handle it
     # Setting a domain that doesn't match the request origin causes browsers to reject cookies
     cookie_domain = None
     
-    response.set_cookie(
-        key=key,
-        value=value,
-        max_age=max_age,
-        httponly=True,
-        secure=is_https,  # Always use HTTPS detection
-        samesite=samesite_setting,  # Use "none" for production cross-origin
-        path="/",
-        # Don't set domain for cross-origin scenarios
-    )
+    print(f"🍪 Setting cookie: {key} with samesite={samesite_setting}, secure={is_https}")
+    
+    # For local development, we might need to be more permissive with cookie settings
+    if not is_https and not is_production:
+        # Local development - use more permissive settings
+        response.set_cookie(
+            key=key,
+            value=value,
+            max_age=max_age,
+            httponly=True,
+            secure=False,  # Allow non-secure cookies in development
+            samesite=samesite_setting,
+            path="/",
+        )
+    else:
+        # Production - use strict settings
+        response.set_cookie(
+            key=key,
+            value=value,
+            max_age=max_age,
+            httponly=True,
+            secure=is_https,  # Always use HTTPS detection
+            samesite=samesite_setting,
+            path="/",
+            # Don't set domain for cross-origin scenarios
+        )
+    
+    print(f"🍪 Cookie {key} set successfully")
 
 # Dependency to get current user from OTP authentication
 async def get_current_user_otp(
@@ -239,9 +287,15 @@ async def verify_otp(
         await create_user_session(db, str(user.id), session_token)
         
         # Set httpOnly cookies with proper security settings
+        print(f"🍪 Setting cookies for user {user.email}")
+        print(f"🍪 Request origin: {request.headers.get('origin', 'unknown')}")
+        print(f"🍪 Request host: {request.headers.get('host', 'unknown')}")
+        
         set_secure_cookie(response, "access_token", tokens["access_token"], 3600, request)  # 1 hour
         set_secure_cookie(response, "refresh_token", tokens["refresh_token"], 604800, request)  # 1 week
         set_secure_cookie(response, "session_token", session_token, 604800, request)  # 1 week
+        
+        print(f"🍪 Cookies set successfully")
         
         # Log successful authentication
         await audit_service.log_user_authentication(
@@ -443,7 +497,28 @@ async def logout(
     # Clear all authentication cookies with proper security settings
     is_production = os.getenv("ENVIRONMENT", "development") == "production"
     is_https = request.url.scheme == "https"
-    samesite_setting = "none" if is_production else "lax"  # Use same setting as cookie creation
+    is_render = "onrender.com" in request.headers.get("host", "")
+    
+    # Check if this is a cross-origin request (different origin from host)
+    origin = request.headers.get("origin", "")
+    host = request.headers.get("host", "")
+    
+    # Extract domain from origin (e.g., "https://commission-tracker-ochre.vercel.app" -> "commission-tracker-ochre.vercel.app")
+    origin_domain = origin.replace("https://", "").replace("http://", "") if origin else ""
+    
+    # Check if origin domain is different from host
+    is_cross_origin = origin and host and origin_domain != host
+    
+    # Use same logic as cookie creation
+    if is_cross_origin and not is_https:
+        # For local development cross-origin (localhost:3000 -> localhost:8000), use "lax"
+        samesite_setting = "lax"
+    elif is_production or is_render or (is_cross_origin and is_https):
+        # For production or HTTPS cross-origin, use "none"
+        samesite_setting = "none"
+    else:
+        # For same-origin requests, use "lax"
+        samesite_setting = "lax"
     
     response.delete_cookie(
         "access_token", 
@@ -484,7 +559,28 @@ async def cleanup_session(
     # Clear cookies with proper security settings
     is_production = os.getenv("ENVIRONMENT", "development") == "production"
     is_https = request.url.scheme == "https"
-    samesite_setting = "none" if is_production else "lax"  # Use same setting as cookie creation
+    is_render = "onrender.com" in request.headers.get("host", "")
+    
+    # Check if this is a cross-origin request (different origin from host)
+    origin = request.headers.get("origin", "")
+    host = request.headers.get("host", "")
+    
+    # Extract domain from origin (e.g., "https://commission-tracker-ochre.vercel.app" -> "commission-tracker-ochre.vercel.app")
+    origin_domain = origin.replace("https://", "").replace("http://", "") if origin else ""
+    
+    # Check if origin domain is different from host
+    is_cross_origin = origin and host and origin_domain != host
+    
+    # Use same logic as cookie creation
+    if is_cross_origin and not is_https:
+        # For local development cross-origin (localhost:3000 -> localhost:8000), use "lax"
+        samesite_setting = "lax"
+    elif is_production or is_render or (is_cross_origin and is_https):
+        # For production or HTTPS cross-origin, use "none"
+        samesite_setting = "none"
+    else:
+        # For same-origin requests, use "lax"
+        samesite_setting = "lax"
     
     response.delete_cookie(
         "access_token", 
@@ -524,6 +620,13 @@ async def auth_status(
     print(f"🔍 Auth Status - Access token present: {bool(access_token)}")
     print(f"🔍 Auth Status - Request host: {request.headers.get('host', 'unknown')}")
     print(f"🔍 Auth Status - Request origin: {request.headers.get('origin', 'unknown')}")
+    
+    # Debug: Print all cookie values (without sensitive data)
+    for cookie_name, cookie_value in all_cookies.items():
+        if cookie_name in ['access_token', 'refresh_token', 'session_token']:
+            print(f"🔍 Auth Status - Cookie {cookie_name}: {cookie_value[:20]}...")
+        else:
+            print(f"🔍 Auth Status - Cookie {cookie_name}: {cookie_value}")
     
     if not access_token:
         return AuthStatusSchema(is_authenticated=False)
