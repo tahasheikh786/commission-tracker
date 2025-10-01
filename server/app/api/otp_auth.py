@@ -23,27 +23,17 @@ router = APIRouter(prefix="/api/auth/otp", tags=["OTP Authentication"])
 security = HTTPBearer()
 
 def set_secure_cookie(response: Response, key: str, value: str, max_age: int, request: Request):
-    """Set secure authentication cookie with proper security settings"""
+    """Set secure authentication cookie with proper security settings for cross-origin scenarios"""
     is_production = os.getenv("ENVIRONMENT", "development") == "production"
     is_https = request.url.scheme == "https"
     
-    # For cross-domain scenarios, use "lax" samesite to allow cookies to work
-    # across different subdomains and in iframe scenarios
-    samesite_setting = "lax"  # Changed from strict to lax for better cross-domain support
+    # For cross-origin scenarios between different domains (Vercel + Render),
+    # use "none" samesite for production to allow cookies to work across domains
+    samesite_setting = "none" if is_production else "lax"
     
-    # Determine cookie domain for deployed environments
+    # Don't set domain for cross-origin deployments - let browsers handle it
+    # Setting a domain that doesn't match the request origin causes browsers to reject cookies
     cookie_domain = None
-    if is_production and is_https:
-        # For production HTTPS, try to set domain to allow subdomain access
-        host = request.headers.get("host", "")
-        if host and "onrender.com" in host:
-            # For Render deployments, don't set domain to allow cookie sharing
-            cookie_domain = None
-        elif host and "." in host:
-            # For other domains, try to set the parent domain
-            parts = host.split(".")
-            if len(parts) >= 2:
-                cookie_domain = f".{'.'.join(parts[-2:])}"
     
     response.set_cookie(
         key=key,
@@ -51,9 +41,9 @@ def set_secure_cookie(response: Response, key: str, value: str, max_age: int, re
         max_age=max_age,
         httponly=True,
         secure=is_https,  # Always use HTTPS detection
-        samesite=samesite_setting,
+        samesite=samesite_setting,  # Use "none" for production cross-origin
         path="/",
-        domain=cookie_domain  # Set domain for better persistence
+        # Don't set domain for cross-origin scenarios
     )
 
 # Dependency to get current user from OTP authentication
@@ -453,7 +443,7 @@ async def logout(
     # Clear all authentication cookies with proper security settings
     is_production = os.getenv("ENVIRONMENT", "development") == "production"
     is_https = request.url.scheme == "https"
-    samesite_setting = "lax"  # Use same setting as cookie creation
+    samesite_setting = "none" if is_production else "lax"  # Use same setting as cookie creation
     
     response.delete_cookie(
         "access_token", 
@@ -494,7 +484,7 @@ async def cleanup_session(
     # Clear cookies with proper security settings
     is_production = os.getenv("ENVIRONMENT", "development") == "production"
     is_https = request.url.scheme == "https"
-    samesite_setting = "lax"  # Use same setting as cookie creation
+    samesite_setting = "none" if is_production else "lax"  # Use same setting as cookie creation
     
     response.delete_cookie(
         "access_token", 

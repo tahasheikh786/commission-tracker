@@ -436,7 +436,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const login = async (credentials: LoginRequest) => {
     try {
       console.log('Attempting login...');
-      const response = await axios.post<LoginResponse>('/api/auth/login', credentials);
+      const response = await axios.post<LoginResponse>('/api/auth/login', credentials, {
+        withCredentials: true
+      });
       const { access_token, user: userData } = response.data;
 
       console.log('Login successful, storing token...');
@@ -460,7 +462,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const signup = async (credentials: SignupRequest) => {
     try {
-      const response = await axios.post<LoginResponse>('/api/auth/signup', credentials);
+      const response = await axios.post<LoginResponse>('/api/auth/signup', credentials, {
+        withCredentials: true
+      });
       const { access_token, user: userData } = response.data;
 
       // Store token in cookie
@@ -513,7 +517,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // OTP Methods
   const requestOTP = async (otpRequest: OTPRequest) => {
     try {
-      const response = await axios.post('/api/auth/otp/request', otpRequest);
+      const response = await axios.post('/api/auth/otp/request', otpRequest, {
+        withCredentials: true
+      });
       return response.data;
     } catch (error: any) {
       const errorMessage = error.response?.data?.detail || 'Failed to send OTP';
@@ -523,7 +529,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const verifyOTP = async (otpVerification: OTPVerification): Promise<LoginResponse> => {
     try {
-      const response = await axios.post<LoginResponse>('/api/auth/otp/verify', otpVerification);
+      const response = await axios.post<LoginResponse>('/api/auth/otp/verify', otpVerification, {
+        withCredentials: true
+      });
       const { user: userData } = response.data;
 
       // For OTP authentication, tokens are set as httpOnly cookies by the server

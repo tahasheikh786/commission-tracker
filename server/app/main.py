@@ -65,7 +65,7 @@ app.add_middleware(
     allow_credentials=cors_config["allow_credentials"],
     allow_methods=cors_config["allow_methods"],
     allow_headers=cors_config["allow_headers"],
-    expose_headers=["*"],  # Allow all headers to be exposed
+    expose_headers=["Set-Cookie", "Authorization", "Content-Type", "X-Process-Time"],  # Important for cookie visibility
 )
 
 app.add_middleware(
