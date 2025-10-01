@@ -27,13 +27,17 @@ def set_secure_cookie(response: Response, key: str, value: str, max_age: int, re
     is_production = os.getenv("ENVIRONMENT", "development") == "production"
     is_https = request.url.scheme == "https"
     
+    # For cross-domain scenarios, use "lax" samesite to allow cookies to work
+    # across different subdomains and in iframe scenarios
+    samesite_setting = "lax"  # Changed from strict to lax for better cross-domain support
+    
     response.set_cookie(
         key=key,
         value=value,
         max_age=max_age,
         httponly=True,
         secure=is_https,  # Always use HTTPS detection
-        samesite="strict" if is_production else "lax",  # Strict in production
+        samesite=samesite_setting,
         path="/",
         domain=None  # Let browser determine
     )
@@ -429,26 +433,27 @@ async def logout(
     # Clear all authentication cookies with proper security settings
     is_production = os.getenv("ENVIRONMENT", "development") == "production"
     is_https = request.url.scheme == "https"
+    samesite_setting = "lax"  # Use same setting as cookie creation
     
     response.delete_cookie(
         "access_token", 
         httponly=True, 
         secure=is_https, 
-        samesite="strict" if is_production else "lax",
+        samesite=samesite_setting,
         path="/"
     )
     response.delete_cookie(
         "refresh_token", 
         httponly=True, 
         secure=is_https, 
-        samesite="strict" if is_production else "lax",
+        samesite=samesite_setting,
         path="/"
     )
     response.delete_cookie(
         "session_token", 
         httponly=True, 
         secure=is_https, 
-        samesite="strict" if is_production else "lax",
+        samesite=samesite_setting,
         path="/"
     )
     
@@ -469,26 +474,27 @@ async def cleanup_session(
     # Clear cookies with proper security settings
     is_production = os.getenv("ENVIRONMENT", "development") == "production"
     is_https = request.url.scheme == "https"
+    samesite_setting = "lax"  # Use same setting as cookie creation
     
     response.delete_cookie(
         "access_token", 
         httponly=True, 
         secure=is_https, 
-        samesite="strict" if is_production else "lax",
+        samesite=samesite_setting,
         path="/"
     )
     response.delete_cookie(
         "refresh_token", 
         httponly=True, 
         secure=is_https, 
-        samesite="strict" if is_production else "lax",
+        samesite=samesite_setting,
         path="/"
     )
     response.delete_cookie(
         "session_token", 
         httponly=True, 
         secure=is_https, 
-        samesite="strict" if is_production else "lax",
+        samesite=samesite_setting,
         path="/"
     )
     

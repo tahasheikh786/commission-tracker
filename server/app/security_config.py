@@ -33,7 +33,13 @@ DEFAULT_CORS_ORIGINS = [
 CORS_ORIGINS_ENV = os.environ.get("CORS_ORIGINS")
 if CORS_ORIGINS_ENV:
     # Parse comma-separated origins from environment variable
-    CORS_ORIGINS = [origin.strip() for origin in CORS_ORIGINS_ENV.split(",")]
+    # Handle potential malformed environment variables
+    origins = []
+    for origin in CORS_ORIGINS_ENV.split(","):
+        origin = origin.strip()
+        if origin:
+            origins.append(origin)
+    CORS_ORIGINS = origins if origins else DEFAULT_CORS_ORIGINS
 else:
     CORS_ORIGINS = DEFAULT_CORS_ORIGINS
 

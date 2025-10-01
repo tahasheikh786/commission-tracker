@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from collections import defaultdict
 import time
+import os
 from app.api import company, mapping, review, statements, database_fields, plan_types, table_editor, improve_extraction, pending, dashboard, format_learning, new_extract, summary_rows, date_extraction, excel_extract, user_management, admin, otp_auth, auth, websocket
 from app.utils.auth_utils import cleanup_expired_sessions
 from app.db.database import get_db
@@ -37,6 +38,19 @@ async def security_status():
         "checks": security_checks,
         "recommendations": recommendations,
         "timestamp": time.time()
+    }
+
+@app.get("/debug/cors")
+async def debug_cors():
+    """Debug endpoint to check CORS configuration"""
+    cors_config = get_cors_config()
+    return {
+        "cors_origins": cors_config["allow_origins"],
+        "cors_credentials": cors_config["allow_credentials"],
+        "cors_methods": cors_config["allow_methods"],
+        "cors_headers": cors_config["allow_headers"],
+        "environment": os.getenv("ENVIRONMENT", "development"),
+        "cors_origins_env": os.getenv("CORS_ORIGINS", "not_set")
     }
 
 # Security Configuration
