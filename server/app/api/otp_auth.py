@@ -31,6 +31,20 @@ def set_secure_cookie(response: Response, key: str, value: str, max_age: int, re
     # across different subdomains and in iframe scenarios
     samesite_setting = "lax"  # Changed from strict to lax for better cross-domain support
     
+    # Determine cookie domain for deployed environments
+    cookie_domain = None
+    if is_production and is_https:
+        # For production HTTPS, try to set domain to allow subdomain access
+        host = request.headers.get("host", "")
+        if host and "onrender.com" in host:
+            # For Render deployments, don't set domain to allow cookie sharing
+            cookie_domain = None
+        elif host and "." in host:
+            # For other domains, try to set the parent domain
+            parts = host.split(".")
+            if len(parts) >= 2:
+                cookie_domain = f".{'.'.join(parts[-2:])}"
+    
     response.set_cookie(
         key=key,
         value=value,
@@ -39,7 +53,7 @@ def set_secure_cookie(response: Response, key: str, value: str, max_age: int, re
         secure=is_https,  # Always use HTTPS detection
         samesite=samesite_setting,
         path="/",
-        domain=None  # Let browser determine
+        domain=cookie_domain  # Set domain for better persistence
     )
 
 # Dependency to get current user from OTP authentication
@@ -513,6 +527,14 @@ async def auth_status(
 ):
     """Check authentication status"""
     access_token = request.cookies.get("access_token")
+    
+    # Debug logging for auth status check
+    all_cookies = dict(request.cookies)
+    print(f"🔍 Auth Status - All cookies: {list(all_cookies.keys())}")
+    print(f"🔍 Auth Status - Access token present: {bool(access_token)}")
+    print(f"🔍 Auth Status - Request host: {request.headers.get('host', 'unknown')}")
+    print(f"🔍 Auth Status - Request origin: {request.headers.get('origin', 'unknown')}")
+    
     if not access_token:
         return AuthStatusSchema(is_authenticated=False)
     

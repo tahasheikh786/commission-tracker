@@ -164,6 +164,36 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const isAuthenticated = !!user;
 
+  // Helper function to save auth state to localStorage (for persistence across refreshes)
+  const saveAuthState = useCallback((userData: User | null) => {
+    if (userData) {
+      try {
+        localStorage.setItem('auth_user', JSON.stringify(userData));
+      } catch (error) {
+        console.warn('Failed to save auth state to localStorage:', error);
+      }
+    } else {
+      try {
+        localStorage.removeItem('auth_user');
+      } catch (error) {
+        console.warn('Failed to clear auth state from localStorage:', error);
+      }
+    }
+  }, []);
+
+  // Helper function to load auth state from localStorage
+  const loadAuthState = useCallback((): User | null => {
+    try {
+      const savedUser = localStorage.getItem('auth_user');
+      if (savedUser) {
+        return JSON.parse(savedUser);
+      }
+    } catch (error) {
+      console.warn('Failed to load auth state from localStorage:', error);
+    }
+    return null;
+  }, []);
+
   // Token refresh timer and manager
   const refreshTimer = useRef<NodeJS.Timeout | null>(null);
   const tokenRefreshManager = TokenRefreshManager.getInstance();
@@ -182,13 +212,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       refreshTimer.current = null;
     }
 
-    // Clear state
+    // Clear state and localStorage
     setUser(null);
     setPermissions(null);
+    saveAuthState(null);
 
     // Redirect to login
     router.push('/auth/login');
-  }, [router]);
+  }, [router, saveAuthState]);
 
   // Proactive token refresh function
   const scheduleTokenRefresh = useCallback(() => {
@@ -294,18 +325,42 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       try {
         console.log('Checking auth status...');
         
+        // First, try to load from localStorage as a fallback
+        const savedUser = loadAuthState();
+        if (savedUser) {
+          console.log('Found saved user in localStorage, setting as fallback');
+          setUser(savedUser);
+        }
+        
         // FIXED: Use authService which now has proper withCredentials
         const authStatus = await authService.checkAuthStatus();
         
         if (authStatus.is_authenticated) {
           console.log('User is authenticated');
           setUser(authStatus.user);
-          await checkPermissions();
+          saveAuthState(authStatus.user); // Save to localStorage
+          
+          // Don't block authentication on permissions check failure
+          // Try to get permissions but don't fail auth if it doesn't work
+          try {
+            await checkPermissions();
+          } catch (permError) {
+            console.log('Permissions check failed during auth, using defaults:', permError);
+            // Set default permissions instead of failing auth
+            setPermissions({
+              can_upload: true,
+              can_edit: true,
+              is_admin: false,
+              is_read_only: false
+            });
+          }
+          
           // Start proactive token refresh
           scheduleTokenRefresh();
         } else {
           console.log('User not authenticated');
           setUser(null);
+          saveAuthState(null); // Clear localStorage
         }
       } catch (error) {
         console.error('Auth check failed:', error);
@@ -313,8 +368,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // Only set user to null if it's a clear authentication failure
         if (error instanceof Error && error.message.includes('401')) {
           setUser(null);
+          saveAuthState(null); // Clear localStorage on auth failure
         }
-        // For other errors (network, timeout), keep current state
+        // For other errors (network, timeout), keep current state from localStorage
       }
       setIsLoading(false);
     };
@@ -475,6 +531,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       
       // Set user data
       setUser(userData);
+      saveAuthState(userData); // Save to localStorage for persistence
       
       // Wait longer for cookies to be set, then check permissions with retry
       setTimeout(async () => {
