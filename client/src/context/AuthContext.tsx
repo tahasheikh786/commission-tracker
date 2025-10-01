@@ -358,20 +358,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Initialize timer
     resetInactivityTimer();
 
-    // Browser close/tab close detection
-    const handleBeforeUnload = () => {
-      // Call cleanup endpoint to invalidate session
-      navigator.sendBeacon(`${API_BASE_URL}/api/auth/otp/cleanup`);
-    };
-
-    window.addEventListener('beforeunload', handleBeforeUnload);
+  
+  
 
     return () => {
       clearTimeout(inactivityTimer);
       activityEvents.forEach(event => {
         document.removeEventListener(event, handleActivity, true);
       });
-      window.removeEventListener('beforeunload', handleBeforeUnload);
+      // No longer using beforeunload listener
+      // window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   }, [isAuthenticated, logout]);
 

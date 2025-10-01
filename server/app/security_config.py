@@ -20,12 +20,22 @@ SECURITY_HEADERS = {
 }
 
 # CORS Configuration
-CORS_ORIGINS = [
+# Default CORS origins - can be overridden by environment variable
+DEFAULT_CORS_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "https://commision-tracker.onrender.com",
+    "https://commission-tracker-ochre.vercel.app",
     # Add your production domains here
 ]
+
+# Allow environment variable to override CORS origins
+CORS_ORIGINS_ENV = os.environ.get("CORS_ORIGINS")
+if CORS_ORIGINS_ENV:
+    # Parse comma-separated origins from environment variable
+    CORS_ORIGINS = [origin.strip() for origin in CORS_ORIGINS_ENV.split(",")]
+else:
+    CORS_ORIGINS = DEFAULT_CORS_ORIGINS
 
 CORS_METHODS = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
 CORS_HEADERS = ["*"]
@@ -104,6 +114,7 @@ def get_security_headers() -> Dict[str, str]:
 
 def get_cors_config() -> Dict[str, Any]:
     """Get CORS configuration"""
+    print(f"🌐 CORS Configuration - Allowed Origins: {CORS_ORIGINS}")
     return {
         "allow_origins": CORS_ORIGINS,
         "allow_methods": CORS_METHODS,
