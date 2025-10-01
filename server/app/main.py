@@ -44,12 +44,7 @@ cors_config = get_cors_config()
 trusted_hosts = get_trusted_hosts()
 security_headers = get_security_headers()
 
-# Security middleware
-app.add_middleware(
-    TrustedHostMiddleware, 
-    allowed_hosts=trusted_hosts
-)
-
+# Security middleware - CORS must be added first
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_config["allow_origins"],
@@ -57,6 +52,11 @@ app.add_middleware(
     allow_methods=cors_config["allow_methods"],
     allow_headers=cors_config["allow_headers"],
     expose_headers=["*"],  # Allow all headers to be exposed
+)
+
+app.add_middleware(
+    TrustedHostMiddleware, 
+    allowed_hosts=trusted_hosts
 )
 
 # Security headers middleware

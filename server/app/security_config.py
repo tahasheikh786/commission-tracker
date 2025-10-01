@@ -24,7 +24,7 @@ SECURITY_HEADERS = {
 DEFAULT_CORS_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
-    "https://commission-tracker-1.onrender.com"
+    "https://commission-tracker-1.onrender.com",
     "https://commission-tracker-ochre.vercel.app",
     # Add your production domains here
 ]
