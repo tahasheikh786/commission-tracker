@@ -135,17 +135,17 @@ body,
 /* Premium Dashboard Container */
 .dashboard-container {
   @apply pt-6 pb-4 px-6;
-  background: linear-gradient(135deg, hsl(var(--primary) / 0.03) 0%, hsl(var(--secondary) / 0.03) 100%);
+  background: transparent;
 }
 
 /* Premium Card Styles */
 .card {
-  @apply bg-white rounded-xl shadow-sm border border-slate-200;
+  @apply bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .card:hover {
-  @apply shadow-md;
+  @apply shadow-md dark:shadow-slate-900/20;
   transform: translateY(-1px);
 }
 
@@ -198,12 +198,12 @@ body,
 
 /* Premium Input Styles */
 .input {
-  @apply w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
+  @apply w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2 text-sm text-slate-900 dark:text-slate-100 ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-slate-500 dark:placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
   transition: all 0.2s ease-in-out;
 }
 
 .input:focus {
-  @apply border-blue-500 shadow-sm;
+  @apply border-blue-500 dark:border-blue-400 shadow-sm;
 }
 
 /* Premium Table Styles */
@@ -212,19 +212,19 @@ body,
 }
 
 .table th {
-  @apply bg-slate-50 text-slate-700 font-medium p-3 text-left border-b border-slate-200;
+  @apply bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium p-3 text-left border-b border-slate-200 dark:border-slate-700;
 }
 
 .table td {
-  @apply p-3 border-b border-slate-100;
+  @apply p-3 border-b border-slate-100 dark:border-slate-800 text-slate-900 dark:text-slate-100;
 }
 
 .table tbody tr {
-  @apply hover:bg-slate-50 transition-colors duration-200;
+  @apply hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors duration-200;
 }
 
 .table tbody tr:hover {
-  @apply shadow-sm;
+  @apply shadow-sm dark:shadow-slate-900/20;
 }
 
 /* Premium Status Badges */
@@ -318,23 +318,144 @@ body,
   animation: shimmer 1.5s infinite;
 }
 
-/* Premium Scrollbar */
+/* Premium Scrollbar - Enhanced for Light & Dark Mode */
 ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-slate-100 dark:bg-slate-800 rounded-full;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-slate-300 dark:bg-slate-600 rounded-full;
+  border-radius: 4px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-slate-400 dark:bg-slate-500;
+  transform: scaleY(1.1);
+}
+
+::-webkit-scrollbar-thumb:active {
+  @apply bg-slate-500 dark:bg-slate-400;
+}
+
+::-webkit-scrollbar-corner {
+  @apply bg-slate-100 dark:bg-slate-800;
+}
+
+/* Firefox Scrollbar Support */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(203 213 225) rgb(241 245 249); /* slate-300 on slate-100 */
+}
+
+.dark * {
+  scrollbar-color: rgb(71 85 105) rgb(30 41 59); /* slate-600 on slate-800 */
+}
+
+/* Enhanced Scrollbar for Specific Areas */
+.scrollbar-thin::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
-::-webkit-scrollbar-track {
-  @apply bg-slate-100 rounded-full;
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
-::-webkit-scrollbar-thumb {
-  @apply bg-slate-300 rounded-full;
-  transition: background-color 0.2s ease;
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  @apply bg-slate-400;
+/* Sidebar - No scroll bar visible */
+/* El sidebar usa .scrollbar-none para ocultar completamente el scroll bar */
+
+/* Premium Scrollbar for Main Content */
+.main-content-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.main-content-scroll::-webkit-scrollbar-track {
+  @apply bg-slate-50 dark:bg-slate-900 rounded-lg;
+  margin: 4px;
+}
+
+.main-content-scroll::-webkit-scrollbar-thumb {
+  @apply bg-gradient-to-b from-slate-300 to-slate-400 dark:from-slate-600 dark:to-slate-700 rounded-lg;
+  border: 1px solid rgb(241 245 249 / 0.5);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.main-content-scroll::-webkit-scrollbar-thumb:hover {
+  @apply from-slate-400 to-slate-500 dark:from-slate-500 dark:to-slate-600;
+  transform: scale(1.1);
+  box-shadow: 0 2px 4px rgb(0 0 0 / 0.1);
+}
+
+/* Premium Scrollbar for Tables */
+.table-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.table-scroll::-webkit-scrollbar-track {
+  @apply bg-slate-50 dark:bg-slate-800 rounded;
+}
+
+.table-scroll::-webkit-scrollbar-thumb {
+  @apply bg-blue-200 dark:bg-blue-800 rounded;
+  transition: all 0.2s ease;
+}
+
+.table-scroll::-webkit-scrollbar-thumb:hover {
+  @apply bg-blue-300 dark:bg-blue-700;
+}
+
+/* Premium Scrollbar for Modals */
+.modal-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.modal-scroll::-webkit-scrollbar-track {
+  @apply bg-slate-100 dark:bg-slate-800 rounded-lg;
+  margin: 2px;
+}
+
+.modal-scroll::-webkit-scrollbar-thumb {
+  @apply bg-slate-300 dark:bg-slate-600 rounded-lg;
+  transition: all 0.2s ease;
+}
+
+.modal-scroll::-webkit-scrollbar-thumb:hover {
+  @apply bg-slate-400 dark:bg-slate-500;
+}
+
+/* Premium Scrollbar for Dropdowns */
+.dropdown-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+
+.dropdown-scroll::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+.dropdown-scroll::-webkit-scrollbar-thumb {
+  @apply bg-slate-200 dark:bg-slate-700 rounded-full;
+  transition: all 0.2s ease;
+}
+
+.dropdown-scroll::-webkit-scrollbar-thumb:hover {
+  @apply bg-slate-300 dark:bg-slate-600;
 }
 
 /* Premium Focus States */

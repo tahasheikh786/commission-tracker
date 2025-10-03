@@ -112,12 +112,12 @@ export default function CarrierList({ carriers, selected, onSelect, loading, onD
   };
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 relative w-full">
+    <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-6 relative w-full">
       {deleting && (
-        <div className="absolute inset-0 bg-white/90 backdrop-blur-sm flex items-center justify-center z-10 rounded-xl">
+        <div className="absolute inset-0 bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm flex items-center justify-center z-10 rounded-xl">
           <div className="flex items-center space-x-3">
-            <div className="w-6 h-6 border-2 border-slate-200 border-t-blue-500 rounded-full animate-spin"></div>
-            <span className="text-slate-700 font-medium">Deleting carriers...</span>
+            <div className="w-6 h-6 border-2 border-slate-200 dark:border-slate-600 border-t-blue-500 rounded-full animate-spin"></div>
+            <span className="text-slate-700 dark:text-slate-300 font-medium">Deleting carriers...</span>
           </div>
         </div>
       )}
@@ -125,8 +125,8 @@ export default function CarrierList({ carriers, selected, onSelect, loading, onD
       {/* Enhanced Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h3 className="text-xl font-bold text-slate-800">Carriers</h3>
-          <p className="text-sm text-slate-600">
+          <h3 className="text-xl font-bold text-slate-800 dark:text-slate-200">Carriers</h3>
+          <p className="text-sm text-slate-600 dark:text-slate-400">
             {carriers.length} total carrier{carriers.length !== 1 ? 's' : ''}
           </p>
         </div>
@@ -141,19 +141,19 @@ export default function CarrierList({ carriers, selected, onSelect, loading, onD
       {/* Enhanced Search Bar */}
       <div className="relative mb-6">
         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-          <Search className="h-5 w-5 text-slate-400" />
+          <Search className="h-5 w-5 text-slate-400 dark:text-slate-500" />
         </div>
         <input
           type="text"
           placeholder="Search carriers..."
           value={searchQuery}
           onChange={handleSearch}
-          className="w-full pl-10 pr-4 py-3 text-sm bg-white rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+          className="w-full pl-10 pr-4 py-3 text-sm bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-lg border border-slate-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
         />
         {searchQuery && (
           <button
             onClick={() => setSearchQuery('')}
-            className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600"
+            className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
           >
             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -164,11 +164,11 @@ export default function CarrierList({ carriers, selected, onSelect, loading, onD
 
       {/* Enhanced Delete Button */}
       {selectedCarriers.size > 0 && canDeleteFiles && (
-        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl">
+        <div className="mb-4 p-4 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-xl">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <Trash2 className="text-red-600" size={20} />
-              <span className="text-red-700 font-medium">
+              <Trash2 className="text-red-600 dark:text-red-400" size={20} />
+              <span className="text-red-700 dark:text-red-300 font-medium">
                 {selectedCarriers.size} carrier{selectedCarriers.size !== 1 ? 's' : ''} selected
               </span>
             </div>
@@ -194,8 +194,8 @@ export default function CarrierList({ carriers, selected, onSelect, loading, onD
               key={carrier.id}
               className={`group relative p-4 rounded-xl border transition-all duration-200 ${
                 selected?.id === carrier.id
-                  ? 'border-blue-500 bg-blue-50 shadow-md'
-                  : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30 shadow-md'
+                  : 'border-slate-200 dark:border-slate-600 hover:border-slate-300 dark:hover:border-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700/50'
               }`}
               style={{ animationDelay: `${index * 50}ms` }}
             >
@@ -219,13 +219,13 @@ export default function CarrierList({ carriers, selected, onSelect, loading, onD
                     style={{ pointerEvents: 'auto', zIndex: 10 }}
                   />
                 ) : (
-                  <div className="w-4 h-4 border border-slate-300 rounded bg-slate-100" title="Selection disabled"></div>
+                  <div className="w-4 h-4 border border-slate-300 dark:border-slate-600 rounded bg-slate-100 dark:bg-slate-700" title="Selection disabled"></div>
                 )}
                 
                 {editingCarrierId === carrier.id ? (
                   <div className="flex-1 flex items-center gap-2">
                     <input
-                      className="w-full py-2 px-3 text-sm bg-white rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent flex-1"
+                      className="w-full py-2 px-3 text-sm bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-lg border border-slate-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent flex-1"
                       value={editName}
                       onChange={e => setEditName(e.target.value)}
                       disabled={updating}
@@ -243,7 +243,7 @@ export default function CarrierList({ carriers, selected, onSelect, loading, onD
                       Save
                     </button>
                     <button
-                      className="inline-flex items-center px-3 py-1 text-xs bg-slate-200 text-slate-700 rounded-lg font-medium hover:bg-slate-300 transition-colors disabled:opacity-50"
+                      className="inline-flex items-center px-3 py-1 text-xs bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg font-medium hover:bg-slate-300 dark:hover:bg-slate-500 transition-colors disabled:opacity-50"
                       onClick={cancelEdit}
                       disabled={updating}
                     >
@@ -254,7 +254,7 @@ export default function CarrierList({ carriers, selected, onSelect, loading, onD
                   <>
                     <button
                       className={`flex-1 text-left font-medium transition-colors ${
-                        selected?.id === carrier.id ? 'text-blue-600' : 'text-slate-800'
+                        selected?.id === carrier.id ? 'text-blue-600 dark:text-blue-400' : 'text-slate-800 dark:text-slate-200'
                       }`}
                       onClick={() => onSelect(carrier)}
                     >
@@ -264,7 +264,7 @@ export default function CarrierList({ carriers, selected, onSelect, loading, onD
                     {canDeleteFiles && (
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
-                          className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                          className="p-2 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-600 rounded-lg transition-colors"
                           onClick={() => startEdit(carrier)}
                           disabled={updating}
                           title="Edit name"
@@ -288,24 +288,24 @@ export default function CarrierList({ carriers, selected, onSelect, loading, onD
 
       {/* Enhanced Pagination */}
       {sortedCarriers.length > carriersPerPage && (
-        <div className="flex items-center justify-between mt-6 pt-4 border-t border-slate-200">
+        <div className="flex items-center justify-between mt-6 pt-4 border-t border-slate-200 dark:border-slate-700">
           <button
             onClick={() => handlePageChange(currentPage - 1)}
             disabled={currentPage === 1}
-            className="inline-flex items-center gap-2 px-3 py-2 text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-2 px-3 py-2 text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <ChevronLeft size={16} />
             Prev
           </button>
           
-          <span className="text-sm text-slate-600 font-medium">
+          <span className="text-sm text-slate-600 dark:text-slate-400 font-medium">
             Page {currentPage} of {Math.ceil(sortedCarriers.length / carriersPerPage)}
           </span>
           
           <button
             onClick={() => handlePageChange(currentPage + 1)}
             disabled={currentPage === Math.ceil(sortedCarriers.length / carriersPerPage)}
-            className="inline-flex items-center gap-2 px-3 py-2 text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-2 px-3 py-2 text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Next
             <ChevronRight size={16} />
@@ -316,13 +316,13 @@ export default function CarrierList({ carriers, selected, onSelect, loading, onD
       {/* Empty State */}
       {!loading && sortedCarriers.length === 0 && (
         <div className="text-center py-12">
-          <div className="w-16 h-16 bg-slate-100 rounded-xl flex items-center justify-center mx-auto mb-4">
-            <Search className="h-8 w-8 text-slate-400" />
+          <div className="w-16 h-16 bg-slate-100 dark:bg-slate-700 rounded-xl flex items-center justify-center mx-auto mb-4">
+            <Search className="h-8 w-8 text-slate-400 dark:text-slate-500" />
           </div>
-          <h3 className="text-lg font-semibold text-slate-700 mb-2">
+          <h3 className="text-lg font-semibold text-slate-700 dark:text-slate-300 mb-2">
             {searchQuery ? 'No carriers found' : 'No carriers yet'}
           </h3>
-          <p className="text-slate-500 text-sm">
+          <p className="text-slate-500 dark:text-slate-400 text-sm">
             {searchQuery 
               ? 'Try adjusting your search terms' 
               : 'Get started by adding your first carrier'

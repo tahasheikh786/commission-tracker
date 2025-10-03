@@ -156,13 +156,13 @@ export default function EnhancedProgressLoader({
   const getStageColor = (stage: ProgressStage) => {
     switch (stage.status) {
       case 'completed':
-        return 'bg-green-50 border-green-200';
+        return 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800';
       case 'processing':
-        return 'bg-blue-50 border-blue-200';
+        return 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800';
       case 'error':
-        return 'bg-red-50 border-red-200';
+        return 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800';
       default:
-        return 'bg-gray-50 border-gray-200';
+        return 'bg-gray-50 dark:bg-slate-700/50 border-gray-200 dark:border-slate-600';
     }
   };
 
@@ -178,20 +178,20 @@ export default function EnhancedProgressLoader({
       <motion.div
         initial={{ y: 50, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+        className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
       >
         {/* Header */}
-        <div className="p-6 border-b border-gray-100">
+        <div className="p-6 border-b border-gray-100 dark:border-slate-700">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <div className="p-3 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl">
                 <Brain className="w-8 h-8 text-white" />
               </div>
               <div>
-                <h2 className="text-2xl font-bold text-gray-800">
+                <h2 className="text-2xl font-bold text-gray-800 dark:text-slate-200">
                   Processing Commission Document
                 </h2>
-                <p className="text-gray-600">
+                <p className="text-gray-600 dark:text-slate-400">
                   {fileName ? `Extracting data from ${fileName}` : 'AI-powered extraction in progress'}
                 </p>
               </div>
@@ -200,7 +200,7 @@ export default function EnhancedProgressLoader({
             {onCancel && (
               <button
                 onClick={onCancel}
-                className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+                className="p-2 text-gray-400 hover:text-gray-600 dark:text-slate-400 dark:hover:text-slate-200 transition-colors"
               >
                 <X className="w-6 h-6" />
               </button>
@@ -209,19 +209,19 @@ export default function EnhancedProgressLoader({
         </div>
 
         {/* Progress Overview */}
-        <div className="p-6 bg-gradient-to-r from-blue-50 to-purple-50">
+        <div className="p-6 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-slate-800/50 dark:to-slate-700/50">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
-                <Clock className="w-5 h-5 text-gray-500" />
-                <span className="text-sm text-gray-600">
+                <Clock className="w-5 h-5 text-gray-500 dark:text-slate-400" />
+                <span className="text-sm text-gray-600 dark:text-slate-300">
                   Elapsed: {formatTime(elapsedTime)}
                 </span>
               </div>
               {estimatedTime && (
                 <div className="flex items-center gap-2">
-                  <TrendingUp className="w-5 h-5 text-gray-500" />
-                  <span className="text-sm text-gray-600">
+                  <TrendingUp className="w-5 h-5 text-gray-500 dark:text-slate-400" />
+                  <span className="text-sm text-gray-600 dark:text-slate-300">
                     Est. remaining: {estimatedTime}
                   </span>
                 </div>
@@ -229,15 +229,15 @@ export default function EnhancedProgressLoader({
             </div>
             
             <div className="text-right">
-              <div className="text-2xl font-bold text-blue-600">
+              <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
                 {Math.round(progress)}%
               </div>
-              <div className="text-sm text-gray-500">Complete</div>
+              <div className="text-sm text-gray-500 dark:text-slate-400">Complete</div>
             </div>
           </div>
 
           {/* Overall Progress Bar */}
-          <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+          <div className="w-full bg-gray-200 dark:bg-slate-700 rounded-full h-3 overflow-hidden">
             <motion.div
               className="h-full bg-gradient-to-r from-blue-500 to-purple-600 rounded-full"
               initial={{ width: 0 }}
@@ -252,7 +252,7 @@ export default function EnhancedProgressLoader({
               key={message}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="mt-4 text-center text-gray-700 font-medium"
+              className="mt-4 text-center text-gray-700 dark:text-slate-300 font-medium"
             >
               {message}
             </motion.p>
@@ -261,7 +261,7 @@ export default function EnhancedProgressLoader({
 
         {/* Stage Details */}
         <div className="p-6">
-          <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+          <h3 className="text-lg font-semibold text-gray-800 dark:text-slate-200 mb-4 flex items-center gap-2">
             <Shield className="w-5 h-5 text-blue-500" />
             Extraction Stages
           </h3>
@@ -282,21 +282,21 @@ export default function EnhancedProgressLoader({
                   
                   <div className="flex-1">
                     <div className="flex items-center justify-between mb-1">
-                      <h4 className="font-semibold text-gray-800">
+                      <h4 className="font-semibold text-gray-800 dark:text-slate-200">
                         {stageItem.name}
                       </h4>
-                      <span className="text-sm text-gray-500">
+                      <span className="text-sm text-gray-500 dark:text-slate-400">
                         {stageItem.estimatedDuration}
                       </span>
                     </div>
-                    <p className="text-gray-600 text-sm">
+                    <p className="text-gray-600 dark:text-slate-300 text-sm">
                       {stageItem.description}
                     </p>
                     
                     {/* Stage Progress Bar */}
                     {stageItem.status === 'processing' && (
                       <div className="mt-2">
-                        <div className="w-full bg-gray-200 rounded-full h-1.5">
+                        <div className="w-full bg-gray-200 dark:bg-slate-700 rounded-full h-1.5">
                           <motion.div
                             className="h-full bg-blue-500 rounded-full"
                             initial={{ width: 0 }}
@@ -324,15 +324,15 @@ export default function EnhancedProgressLoader({
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="p-6 bg-red-50 border-t border-red-100"
+            className="p-6 bg-red-50 dark:bg-red-900/20 border-t border-red-100 dark:border-red-800"
           >
             <div className="flex items-start gap-3">
               <AlertCircle className="w-6 h-6 text-red-500 flex-shrink-0 mt-1" />
               <div className="flex-1">
-                <h4 className="font-semibold text-red-800 mb-1">
+                <h4 className="font-semibold text-red-800 dark:text-red-200 mb-1">
                   Processing Error
                 </h4>
-                <p className="text-red-700 text-sm mb-4">
+                <p className="text-red-700 dark:text-red-300 text-sm mb-4">
                   {error}
                 </p>
                 
@@ -351,8 +351,8 @@ export default function EnhancedProgressLoader({
         )}
 
         {/* Footer */}
-        <div className="p-6 bg-gray-50 border-t border-gray-100 rounded-b-2xl">
-          <div className="flex items-center justify-center gap-6 text-sm text-gray-500">
+        <div className="p-6 bg-gray-50 dark:bg-slate-700/50 border-t border-gray-100 dark:border-slate-600 rounded-b-2xl">
+          <div className="flex items-center justify-center gap-6 text-sm text-gray-500 dark:text-slate-400">
             <div className="flex items-center gap-2">
               <Shield className="w-4 h-4" />
               <span>Secure Processing</span>

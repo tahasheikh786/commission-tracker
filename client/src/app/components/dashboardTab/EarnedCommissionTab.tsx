@@ -110,10 +110,10 @@ const CarrierCard: React.FC<CarrierCardProps> = ({
   };
   
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all duration-300">
+    <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md transition-all duration-300">
       {/* Card Header */}
       <div 
-        className="p-4 md:p-6 cursor-pointer hover:bg-slate-50 transition-colors duration-200"
+        className="p-4 md:p-6 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors duration-200"
         onClick={(e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -139,24 +139,24 @@ const CarrierCard: React.FC<CarrierCardProps> = ({
             
             {/* Carrier Info */}
             <div className="min-w-0 flex-1">
-              <h3 className="text-lg md:text-xl font-bold text-slate-800 truncate">{carrierGroup.carrierName}</h3>
-              <p className="text-xs md:text-sm text-slate-600">{carrierGroup.companyCount} companies • {carrierGroup.statementCount} statements</p>
+              <h3 className="text-lg md:text-xl font-bold text-slate-800 dark:text-slate-200 truncate">{carrierGroup.carrierName}</h3>
+              <p className="text-xs md:text-sm text-slate-600 dark:text-slate-400">{carrierGroup.companyCount} companies • {carrierGroup.statementCount} statements</p>
             </div>
           </div>
 
           {/* Key Metrics */}
           <div className="text-right ml-2">
-            <p className="text-lg md:text-2xl font-bold text-emerald-600">{formatCurrency(carrierGroup.totalCommission)}</p>
-            <p className="text-xs md:text-sm text-slate-600 hidden md:block">Total Commission</p>
-            <p className="text-xs text-slate-500 hidden lg:block">Invoice: {formatCurrency(carrierGroup.totalInvoice)}</p>
+            <p className="text-lg md:text-2xl font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(carrierGroup.totalCommission)}</p>
+            <p className="text-xs md:text-sm text-slate-600 dark:text-slate-400 hidden md:block">Total Commission</p>
+            <p className="text-xs text-slate-500 dark:text-slate-500 hidden lg:block">Invoice: {formatCurrency(carrierGroup.totalInvoice)}</p>
           </div>
 
           {/* Expand/Collapse Icon */}
           <div className="ml-2 flex-shrink-0">
             {isExpanded ? (
-              <ChevronUp className="w-5 h-5 md:w-6 md:h-6 text-slate-400" />
+              <ChevronUp className="w-5 h-5 md:w-6 md:h-6 text-slate-400 dark:text-slate-500" />
             ) : (
-              <ChevronDown className="w-5 h-5 md:w-6 md:h-6 text-slate-400" />
+              <ChevronDown className="w-5 h-5 md:w-6 md:h-6 text-slate-400 dark:text-slate-500" />
             )}
           </div>
         </div>
@@ -165,7 +165,7 @@ const CarrierCard: React.FC<CarrierCardProps> = ({
       {/* Card Content - Simple clickable card, no expansion */}
       <div className="px-4 md:px-6 pb-4 md:pb-6">
         <div className="pt-2">
-          <div className="text-xs text-slate-500 text-center">
+          <div className="text-xs text-slate-500 dark:text-slate-400 text-center">
             Click to view all {carrierGroup.companyCount} companies
           </div>
         </div>
@@ -211,26 +211,26 @@ const CarrierFullTableView: React.FC<{
   }, [carrier.companies, searchQuery]);
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
+    <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
       {/* Header with Back Button */}
-      <div className="p-6 border-b border-slate-200">
+      <div className="p-6 border-b border-slate-200 dark:border-slate-700">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-4">
             <button
               onClick={onBack}
-              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
+              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
             >
               <ChevronLeft size={16} />
               Back to Carriers
             </button>
-            <div className="h-6 w-px bg-slate-300" />
+            <div className="h-6 w-px bg-slate-300 dark:bg-slate-600" />
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white font-bold text-lg">
                 {carrier.carrierName.charAt(0).toUpperCase()}
               </div>
               <div>
-                <h2 className="text-xl font-bold text-slate-800">{carrier.carrierName}</h2>
-                <p className="text-sm text-slate-600">
+                <h2 className="text-xl font-bold text-slate-800 dark:text-slate-200">{carrier.carrierName}</h2>
+                <p className="text-sm text-slate-600 dark:text-slate-400">
                   {carrier.companyCount} companies • {formatCurrency(carrier.totalCommission)} total commission
                 </p>
               </div>
@@ -240,13 +240,13 @@ const CarrierFullTableView: React.FC<{
 
         {/* Search Bar */}
         <div className="relative max-w-md">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={16} />
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 dark:text-slate-500" size={16} />
           <input
             type="text"
             placeholder={`Search companies in ${carrier.carrierName}...`}
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 text-sm bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200"
+            className="w-full pl-10 pr-4 py-2 text-sm bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-lg border border-slate-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200"
           />
         </div>
       </div>
@@ -254,13 +254,13 @@ const CarrierFullTableView: React.FC<{
       {/* Companies Table */}
       <div className="overflow-x-auto">
         <table className="w-full">
-          <thead className="bg-slate-50 border-b border-slate-200">
+          <thead className="bg-slate-50 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-700">
             <tr>
-              <th className="text-left py-3 px-6 font-semibold text-slate-700">Company Name</th>
-              <th className="text-right py-3 px-4 font-semibold text-slate-700">Total Commission</th>
-              <th className="text-right py-3 px-4 font-semibold text-slate-700">Total Invoice</th>
-              <th className="text-center py-3 px-4 font-semibold text-slate-700">Statements</th>
-              <th className="text-center py-3 px-4 font-semibold text-slate-700">Actions</th>
+              <th className="text-left py-3 px-6 font-semibold text-slate-700 dark:text-slate-300">Company Name</th>
+              <th className="text-right py-3 px-4 font-semibold text-slate-700 dark:text-slate-300">Total Commission</th>
+              <th className="text-right py-3 px-4 font-semibold text-slate-700 dark:text-slate-300">Total Invoice</th>
+              <th className="text-center py-3 px-4 font-semibold text-slate-700 dark:text-slate-300">Statements</th>
+              <th className="text-center py-3 px-4 font-semibold text-slate-700 dark:text-slate-300">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -268,30 +268,30 @@ const CarrierFullTableView: React.FC<{
               <React.Fragment key={company.id}>
                 {/* Company Row */}
                 <tr 
-                  className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer transition-colors"
+                  className="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer transition-colors"
                   onClick={() => onToggleCompanyExpansion(company.id)}
                 >
                   <td className="py-4 px-6">
                     <div className="flex items-center gap-3">
                       {expandedCompanies.has(company.id) ? (
-                        <ChevronDown size={16} className="text-slate-400" />
+                        <ChevronDown size={16} className="text-slate-400 dark:text-slate-500" />
                       ) : (
-                        <ChevronRight size={16} className="text-slate-400" />
+                        <ChevronRight size={16} className="text-slate-400 dark:text-slate-500" />
                       )}
                       <div>
-                        <div className="font-semibold text-slate-900">{company.client_name}</div>
-                        <div className="text-xs text-slate-500">Year: {company.statement_year || 'N/A'}</div>
+                        <div className="font-semibold text-slate-900 dark:text-slate-200">{company.client_name}</div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">Year: {company.statement_year || 'N/A'}</div>
                       </div>
                     </div>
                   </td>
                   <td className="py-4 px-4 text-right">
-                    <span className="font-bold text-emerald-600">{formatCurrency(company.commission_earned)}</span>
+                    <span className="font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(company.commission_earned)}</span>
                   </td>
                   <td className="py-4 px-4 text-right">
-                    <span className="font-medium text-slate-700">{formatCurrency(company.invoice_total)}</span>
+                    <span className="font-medium text-slate-700 dark:text-slate-300">{formatCurrency(company.invoice_total)}</span>
                   </td>
                   <td className="py-4 px-4 text-center">
-                    <span className="text-slate-600">{company.statement_count}</span>
+                    <span className="text-slate-600 dark:text-slate-400">{company.statement_count}</span>
                   </td>
                   <td className="py-4 px-4 text-center">
                     <button
@@ -302,8 +302,8 @@ const CarrierFullTableView: React.FC<{
                       disabled={viewAllData}
                       className={`p-2 rounded-lg transition-colors ${ 
                         viewAllData 
-                          ? 'text-slate-400 cursor-not-allowed opacity-50' 
-                          : 'text-blue-600 hover:text-blue-800 hover:bg-blue-50'
+                          ? 'text-slate-400 dark:text-slate-600 cursor-not-allowed opacity-50' 
+                          : 'text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30'
                       }`}
                       title={viewAllData ? 'Read-only mode - switch to My Data to edit' : 'Edit commission data'}
                     >
@@ -315,18 +315,18 @@ const CarrierFullTableView: React.FC<{
                 {/* Expanded Monthly Breakdown Row */}
                 {expandedCompanies.has(company.id) && (
                   <tr>
-                    <td colSpan={5} className="py-4 px-6 bg-slate-50">
+                    <td colSpan={5} className="py-4 px-6 bg-slate-50 dark:bg-slate-700/30">
                       <div className="space-y-3">
-                        <h4 className="font-semibold text-slate-800 flex items-center gap-2">
+                        <h4 className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2">
                           <BarChart3 size={16} />
                           Monthly Breakdown for {company.client_name}
                         </h4>
                         <div className="overflow-x-auto">
                           <table className="w-full text-sm">
                             <thead>
-                              <tr className="border-b border-slate-200">
+                              <tr className="border-b border-slate-200 dark:border-slate-600">
                                 {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map(month => (
-                                  <th key={month} className="text-center py-2 px-3 font-medium text-slate-600 min-w-[80px]">
+                                  <th key={month} className="text-center py-2 px-3 font-medium text-slate-600 dark:text-slate-400 min-w-[80px]">
                                     {month}
                                   </th>
                                 ))}
@@ -335,7 +335,7 @@ const CarrierFullTableView: React.FC<{
                             <tbody>
                               <tr>
                                 {['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'].map(month => (
-                                  <td key={month} className="text-center py-2 px-3 text-slate-700">
+                                  <td key={month} className="text-center py-2 px-3 text-slate-700 dark:text-slate-300">
                                     {company.monthly_breakdown?.[month as keyof typeof company.monthly_breakdown] 
                                       ? formatCurrency(company.monthly_breakdown[month as keyof typeof company.monthly_breakdown])
                                       : '-'
@@ -357,11 +357,11 @@ const CarrierFullTableView: React.FC<{
       </div>
 
       {/* Footer */}
-      <div className="px-6 py-4 border-t border-slate-200 bg-slate-50">
-        <div className="flex items-center justify-between text-sm text-slate-600">
+      <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/30">
+        <div className="flex items-center justify-between text-sm text-slate-600 dark:text-slate-400">
           <span>Showing {filteredCompanies.length} of {carrier.companyCount} companies</span>
           <span className="font-medium">
-            Total Commission: <span className="text-emerald-600 font-bold">{formatCurrency(carrier.totalCommission)}</span>
+            Total Commission: <span className="text-emerald-600 dark:text-emerald-400 font-bold">{formatCurrency(carrier.totalCommission)}</span>
           </span>
         </div>
       </div>
@@ -698,7 +698,7 @@ export default function EarnedCommissionTab() {
 
 
   return (
-    <div className="w-full space-y-6" style={{
+    <div className="w-full space-y-6 bg-slate-50 dark:bg-slate-900 min-h-screen" style={{
       '--primary-blue': '#3B82F6',
       '--success-green': '#10B981',
       '--warning-orange': '#F59E0B',
@@ -710,13 +710,13 @@ export default function EarnedCommissionTab() {
       {/* Controls */}
       <div className="flex justify-between items-center">
         {/* View Toggle */}
-        <div className="flex items-center gap-2 bg-white rounded-xl border border-slate-200 shadow-sm p-1">
+        <div className="flex items-center gap-2 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-1">
           <button
             onClick={() => setViewAllData(false)}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
               !viewAllData
                 ? 'bg-blue-500 text-white shadow-sm'
-                : 'text-slate-600 hover:bg-slate-100'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
             }`}
           >
             <Eye className="w-4 h-4" />
@@ -727,7 +727,7 @@ export default function EarnedCommissionTab() {
             className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
               viewAllData
                 ? 'bg-blue-500 text-white shadow-sm'
-                : 'text-slate-600 hover:bg-slate-100'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
             }`}
           >
             <EyeOff className="w-4 h-4" />
@@ -748,27 +748,27 @@ export default function EarnedCommissionTab() {
 
       {/* Status Indicators */}
       {selectedYear && selectedYear !== 2025 && (
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-              <span className="text-blue-600 text-sm">📅</span>
+            <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center">
+              <span className="text-blue-600 dark:text-blue-400 text-sm">📅</span>
             </div>
             <div>
-              <p className="text-sm font-medium text-blue-800">Year Filter Active</p>
-              <p className="text-xs text-blue-600">Showing data for year {selectedYear}</p>
+              <p className="text-sm font-medium text-blue-800 dark:text-blue-300">Year Filter Active</p>
+              <p className="text-xs text-blue-600 dark:text-blue-400">Showing data for year {selectedYear}</p>
             </div>
           </div>
         </div>
       )}
       {viewAllData && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+        <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-600 rounded-xl p-4 shadow-sm">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center">
-              <span className="text-amber-600 text-sm">🔒</span>
+            <div className="w-8 h-8 bg-amber-100 dark:bg-amber-800/60 rounded-full flex items-center justify-center">
+              <span className="text-amber-600 dark:text-amber-200 text-sm">🔒</span>
             </div>
             <div>
-              <p className="text-sm font-medium text-amber-800">Read-Only Mode</p>
-              <p className="text-xs text-amber-600">Viewing all company data</p>
+              <p className="text-sm font-medium text-amber-800 dark:text-amber-100">Read-Only Mode</p>
+              <p className="text-xs text-amber-600 dark:text-amber-200">Viewing all company data</p>
             </div>
           </div>
         </div>
@@ -778,94 +778,82 @@ export default function EarnedCommissionTab() {
 
       {/* Stats Cards */}
       <div className="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="font-medium text-slate-600 text-sm">Total Invoice Amount</p>
-              <div className="font-bold text-slate-800 text-2xl">
+              <p className="font-medium text-slate-600 dark:text-slate-400 text-sm">Total Invoice Amount</p>
+              <div className="font-bold text-slate-800 dark:text-slate-200 text-2xl">
                 {statsLoading ? (
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 border-2 border-slate-200 border-t-blue-500 rounded-full animate-spin"></div>
-                    <span>Loading...</span>
-                  </div>
+                  <div className="w-20 h-6 bg-slate-200 dark:bg-slate-600 rounded animate-pulse"></div>
                 ) : formatCurrency(overallStats?.total_invoice || 0)}
               </div>
             </div>
-            <div className="bg-blue-100 rounded-lg p-3">
-              <DollarSign className="text-blue-600" size={24} />
+            <div className="bg-blue-100 dark:bg-blue-900/30 rounded-lg p-3">
+              <DollarSign className="text-blue-600 dark:text-blue-400" size={24} />
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="font-medium text-slate-600 text-sm">Total Commission Earned</p>
-              <p className="font-bold text-emerald-600 text-2xl">
+              <p className="font-medium text-slate-600 dark:text-slate-400 text-sm">Total Commission Earned</p>
+              <div className="font-bold text-emerald-600 dark:text-emerald-400 text-2xl">
                 {statsLoading ? (
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 border-2 border-slate-200 border-t-emerald-500 rounded-full animate-spin"></div>
-                    <span>Loading...</span>
-                  </div>
+                  <div className="w-20 h-6 bg-slate-200 dark:bg-slate-600 rounded animate-pulse"></div>
                 ) : formatCurrency(overallStats?.total_commission || 0)}
-              </p>
+              </div>
             </div>
-            <div className="bg-emerald-100 rounded-lg p-3">
-              <TrendingUp className="text-emerald-600" size={24} />
+            <div className="bg-emerald-100 dark:bg-emerald-900/30 rounded-lg p-3">
+              <TrendingUp className="text-emerald-600 dark:text-emerald-400" size={24} />
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="font-medium text-slate-600 text-sm">Total Carriers</p>
-              <p className="font-bold text-purple-600 text-2xl">
+              <p className="font-medium text-slate-600 dark:text-slate-400 text-sm">Total Carriers</p>
+              <p className="font-bold text-purple-600 dark:text-purple-400 text-2xl">
                 {statsLoading ? (
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 border-2 border-slate-200 border-t-purple-500 rounded-full animate-spin"></div>
-                    <span>Loading...</span>
-                  </div>
+                  <div className="w-20 h-6 bg-slate-200 dark:bg-slate-600 rounded animate-pulse"></div>
                 ) : overallStats?.total_carriers || 0}
               </p>
             </div>
-            <div className="bg-purple-100 rounded-lg p-3">
-              <Building2 className="text-purple-600" size={24} />
+            <div className="bg-purple-100 dark:bg-purple-900/30 rounded-lg p-3">
+              <Building2 className="text-purple-600 dark:text-purple-400" size={24} />
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="font-medium text-slate-600 text-sm">Total Companies</p>
-              <p className="font-bold text-orange-600 text-2xl">
+              <p className="font-medium text-slate-600 dark:text-slate-400 text-sm">Total Companies</p>
+              <p className="font-bold text-orange-600 dark:text-orange-400 text-2xl">
                 {statsLoading ? (
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 border-2 border-slate-200 border-t-orange-500 rounded-full animate-spin"></div>
-                    <span>Loading...</span>
-                  </div>
+                  <div className="w-20 h-6 bg-slate-200 dark:bg-slate-600 rounded animate-pulse"></div>
                 ) : overallStats?.total_companies || 0}
               </p>
             </div>
-            <div className="bg-orange-100 rounded-lg p-3">
-              <Users className="text-orange-600" size={24} />
+            <div className="bg-orange-100 dark:bg-orange-900/30 rounded-lg p-3">
+              <Users className="text-orange-600 dark:text-orange-400" size={24} />
             </div>
           </div>
         </div>
       </div>
 
       {/* Carrier-Centric Dashboard */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
         {/* Dashboard Header */}
-        <div className="p-6 border-b border-slate-200">
+        <div className="p-6 border-b border-slate-200 dark:border-slate-700">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                <BarChart3 className="text-emerald-600" size={18} />
+              <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                <BarChart3 className="text-emerald-600 dark:text-emerald-400" size={18} />
                 Commission Data by Carrier
               </h3>
-              <p className="text-sm text-slate-600 mt-1">
+              <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
                 {carrierGroups.length} carriers • {filteredData.length} total records
               </p>
             </div>
@@ -875,7 +863,7 @@ export default function EarnedCommissionTab() {
                 className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-200 ${
                   showFilters 
                     ? 'bg-emerald-500 text-white shadow-sm' 
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
                 }`}
               >
                 <SlidersHorizontal size={14} />
@@ -884,7 +872,7 @@ export default function EarnedCommissionTab() {
                   <div className="w-2 h-2 bg-red-500 rounded-full"></div>
                 )}
               </button>
-              <button className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-all duration-200">
+              <button className="p-2 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-all duration-200">
                 <Download size={16} />
               </button>
             </div>
@@ -894,30 +882,30 @@ export default function EarnedCommissionTab() {
           <div className="space-y-4 mb-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={16} />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 dark:text-slate-500" size={16} />
                 <input
                   type="text"
                   placeholder="Search by company..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 text-sm bg-white rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200"
+                  className="w-full pl-10 pr-4 py-2 text-sm bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-lg border border-slate-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200"
                 />
               </div>
               <div className="relative">
-                <Building2 className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={16} />
+                <Building2 className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 dark:text-slate-500" size={16} />
                 <input
                   type="text"
                   placeholder="Search by carrier..."
                   value={carrierFilter}
                   onChange={(e) => setCarrierFilter(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 text-sm bg-white rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200"
+                  className="w-full pl-10 pr-4 py-2 text-sm bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-lg border border-slate-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200"
                 />
               </div>
               <div>
                 <select
                   value={selectedYear || 2025}
                   onChange={(e) => setSelectedYear(e.target.value ? parseInt(e.target.value) : null)}
-                  className="w-full px-4 py-2 text-sm bg-white rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200"
+                  className="w-full px-4 py-2 text-sm bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-lg border border-slate-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200"
                 >
                   <option value="">All Years</option>
                   {yearsLoading ? (
@@ -936,7 +924,7 @@ export default function EarnedCommissionTab() {
               <div className="flex justify-center">
                 <button
                   onClick={clearFilters}
-                  className="flex items-center gap-2 px-3 py-1 text-sm bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors font-medium"
+                  className="flex items-center gap-2 px-3 py-1 text-sm bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors font-medium"
                 >
                   <X size={14} />
                   Clear All Filters
@@ -947,16 +935,16 @@ export default function EarnedCommissionTab() {
 
           {/* Advanced Filters Panel */}
           {showFilters && (
-            <div className="bg-slate-50 rounded-lg p-4 mb-4 border border-slate-200">
+            <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4 mb-4 border border-slate-200 dark:border-slate-600">
               <div className="flex items-center justify-between mb-4">
-                <h4 className="font-medium text-slate-800 flex items-center gap-2">
+                <h4 className="font-medium text-slate-800 dark:text-slate-200 flex items-center gap-2">
                   <Filter size={14} />
                   Advanced Filters
                 </h4>
                 {hasActiveFilters && (
                   <button
                     onClick={clearFilters}
-                    className="flex items-center gap-1 px-2 py-1 text-xs bg-red-100 text-red-600 rounded hover:bg-red-200 transition-colors"
+                    className="flex items-center gap-1 px-2 py-1 text-xs bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors"
                   >
                     <X size={10} />
                     Clear All
@@ -966,23 +954,23 @@ export default function EarnedCommissionTab() {
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-2">Min Commission</label>
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">Min Commission</label>
                   <input
                     type="number"
                     placeholder="Min amount..."
                     value={minCommissionFilter}
                     onChange={(e) => setMinCommissionFilter(e.target.value)}
-                    className="w-full px-3 py-2 text-sm bg-white rounded border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded border border-slate-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-2">Max Commission</label>
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">Max Commission</label>
                   <input
                     type="number"
                     placeholder="Max amount..."
                     value={maxCommissionFilter}
                     onChange={(e) => setMaxCommissionFilter(e.target.value)}
-                    className="w-full px-3 py-2 text-sm bg-white rounded border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded border border-slate-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                   />
                 </div>
               </div>
@@ -1014,18 +1002,18 @@ export default function EarnedCommissionTab() {
               {allDataLoading ? (
                 <div className="flex items-center justify-center py-12">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 border-2 border-slate-200 border-t-emerald-500 rounded-full animate-spin"></div>
-                    <span className="text-slate-500">Loading commission data...</span>
+                    <div className="w-8 h-8 border-2 border-slate-200 dark:border-slate-600 border-t-emerald-500 rounded-full animate-spin"></div>
+                    <span className="text-slate-500 dark:text-slate-400">Loading commission data...</span>
                   </div>
                 </div>
               ) : carrierGroups.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-slate-500">
-                  <BarChart3 className="text-slate-300 mb-4" size={48} />
+                <div className="flex flex-col items-center justify-center py-12 text-slate-500 dark:text-slate-400">
+                  <BarChart3 className="text-slate-300 dark:text-slate-600 mb-4" size={48} />
                   <p className="text-lg font-medium mb-2">No commission data found</p>
                   {hasActiveFilters && (
                     <button
                       onClick={clearFilters}
-                      className="text-sm text-emerald-600 hover:text-emerald-700 underline"
+                      className="text-sm text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 underline"
                     >
                       Clear filters to see all data
                     </button>
@@ -1052,14 +1040,14 @@ export default function EarnedCommissionTab() {
         </div>
 
         {/* Summary Footer */}
-        <div className="px-6 py-4 border-t border-slate-200 bg-slate-50">
+        <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/30">
           <div className="flex items-center justify-between">
-            <div className="text-sm text-slate-700 font-medium">
+            <div className="text-sm text-slate-700 dark:text-slate-300 font-medium">
               Showing {carrierGroups.length} carriers with {filteredData.length} total records
             </div>
-            <div className="flex items-center gap-4 text-sm text-slate-600">
-              <span>Total Commission: <span className="font-bold text-emerald-600">{formatCurrency(carrierGroups.reduce((sum, group) => sum + group.totalCommission, 0))}</span></span>
-              <span>Total Invoice: <span className="font-bold text-slate-800">{formatCurrency(carrierGroups.reduce((sum, group) => sum + group.totalInvoice, 0))}</span></span>
+            <div className="flex items-center gap-4 text-sm text-slate-600 dark:text-slate-400">
+              <span>Total Commission: <span className="font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(carrierGroups.reduce((sum, group) => sum + group.totalCommission, 0))}</span></span>
+              <span>Total Invoice: <span className="font-bold text-slate-800 dark:text-slate-200">{formatCurrency(carrierGroups.reduce((sum, group) => sum + group.totalInvoice, 0))}</span></span>
             </div>
           </div>
         </div>

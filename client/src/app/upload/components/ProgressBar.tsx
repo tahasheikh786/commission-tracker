@@ -39,48 +39,46 @@ const ProgressBarComponent = ({ currentStep, steps = DEFAULT_STEPS }: ProgressBa
   }))
 
   return (
-    <div className="w-full bg-white border-b border-slate-200 p-6 z-10 relative shadow-sm">
-      <div className="max-w-4xl mx-auto">
-        <div className="flex items-center justify-center gap-8">
-          {updatedSteps.map((step, index) => (
-            <div key={step.id} className="flex items-center">
-              <div className="flex items-center gap-3">
-                <div className={`
-                  w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold transition-all duration-300 shadow-sm
-                  ${step.status === 'completed' 
-                    ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-lg' 
-                    : step.status === 'current' 
-                    ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg' 
-                    : 'bg-slate-100 text-slate-500 border border-slate-200'
-                  }
-                `}>
-                  {step.status === 'completed' ? (
-                    <Check size={18} />
-                  ) : (
-                    index + 1
-                  )}
-                </div>
-                <span className={`
-                  text-sm font-semibold transition-all duration-300
-                  ${step.status === 'completed' 
-                    ? 'text-emerald-600' 
-                    : step.status === 'current' 
-                    ? 'text-blue-600' 
-                    : 'text-slate-500'
-                  }
-                `}>
-                  {step.label}
-                </span>
+    <div className="bg-transparent py-1 z-10 relative">
+      <div className="flex items-center justify-center gap-4">
+        {updatedSteps.map((step, index) => (
+          <div key={step.id} className="flex items-center">
+            <div className="flex items-center gap-2">
+              <div className={`
+                w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold transition-all duration-300 shadow-sm
+                ${step.status === 'completed' 
+                  ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-lg' 
+                  : step.status === 'current' 
+                  ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg' 
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700'
+                }
+              `}>
+                {step.status === 'completed' ? (
+                  <Check size={14} />
+                ) : (
+                  index + 1
+                )}
               </div>
-              {index < updatedSteps.length - 1 && (
-                <div className={`
-                  w-16 h-1 mx-6 transition-all duration-300 rounded-full
-                  ${step.status === 'completed' ? 'bg-gradient-to-r from-emerald-500 to-teal-600' : 'bg-slate-200'}
-                `} />
-              )}
+              <span className={`
+                text-xs font-medium transition-all duration-300 whitespace-nowrap
+                ${step.status === 'completed' 
+                  ? 'text-emerald-600 dark:text-emerald-400' 
+                  : step.status === 'current' 
+                  ? 'text-blue-600 dark:text-blue-400' 
+                  : 'text-slate-500 dark:text-slate-400'
+                }
+              `}>
+                {step.label}
+              </span>
             </div>
-          ))}
-        </div>
+            {index < updatedSteps.length - 1 && (
+              <div className={`
+                w-12 h-1 mx-4 transition-all duration-300 rounded-full
+                ${step.status === 'completed' ? 'bg-gradient-to-r from-emerald-500 to-teal-600' : 'bg-slate-200 dark:bg-slate-700'}
+              `} />
+            )}
+          </div>
+        ))}
       </div>
     </div>
   )

@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { SubmissionProvider } from "@/context/SubmissionContext";
 import { AuthProvider } from "@/context/AuthContext";
+import { ThemeProvider } from "@/context/ThemeContext";
 import { Toaster } from "@/app/toast";
 
 const inter = Inter({
@@ -26,11 +27,13 @@ export default function RootLayout({
       <body
         className={`${inter.variable} font-sans antialiased h-full bg-slate-50`}
       >
-        <AuthProvider>
-          <SubmissionProvider>
-            {children}
-          </SubmissionProvider>
-        </AuthProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            <SubmissionProvider>
+              {children}
+            </SubmissionProvider>
+          </AuthProvider>
+        </ThemeProvider>
         <Toaster />
       </body>
     </html>
