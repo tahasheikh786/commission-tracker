@@ -11,24 +11,21 @@ import {
   Settings,
   Zap
 } from "lucide-react";
-import { ApprovalLoader, ExtractionLoader } from "../../components/ui/FullScreenLoader";
+import { ApprovalLoader } from "../../components/ui/FullScreenLoader";
 import MinimalLoader from "../../components/ui/MinimalLoader";
 import EnhancedProgressLoader from "../../components/ui/EnhancedProgressLoader";
 import TableEditorDemo from "../demo/TableEditorDemo";
 import FieldMapperDemo from "../demo/FieldMapperDemo";
 import ReviewDemo from "../demo/ReviewDemo";
-import DashboardTableFullPageDemo from "../../upload/components/DashboardTableFullPageDemo";
 import IntegratedDemoFlow from "../../upload/components/IntegratedDemoFlow";
 import toast from 'react-hot-toast';
 
 export default function DemosTab() {
-  const [showTestLoader, setShowTestLoader] = useState(false);
   const [showMinimalLoader, setShowMinimalLoader] = useState(false);
   const [showEnhancedProgressLoader, setShowEnhancedProgressLoader] = useState(false);
   const [showTableEditorDemo, setShowTableEditorDemo] = useState(false);
   const [showFieldMapperDemo, setShowFieldMapperDemo] = useState(false);
   const [showReviewDemo, setShowReviewDemo] = useState(false);
-  const [showDashboardTableDemo, setShowDashboardTableDemo] = useState(false);
   const [showIntegratedDemo, setShowIntegratedDemo] = useState(false);
   
   // Enhanced Progress Loader state
@@ -40,15 +37,6 @@ export default function DemosTab() {
 
   const demoCards = [
     {
-      id: 'extraction-loader',
-      title: 'Test Extraction Loader',
-      description: 'Test the modal loader that appears during document extraction',
-      icon: Loader,
-      color: 'blue',
-      buttonText: 'Try Loader',
-      onClick: () => setShowTestLoader(true)
-    },
-    {
       id: 'enhanced-progress-loader',
       title: 'Test Enhanced Progress Loader',
       description: 'Advanced progress modal with WebSocket simulation and real-time updates',
@@ -57,18 +45,6 @@ export default function DemosTab() {
       buttonText: 'Try Enhanced Loader',
       onClick: () => {
         setShowEnhancedProgressLoader(true);
-        simulateProgressLoader();
-      }
-    },
-    {
-      id: 'minimal-loader',
-      title: 'Test Minimal Loader',
-      description: 'Enhanced minimal loader with WebSocket support and individual progress bars',
-      icon: Zap,
-      color: 'green',
-      buttonText: 'Try Minimal Loader',
-      onClick: () => {
-        setShowMinimalLoader(true);
         simulateProgressLoader();
       }
     },
@@ -84,42 +60,6 @@ export default function DemosTab() {
         simulateWebSocketProgress();
       }
     },
-    {
-      id: 'table-editor',
-      title: 'Test Table Editor',
-      description: 'Complete table editor with sample data to test functionalities',
-      icon: Table,
-      color: 'purple',
-      buttonText: 'Try Table Editor',
-      onClick: () => setShowTableEditorDemo(true)
-    },
-    {
-      id: 'field-mapper',
-      title: 'Test Field Mapper',
-      description: 'Complete field mapping with sample data to test functionalities',
-      icon: MapPin,
-      color: 'orange',
-      buttonText: 'Try Field Mapper',
-      onClick: () => setShowFieldMapperDemo(true)
-    },
-    {
-      id: 'dashboard-table',
-      title: 'Test Dashboard Table Full Page',
-      description: 'Complete final table view with sample data to test approval functionalities',
-      icon: Table,
-      color: 'green',
-      buttonText: 'Try Dashboard Table',
-      onClick: () => setShowDashboardTableDemo(true)
-    },
-    {
-      id: 'review-demo',
-      title: 'Test Review Demo',
-      description: 'Final review step with complete table, inline editing and approval/rejection functionalities',
-      icon: Eye,
-      color: 'indigo',
-      buttonText: 'Try Review',
-      onClick: () => setShowReviewDemo(true)
-    }
   ];
 
   const getColorClasses = (color: string) => {
@@ -128,6 +68,7 @@ export default function DemosTab() {
       green: 'bg-green-600 hover:bg-green-700',
       purple: 'bg-purple-600 hover:bg-purple-700',
       orange: 'bg-orange-600 hover:bg-orange-700',
+      teal: 'bg-teal-600 hover:bg-teal-700',
       indigo: 'bg-indigo-600 hover:bg-indigo-700',
       gradient: 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700'
     };
@@ -252,18 +193,27 @@ export default function DemosTab() {
                     <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                     <span className="text-sm font-medium text-blue-800 dark:text-slate-200">Upload</span>
                   </div>
-                  <div className="flex items-center gap-2 bg-white/50 dark:bg-slate-700/30 px-4 py-2 rounded-full">
+                  <button 
+                    onClick={() => setShowTableEditorDemo(true)}
+                    className="flex items-center gap-2 bg-white/50 dark:bg-slate-700/30 px-4 py-2 rounded-full hover:bg-white/70 dark:hover:bg-slate-600/40 transition-all duration-200 cursor-pointer"
+                  >
                     <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
                     <span className="text-sm font-medium text-blue-800 dark:text-slate-200">Process</span>
-                  </div>
-                  <div className="flex items-center gap-2 bg-white/50 dark:bg-slate-700/30 px-4 py-2 rounded-full">
+                  </button>
+                  <button 
+                    onClick={() => setShowFieldMapperDemo(true)}
+                    className="flex items-center gap-2 bg-white/50 dark:bg-slate-700/30 px-4 py-2 rounded-full hover:bg-white/70 dark:hover:bg-slate-600/40 transition-all duration-200 cursor-pointer"
+                  >
                     <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
                     <span className="text-sm font-medium text-blue-800 dark:text-slate-200">Mapping</span>
-                  </div>
-                  <div className="flex items-center gap-2 bg-white/50 dark:bg-slate-700/30 px-4 py-2 rounded-full">
+                  </button>
+                  <button 
+                    onClick={() => setShowReviewDemo(true)}
+                    className="flex items-center gap-2 bg-white/50 dark:bg-slate-700/30 px-4 py-2 rounded-full hover:bg-white/70 dark:hover:bg-slate-600/40 transition-all duration-200 cursor-pointer"
+                  >
                     <div className="w-2 h-2 bg-pink-500 rounded-full"></div>
                     <span className="text-sm font-medium text-blue-800 dark:text-slate-200">Review</span>
-                  </div>
+                  </button>
                 </div>
               </div>
               
@@ -322,15 +272,6 @@ export default function DemosTab() {
         })}
       </div>
 
-      {/* Test Extraction Loader */}
-      <ExtractionLoader 
-        isVisible={showTestLoader} 
-        progress={showTestLoader ? 75 : 0}
-        onCancel={() => {
-          setShowTestLoader(false);
-          toast.success("Test loader cancelled");
-        }}
-      />
 
       {/* Test Minimal Loader */}
       <MinimalLoader 
@@ -359,15 +300,12 @@ export default function DemosTab() {
         <TableEditorDemo onClose={() => setShowTableEditorDemo(false)} />
       )}
 
+
       {/* Test Field Mapper Demo */}
       {showFieldMapperDemo && (
         <FieldMapperDemo onClose={() => setShowFieldMapperDemo(false)} />
       )}
 
-      {/* Test Dashboard Table Full Page Demo */}
-      {showDashboardTableDemo && (
-        <DashboardTableFullPageDemo onClose={() => setShowDashboardTableDemo(false)} />
-      )}
 
       {/* Test Review Demo */}
       {showReviewDemo && (

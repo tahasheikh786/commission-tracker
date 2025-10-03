@@ -16,6 +16,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import EnhancedProgressLoader from './ui/EnhancedProgressLoader';
+import MinimalEnhancedLoader from './ui/MinimalEnhancedLoader';
 import CompanySelect from '../upload/components/CompanySelect';
 import toast from 'react-hot-toast';
 import axios from 'axios';
@@ -54,6 +55,7 @@ export default function CarrierUploadZone({
   const [error, setError] = useState<string | null>(null);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [uploadId, setUploadId] = useState<string | null>(null);
+  const [useMinimalLoader, setUseMinimalLoader] = useState(true); // Toggle between loaders
   const wsServiceRef = useRef<WebSocketService | null>(null);
 
   // Handle upload click
@@ -338,17 +340,31 @@ export default function CarrierUploadZone({
   if (isUploading) {
     return (
       <div className="w-full h-full">
-        <EnhancedProgressLoader
-          isVisible={true}
-          progress={stageProgress}
-          stage={currentStage}
-          message={stageMessage}
-          estimatedTime={estimatedTime}
-          fileName={uploadedFile?.name}
-          onCancel={handleCancel}
-          onRetry={error ? handleRetry : undefined}
-          error={error}
-        />
+        {useMinimalLoader ? (
+          <MinimalEnhancedLoader
+            isVisible={true}
+            progress={stageProgress}
+            stage={currentStage}
+            message={stageMessage}
+            estimatedTime={estimatedTime}
+            fileName={uploadedFile?.name}
+            onCancel={handleCancel}
+            onRetry={error ? handleRetry : undefined}
+            error={error}
+          />
+        ) : (
+          <EnhancedProgressLoader
+            isVisible={true}
+            progress={stageProgress}
+            stage={currentStage}
+            message={stageMessage}
+            estimatedTime={estimatedTime}
+            fileName={uploadedFile?.name}
+            onCancel={handleCancel}
+            onRetry={error ? handleRetry : undefined}
+            error={error}
+          />
+        )}
       </div>
     );
   }
@@ -494,18 +510,57 @@ export default function CarrierUploadZone({
 
               {/* Features Grid - Only show when carrier is selected */}
               {company && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-slate-500 dark:text-slate-400">
-                  <div className="flex items-center justify-center gap-2">
-                    <Shield className="w-4 h-4" />
-                    <span>Secure Processing</span>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-slate-500 dark:text-slate-400">
+                    <div className="flex items-center justify-center gap-2">
+                      <Shield className="w-4 h-4" />
+                      <span>Secure Processing</span>
+                    </div>
+                    <div className="flex items-center justify-center gap-2">
+                      <FileText className="w-4 h-4" />
+                      <span>PDF & Excel Supported</span>
+                    </div>
+                    <div className="flex items-center justify-center gap-2">
+                      <Sparkles className="w-4 h-4" />
+                      <span>AI-Powered Extraction</span>
+                    </div>
                   </div>
-                  <div className="flex items-center justify-center gap-2">
-                    <FileText className="w-4 h-4" />
-                    <span>PDF & Excel Supported</span>
-                  </div>
-                  <div className="flex items-center justify-center gap-2">
-                    <Sparkles className="w-4 h-4" />
-                    <span>AI-Powered Extraction</span>
+                  
+                  {/* Loader Toggle */}
+                  <div className="flex items-center justify-center gap-3">
+                    <span className="text-sm text-slate-600 dark:text-slate-400">Loader Style:</span>
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setUseMinimalLoader(!useMinimalLoader);
+                      }}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onMouseUp={(e) => e.stopPropagation()}
+                      className={`px-3 py-1 rounded-lg text-xs font-medium transition-all duration-200 ${
+                        useMinimalLoader
+                          ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
+                          : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-600 hover:bg-slate-200 dark:hover:bg-slate-600'
+                      }`}
+                    >
+                      {useMinimalLoader ? 'Minimal' : 'Enhanced'}
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setUseMinimalLoader(!useMinimalLoader);
+                      }}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onMouseUp={(e) => e.stopPropagation()}
+                      className={`px-3 py-1 rounded-lg text-xs font-medium transition-all duration-200 ${
+                        !useMinimalLoader
+                          ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800'
+                          : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-600 hover:bg-slate-200 dark:hover:bg-slate-600'
+                      }`}
+                    >
+                      Enhanced
+                    </button>
                   </div>
                 </div>
               )}

@@ -816,7 +816,7 @@ export default function EarnedCommissionTab() {
               <p className="font-medium text-slate-600 dark:text-slate-400 text-sm">Total Carriers</p>
               <p className="font-bold text-purple-600 dark:text-purple-400 text-2xl">
                 {statsLoading ? (
-                  <div className="w-20 h-6 bg-slate-200 dark:bg-slate-600 rounded animate-pulse"></div>
+                  <span className="w-20 h-6 bg-slate-200 dark:bg-slate-600 rounded animate-pulse inline-block"></span>
                 ) : overallStats?.total_carriers || 0}
               </p>
             </div>
@@ -832,7 +832,7 @@ export default function EarnedCommissionTab() {
               <p className="font-medium text-slate-600 dark:text-slate-400 text-sm">Total Companies</p>
               <p className="font-bold text-orange-600 dark:text-orange-400 text-2xl">
                 {statsLoading ? (
-                  <div className="w-20 h-6 bg-slate-200 dark:bg-slate-600 rounded animate-pulse"></div>
+                  <span className="w-20 h-6 bg-slate-200 dark:bg-slate-600 rounded animate-pulse inline-block"></span>
                 ) : overallStats?.total_companies || 0}
               </p>
             </div>

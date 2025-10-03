@@ -116,14 +116,15 @@ function HomePageContent() {
       gradient: "from-orange-600 via-red-600 to-pink-600",
       bgGradient: "from-orange-50 via-red-50 to-pink-50"
     },
-    {
-      id: "demos" as const,
-      label: "Demos",
-      icon: TestTube,
-      description: "Test & Demo Center",
-      gradient: "from-orange-600 via-red-600 to-pink-600",
-      bgGradient: "from-orange-50 via-red-50 to-pink-50"
-    },
+    // Temporarily hidden - demos button
+    // {
+    //   id: "demos" as const,
+    //   label: "Demos",
+    //   icon: TestTube,
+    //   description: "Test & Demo Center",
+    //   gradient: "from-orange-600 via-red-600 to-pink-600",
+    //   bgGradient: "from-orange-50 via-red-50 to-pink-50"
+    // },
   ];
 
   return (
