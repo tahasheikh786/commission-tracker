@@ -7,7 +7,6 @@ import CarriersModal from "./CarriersModal";
 import { useDashboardStats, useCarriers, useEarnedCommissionStats } from "../../hooks/useDashboard";
 import { TrendingUp, Upload, FileText, Users, Clock, CheckCircle, XCircle, AlertTriangle, ArrowRight, Sparkles, Building2, Database, Plus } from "lucide-react";
 import CompanySelect from "../../upload/components/CompanySelect";
-import SimpleCarrierSelector from "../../upload/components/SimpleCarrierSelector";
 import BeautifulUploadZone from "../../upload/components/BeautifulUploadZone";
 import CarrierUploadZone from "../CarrierUploadZone";
 import DashboardTable from "../../upload/components/DashboardTable";
@@ -448,7 +447,7 @@ export default function DashboardTab({ showAnalytics = false }: DashboardTabProp
   // Render full-page components if active
   if (showTableEditor) {
     return (
-      <div className="fixed inset-0 bg-white z-50">
+      <div className="fixed inset-0 bg-white dark:bg-slate-900 z-50">
         <TableEditor
           tables={uploaded?.tables || []}
           onTablesChange={(tables) => {
@@ -517,7 +516,7 @@ export default function DashboardTab({ showAnalytics = false }: DashboardTabProp
   if (showFieldMapper && company) {
 
     return (
-      <div className="fixed inset-0 bg-white z-50">
+      <div className="fixed inset-0 bg-white dark:bg-slate-900 z-50">
         <FieldMapper
           company={company}
           columns={uploaded?.tables?.[0]?.header || []}
@@ -614,110 +613,17 @@ export default function DashboardTab({ showAnalytics = false }: DashboardTabProp
     );
   }
 
-  // If showing analytics, render the stats grid with hierarchy
+  // If showing analytics, render the stats grid
   if (showAnalytics) {
-    // Separate cards by importance
-    const primaryCard = statCards.find(card => card.type === 'total_earned_commission');
-    const secondaryCards = statCards.filter(card => ['total_statements', 'total_carriers'].includes(card.type));
-    const tertiaryCards = statCards.filter(card => ['pending_reviews', 'approved_statements', 'rejected_statements'].includes(card.type));
-
     return (
       <div className="w-full space-y-8">
-        {/* Primary Card - Total Earned Commission (Hero Card) */}
-        {primaryCard && (
-          <div className="animate-scale-in">
+        {/* Premium Stats Grid - Full Width */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
+          {statCards.map((card, i) => (
             <div 
-              className="group relative bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-lg hover:shadow-xl p-8 transition-all duration-300 cursor-pointer hover:scale-[1.01] hover:-translate-y-1"
-              onClick={() => handleCardClick(primaryCard.type)}
-            >
-              {/* Background Gradient Overlay */}
-              <div className={`absolute inset-0 bg-gradient-to-br ${primaryCard.gradient} opacity-0 group-hover:opacity-10 transition-opacity duration-300 rounded-2xl`}></div>
-              
-              {/* Content */}
-              <div className="relative z-10">
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-4 mb-6">
-                      <div className={`w-20 h-20 rounded-2xl bg-gradient-to-r ${primaryCard.gradient} flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform duration-300`}>
-                        <primaryCard.icon className="text-white" size={40} />
-                      </div>
-                      <div>
-                        <h3 className="text-3xl font-bold text-slate-800 dark:text-slate-200 group-hover:text-slate-900 dark:group-hover:text-slate-100 transition-colors">
-                          {primaryCard.label}
-                        </h3>
-                        <p className="text-slate-500 dark:text-slate-400 text-lg mt-1">{primaryCard.description}</p>
-                      </div>
-                    </div>
-                    
-                    <div className="text-6xl font-bold text-slate-900 dark:text-slate-100 group-hover:text-slate-900 dark:group-hover:text-slate-100 transition-colors">
-                      {loading || earnedCommissionLoading ? (
-                        <div className="w-48 h-16 bg-slate-200 dark:bg-slate-600 rounded animate-pulse"></div>
-                      ) : primaryCard.value}
-                    </div>
-                  </div>
-                </div>
-              </div>
-              
-              {/* Hover Border Effect */}
-              <div className={`absolute inset-0 rounded-2xl border-2 border-transparent group-hover:border-gradient-to-r ${primaryCard.gradient} opacity-0 group-hover:opacity-20 transition-all duration-300`}></div>
-            </div>
-          </div>
-        )}
-
-        {/* Secondary Cards - Total Statements & Total Carriers */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {secondaryCards.map((card, i) => (
-            <div 
-              key={card.type} 
+              key={i} 
               className="animate-scale-in"
-              style={{ animationDelay: `${(i + 1) * 100}ms` }}
-            >
-              <div 
-                className="group relative bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-lg p-6 transition-all duration-300 cursor-pointer hover:scale-[1.02] hover:-translate-y-1"
-                onClick={() => handleCardClick(card.type)}
-              >
-                {/* Background Gradient Overlay */}
-                <div className={`absolute inset-0 bg-gradient-to-br ${card.gradient} opacity-0 group-hover:opacity-5 transition-opacity duration-300 rounded-xl`}></div>
-                
-                {/* Content */}
-                <div className="relative z-10">
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <div className="font-semibold text-xl text-slate-800 dark:text-slate-200 group-hover:text-slate-800 dark:group-hover:text-slate-200 transition-colors mb-4">
-                        {card.label}
-                      </div>
-                      
-                      <div className="text-4xl font-bold text-slate-900 dark:text-slate-100 group-hover:text-slate-900 dark:group-hover:text-slate-100 transition-colors mb-2">
-                        {loading ? (
-                          <div className="w-28 h-10 bg-slate-200 dark:bg-slate-600 rounded animate-pulse"></div>
-                        ) : card.value}
-                      </div>
-                      
-                      <div className="text-sm text-slate-500 dark:text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300 transition-colors">
-                        {card.description}
-                      </div>
-                    </div>
-                    
-                    <div className={`w-16 h-16 rounded-xl bg-gradient-to-r ${card.gradient} flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform duration-300`}>
-                      <card.icon className="text-white" size={32} />
-                    </div>
-                  </div>
-                </div>
-                
-                {/* Hover Border Effect */}
-                <div className={`absolute inset-0 rounded-xl border-2 border-transparent group-hover:border-gradient-to-r ${card.gradient} opacity-0 group-hover:opacity-20 transition-all duration-300`}></div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Tertiary Cards - Status Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {tertiaryCards.map((card, i) => (
-            <div 
-              key={card.type} 
-              className="animate-scale-in"
-              style={{ animationDelay: `${(i + 3) * 100}ms` }}
+              style={{ animationDelay: `${i * 100}ms` }}
             >
               <StatCard 
                 label={card.label} 
@@ -750,113 +656,113 @@ export default function DashboardTab({ showAnalytics = false }: DashboardTabProp
         }}
       />
       
-      {/* New Integrated Upload Interface with CarrierUploadZone */}
+      {/* New Integrated Upload Interface - Full Height */}
       <div className="w-full h-full min-h-[calc(100vh-200px)] p-6">
         <div className="h-full">
-          {!uploaded ? (
-            <CarrierUploadZone
-              onParsed={handleUploadResult}
-              selectedStatementDate={selectedStatementDate}
-              extractionMethod={extractionMethod}
-              onExtractionMethodChange={setExtractionMethod}
-            />
-          ) : (
-            /* Final Dashboard Table with Approve/Reject - Full Page */
-            <div className="space-y-6">
-                  {/* Enhanced Progress Indicator */}
-                  <StepIndicator
-                    steps={[
-                      {
-                        id: 'upload',
-                        title: 'Upload',
-                        description: 'Document uploaded',
-                        status: 'completed'
-                      },
-                      {
-                        id: 'process',
-                        title: 'Process',
-                        description: 'AI extraction complete',
-                        status: 'completed'
-                      },
-                      {
-                        id: 'review',
-                        title: 'Review',
-                        description: 'Ready for approval',
-                        status: 'active'
-                      }
-                    ]}
-                    currentStep="review"
-                    className="mb-8"
-                  />
-
-                  {/* Dashboard Table */}
-                  <div className="bg-slate-100 dark:bg-slate-700/30 rounded-xl border border-slate-200 dark:border-slate-600 p-6">
-                    <DashboardTable
-                      tables={finalTables}
-                      fieldConfig={fieldConfig}
-                      onEditMapping={() => {
-                        setShowFieldMapper(true);
-                        setSkipped(false);
-                      }}
-                      company={company}
-                      fileName={uploaded?.file_name || "uploaded.pdf"}
-                      fileUrl={uploaded?.file?.url || null}
-                      readOnly={false}
-                      onTableChange={setFinalTables}
-                      planTypes={planTypes}
-                      onSendToPending={() => {}}
-                      uploadId={uploaded?.upload_id}
-                      selectedStatementDate={selectedStatementDate}
-                    />
-                  </div>
-
-                  {/* Enhanced Action Buttons */}
-                  <div className="flex flex-col sm:flex-row justify-center gap-4">
-                    <motion.button
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      onClick={handleReset}
-                      className="px-6 py-3 bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-xl hover:bg-slate-300 dark:hover:bg-slate-500 transition-all duration-200 font-semibold shadow-md hover:shadow-lg"
-                    >
-                      Upload Another PDF
-                    </motion.button>
-                    <motion.button
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-8 py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200"
-                      onClick={handleApprove}
-                      disabled={submitting}
-                    >
-                      {submitting ? (
-                        <div className="flex items-center gap-2">
-                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                          Processing...
-                        </div>
-                      ) : (
-                        'Approve'
-                      )}
-                    </motion.button>
-                    <motion.button
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      className="bg-gradient-to-r from-red-500 to-rose-600 text-white px-8 py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200"
-                      onClick={handleReject}
-                      disabled={submitting}
-                    >
-                      {submitting ? (
-                        <div className="flex items-center gap-2">
-                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                          Processing...
-                        </div>
-                      ) : (
-                        'Reject'
-                      )}
-                    </motion.button>
-                  </div>
-            </div>
-          )}
+          <CarrierUploadZone
+            onParsed={handleUploadResult}
+            selectedStatementDate={selectedStatementDate}
+            extractionMethod={extractionMethod}
+            onExtractionMethodChange={setExtractionMethod}
+          />
         </div>
       </div>
+
+      {/* Final Dashboard Table with Approve/Reject - Show when uploaded */}
+      {uploaded && finalTables.length > 0 && (
+        <div className="space-y-6 mt-8 p-6">
+          {/* Enhanced Progress Indicator */}
+          <StepIndicator
+            steps={[
+              {
+                id: 'upload',
+                title: 'Upload',
+                description: 'Document uploaded',
+                status: 'completed'
+              },
+              {
+                id: 'process',
+                title: 'Process',
+                description: 'AI extraction complete',
+                status: 'completed'
+              },
+              {
+                id: 'review',
+                title: 'Review',
+                description: 'Ready for approval',
+                status: 'active'
+              }
+            ]}
+            currentStep="review"
+            className="mb-8"
+          />
+
+          {/* Dashboard Table */}
+          <div className="bg-slate-100 dark:bg-slate-700/30 rounded-xl border border-slate-200 dark:border-slate-600 p-6">
+            <DashboardTable
+              tables={finalTables}
+              fieldConfig={fieldConfig}
+              onEditMapping={() => {
+                setShowFieldMapper(true);
+                setSkipped(false);
+              }}
+              company={company}
+              fileName={uploaded?.file_name || "uploaded.pdf"}
+              fileUrl={uploaded?.file?.url || null}
+              readOnly={false}
+              onTableChange={setFinalTables}
+              planTypes={planTypes}
+              onSendToPending={() => {}}
+              uploadId={uploaded?.upload_id}
+              selectedStatementDate={selectedStatementDate}
+            />
+          </div>
+
+          {/* Enhanced Action Buttons */}
+          <div className="flex flex-col sm:flex-row justify-center gap-4">
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={handleReset}
+              className="px-6 py-3 bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-xl hover:bg-slate-300 dark:hover:bg-slate-500 transition-all duration-200 font-semibold shadow-md hover:shadow-lg"
+            >
+              Upload Another PDF
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-8 py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200"
+              onClick={handleApprove}
+              disabled={submitting}
+            >
+              {submitting ? (
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Processing...
+                </div>
+              ) : (
+                'Approve'
+              )}
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              className="bg-gradient-to-r from-red-500 to-rose-600 text-white px-8 py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200"
+              onClick={handleReject}
+              disabled={submitting}
+            >
+              {submitting ? (
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Processing...
+                </div>
+              ) : (
+                'Reject'
+              )}
+            </motion.button>
+          </div>
+        </div>
+      )}
 
       {/* Reject Modal */}
       {showRejectModal && (
@@ -871,7 +777,7 @@ export default function DashboardTab({ showAnalytics = false }: DashboardTabProp
           />
             <div className="flex gap-3">
               <button
-                className="flex-1 bg-gradient-to-r from-red-500 to-rose-600 text-white px-4 py-3 rounded-xl font-semibold disabled:opacity-50"
+                className="flex-1 bg-gradient-to-r from-red-500 to-rose-600 text-white px-4 py-3 rounded-xl font-semibold disabled:opacity-50 cursor-pointer"
                 disabled={!rejectReason.trim() || submitting}
                 onClick={handleRejectSubmit}
               >
@@ -895,6 +801,7 @@ export default function DashboardTab({ showAnalytics = false }: DashboardTabProp
         carriers={carriers}
         loading={carriersLoading}
       />
+
     </>
   );
 }
