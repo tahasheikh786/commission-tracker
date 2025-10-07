@@ -333,7 +333,8 @@ export default function CarrierTab() {
                 loading={loadingCarriers || userCompaniesLoading}
                 onDelete={handleCarrierDelete}
                 deleting={deletingCarriers}
-                readOnly={!canEditData}
+                canSelectFiles={canEditData}
+                canDeleteFiles={canEditData}
               />
             </div>
           </div>
@@ -464,7 +465,8 @@ export default function CarrierTab() {
                     onCompare={setShowCompareIdx}
                     onDelete={handleDelete}
                     deleting={deletingStatements}
-                    readOnly={!canEditData}
+                    canSelectFiles={canEditData}
+                    canDeleteFiles={canEditData}
                   />
                 ) : (
                   <div className="flex flex-col items-center justify-center py-16 text-center">

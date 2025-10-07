@@ -247,7 +247,7 @@ export default function CompanySelect({
                   </div>
                   <div>
                     <div className="font-medium text-slate-800 dark:text-slate-200 group-hover:text-blue-600 dark:group-hover:text-blue-400">
-                      Create "{searchTerm.trim()}"
+                      Create &quot;{searchTerm.trim()}&quot;
                     </div>
                     <div className="text-sm text-slate-500 dark:text-slate-400">Add new carrier</div>
                   </div>
@@ -268,7 +268,7 @@ export default function CompanySelect({
                   </div>
                   <div>
                     <div className="font-medium text-slate-800 dark:text-slate-200 group-hover:text-green-600 dark:group-hover:text-green-400">
-                      Select "{exactMatch.name}"
+                      Select &quot;{exactMatch.name}&quot;
                     </div>
                     <div className="text-sm text-slate-500 dark:text-slate-400">Existing carrier</div>
                   </div>
