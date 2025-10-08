@@ -83,7 +83,7 @@ export default function DocumentPreview({ uploaded, zoom, onZoomIn, onZoomOut }:
         />
       </div>
       <div className="text-xs text-gray-500 mt-2 px-4 pb-2 text-center bg-white/80">
-        Can't see the PDF? <a href={pdfDisplayUrl || '#'} className="underline text-blue-600 hover:text-blue-800" target="_blank" rel="noopener noreferrer">Open in new tab</a>
+        Can&apos;t see the PDF? <a href={pdfDisplayUrl || '#'} className="underline text-blue-600 hover:text-blue-800" target="_blank" rel="noopener noreferrer">Open in new tab</a>
       </div>
     </div>
   )
