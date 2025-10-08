@@ -10,13 +10,13 @@ from typing import List, Dict, Any
 from datetime import timedelta
 
 # Security Headers Configuration
+# Note: X-Frame-Options is conditionally set based on environment in get_security_headers()
 SECURITY_HEADERS = {
     "X-Content-Type-Options": "nosniff",
-    "X-Frame-Options": "DENY",
     "X-XSS-Protection": "1; mode=block",
     "Referrer-Policy": "strict-origin-when-cross-origin",
     "Permissions-Policy": "geolocation=(), microphone=(), camera=()",
-    "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' ws: wss:;"
+    "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' ws: wss:; frame-src 'self'; object-src 'self';"
 }
 
 # CORS Configuration
@@ -116,7 +116,17 @@ MONITORING_CONFIG = {
 
 def get_security_headers() -> Dict[str, str]:
     """Get security headers configuration"""
-    return SECURITY_HEADERS.copy()
+    headers = SECURITY_HEADERS.copy()
+    
+    # In development (localhost), don't set X-Frame-Options to allow iframe embedding
+    # In production, set to SAMEORIGIN for security
+    environment = os.getenv("ENVIRONMENT", "development")
+    if environment == "production":
+        headers["X-Frame-Options"] = "SAMEORIGIN"
+    # For development, we don't add X-Frame-Options to allow cross-origin iframe embedding
+    # between localhost:3000 (frontend) and localhost:8000 (backend)
+    
+    return headers
 
 def get_cors_config() -> Dict[str, Any]:
     """Get CORS configuration"""

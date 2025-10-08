@@ -28,13 +28,46 @@ class MappingConfig(BaseModel):
     selected_statement_date: Dict[str, Any] = None  # Add selected statement date
 
 @router.get("/companies/{company_id}/mapping/", response_model=MappingConfig)
-async def get_company_mapping(company_id: str, db: AsyncSession = Depends(get_db)):
+async def get_company_mapping(
+    company_id: str, 
+    db: AsyncSession = Depends(get_db),
+    upload_id: str = None  # Optional upload_id parameter to retrieve carrier_id
+):
+    """
+    Get mapping configuration for a company (carrier).
+    company_id parameter is actually the carrier_id in the new flow.
+    
+    If upload_id is provided, we retrieve the carrier_id from the statement_upload
+    and use that instead of the company_id parameter.
+    """
+    logger.info(f"🎯 Mapping API: Getting mapping for carrier/company {company_id}")
+    logger.info(f"🎯 Mapping API: Upload ID: {upload_id}")
+    
+    # If upload_id is provided, retrieve the carrier_id from statement_upload
+    carrier_id = company_id  # Default to provided company_id
+    if upload_id:
+        try:
+            from uuid import UUID
+            upload_uuid = UUID(upload_id)
+            upload_record = await with_db_retry(db, crud.get_statement_upload_by_id, upload_id=upload_uuid)
+            if upload_record and upload_record.carrier_id:
+                carrier_id = str(upload_record.carrier_id)
+                logger.info(f"🎯 Mapping API: Retrieved carrier_id from upload: {carrier_id}")
+            else:
+                logger.warning(f"🎯 Mapping API: No carrier_id found in upload record, using provided company_id")
+        except Exception as e:
+            logger.error(f"🎯 Mapping API: Error retrieving carrier_id from upload: {e}")
+            logger.warning(f"🎯 Mapping API: Falling back to provided company_id")
+    
+    logger.info(f"🎯 Mapping API: Final carrier_id to use: {carrier_id}")
+    
     # Fetch mapping from company_field_mappings table with retry
-    mapping_rows = await with_db_retry(db, crud.get_company_mappings, company_id=company_id)
+    mapping_rows = await with_db_retry(db, crud.get_company_mappings, company_id=carrier_id)
     mapping = {row.display_name: row.column_name for row in mapping_rows}
+    logger.info(f"🎯 Mapping API: Found {len(mapping)} existing mappings for carrier {carrier_id}")
     
     # Fetch company configuration (field_config, plan_types, table_names) with retry
-    company_config = await with_db_retry(db, crud.get_company_configuration, company_id=company_id)
+    company_config = await with_db_retry(db, crud.get_company_configuration, company_id=carrier_id)
     
     # Use company configuration if available, otherwise fall back to defaults
     plan_types = company_config.plan_types if company_config and company_config.plan_types else []
@@ -43,10 +76,12 @@ async def get_company_mapping(company_id: str, db: AsyncSession = Depends(get_db
     # Get field_config from company configuration if available, otherwise return empty list for new carriers
     if company_config and company_config.field_config:
         field_config = company_config.field_config
+        logger.info(f"🎯 Mapping API: Found existing field_config with {len(field_config)} fields for carrier {carrier_id}")
     else:
         # For new carriers with no existing configuration, return empty field_config
         # This allows the frontend to start with empty fields and let users add them manually
         field_config = []
+        logger.info(f"🎯 Mapping API: No existing field_config found for carrier {carrier_id}")
     
     return MappingConfig(
         mapping=mapping,
@@ -60,51 +95,82 @@ async def update_company_mapping(
     company_id: str, 
     config: MappingConfig, 
     current_user: User = Depends(get_current_user_hybrid),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    upload_id: str = None  # Optional upload_id parameter to retrieve carrier_id
 ):
-    logger.info(f"🎯 Mapping API: Received mapping request for company {company_id}")
+    """
+    Update mapping configuration for a company (carrier).
+    company_id parameter is actually the carrier_id in the new flow.
+    
+    If upload_id is provided, we retrieve the carrier_id from the statement_upload
+    and use that instead of the company_id parameter.
+    """
+    logger.info(f"🎯 Mapping API: Received mapping request for carrier/company {company_id}")
+    logger.info(f"🎯 Mapping API: Upload ID: {upload_id}")
     logger.info(f"🎯 Mapping API: Config received - mapping keys: {list(config.mapping.keys()) if config.mapping else 'None'}")
     logger.info(f"🎯 Mapping API: Selected statement date: {config.selected_statement_date}")
     logger.info(f"🎯 Mapping API: Table data rows: {len(config.table_data) if config.table_data else 0}")
     logger.info(f"🎯 Mapping API: Headers: {config.headers}")
     
+    # If upload_id is provided, retrieve the carrier_id from statement_upload
+    carrier_id = company_id  # Default to provided company_id
+    if upload_id:
+        try:
+            from uuid import UUID
+            upload_uuid = UUID(upload_id)
+            upload_record = await with_db_retry(db, crud.get_statement_upload_by_id, upload_id=upload_uuid)
+            if upload_record and upload_record.carrier_id:
+                carrier_id = str(upload_record.carrier_id)
+                logger.info(f"🎯 Mapping API: Retrieved carrier_id from upload: {carrier_id}")
+            else:
+                logger.warning(f"🎯 Mapping API: No carrier_id found in upload record, using provided company_id")
+        except Exception as e:
+            logger.error(f"🎯 Mapping API: Error retrieving carrier_id from upload: {e}")
+            logger.warning(f"🎯 Mapping API: Falling back to provided company_id")
+    
+    logger.info(f"🎯 Mapping API: Final carrier_id to use: {carrier_id}")
+    
     # Save field mapping to company_field_mappings table with retry
+    # This saves mapping for the CARRIER (not user's company)
     for display_name, column_name in config.mapping.items():
         mapping_obj = schemas.CompanyFieldMappingCreate(
-            company_id=company_id,
+            company_id=carrier_id,  # carrier_id (retrieved from upload or provided as parameter)
             display_name=display_name,
             column_name=column_name,
         )
         await with_db_retry(db, crud.save_company_mapping, mapping=mapping_obj)
+    logger.info(f"🎯 Mapping API: Saved {len(config.mapping)} field mappings for carrier {carrier_id}")
     
     # Save field_config, plan_types, and table_names to company_configurations table with retry
     await with_db_retry(
         db, 
         crud.save_company_configuration,
-        company_id=company_id, 
+        company_id=carrier_id,  # carrier_id (retrieved from upload or provided as parameter)
         field_config=config.field_config,
         plan_types=config.plan_types,
         table_names=config.table_names
     )
+    logger.info(f"🎯 Mapping API: Saved configuration for carrier {carrier_id}")
     
     # Learn from the processed file if table data is provided
+    # This learns format patterns for the CARRIER
     if config.table_data and config.headers and config.mapping:
         try:
-            logger.info(f"🎯 Mapping API: Learning from processed file")
+            logger.info(f"🎯 Mapping API: Learning format from processed file for carrier {carrier_id}")
             logger.info(f"🎯 Mapping API: Table data length: {len(config.table_data)}")
             logger.info(f"🎯 Mapping API: Headers: {config.headers}")
             logger.info(f"🎯 Mapping API: Mapping: {config.mapping}")
             
             await format_learning_service.learn_from_processed_file(
                 db=db,
-                company_id=company_id,
+                company_id=carrier_id,  # carrier_id - format learning for this carrier
                 table_data=config.table_data,
                 headers=config.headers,
                 field_mapping=config.mapping,
                 confidence_score=85,  # Higher confidence for manually mapped data
                 table_editor_settings=None  # Will be learned from table editor save
             )
-            logger.info(f"🎯 Mapping API: Format learning completed successfully")
+            logger.info(f"🎯 Mapping API: Format learning completed successfully for carrier {carrier_id}")
         except Exception as e:
             # Log error but don't fail the mapping save
             logger.error(f"🎯 Mapping API: Error learning from processed file: {e}")
@@ -117,7 +183,7 @@ async def update_company_mapping(
             logger.info(f"🎯 Mapping API: Statement date object: {config.selected_statement_date}")
             await process_commission_data_with_date(
                 db=db,
-                company_id=company_id,
+                company_id=carrier_id,  # carrier_id (retrieved from upload or provided as parameter)
                 table_data=config.table_data,
                 headers=config.headers,
                 mapping=config.mapping,
@@ -135,7 +201,7 @@ async def update_company_mapping(
         if not config.table_data:
             logger.warning(f"🎯 Mapping API: table_data is None or empty")
     
-    logger.info(f"🎯 Mapping API: Mapping update completed successfully for company {company_id}")
+    logger.info(f"🎯 Mapping API: Mapping update completed successfully for carrier {carrier_id}")
     return {"ok": True}
 
 

@@ -15,7 +15,7 @@ export type TableData = {
 export type TableEditorProps = {
   tables: TableData[]
   onTablesChange: (tables: TableData[]) => void
-  onSave: (tables: TableData[], selectedStatementDate?: any) => void
+  onSave: (tables: TableData[], selectedStatementDate?: any, extractedCarrier?: string, extractedDate?: string) => void
   onUseAnotherExtraction: () => void
   onGoToFieldMapping: () => void
   onGoToPreviousExtraction?: () => void
@@ -33,7 +33,9 @@ export type TableEditorProps = {
   selectedStatementDate?: any
   disableAutoDateExtraction?: boolean
   tableEditorLearning?: any
-
+  extractedCarrier?: string
+  extractedDate?: string
+  carrierConfidence?: number
 }
 
 export type CellEdit = {

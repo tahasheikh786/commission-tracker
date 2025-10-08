@@ -28,11 +28,24 @@ export interface DateExtractionResponse {
 }
 
 class DateExtractionService {
-  private baseUrl: string
   private pendingRequests: Map<string, Promise<DateExtractionResponse>> = new Map()
 
-  constructor() {
-    this.baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+  private getApiUrl(endpoint: string): string {
+    // In development (localhost), use relative URL to leverage Next.js proxy
+    // In production, use the full API URL
+    const isDevelopment = typeof window !== 'undefined' && (
+      window.location.hostname === 'localhost' || 
+      window.location.hostname === '127.0.0.1'
+    )
+    
+    if (isDevelopment) {
+      // Use relative URL to avoid CORS issues in development
+      return `/api${endpoint}`
+    } else {
+      // In production, use the full API URL
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || ''
+      return `${apiUrl}${endpoint}`
+    }
   }
 
   async extractDatesFromFile(file: File, companyId: string): Promise<DateExtractionResponse> {
@@ -67,10 +80,11 @@ class DateExtractionService {
     formData.append('max_pages', '1') // Only extract from first page
 
     try {
-      
-      const response = await fetch(`${this.baseUrl}/extract-dates/`, {
+      const url = this.getApiUrl('/extract-dates/')
+      const response = await fetch(url, {
         method: 'POST',
         body: formData,
+        credentials: 'include', // Include credentials for authentication
       })
 
 
@@ -132,9 +146,11 @@ class DateExtractionService {
     formData.append('max_pages', '1') // Only extract from first page
 
     try {
-      const response = await fetch(`${this.baseUrl}/extract-dates-bytes/`, {
+      const url = this.getApiUrl('/extract-dates-bytes/')
+      const response = await fetch(url, {
         method: 'POST',
         body: formData,
+        credentials: 'include', // Include credentials for authentication
       })
 
       if (!response.ok) {
@@ -152,7 +168,10 @@ class DateExtractionService {
 
   async getExtractionStatus(): Promise<any> {
     try {
-      const response = await fetch(`${this.baseUrl}/date-extraction-status/`)
+      const url = this.getApiUrl('/date-extraction-status/')
+      const response = await fetch(url, {
+        credentials: 'include', // Include credentials for authentication
+      })
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`)

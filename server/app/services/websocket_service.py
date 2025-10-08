@@ -122,6 +122,12 @@ class ConnectionManager:
                 'icon': '📄',
                 'estimated_duration': '5-10 seconds'
             },
+            'metadata_extraction': {
+                'name': 'Metadata Extraction',
+                'description': 'Extracting carrier name and statement date with GPT-4',
+                'icon': '🏷️',
+                'estimated_duration': '3-5 seconds'
+            },
             'table_detection': {
                 'name': 'Table Detection', 
                 'description': 'AI-powered table and data structure identification',
@@ -213,6 +219,12 @@ class ConnectionManager:
                 'description': 'Analyzing document structure and format',
                 'icon': 'file-text',
                 'estimated_duration': '5-10 seconds'
+            },
+            'metadata_extraction': {
+                'name': 'Metadata Extraction',
+                'description': 'Extracting carrier name and statement date with GPT-4',
+                'icon': 'tag',
+                'estimated_duration': '3-5 seconds'
             },
             'table_detection': {
                 'name': 'Table Detection',

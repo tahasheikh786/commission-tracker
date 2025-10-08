@@ -16,10 +16,12 @@ from app.db.models import User
 from app.services.duplicate_detection_service import DuplicateDetectionService
 from app.services.user_profile_service import UserProfileService
 from app.services.audit_logging_service import AuditLoggingService
+import asyncio
 import os
 from datetime import datetime
 from uuid import uuid4, UUID
-from app.services.gcs_utils import upload_file_to_gcs, get_gcs_file_url, download_file_from_gcs
+from app.services.gcs_utils import upload_file_to_gcs, get_gcs_file_url, download_file_from_gcs, generate_gcs_signed_url
+from app.services.extraction_utils import stitch_multipage_tables
 import logging
 from typing import Optional, Dict, Any
 from fastapi.responses import JSONResponse
@@ -130,10 +132,13 @@ async def get_enhanced_extraction_service_instance():
 
 
 
+# Store running extraction tasks for cancellation
+running_extractions: Dict[str, asyncio.Task] = {}
+
 @router.post("/extract-tables-smart/")
 async def extract_tables_smart(
     file: UploadFile = File(...),
-    company_id: str = Form(...),
+    company_id: Optional[str] = Form(None),
     extraction_method: str = Form("smart"),
     upload_id: Optional[str] = Form(None),
     current_user: User = Depends(get_current_user_hybrid),
@@ -188,16 +193,38 @@ async def extract_tables_smart(
     )
     
     if duplicate_check['is_duplicate']:
+        # Return 409 Conflict with duplicate information
+        existing_upload = duplicate_check['existing_upload']
+        
+        # Generate GCS URL for the existing file
+        existing_gcs_url = None
+        if existing_upload.file_name:
+            existing_gcs_url = generate_gcs_signed_url(existing_upload.file_name)
+            if not existing_gcs_url:
+                existing_gcs_url = get_gcs_file_url(existing_upload.file_name)
+        
+        # Format upload date for user-friendly display
+        upload_date = None
+        if existing_upload.uploaded_at:
+            upload_date = existing_upload.uploaded_at.strftime("%B %d, %Y at %I:%M %p")
+        
+        # Return 409 Conflict status with clear error message
         return JSONResponse(
             status_code=409,
             content={
+                "success": False,
                 "status": "duplicate_detected",
-                "message": duplicate_check['message'],
+                "error": f"This file has already been uploaded on {upload_date}.",
+                "message": f"Duplicate file detected. This file was previously uploaded on {upload_date}. Please upload a different file or use the existing one.",
                 "duplicate_info": {
                     "type": duplicate_check['duplicate_type'],
-                    "existing_upload_id": str(duplicate_check['existing_upload'].id),
-                    "existing_file_name": duplicate_check['existing_upload'].file_name,
-                    "existing_upload_date": duplicate_check['existing_upload'].uploaded_at.isoformat() if duplicate_check['existing_upload'].uploaded_at else None
+                    "existing_upload_id": str(existing_upload.id),
+                    "existing_file_name": existing_upload.file_name,
+                    "existing_upload_date": existing_upload.uploaded_at.isoformat() if existing_upload.uploaded_at else None,
+                    "existing_upload_date_formatted": upload_date,
+                    "gcs_url": existing_gcs_url,
+                    "gcs_key": existing_upload.file_name,
+                    "table_count": len(existing_upload.raw_data or [])
                 }
             }
         )
@@ -206,6 +233,20 @@ async def extract_tables_smart(
         # Save uploaded file
         with open(file_path, "wb") as buffer:
             buffer.write(file_content)
+
+        # Handle company_id - if not provided, we'll extract it from the document
+        if not company_id:
+            # Get all companies and use the first one, or create a default company
+            all_companies = await with_db_retry(db, crud.get_all_companies)
+            if all_companies:
+                company_id = all_companies[0].id
+            else:
+                # Create a default company
+                default_company = schemas.CompanyCreate(
+                    name="Auto-Detected Carrier"
+                )
+                company = await with_db_retry(db, crud.create_company, company=default_company)
+                company_id = company.id
 
         # Get company info with retry
         company = await with_db_retry(db, crud.get_company_by_id, company_id=company_id)
@@ -218,7 +259,12 @@ async def extract_tables_smart(
         uploaded = upload_file_to_gcs(file_path, gcs_key)
         if not uploaded:
             raise HTTPException(status_code=500, detail="Failed to upload file to GCS.")
-        gcs_url = get_gcs_file_url(gcs_key)
+        
+        # Generate signed URL for PDF preview
+        gcs_url = generate_gcs_signed_url(gcs_key)
+        if not gcs_url:
+            # Fallback to public URL if signed URL generation fails
+            gcs_url = get_gcs_file_url(gcs_key)
 
         # Create statement upload record for progress tracking
         db_upload = schemas.StatementUpload(
@@ -254,14 +300,41 @@ async def extract_tables_smart(
         # Get enhanced extraction service with websocket progress tracking
         enhanced_service = await get_enhanced_extraction_service_instance()
         
-        # Perform extraction with progress tracking
-        extraction_result = await enhanced_service.extract_tables_with_progress(
-            file_path=file_path,
-            company_id=company_id,
-            upload_id=upload_id_str,
-            file_type=file_ext,
-            extraction_method=extraction_method
-        )
+        # Create extraction task for cancellation support
+        async def extraction_task():
+            return await enhanced_service.extract_tables_with_progress(
+                file_path=file_path,
+                company_id=company_id,
+                upload_id=upload_id_str,
+                file_type=file_ext,
+                extraction_method=extraction_method,
+                upload_id_uuid=str(upload_id_uuid)  # Pass UUID for WebSocket completion message
+            )
+        
+        # Store the task for potential cancellation
+        task = asyncio.create_task(extraction_task())
+        running_extractions[upload_id_str] = task
+        
+        try:
+            # Perform extraction with progress tracking
+            extraction_result = await task
+        except asyncio.CancelledError:
+            logger.info(f"Extraction cancelled for upload {upload_id_str}")
+            # Update upload status to cancelled
+            update_data = schemas.StatementUploadUpdate(
+                status="cancelled",
+                current_step="cancelled",
+                progress_data={
+                    **db_upload.progress_data,
+                    'cancelled': True,
+                    'cancellation_time': datetime.utcnow().isoformat()
+                }
+            )
+            await with_db_retry(db, crud.update_statement_upload, upload_id=upload_id_uuid, update_data=update_data)
+            raise HTTPException(status_code=499, detail="Extraction cancelled by user")
+        finally:
+            # Clean up the task from running extractions
+            running_extractions.pop(upload_id_str, None)
         
         # Update upload record with results
         update_data = schemas.StatementUploadUpdate(
@@ -289,6 +362,59 @@ async def extract_tables_smart(
             tables_count=len(extraction_result.get('tables', []))
         )
         
+        # Extract carrier and date information from document metadata
+        document_metadata = extraction_result.get('document_metadata', {})
+        extracted_carrier = document_metadata.get('carrier_name')
+        extracted_date = document_metadata.get('statement_date')
+        
+        # Look up learned formats if carrier was detected
+        format_learning_data = extraction_result.get('format_learning', {})
+        if extracted_carrier and extraction_result.get('tables'):
+            try:
+                from app.services.format_learning_service import FormatLearningService
+                format_learning_service = FormatLearningService()
+                
+                # Find carrier by name to get carrier_id
+                carrier = await with_db_retry(db, crud.get_company_by_name, name=extracted_carrier)
+                if carrier:
+                    logger.info(f"🎯 Format Learning: Found carrier {carrier.name} with ID {carrier.id}")
+                    
+                    # Get first table for format matching
+                    first_table = extraction_result['tables'][0]
+                    headers = first_table.get('header', []) or first_table.get('headers', [])
+                    
+                    # Generate table structure
+                    table_structure = {
+                        "row_count": len(first_table.get('rows', [])),
+                        "column_count": len(headers),
+                        "has_financial_data": any(keyword in ' '.join(headers).lower() for keyword in [
+                            'premium', 'commission', 'billed', 'group', 'client', 'invoice',
+                            'total', 'amount', 'due', 'paid', 'rate', 'percentage', 'period'
+                        ])
+                    }
+                    
+                    # Look up learned format for this carrier
+                    learned_format, match_score = await format_learning_service.find_matching_format(
+                        db=db,
+                        company_id=str(carrier.id),  # Use carrier_id for lookup
+                        headers=headers,
+                        table_structure=table_structure
+                    )
+                    
+                    if learned_format and match_score > 0.5:
+                        logger.info(f"🎯 Format Learning: Found matching format with score {match_score}")
+                        format_learning_data = {
+                            "found_match": True,
+                            "match_score": match_score,
+                            "learned_format": learned_format,
+                            "suggested_mapping": learned_format.get("field_mapping", {}),
+                            "table_editor_settings": learned_format.get("table_editor_settings")
+                        }
+                    else:
+                        logger.info(f"🎯 Format Learning: No matching format found (score: {match_score})")
+            except Exception as e:
+                logger.warning(f"Format learning lookup failed: {str(e)}")
+        
         # Prepare client response
         client_response = {
             "success": True,
@@ -301,8 +427,11 @@ async def extract_tables_smart(
             "processing_time": processing_time,
             "quality_summary": extraction_result.get('quality_summary', {}),
             "extraction_config": extraction_result.get('extraction_config', {}),
-            "format_learning": extraction_result.get('format_learning', {}),
+            "format_learning": format_learning_data,  # Use enhanced format learning data
             "metadata": extraction_result.get('metadata', {}),
+            "extracted_carrier": extracted_carrier,
+            "extracted_date": extracted_date,
+            "document_metadata": document_metadata,
             "message": f"Successfully extracted {len(extraction_result.get('tables', []))} tables using {extraction_method} method"
         }
         
@@ -342,7 +471,8 @@ async def extract_tables_smart(
             "extraction_id": str(upload_id_uuid),
             "upload_id": str(upload_id_uuid),
             "gcs_url": gcs_url,
-            "gcs_key": gcs_key
+            "gcs_key": gcs_key,
+            "file_name": gcs_key  # Use full GCS path as file_name for PDF preview
         })
         
         return client_response
@@ -358,6 +488,72 @@ async def extract_tables_smart(
         if os.path.exists(file_path):
             os.remove(file_path)
         raise HTTPException(status_code=500, detail=f"Smart extraction failed: {str(e)}")
+
+
+@router.post("/cancel-extraction/{upload_id}")
+async def cancel_extraction(
+    upload_id: str,
+    current_user: User = Depends(get_current_user_hybrid),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Cancel a running extraction process.
+    
+    Args:
+        upload_id: The upload ID to cancel
+        current_user: Current authenticated user
+        db: Database session
+        
+    Returns:
+        Success message if cancellation was successful
+    """
+    logger.info(f"Cancellation requested for upload {upload_id}")
+    
+    # Check if extraction is running
+    if upload_id not in running_extractions:
+        raise HTTPException(
+            status_code=404, 
+            detail="No running extraction found for this upload ID"
+        )
+    
+    # Get the running task
+    task = running_extractions[upload_id]
+    
+    # Cancel the task
+    task.cancel()
+    
+    try:
+        # Wait for the task to be cancelled
+        await task
+    except asyncio.CancelledError:
+        logger.info(f"Successfully cancelled extraction for upload {upload_id}")
+    
+    # Clean up the task from running extractions
+    running_extractions.pop(upload_id, None)
+    
+    # Update the upload status in database
+    try:
+        update_data = schemas.StatementUploadUpdate(
+            status="cancelled",
+            current_step="cancelled",
+            progress_data={
+                'cancelled': True,
+                'cancellation_time': datetime.utcnow().isoformat(),
+                'cancelled_by_user': str(current_user.id)
+            }
+        )
+        await with_db_retry(db, crud.update_statement_upload, upload_id=upload_id, update_data=update_data)
+    except Exception as e:
+        logger.error(f"Failed to update upload status after cancellation: {e}")
+    
+    return JSONResponse(
+        status_code=200,
+        content={
+            "success": True,
+            "message": f"Extraction cancelled successfully for upload {upload_id}",
+            "upload_id": upload_id
+        }
+    )
 
 
 @router.post("/extract-tables-gpt/")
@@ -665,8 +861,8 @@ async def extract_tables_gpt(
                 "format_accuracy": "≥95%"
             },
             "gcs_key": upload_info.file_name,
-            "gcs_url": f"https://text-extraction-pdf.s3.us-east-1.amazonaws.com/{upload_info.file_name}",
-            "file_name": upload_info.file_name.split('/')[-1] if '/' in upload_info.file_name else upload_info.file_name,
+            "gcs_url": generate_gcs_signed_url(upload_info.file_name) or f"https://text-extraction-pdf.s3.us-east-1.amazonaws.com/{upload_info.file_name}",
+            "file_name": upload_info.file_name,  # Use full GCS path for PDF preview
             "timestamp": datetime.now().isoformat(),
             "format_learning": format_learning_data
         }
@@ -900,8 +1096,8 @@ async def extract_tables_google_docai(
                 "format_accuracy": "≥80%"
             },
             "gcs_key": upload_info.file_name,
-            "gcs_url": f"https://text-extraction-pdf.s3.us-east-1.amazonaws.com/{upload_info.file_name}",
-            "file_name": upload_info.file_name.split('/')[-1] if '/' in upload_info.file_name else upload_info.file_name,
+            "gcs_url": generate_gcs_signed_url(upload_info.file_name) or f"https://text-extraction-pdf.s3.us-east-1.amazonaws.com/{upload_info.file_name}",
+            "file_name": upload_info.file_name,  # Use full GCS path for PDF preview
             "timestamp": datetime.now().isoformat(),
             "format_learning": format_learning_data
         }
@@ -1054,6 +1250,101 @@ def transform_new_extraction_response_to_client_format(
         "errors": extraction_result.get("errors", [])
     }
 
+@router.post("/extract-intelligent/")
+async def extract_with_intelligence(
+    file: UploadFile = File(...),
+    company_id: str = Form(...)
+):
+    """
+    INTELLIGENT extraction endpoint with enhanced response structure
+    
+    This endpoint implements the revolutionary two-phase extraction architecture:
+    1. Document Intelligence Analysis - Uses LLM reasoning to identify carriers, dates, and entities
+    2. Table Structure Intelligence - Extracts tables with business context understanding
+    3. Cross-validation and Quality Assessment - Validates extraction using business logic
+    4. Intelligent Response Formatting - Separates document metadata from table data
+    """
+    start_time = datetime.now()
+    logger.info(f"Starting intelligent extraction for file: {file.filename}")
+    
+    try:
+        # Validate file
+        if not file.filename:
+            raise HTTPException(status_code=400, detail="No file uploaded")
+        
+        # Determine file type
+        file_ext = file.filename.lower().split('.')[-1]
+        if file_ext != 'pdf':
+            raise HTTPException(
+                status_code=400, 
+                detail="Intelligent extraction currently supports PDF files only"
+            )
+        
+        # Save uploaded file temporarily
+        temp_file_path = os.path.join(UPLOAD_DIR, f"temp_{uuid4()}_{file.filename}")
+        file_content = await file.read()
+        
+        with open(temp_file_path, "wb") as buffer:
+            buffer.write(file_content)
+        
+        # Use intelligent extraction service
+        from app.services.mistral import MistralDocumentAIService
+        extraction_service = MistralDocumentAIService()
+        
+        if not extraction_service.is_available():
+            raise HTTPException(
+                status_code=503, 
+                detail="Intelligent extraction service not available. Please check MISTRAL_API_KEY configuration."
+            )
+        
+        # Test connection first
+        connection_test = extraction_service.test_connection()
+        if not connection_test.get("success"):
+            logger.warning(f"Intelligent service connection test failed: {connection_test.get('error')}")
+        
+        # Perform intelligent extraction
+        logger.info("Starting intelligent extraction with two-phase architecture...")
+        result = await extraction_service.extract_commission_data_intelligently(temp_file_path)
+        
+        # Clean up temporary file
+        try:
+            os.remove(temp_file_path)
+            logger.info(f"Cleaned up temporary file: {temp_file_path}")
+        except Exception as cleanup_error:
+            logger.warning(f"Failed to clean up temporary file: {cleanup_error}")
+        
+        # Validate intelligence quality
+        if result.get('extraction_intelligence', {}).get('overall_confidence', 0) < 0.7:
+            # Flag for human review
+            result['requires_human_review'] = True
+            result['review_reasons'] = extraction_service.service.get_low_confidence_reasons(result)
+        
+        # Add processing metadata
+        processing_time = (datetime.now() - start_time).total_seconds()
+        result['processing_metadata'] = {
+            "file_name": file.filename,
+            "company_id": company_id,
+            "processing_time": processing_time,
+            "intelligent_extraction_version": "2.0.0",
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        logger.info(f"Intelligent extraction completed successfully in {processing_time:.2f} seconds")
+        return result
+        
+    except HTTPException:
+        # Clean up file on error
+        if 'temp_file_path' in locals() and os.path.exists(temp_file_path):
+            os.remove(temp_file_path)
+        raise
+    except Exception as e:
+        logger.error(f"Intelligent extraction error: {str(e)}")
+        # Clean up file on error
+        if 'temp_file_path' in locals() and os.path.exists(temp_file_path):
+            os.remove(temp_file_path)
+        raise HTTPException(status_code=500, detail=f"Intelligent extraction failed: {str(e)}")
+
+
 @router.post("/extract-tables-mistral-frontend/")
 async def extract_tables_mistral_frontend(
     upload_id: str = Form(...),
@@ -1061,11 +1352,11 @@ async def extract_tables_mistral_frontend(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Extract tables using Mistral Document AI with frontend-compatible response format.
-    This endpoint returns data in the exact format expected by the TableEditor component.
+    Extract tables using INTELLIGENT Mistral Document AI with frontend-compatible response format.
+    This endpoint now uses the intelligent two-phase extraction architecture.
     """
     start_time = datetime.now()
-    logger.info(f"Starting Mistral Document AI frontend extraction for upload_id: {upload_id}")
+    logger.info(f"Starting INTELLIGENT Mistral Document AI frontend extraction for upload_id: {upload_id}")
     
     try:
         # Get upload information
@@ -1087,37 +1378,24 @@ async def extract_tables_mistral_frontend(
         
         logger.info(f"Processing PDF: {temp_pdf_path} (downloaded from GCS)")
         
-        # Use the Enhanced Mistral Document AI service for extraction
-        from app.services.enhanced_mistral_service import MistralDocumentAIService
+        # Use the INTELLIGENT Mistral Document AI service for extraction
+        from app.services.mistral import MistralDocumentAIService
         mistral_service = MistralDocumentAIService()
         
         if not mistral_service.is_available():
             raise HTTPException(
                 status_code=503, 
-                detail="Mistral Document AI service not available. Please check MISTRAL_API_KEY configuration."
+                detail="Intelligent Mistral Document AI service not available. Please check MISTRAL_API_KEY configuration."
             )
         
         # Test connection first
         connection_test = mistral_service.test_connection()
         if not connection_test.get("success"):
-            logger.warning(f"Mistral connection test failed: {connection_test.get('error')}")
+            logger.warning(f"Intelligent Mistral connection test failed: {connection_test.get('error')}")
         
-        # Step 1: Determine number of pages
-        import fitz  # PyMuPDF
-        doc = fitz.open(temp_pdf_path)
-        num_pages = len(doc)
-        doc.close()
-        
-        logger.info(f"PDF has {num_pages} pages")
-        
-        # Mistral Document AI has a limit of 8 pages for document annotation
-        max_pages = min(8, num_pages)
-        if num_pages > 8:
-            logger.warning(f"PDF has {num_pages} pages, but Mistral Document AI supports max 8 pages for document annotation. Processing first {max_pages} pages.")
-        
-        # Use Mistral Document AI for extraction
-        logger.info("Starting Mistral Document AI extraction with structured annotations...")
-        extraction_result = mistral_service.extract_commission_data(temp_pdf_path, max_pages)
+        # Use INTELLIGENT extraction instead of legacy method
+        logger.info("Starting INTELLIGENT Mistral Document AI extraction with two-phase architecture...")
+        extraction_result = await mistral_service.extract_commission_data_intelligently(temp_pdf_path)
         
         # Calculate processing time
         processing_time = (datetime.now() - start_time).total_seconds()
@@ -1131,24 +1409,26 @@ async def extract_tables_mistral_frontend(
         
         # Check if extraction was successful
         if not extraction_result.get("success"):
-            logger.error(f"Mistral Document AI extraction failed: {extraction_result.get('error')}")
+            logger.error(f"Intelligent Mistral Document AI extraction failed: {extraction_result.get('error')}")
             raise HTTPException(
                 status_code=500,
-                detail=f"Mistral Document AI extraction failed: {extraction_result.get('error')}"
+                detail=f"Intelligent Mistral Document AI extraction failed: {extraction_result.get('error')}"
             )
         
-        # Get extracted tables
+        # Get extracted tables from intelligent response
         extracted_tables = extraction_result.get("tables", [])
-        extraction_metadata = extraction_result.get("extraction_metadata", {})
+        document_metadata = extraction_result.get("document_metadata", {})
+        extraction_quality = extraction_result.get("extraction_quality", {})
+        extraction_intelligence = extraction_result.get("extraction_intelligence", {})
         
         if not extracted_tables:
-            logger.warning("No tables extracted from Mistral analysis")
+            logger.warning("No tables extracted from intelligent Mistral analysis")
             return JSONResponse(
                 status_code=422,  # Unprocessable Entity
                 content={
                     "success": False,
                     "error": "No tables found in document",
-                    "message": "Mistral could not identify any tables in the document. This may be due to document format or content issues. Please try with a different document or contact support.",
+                    "message": "Intelligent Mistral could not identify any tables in the document. This may be due to document format or content issues. Please try with a different document or contact support.",
                     "upload_id": upload_id,
                     "timestamp": datetime.now().isoformat()
                 }
@@ -1156,7 +1436,8 @@ async def extract_tables_mistral_frontend(
         
         # Log successful extraction
         tables_count = len(extracted_tables)
-        logger.info(f"Mistral Document AI extraction completed successfully. Found {tables_count} tables in {processing_time:.2f} seconds")
+        overall_confidence = extraction_intelligence.get("overall_confidence", 0.0)
+        logger.info(f"INTELLIGENT Mistral Document AI extraction completed successfully. Found {tables_count} tables with {overall_confidence:.2f} confidence in {processing_time:.2f} seconds")
         
         # Transform tables to frontend format (TableData structure)
         frontend_tables = []
@@ -1186,41 +1467,46 @@ async def extract_tables_mistral_frontend(
                 "name": f"Table_{i + 1}",
                 "header": cleaned_headers,
                 "rows": cleaned_rows,
-                "extractor": "mistral_document_ai",
+                "extractor": "intelligent_mistral_document_ai",
                 "table_type": table.get("table_type", "commission_table"),
                 "company_name": table.get("company_name"),
                 "metadata": {
-                    "extraction_method": "mistral_document_ai_qna",
+                    "extraction_method": "intelligent_mistral_document_ai",
                     "timestamp": datetime.now().isoformat(),
-                    "confidence": table.get("metadata", {}).get("confidence", 0.85),
-                    "pages_processed": max_pages,
-                    "total_pages": num_pages,
-                    "mistral_metadata": extraction_metadata
+                    "confidence": overall_confidence,
+                    "intelligent_metadata": {
+                        "document_understanding": extraction_intelligence.get("document_understanding", 0.0),
+                        "table_understanding": extraction_intelligence.get("table_understanding", 0.0),
+                        "overall_confidence": overall_confidence,
+                        "requires_human_review": extraction_quality.get("requires_human_review", False)
+                    }
                 }
             }
             frontend_tables.append(frontend_table)
         
-        # Prepare response in the exact format expected by TableEditor
+        # Prepare INTELLIGENT response in the exact format expected by TableEditor
         response_data = {
             "success": True,
             "tables": frontend_tables,
             "filename": upload_info.file_name.split('/')[-1] if '/' in upload_info.file_name else upload_info.file_name,
             "company_id": company_id,
-            "extraction_method": "mistral_document_ai",
+            "extraction_method": "intelligent_mistral_document_ai",
             "processing_time": processing_time,
-            "pages_processed": max_pages,
-            "total_pages": num_pages,
-            "mistral_metadata": extraction_metadata,
-            "message": f"Successfully extracted {len(frontend_tables)} tables using Mistral Document AI QnA"
+            "intelligent_metadata": {
+                "document_metadata": document_metadata,
+                "extraction_quality": extraction_quality,
+                "extraction_intelligence": extraction_intelligence
+            },
+            "message": f"Successfully extracted {len(frontend_tables)} tables using INTELLIGENT Mistral Document AI with {overall_confidence:.2f} confidence"
         }
         
-        logger.info(f"Mistral Document AI frontend extraction completed successfully in {processing_time:.2f} seconds")
+        logger.info(f"INTELLIGENT Mistral Document AI frontend extraction completed successfully in {processing_time:.2f} seconds")
         return response_data
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Mistral Document AI frontend extraction failed: {str(e)}")
+        logger.error(f"INTELLIGENT Mistral Document AI frontend extraction failed: {str(e)}")
         
         # Clean up temporary file if it exists
         try:
@@ -1231,6 +1517,6 @@ async def extract_tables_mistral_frontend(
         
         raise HTTPException(
             status_code=500,
-            detail=f"Mistral Document AI frontend extraction failed: {str(e)}"
+            detail=f"INTELLIGENT Mistral Document AI frontend extraction failed: {str(e)}"
         )
 

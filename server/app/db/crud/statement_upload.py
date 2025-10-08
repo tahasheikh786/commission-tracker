@@ -280,6 +280,28 @@ async def get_statements_for_company(db, company_id):
     )
     return result.scalars().all()
 
+async def get_statements_for_carrier(db, carrier_id):
+    """
+    Get all statements for a specific carrier.
+    NOTE: Support both old (company_id) and new (carrier_id) format for backwards compatibility.
+    Old format: carrier stored in company_id, carrier_id is NULL
+    New format: carrier stored in carrier_id
+    """
+    from sqlalchemy import or_, and_
+    result = await db.execute(
+        select(StatementUploadModel).where(
+            or_(
+                StatementUploadModel.carrier_id == carrier_id,
+                and_(
+                    StatementUploadModel.company_id == carrier_id,
+                    StatementUploadModel.carrier_id.is_(None)
+                )
+            )
+        )
+        .order_by(StatementUploadModel.last_updated.desc())
+    )
+    return result.scalars().all()
+
 async def get_statement_by_id(db: AsyncSession, statement_id: str):
     try:
         # Convert string to UUID if needed
@@ -386,13 +408,14 @@ async def get_edited_tables(db: AsyncSession, upload_id: str):
     
     return db_upload.edited_tables
 
-async def update_upload_tables(db: AsyncSession, upload_id: str, tables_data: list, selected_statement_date: Optional[Dict[str, Any]] = None):
+async def update_upload_tables(db: AsyncSession, upload_id: str, tables_data: list, selected_statement_date: Optional[Dict[str, Any]] = None, carrier_id: Optional[str] = None):
     """
-    Update upload tables with progress tracking and selected statement date.
+    Update upload tables with progress tracking, selected statement date, and carrier information.
     """
     print(f"🎯 CRUD: update_upload_tables called for upload_id: {upload_id}")
     print(f"🎯 CRUD: Tables data length: {len(tables_data) if tables_data else 0}")
     print(f"🎯 CRUD: Selected statement date: {selected_statement_date}")
+    print(f"🎯 CRUD: Carrier ID: {carrier_id}")
     
     result = await db.execute(select(StatementUploadModel).where(StatementUploadModel.id == upload_id))
     db_upload = result.scalar_one_or_none()
@@ -401,7 +424,7 @@ async def update_upload_tables(db: AsyncSession, upload_id: str, tables_data: li
         print(f"🎯 CRUD: Upload not found for ID: {upload_id}")
         return None
     
-    print(f"🎯 CRUD: Found upload, updating with tables and statement date")
+    print(f"🎯 CRUD: Found upload, updating with tables, statement date, and carrier")
     
     # Save edited tables to edited_tables field, not raw_data
     db_upload.edited_tables = tables_data
@@ -417,6 +440,11 @@ async def update_upload_tables(db: AsyncSession, upload_id: str, tables_data: li
     else:
         print(f"🎯 CRUD: No selected statement date provided")
     
+    # Update carrier_id if provided (this links the statement to the carrier)
+    if carrier_id:
+        db_upload.carrier_id = carrier_id
+        print(f"🎯 CRUD: Linking statement to carrier: {carrier_id}")
+    
     # Save in progress_data
     if not db_upload.progress_data:
         db_upload.progress_data = {}
@@ -426,17 +454,18 @@ async def update_upload_tables(db: AsyncSession, upload_id: str, tables_data: li
         'table_count': len(tables_data)
     }
     
-    # Also save selected statement date in progress data
-    if selected_statement_date:
+    # Also save selected statement date and carrier info in progress data
+    if selected_statement_date or carrier_id:
         db_upload.progress_data['table_editor'] = {
-            'selected_statement_date': selected_statement_date
+            'selected_statement_date': selected_statement_date,
+            'carrier_id': carrier_id
         }
-        print(f"🎯 CRUD: Also saved statement date to progress_data")
+        print(f"🎯 CRUD: Also saved statement date and carrier to progress_data")
     
     await db.commit()
     await db.refresh(db_upload)
     
-    print(f"🎯 CRUD: Successfully updated upload {upload_id} with tables and statement date")
+    print(f"🎯 CRUD: Successfully updated upload {upload_id} with tables, statement date, and carrier")
     print(f"🎯 CRUD: Final selected_statement_date in database: {db_upload.selected_statement_date}")
     
     return db_upload

@@ -1,56 +1,32 @@
 import { TableData, DataType, FormatValidationResult } from './types'
 
-// Enhanced PDF URL function that prioritizes GCS URLs
-export function getPdfUrl(uploaded: any) {
-  if (!uploaded?.file_name) {
-    console.log('getPdfUrl: No file_name found in uploaded object:', uploaded);
-    return null;
+/**
+ * Simplified PDF URL function that constructs a proxy URL to stream the PDF
+ * Uses the backend proxy endpoint to avoid CORS issues
+ * In development, uses relative URLs to leverage Next.js proxy
+ */
+export function getPdfUrl(uploaded: any): string | null {
+  if (!uploaded?.gcs_key && !uploaded?.file_name) {
+    return null
   }
 
-  // Priority 1: Use GCS URL if available (from API response)
-  if (uploaded.gcs_url) {
-    console.log('getPdfUrl (GCS URL):', {
-      gcs_url: uploaded.gcs_url,
-      file_name: uploaded.file_name
-    });
-    return uploaded.gcs_url;
+  const gcsKey = uploaded.gcs_key || uploaded.file_name
+  
+  // In development (localhost), use relative URL to leverage Next.js proxy
+  // In production, use the full API URL
+  const isDevelopment = typeof window !== 'undefined' && (
+    window.location.hostname === 'localhost' || 
+    window.location.hostname === '127.0.0.1'
+  )
+  
+  if (isDevelopment) {
+    // Use relative URL to avoid CORS issues in development
+    return `/api/pdf-proxy/?gcs_key=${encodeURIComponent(gcsKey)}`
+  } else {
+    // In production, use the full API URL
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || ''
+    return `${apiUrl}/pdf-proxy/?gcs_key=${encodeURIComponent(gcsKey)}`
   }
-
-  // Priority 2: Use fileUrl if available (alternative field name)
-  if (uploaded.fileUrl) {
-    console.log('getPdfUrl (fileUrl):', {
-      fileUrl: uploaded.fileUrl,
-      file_name: uploaded.file_name
-    });
-    return uploaded.fileUrl;
-  }
-
-  // Priority 3: Construct URL from GCS key if file_name is a GCS path
-  if (uploaded.file_name.startsWith("statements/")) {
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, '');
-    const url = `${baseUrl}/pdfs/${encodeURIComponent(uploaded.file_name)}`;
-    console.log('getPdfUrl (GCS key):', {
-      file_name: uploaded.file_name,
-      NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
-      baseUrl: baseUrl,
-      encoded: encodeURIComponent(uploaded.file_name),
-      finalUrl: url
-    });
-    return url;
-  }
-
-  // Priority 4: Fallback to localhost construction (for development)
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, '');
-  const url = `${baseUrl}/pdfs/${encodeURIComponent(uploaded.file_name)}`;
-  console.log('getPdfUrl (fallback localhost):', {
-    file_name: uploaded.file_name,
-    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
-    baseUrl: baseUrl,
-    encoded: encodeURIComponent(uploaded.file_name),
-    finalUrl: url,
-    warning: 'Using localhost fallback - GCS URL not available'
-  });
-  return url;
 }
 
 export const detectDataType = (value: string): DataType => {

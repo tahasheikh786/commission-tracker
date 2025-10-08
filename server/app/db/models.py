@@ -75,7 +75,8 @@ class CarrierFormatLearning(Base):
 class StatementUpload(Base):
     __tablename__ = 'statement_uploads'
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    company_id = Column(UUID(as_uuid=True), ForeignKey('companies.id'), nullable=False)
+    company_id = Column(UUID(as_uuid=True), ForeignKey('companies.id'), nullable=False)  # User's company
+    carrier_id = Column(UUID(as_uuid=True), ForeignKey('companies.id'), nullable=True)  # Insurance carrier company
     user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False)  # User who uploaded the file
     file_name = Column(Text)
     file_hash = Column(String, nullable=True)  # SHA-256 hash for duplicate detection

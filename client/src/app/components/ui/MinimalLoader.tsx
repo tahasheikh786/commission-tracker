@@ -1,7 +1,7 @@
 'use client'
 import React, { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { CheckCircle, Clock, Loader2, FileText, Table, Search, Database, DollarSign, CheckCircle2, AlertCircle, Zap } from 'lucide-react'
+import { CheckCircle, Clock, Loader2, FileText, Table, Search, Database, DollarSign, CheckCircle2, AlertCircle, Zap, Brain } from 'lucide-react'
 import Spinner from './Spinner'
 
 // CSS for pulse animation
@@ -107,6 +107,14 @@ export default function MinimalLoader({
       estimatedDuration: '5-10 seconds',
       status: 'pending',
       icon: FileText
+    },
+    { 
+      id: 'metadata_extraction', 
+      label: 'Metadata Extraction', 
+      description: 'Extracting carrier name and statement date with GPT-4',
+      estimatedDuration: '3-5 seconds',
+      status: 'pending',
+      icon: Brain
     },
     { 
       id: 'table_detection', 

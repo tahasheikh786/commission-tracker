@@ -92,7 +92,8 @@ class CarrierFormatLearning(CarrierFormatLearningBase):
 
 class StatementUpload(BaseModel):
     id: UUID
-    company_id: UUID
+    company_id: UUID  # User's company
+    carrier_id: Optional[UUID] = None  # Insurance carrier company
     user_id: UUID  # User who uploaded the file
     file_name: str
     file_hash: Optional[str] = None  # SHA-256 hash for duplicate detection
@@ -129,7 +130,8 @@ class StatementUpload(BaseModel):
         from_attributes = True
 
 class StatementUploadCreate(BaseModel):
-    company_id: UUID
+    company_id: UUID  # User's company
+    carrier_id: Optional[UUID] = None  # Insurance carrier company
     user_id: UUID  # User who uploaded the file
     file_name: str
     file_hash: Optional[str] = None  # SHA-256 hash for duplicate detection
@@ -141,6 +143,7 @@ class StatementUploadCreate(BaseModel):
 class StatementUploadUpdate(BaseModel):
     status: Optional[str] = None
     current_step: Optional[str] = None
+    carrier_id: Optional[UUID] = None  # Insurance carrier company
     progress_data: Optional[Dict[str, Any]] = None
     raw_data: Optional[List[Dict[str, Any]]] = None
     edited_tables: Optional[List[Dict[str, Any]]] = None

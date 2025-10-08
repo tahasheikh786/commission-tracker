@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
+import axios from 'axios';
 import StatCard from "./StatCard";
 import CarriersModal from "./CarriersModal";
 import { useDashboardStats, useCarriers, useEarnedCommissionStats } from "../../hooks/useDashboard";
@@ -85,20 +86,22 @@ export default function DashboardTab({ showAnalytics = false }: DashboardTabProp
 
   // Load selected statement date from upload progress
   const loadSelectedStatementDate = useCallback(async () => {
-    if (uploaded?.upload_id) {
+    // Use extraction_id or id (UUID) instead of upload_id (temp string)
+    const uploadUuid = uploaded?.extraction_id || uploaded?.id || uploaded?.upload_id;
+    if (uploadUuid) {
       try {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/pending/progress/${uploaded.upload_id}/table_editor`);
-        if (response.ok) {
-          const data = await response.json();
-          if (data.success && data.progress_data?.selected_statement_date) {
-            setSelectedStatementDate(data.progress_data.selected_statement_date);
-          }
+        const response = await axios.get(
+          `${process.env.NEXT_PUBLIC_API_URL}/api/pending/progress/${uploadUuid}/table_editor`,
+          { withCredentials: true }
+        );
+        if (response.data.success && response.data.progress_data?.selected_statement_date) {
+          setSelectedStatementDate(response.data.progress_data.selected_statement_date);
         }
       } catch (error) {
         console.error('Error loading selected statement date:', error);
       }
     }
-  }, [uploaded?.upload_id]);
+  }, [uploaded?.extraction_id, uploaded?.id, uploaded?.upload_id]);
 
   // Load selected statement date when upload changes
   useEffect(() => {
@@ -138,21 +141,18 @@ export default function DashboardTab({ showAnalytics = false }: DashboardTabProp
     async function fetchDatabaseFields() {
       try {
         setLoadingFields(true);
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/database-fields/?active_only=true`);
-        if (response.ok) {
-          const data = await response.json();
-          const fieldsFromBackend = data.map((field: any) => ({
-            field: field.field_key,
-            label: field.display_name
-          }));
-          setDatabaseFields(fieldsFromBackend);
-          
-          if (fieldConfig.length === 0) {
-            setFieldConfig([]);
-          }
-        } else {
-          console.error('Failed to fetch database fields');
-          toast.error('Failed to load database fields');
+        const response = await axios.get(
+          `${process.env.NEXT_PUBLIC_API_URL}/api/database-fields/?active_only=true`,
+          { withCredentials: true }
+        );
+        const fieldsFromBackend = response.data.map((field: any) => ({
+          field: field.field_key,
+          label: field.display_name
+        }));
+        setDatabaseFields(fieldsFromBackend);
+        
+        if (fieldConfig.length === 0) {
+          setFieldConfig([]);
         }
       } catch (error) {
         console.error('Error fetching database fields:', error);
@@ -168,15 +168,54 @@ export default function DashboardTab({ showAnalytics = false }: DashboardTabProp
   }, [databaseFields.length, fieldConfig.length]);
 
   // Handle upload result
-  function handleUploadResult({ tables, upload_id, file_name, file, plan_types, field_config, quality_summary, extraction_config, format_learning }: any) {
+  function handleUploadResult({ tables, upload_id, extraction_id, file_name, file, plan_types, field_config, quality_summary, extraction_config, format_learning, extracted_carrier, extracted_date, gcs_url, gcs_key, document_metadata }: any) {
     if (file && !originalFile) {
       setOriginalFile(file);
     }
     
-    setUploaded({ tables, upload_id, file_name, file });
+    // Use extraction_id (UUID) if available, fallback to upload_id (temp string)
+    setUploaded({ 
+      tables, 
+      upload_id, 
+      extraction_id: extraction_id || upload_id, 
+      id: extraction_id || upload_id, 
+      file_name, 
+      file, 
+      extraction_config, 
+      gcs_url, 
+      gcs_key, 
+      extracted_carrier,
+      extracted_date,
+      document_metadata 
+    });
     setFinalTables([]);
     setFieldConfig(field_config || []);
     setFormatLearning(format_learning);
+    
+    // Handle automatic carrier detection
+    if (extracted_carrier) {
+      // Find or create company based on extracted carrier
+      const existingCompany = carriers?.find(c => c.name.toLowerCase().includes(extracted_carrier.toLowerCase()));
+      if (existingCompany) {
+        setCompany(existingCompany);
+        toast.success(`Auto-detected carrier: ${extracted_carrier}`);
+      } else {
+        // Create a temporary company object for the extracted carrier
+        setCompany({ id: 'auto-detected', name: extracted_carrier });
+        toast.success(`Auto-detected carrier: ${extracted_carrier}`);
+      }
+    }
+    
+    // Handle extracted date
+    if (extracted_date) {
+      const dateInfo = {
+        date: extracted_date,
+        confidence: extraction_config?.document_metadata?.date_confidence || 0.8,
+        source: 'ai_extraction'
+      };
+      setSelectedStatementDate(dateInfo);
+      toast.success(`Auto-detected statement date: ${extracted_date}`);
+    }
     
     if (format_learning?.suggested_mapping && Object.keys(format_learning.suggested_mapping).length > 0) {
       setMapping(format_learning.suggested_mapping);
@@ -271,39 +310,34 @@ export default function DashboardTab({ showAnalytics = false }: DashboardTabProp
         selected_statement_date: selectedStatementDate,
       };
       
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/review/approve/`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody),
-      });
+      await axios.post(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/review/approve/`,
+        requestBody,
+        { withCredentials: true }
+      );
       
-      if (response.ok) {
-        // Simulate progress updates during processing
-        const progressInterval = setInterval(() => {
-          setApprovalProgress(prev => {
-            if (prev.processedRows < prev.totalRows) {
-              return { ...prev, processedRows: Math.min(prev.processedRows + Math.ceil(prev.totalRows / 10), prev.totalRows) };
-            }
-            return prev;
-          });
-        }, 200);
-        
-        // Clear interval after a delay to simulate completion
-        setTimeout(() => {
-          clearInterval(progressInterval);
-          setApprovalProgress({ totalRows, processedRows: totalRows });
-        }, 2000);
-        
-        toast.success('Statement approved successfully!');
-        // Refresh earned commission stats after approval
-        refetchEarnedCommissionStats();
-        setTimeout(() => {
-          window.location.href = '/?tab=dashboard';
-        }, 1000);
-      } else {
-        const error = await response.json();
-        toast.error(error.detail || 'Failed to approve statement');
-      }
+      // Simulate progress updates during processing
+      const progressInterval = setInterval(() => {
+        setApprovalProgress(prev => {
+          if (prev.processedRows < prev.totalRows) {
+            return { ...prev, processedRows: Math.min(prev.processedRows + Math.ceil(prev.totalRows / 10), prev.totalRows) };
+          }
+          return prev;
+        });
+      }, 200);
+      
+      // Clear interval after a delay to simulate completion
+      setTimeout(() => {
+        clearInterval(progressInterval);
+        setApprovalProgress({ totalRows, processedRows: totalRows });
+      }, 2000);
+      
+      toast.success('Statement approved successfully!');
+      // Refresh earned commission stats after approval
+      refetchEarnedCommissionStats();
+      setTimeout(() => {
+        window.location.href = '/?tab=dashboard';
+      }, 1000);
     } catch (error) {
       console.error('Error approving statement:', error);
       toast.error('Failed to approve statement');
@@ -334,21 +368,16 @@ export default function DashboardTab({ showAnalytics = false }: DashboardTabProp
       };
       
       
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/review/reject/`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody),
-      });
+      await axios.post(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/review/reject/`,
+        requestBody,
+        { withCredentials: true }
+      );
       
-      if (response.ok) {
-        toast.success('Statement rejected successfully!');
-        setTimeout(() => {
-          window.location.href = '/?tab=dashboard';
-        }, 1000);
-      } else {
-        const error = await response.json();
-        toast.error(error.detail || 'Failed to reject statement');
-      }
+      toast.success('Statement rejected successfully!');
+      setTimeout(() => {
+        window.location.href = '/?tab=dashboard';
+      }, 1000);
     } catch (error) {
       console.error('Error rejecting statement:', error);
       toast.error('Failed to reject statement');
@@ -454,7 +483,7 @@ export default function DashboardTab({ showAnalytics = false }: DashboardTabProp
           onTablesChange={(tables) => {
             setUploaded({ ...uploaded, tables });
           }}
-          onSave={async (tables, selectedDate) => {
+          onSave={async (tables, selectedDate, extractedCarrier, extractedDate) => {
             try {
               // Save tables to backend to trigger format learning
               if (uploaded?.upload_id && company?.id) {
@@ -462,20 +491,25 @@ export default function DashboardTab({ showAnalytics = false }: DashboardTabProp
                   upload_id: uploaded.upload_id,
                   company_id: company.id,
                   tables: tables,
-                  selected_statement_date: selectedDate
+                  selected_statement_date: selectedDate,
+                  extracted_carrier: extractedCarrier || uploaded.extracted_carrier,
+                  extracted_date: extractedDate || uploaded.extracted_date
                 }
                 
+                const saveResponse = await axios.post(
+                  `${process.env.NEXT_PUBLIC_API_URL}/api/table-editor/save-tables/`,
+                  requestBody,
+                  { withCredentials: true }
+                );
                 
-                const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/table-editor/save-tables/`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(requestBody),
-                })
-                
-                if (!response.ok) {
-                  throw new Error(`Failed to save tables: ${response.status}`)
+                // Update company state with actual carrier UUID from backend
+                if (saveResponse.data?.carrier_id && saveResponse.data?.carrier_name) {
+                  setCompany({
+                    id: saveResponse.data.carrier_id,
+                    name: saveResponse.data.carrier_name
+                  });
+                  console.log('✅ Updated company with carrier UUID:', saveResponse.data.carrier_id);
                 }
-                
               }
               
               // Update local state
@@ -509,6 +543,9 @@ export default function DashboardTab({ showAnalytics = false }: DashboardTabProp
           companyId={company?.id}
           selectedStatementDate={selectedStatementDate}
           disableAutoDateExtraction={false}
+          extractedCarrier={uploaded?.extracted_carrier}
+          extractedDate={uploaded?.extracted_date}
+          carrierConfidence={uploaded?.document_metadata?.carrier_confidence}
         />
       </div>
     );
@@ -537,15 +574,11 @@ export default function DashboardTab({ showAnalytics = false }: DashboardTabProp
               }
               
               
-              const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/companies/${company.id}/mapping/`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(config),
-              })
-              
-              if (!response.ok) {
-                throw new Error(`Failed to save mapping: ${response.status}`)
-              }
+              await axios.post(
+                `${process.env.NEXT_PUBLIC_API_URL}/api/companies/${company.id}/mapping/`,
+                config,
+                { withCredentials: true }
+              )
               
               
               // Update local state

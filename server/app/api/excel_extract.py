@@ -14,7 +14,7 @@ import os
 import shutil
 from datetime import datetime
 from uuid import uuid4
-from app.services.gcs_utils import upload_file_to_gcs, get_gcs_file_url, download_file_from_gcs
+from app.services.gcs_utils import upload_file_to_gcs, get_gcs_file_url, download_file_from_gcs, generate_gcs_signed_url
 import logging
 import asyncio
 from typing import Optional, Dict, Any, List
@@ -92,7 +92,12 @@ async def extract_tables_excel(
         uploaded = upload_file_to_gcs(file_path, gcs_key)
         if not uploaded:
             raise HTTPException(status_code=500, detail="Failed to upload file to GCS.")
-        gcs_url = get_gcs_file_url(gcs_key)
+        
+        # Generate signed URL for PDF preview
+        gcs_url = generate_gcs_signed_url(gcs_key)
+        if not gcs_url:
+            # Fallback to public URL if signed URL generation fails
+            gcs_url = get_gcs_file_url(gcs_key)
 
         # Get Excel extraction service
         excel_service = await get_excel_extraction_service_instance(company_id=company_id)
@@ -272,6 +277,7 @@ async def extract_tables_excel(
             "company_id": company_id,
             "gcs_url": gcs_url,
             "gcs_key": gcs_key,  # Add GCS key for consistency with PDF flow
+            "file_name": gcs_key,  # Use full GCS path as file_name for PDF preview
             "file_type": "excel",
             "extraction_method": "excel_extraction",
             "format_learning": format_learning_data
@@ -814,8 +820,9 @@ async def extract_tables_excel_s3(
                 "upload_id": str(upload_id),
                 "extraction_id": str(uuid.uuid4()),
                 "company_id": company_id,
-                "gcs_url": get_s3_file_url(gcs_key),
+                "gcs_url": generate_gcs_signed_url(gcs_key) or get_gcs_file_url(gcs_key),
                 "gcs_key": gcs_key,
+                "file_name": gcs_key,  # Use full GCS path as file_name for PDF preview
                 "file_type": "excel",
                 "extraction_method": "excel_extraction",
                 "format_learning": format_learning_data

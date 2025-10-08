@@ -17,6 +17,9 @@ import {
   Brain,
   Eye,
   EyeOff,
+  Building2,
+  CheckCircle,
+  AlertCircle,
 } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 
@@ -74,7 +77,9 @@ export default function TableEditor({
   selectedStatementDate,
   disableAutoDateExtraction = false,
   tableEditorLearning,
-
+  extractedCarrier: initialExtractedCarrier,
+  extractedDate: initialExtractedDate,
+  carrierConfidence: initialCarrierConfidence,
 }: TableEditorProps) {
   const [currentTableIdx, setCurrentTableIdx] = useState(0)
   const [searchTerm, setSearchTerm] = useState('')
@@ -92,6 +97,11 @@ export default function TableEditor({
   const [extractedDates, setExtractedDates] = useState<ExtractedDate[]>([])
   const [dateExtractionLoading, setDateExtractionLoading] = useState(false)
   const [hasExtractedDates, setHasExtractedDates] = useState(false) // Track if dates were ever extracted
+  
+  // Extracted metadata state - initialize with props
+  const [extractedCarrier, setExtractedCarrier] = useState<string | null>(initialExtractedCarrier || null)
+  const [extractedDate, setExtractedDate] = useState<string | null>(initialExtractedDate || null)
+  const [carrierConfidence, setCarrierConfidence] = useState<number | null>(initialCarrierConfidence || null)
 
   // Extraction handlers state
   const [isExtractingWithGPT, setIsExtractingWithGPT] = useState(false)
@@ -463,15 +473,11 @@ export default function TableEditor({
   useEffect(() => {
     if (!tables.length) return
 
-    console.log('TableEditor: Processing tables:', tables)
-    console.log('TableEditor: First table structure:', tables[0])
-
+   
     const cleanedTables = tables.map((table, index) => {
-      console.log(`TableEditor: Processing table ${index}:`, table)
       
       // Handle both 'header' and 'headers' properties for backward compatibility
       const headers = table.header || (table as any).headers || []
-      console.log(`TableEditor: Headers for table ${index}:`, headers)
       
       return {
         ...table,
@@ -488,6 +494,65 @@ export default function TableEditor({
     }
   }, [tables, extractionHistory, currentExtractionIndex, onTablesChange])
 
+  // Extract carrier and date information from uploaded data
+  useEffect(() => {
+    if (uploaded) {
+      // First priority: Use extracted metadata from API response
+      if (uploaded.extracted_carrier) {
+        setExtractedCarrier(uploaded.extracted_carrier);
+        // Use confidence from document_metadata if available
+        const confidence = uploaded.document_metadata?.carrier_confidence || 0.9;
+        setCarrierConfidence(confidence);
+      }
+      
+      if (uploaded.extracted_date) {
+        setExtractedDate(uploaded.extracted_date);
+      }
+      
+      // Fallback: Extract from tables if no direct extraction available
+      if (!uploaded.extracted_carrier && uploaded.tables) {
+        const firstTable = uploaded.tables[0];
+        if (firstTable && firstTable.company_name) {
+          setExtractedCarrier(firstTable.company_name);
+          setCarrierConfidence(0.9); // High confidence from API
+        }
+      }
+      
+      // Fallback: Extract carrier from filename if no other method worked
+      if (!uploaded.extracted_carrier && !uploaded.tables?.[0]?.company_name && uploaded.file_name) {
+        const fileName = uploaded.file_name.toLowerCase();
+        const knownCarriers = {
+          'aetna': 'Aetna',
+          'bcbs': 'Blue Cross Blue Shield', 
+          'cigna': 'Cigna',
+          'humana': 'Humana',
+          'uhc': 'United Healthcare'
+        };
+        
+        for (const [key, value] of Object.entries(knownCarriers)) {
+          if (fileName.includes(key)) {
+            setExtractedCarrier(value);
+            setCarrierConfidence(0.8);
+            break;
+          }
+        }
+      }
+      
+      // Fallback: Extract date from filename pattern (2024.12 format) if no direct extraction
+      if (!uploaded.extracted_date && uploaded.file_name) {
+        const dateMatch = uploaded.file_name.match(/(\d{4})\.(\d{1,2})/);
+        if (dateMatch) {
+          const year = dateMatch[1];
+          const month = dateMatch[2].padStart(2, '0');
+          const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                            'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+          const monthName = monthNames[parseInt(month) - 1];
+          setExtractedDate(`${monthName} ${year}`);
+        }
+      }
+    }
+  }, [uploaded])
+
   // Trigger date extraction when TableEditor loads
   useEffect(() => {
     if (!tables.length || !uploaded?.file || !companyId || disableAutoDateExtraction || dateExtractionLoading) {
@@ -496,7 +561,6 @@ export default function TableEditor({
 
     // Skip if date extraction is already in progress
     if (dateExtractionInProgressRef.current) {
-      console.log('🚫 Date extraction already in progress, skipping...')
       return
     }
 
@@ -505,23 +569,19 @@ export default function TableEditor({
     
     // Skip if already processed
     if (processedDataKeysRef.current.has(dataKey)) {
-      console.log('🚫 Date extraction already processed for this file, skipping...')
       return
     }
 
     // Skip if we already have extracted dates for this file
     if (hasExtractedDates && extractedDates.length > 0) {
-      console.log('🚫 Dates already extracted for this file, skipping...')
       return
     }
 
     // Skip if a statement date has already been selected
     if (selectedStatementDate) {
-      console.log('🚫 Statement date already selected, skipping date extraction...')
       return
     }
 
-    console.log('🚀 Starting date extraction for file:', uploaded.file_name)
     processedDataKeysRef.current.add(dataKey)
     dateExtractionInProgressRef.current = true
     
@@ -579,7 +639,6 @@ export default function TableEditor({
       // Clear processed keys and reset progress flag when a new file is loaded
       processedDataKeysRef.current.clear()
       dateExtractionInProgressRef.current = false
-      console.log('🔄 Cleared processed keys and reset progress flag for new file:', uploaded.file_name)
     }
   }, [uploaded?.file_name])
 
@@ -602,93 +661,6 @@ export default function TableEditor({
     // Always reset loading state when modal is closed
     setDateExtractionLoading(false)
   }
-
-  const performDateExtraction = useCallback(async () => {
-    console.log('🗓️ performDateExtraction called', {
-      hasFile: !!uploaded?.file,
-      companyId
-    })
-    
-    setDateExtractionLoading(true)
-    
-    if (!uploaded?.file || !companyId) {
-      console.log('🗓️ Missing file or companyId, aborting date extraction')
-      setDateExtractionLoading(false)
-      return
-    }
-    
-    try {
-      const fileToUse = uploaded.file
-      let response
-      
-      console.log('🗓️ Starting date extraction API call', {
-        fileType: fileToUse instanceof File ? 'File' : typeof fileToUse,
-        fileName: uploaded.file_name
-      })
-      
-      if (fileToUse instanceof File) {
-        response = await dateExtractionService.extractDatesFromFile(fileToUse, companyId)
-      } else if (fileToUse && typeof fileToUse === 'object' && fileToUse.url) {
-        try {
-          const fileResponse = await fetch(fileToUse.url)
-          if (!fileResponse.ok) {
-            throw new Error(`Failed to fetch file from URL: ${fileResponse.status}`)
-          }
-          const fileBlob = await fileResponse.blob()
-          const fileName = uploaded.file_name || 'document.pdf'
-          const file = new File([fileBlob], fileName, { type: fileBlob.type || 'application/pdf' })
-          response = await dateExtractionService.extractDatesFromFile(file, companyId)
-        } catch (fetchError) {
-          // Show modal for manual selection
-          setExtractedDates([])
-          setHasExtractedDates(true) // Reset flag on error
-          setShowDateModal(true)
-          toast.success('Could not access the file for date extraction. You can manually select a date.')
-          setDateExtractionLoading(false)
-          return
-        }
-      } else {
-        // Show modal for manual selection
-        setExtractedDates([])
-        setHasExtractedDates(false) // Reset flag on error
-        setShowDateModal(true)
-        toast.success('Date extraction not available. You can manually select a date.')
-        setDateExtractionLoading(false)
-        return
-      }
-      
-      console.log('🗓️ Date extraction API response', {
-        success: response.success,
-        datesCount: response.dates?.length || 0,
-        errors: response.errors
-      })
-      
-      // Show modal with results
-      if (response.success && response.dates && response.dates.length > 0) {
-        console.log('🗓️ Setting extracted dates and showing modal')
-        setExtractedDates(response.dates)
-        setHasExtractedDates(true) // Mark that dates were extracted
-        setShowDateModal(true)
-        toast.success(`Found ${response.dates.length} date(s) in your document`)
-      } else {
-        console.log('🗓️ No dates found, showing modal for manual selection')
-        setExtractedDates([])
-        setHasExtractedDates(true) // Set to true to indicate extraction was attempted
-        setShowDateModal(true)
-        toast.success('No dates found in the document. You can manually select a date.')
-      }
-    } catch (error: any) {
-      // Show modal for manual selection
-      setExtractedDates([])
-      setHasExtractedDates(true) // Set to true to indicate extraction was attempted
-      setShowDateModal(true)
-      toast.success('Date extraction failed. You can manually select a date.')
-    } finally {
-      // Always reset loading state
-      setDateExtractionLoading(false)
-    }
-  }, [uploaded?.file, uploaded?.file_name, companyId])
-
   // Close menus when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -1058,155 +1030,53 @@ export default function TableEditor({
         {/* Progress Bar */}
         <ProgressBar currentStep="table_editor" />
         
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-blue-50 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <h2 className="text-2xl font-bold text-slate-800">Table Editor</h2>
-            {uploaded && (
-              <span className="text-sm text-slate-600 bg-white px-4 py-2 rounded-lg border border-slate-200 shadow-sm">
-                {uploaded.file_name}
-              </span>
-            )}
-            {selectedStatementDate && (
-              <div className="flex items-center gap-2 bg-emerald-50 px-4 py-2 rounded-lg border border-emerald-200">
-                <Calendar className="w-4 h-4 text-emerald-600" />
-                <span className="text-sm text-emerald-700 font-medium">
-                  Statement Date: {selectedStatementDate.date}
-                </span>
-                <button
-                  onClick={() => {
-                    if (onStatementDateSelect) {
-                      onStatementDateSelect(null)
-                    }
-                    // Reset all date extraction state to allow re-extraction
-                    processedDataKeysRef.current.clear()
-                    setDateExtractionLoading(false)
-                    setExtractedDates([])
-                    setHasExtractedDates(false) // Reset the flag
-                    setShowDateModal(false)
-                    toast.success('Date selection reset. You can extract dates again.')
-                  }}
-                  className="ml-1 p-1 text-emerald-600 hover:text-emerald-800 hover:bg-emerald-200 rounded-lg transition-colors"
-                  title="Reset date selection"
+        {/* MODERN PROFESSIONAL HEADER */}
+        <div className="bg-white border-b border-gray-100 shadow-sm">
+          <div className="max-w-7xl mx-auto px-6 py-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-6">
+                <h1 className="text-3xl font-bold text-gray-900">Review & Validate</h1>
+                <div className="hidden md:flex items-center space-x-8">
+                  {/* Carrier Info Badge */}
+                  <div className="flex items-center space-x-3 px-4 py-2 bg-blue-50 rounded-xl border border-blue-200">
+                    <Building2 className="h-5 w-5 text-blue-600" />
+                    <div>
+                      <p className="text-xs font-medium text-blue-800 uppercase tracking-wide">Detected Carrier</p>
+                      <p className="text-sm font-semibold text-blue-900">{extractedCarrier || 'Unknown'}</p>
+                    </div>
+                    {carrierConfidence && (
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        carrierConfidence > 0.8 ? 'bg-green-100 text-green-800' : 
+                        carrierConfidence > 0.6 ? 'bg-yellow-100 text-yellow-800' : 
+                        'bg-red-100 text-red-800'
+                      }`}>
+                        {Math.round(carrierConfidence * 100)}%
+                      </span>
+                    )}
+                  </div>
+                  
+                  {/* Date Info Badge */}
+                  <div className="flex items-center space-x-3 px-4 py-2 bg-emerald-50 rounded-xl border border-emerald-200">
+                    <Calendar className="h-5 w-5 text-emerald-600" />
+                    <div>
+                      <p className="text-xs font-medium text-emerald-800 uppercase tracking-wide">Statement Period</p>
+                      <p className="text-sm font-semibold text-emerald-900">{extractedDate || selectedStatementDate?.date || 'Not detected'}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Action Buttons */}
+              <div className="flex items-center space-x-3">
+                <button 
+                  onClick={() => setShowDateModal(true)}
+                  className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
                 >
-                  <X className="w-3 h-3" />
+                  <Pencil className="h-4 w-4 mr-2" />
+                  Edit Details
                 </button>
               </div>
-            )}
-          </div>
-          
-          <div className="flex items-center gap-3">
-                        {/* Date Extraction Button */}
-            <button
-              onClick={() => {
-                console.log('🗓️ Date extraction button clicked', {
-                  hasExtractedDates,
-                  extractedDatesLength: extractedDates.length,
-                  dateExtractionLoading,
-                  showDateModal
-                })
-                
-                // If dates were already extracted and we have dates, just reopen the modal
-                if (hasExtractedDates && extractedDates.length > 0) {
-                  console.log('🗓️ Reopening date modal with existing dates')
-                  setShowDateModal(true)
-                  return
-                }
-                
-                // If not loading, perform extraction (this will handle both initial extraction and retry)
-                if (!dateExtractionLoading) {
-                  console.log('🗓️ Starting manual date extraction')
-                  performDateExtraction()
-                } else {
-                  console.log('🗓️ Date extraction already in progress, ignoring click')
-                }
-              }}
-              disabled={dateExtractionLoading}
-              className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2 text-sm"
-              title={hasExtractedDates && extractedDates.length > 0 ? "Reopen date selection modal" : "Extract dates from document"}
-            >
-              <Calendar className="w-4 h-4" />
-              {dateExtractionLoading ? 'Extracting...' : (hasExtractedDates && extractedDates.length > 0 ? 'Select Date' : 'Extract Dates')}
-            </button>
-
-
-
-            {/* Extract with GPT 5 Button */}
-            <button
-              onClick={handleExtractWithGPT}
-              disabled={isExtractingWithGPT || loading || !gptServiceAvailable}
-              className="px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2 text-sm"
-              title="Extract tables using GPT-5 Vision"
-            >
-              <Brain className="w-4 h-4" />
-              {isExtractingWithGPT ? 'Extracting with GPT...' : !gptServiceAvailable ? 'GPT Service Unavailable' : 'Extract with GPT 5'}
-            </button>
-
-            {/* Extract with Google DOC AI Button */}
-            <button
-              onClick={handleExtractWithGoogleDocAI}
-              disabled={isExtractingWithGoogleDocAI || loading || !googleDocAIServiceAvailable}
-              className="px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center gap-2 text-sm"
-              title="Extract tables using Google Document AI"
-            >
-              <FileText className="w-4 h-4" />
-              {isExtractingWithGoogleDocAI ? 'Extracting with DOC AI...' : !googleDocAIServiceAvailable ? 'DOC AI Service Unavailable' : 'Extract with Google DOC AI'}
-            </button>
-
-            {/* Extract with Mistral Button */}
-            <button
-              onClick={handleExtractWithMistral}
-              disabled={isExtractingWithMistral || loading || !mistralServiceAvailable}
-              className="px-3 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50 flex items-center gap-2 text-sm"
-              title="Extract tables using Mistral Document AI"
-            >
-              <FileText className="w-4 h-4" />
-              {isExtractingWithMistral ? 'Extracting with Mistral...' : !mistralServiceAvailable ? 'Mistral Service Unavailable' : 'Extract with Mistral'}
-            </button>
-
-
-
-
-            {/* Search */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <input
-                type="text"
-                placeholder="Search tables..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-sm"
-              />
             </div>
-
-            {/* Undo/Redo */}
-            <button
-              onClick={undo}
-              disabled={undoStack.length === 0}
-              className="p-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 bg-white rounded-lg border border-gray-200 hover:border-gray-300"
-              title="Undo"
-            >
-              <RotateCcw className="w-4 h-4" />
-            </button>
-            <button
-              onClick={redo}
-              disabled={redoStack.length === 0}
-              className="p-2 text-gray-600 hover:text-gray-900 disabled:opacity-50 bg-white rounded-lg border border-gray-200 hover:border-gray-300"
-              title="Redo"
-            >
-              <RotateCcw className="w-4 h-4 transform scale-x-[-1]" />
-            </button>
-
-            {/* Revert Merge */}
-            {mergeHistory.length > 0 && (
-              <button
-                onClick={revertLastMerge}
-                className="p-2 text-orange-600 hover:text-orange-700 bg-white rounded-lg border border-orange-200 hover:border-orange-300"
-                title="Revert last merge"
-              >
-                <RotateCcw className="w-4 h-4" />
-              </button>
-            )}
           </div>
         </div>
 
@@ -1617,16 +1487,49 @@ export default function TableEditor({
                 </button>
               )}
               <button
-                onClick={() => {
-                  onSave(tables)
-                  onGoToFieldMapping()
+                onClick={async () => {
+                  try {
+                    // Trigger format learning before saving
+                    const learningResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/table-editor/learn-format-patterns`, {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify({
+                        upload_id: uploaded?.upload_id || uploaded?.id,
+                        tables: tables,
+                        company_id: companyId,
+                        selected_statement_date: selectedStatementDate,
+                        extracted_carrier: extractedCarrier,
+                        extracted_date: extractedDate
+                      })
+                    });
+                    
+                    if (learningResponse.ok) {
+                      toast.success('Format patterns learned successfully!');
+                    }
+                    
+                    // Continue with normal save
+                    onSave(tables, selectedStatementDate, extractedCarrier || undefined, extractedDate || undefined);
+                    onGoToFieldMapping();
+                  } catch (error) {
+                    console.error('Format learning error:', error);
+                    // Continue with save even if learning fails
+                    onSave(tables, selectedStatementDate, extractedCarrier || undefined, extractedDate || undefined);
+                    onGoToFieldMapping();
+                  }
                 }}
-                disabled={loading || isUsingAnotherExtraction || !selectedStatementDate}
+                disabled={loading || isUsingAnotherExtraction || !selectedStatementDate || !extractedCarrier}
                 className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2 font-medium"
-                title={!selectedStatementDate ? "Please select a statement date first" : "Save tables and proceed to field mapping"}
+                title={
+                  !selectedStatementDate ? "Please select a statement date first" : 
+                  !extractedCarrier ? "Please ensure carrier name is extracted or manually entered" : 
+                  "Save tables and proceed to field mapping"
+                }
               >
                 <FileText className="w-4 h-4" />
-                Save & Go to Field Mapping
+                Save & Continue
+                <span className="ml-2 text-blue-200">→</span>
               </button>
             </div>
           </div>
@@ -1652,6 +1555,10 @@ export default function TableEditor({
           extractedDates={extractedDates}
           fileName={uploaded?.file_name || 'Unknown file'}
           loading={dateExtractionLoading}
+          extractedCarrier={extractedCarrier || undefined}
+          extractedDate={extractedDate || undefined}
+          onCarrierUpdate={(carrier) => setExtractedCarrier(carrier)}
+          onDateUpdate={(date) => setExtractedDate(date)}
         />
 
       </div>

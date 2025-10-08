@@ -190,7 +190,7 @@ async def save_progress(
 
 @router.get("/progress/{upload_id}/{step}")
 async def get_progress(
-    upload_id: UUID,
+    upload_id: str,
     step: str,
     db: AsyncSession = Depends(get_db)
 ):
@@ -198,7 +198,17 @@ async def get_progress(
     Get progress data for a specific step.
     """
     try:
-        progress_data = await crud.get_progress_data(db, upload_id, step)
+        # Try to convert string to UUID if it's a valid UUID format
+        try:
+            upload_id_uuid = UUID(upload_id)
+        except (ValueError, AttributeError):
+            # If not a valid UUID, it might be a custom format - try to find by string ID
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid upload_id format. Expected UUID, got: {upload_id}"
+            )
+        
+        progress_data = await crud.get_progress_data(db, upload_id_uuid, step)
         
         return JSONResponse({
             "success": True,

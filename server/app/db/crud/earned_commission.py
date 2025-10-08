@@ -1162,8 +1162,10 @@ async def bulk_process_commissions(db: AsyncSession, statement_upload: Statement
                 
                 # Only process records with commission or invoice data
                 if commission_earned != 0 or invoice_total != 0:
+                    # ✅ FIX: Use carrier_id if available (new flow), otherwise fall back to company_id (old flow)
+                    effective_carrier_id = statement_upload.carrier_id if statement_upload.carrier_id else statement_upload.company_id
                     commission_records.append({
-                        'carrier_id': statement_upload.company_id,
+                        'carrier_id': effective_carrier_id,
                         'client_name': client_name,
                         'commission_earned': commission_earned,
                         'invoice_total': invoice_total,
@@ -1335,8 +1337,10 @@ async def extract_all_commission_data_async(statement_upload: StatementUploadMod
                 invoice_total = parse_currency_amount(invoice_str)
                 
                 if commission_earned != 0 or invoice_total != 0:
+                    # ✅ FIX: Use carrier_id if available (new flow), otherwise fall back to company_id (old flow)
+                    effective_carrier_id = statement_upload.carrier_id if statement_upload.carrier_id else statement_upload.company_id
                     commission_records.append({
-                        'carrier_id': statement_upload.company_id,
+                        'carrier_id': effective_carrier_id,
                         'client_name': client_name,
                         'commission_earned': commission_earned,
                         'invoice_total': invoice_total,

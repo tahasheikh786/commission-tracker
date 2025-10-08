@@ -78,9 +78,10 @@ app.add_middleware(
 async def add_security_headers(request: Request, call_next):
     response = await call_next(request)
     
-    # Add security headers
+    # Add security headers (but don't override if already set by endpoint)
     for header, value in security_headers.items():
-        response.headers[header] = value
+        if header not in response.headers:
+            response.headers[header] = value
     
     # Add HSTS header for HTTPS
     if request.url.scheme == "https":

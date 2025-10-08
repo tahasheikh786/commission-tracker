@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import func, select, and_
+from sqlalchemy import func, select, and_, or_
 from app.db import crud, schemas
 from app.config import get_db
 from app.db.models import StatementUpload, Company, EarnedCommission, User
@@ -33,13 +33,22 @@ async def get_dashboard_stats(
         total_statements = total_statements_result.scalar() or 0
 
         # Get total carriers count - for admin show carriers with statements, for regular users show carriers they've worked with
+        # NOTE: Use COALESCE to support both old (company_id) and new (carrier_id) data
         if is_admin:
+            # For admin, get all unique carriers (both old and new format)
+            # Old format: carrier stored in company_id, carrier_id is NULL
+            # New format: carrier stored in carrier_id
             total_carriers_result = await db.execute(
-                select(func.count(func.distinct(StatementUpload.company_id)))
+                select(func.count(func.distinct(
+                    func.coalesce(StatementUpload.carrier_id, StatementUpload.company_id)
+                )))
             )
         else:
+            # For regular users, only count carriers they've worked with
             total_carriers_result = await db.execute(
-                select(func.count(func.distinct(StatementUpload.company_id)))
+                select(func.count(func.distinct(
+                    func.coalesce(StatementUpload.carrier_id, StatementUpload.company_id)
+                )))
                 .where(StatementUpload.user_id == current_user.id)
             )
         total_carriers = total_carriers_result.scalar() or 0
@@ -201,25 +210,39 @@ async def get_carriers_with_statement_counts(
         
         if is_admin:
             # Admin sees all carriers with total statement counts
+            # NOTE: Support both old (company_id) and new (carrier_id) format
             result = await db.execute(
                 select(
                     Company.id,
                     Company.name,
                     func.count(StatementUpload.id).label('statement_count')
                 )
-                .outerjoin(StatementUpload, Company.id == StatementUpload.company_id)
+                .outerjoin(StatementUpload, or_(
+                    Company.id == StatementUpload.carrier_id,
+                    and_(
+                        Company.id == StatementUpload.company_id,
+                        StatementUpload.carrier_id.is_(None)
+                    )
+                ))
                 .group_by(Company.id, Company.name)
                 .order_by(Company.name)
             )
         else:
             # Regular users see only carriers they've uploaded statements for
+            # NOTE: Support both old (company_id) and new (carrier_id) format
             result = await db.execute(
                 select(
                     Company.id,
                     Company.name,
                     func.count(StatementUpload.id).label('statement_count')
                 )
-                .join(StatementUpload, Company.id == StatementUpload.company_id)
+                .join(StatementUpload, or_(
+                    Company.id == StatementUpload.carrier_id,
+                    and_(
+                        Company.id == StatementUpload.company_id,
+                        StatementUpload.carrier_id.is_(None)
+                    )
+                ))
                 .where(StatementUpload.user_id == current_user.id)
                 .group_by(Company.id, Company.name)
                 .order_by(Company.name)
@@ -253,10 +276,18 @@ async def get_statements_by_carrier(carrier_id: UUID, db: AsyncSession = Depends
             raise HTTPException(status_code=404, detail="Carrier not found")
         
         # Get statements for this carrier
+        # NOTE: Support both old (company_id) and new (carrier_id) format
         result = await db.execute(
             select(StatementUpload)
-            .join(Company, StatementUpload.company_id == Company.id)
-            .where(Company.id == carrier_id)
+            .where(
+                or_(
+                    StatementUpload.carrier_id == carrier_id,
+                    and_(
+                        StatementUpload.company_id == carrier_id,
+                        StatementUpload.carrier_id.is_(None)
+                    )
+                )
+            )
             .order_by(StatementUpload.uploaded_at.desc())
         )
         statements = result.scalars().all()
@@ -313,10 +344,18 @@ async def get_statements_by_carrier_and_status(
         db_statuses = status_mapping.get(status, [])
         
         # Get statements for this carrier with status filter
+        # NOTE: Support both old (company_id) and new (carrier_id) format
         result = await db.execute(
             select(StatementUpload)
-            .join(Company, StatementUpload.company_id == Company.id)
-            .where(Company.id == carrier_id)
+            .where(
+                or_(
+                    StatementUpload.carrier_id == carrier_id,
+                    and_(
+                        StatementUpload.company_id == carrier_id,
+                        StatementUpload.carrier_id.is_(None)
+                    )
+                )
+            )
             .where(StatementUpload.status.in_(db_statuses))
             .order_by(StatementUpload.uploaded_at.desc())
         )
@@ -349,14 +388,22 @@ async def get_user_specific_companies(
     current_user: User = Depends(get_current_user_hybrid),
     db: AsyncSession = Depends(get_db)
 ):
-    """Get companies that the current user has worked with"""
+    """Get carriers that the current user has worked with"""
     try:
         # Get carriers that the user has uploaded statements for
+        # NOTE: Support both old (company_id) and new (carrier_id) format
+        # Old format: carrier stored in company_id, carrier_id is NULL
+        # New format: carrier stored in carrier_id
+        
+        # Get all unique carrier IDs from both old and new format
         user_carriers_result = await db.execute(
-            select(func.distinct(StatementUpload.company_id))
+            select(
+                func.coalesce(StatementUpload.carrier_id, StatementUpload.company_id).label('carrier_id')
+            )
             .where(StatementUpload.user_id == current_user.id)
+            .distinct()
         )
-        user_carrier_ids = [row[0] for row in user_carriers_result.all()]
+        user_carrier_ids = [row[0] for row in user_carriers_result.all() if row[0] is not None]
         
         if not user_carrier_ids:
             return []
@@ -386,14 +433,23 @@ async def get_user_specific_company_statements(
     current_user: User = Depends(get_current_user_hybrid),
     db: AsyncSession = Depends(get_db)
 ):
-    """Get statements for a specific company that the current user has uploaded"""
+    """Get statements for a specific carrier that the current user has uploaded"""
     try:
-        # Get statements for this company that the user has uploaded
+        # Get statements for this carrier that the user has uploaded
+        # NOTE: Support both old (company_id) and new (carrier_id) format
         statements_result = await db.execute(
             select(StatementUpload)
             .where(
-                StatementUpload.company_id == company_id,
-                StatementUpload.user_id == current_user.id
+                and_(
+                    or_(
+                        StatementUpload.carrier_id == company_id,
+                        and_(
+                            StatementUpload.company_id == company_id,
+                            StatementUpload.carrier_id.is_(None)
+                        )
+                    ),
+                    StatementUpload.user_id == current_user.id
+                )
             )
             .order_by(StatementUpload.uploaded_at.desc())
         )
@@ -435,12 +491,17 @@ async def get_all_earned_commissions(
             commissions = await crud.get_all_earned_commissions(db, year=year)
         else:
             # Regular users see only data from carriers they've worked with
-            # Get carriers that the user has worked with
+            # NOTE: Support both old (company_id) and new (carrier_id) format
+            # Old format: carrier stored in company_id, carrier_id is NULL
+            # New format: carrier stored in carrier_id
             user_carriers_result = await db.execute(
-                select(func.distinct(StatementUpload.company_id))
+                select(
+                    func.coalesce(StatementUpload.carrier_id, StatementUpload.company_id).label('carrier_id')
+                )
                 .where(StatementUpload.user_id == current_user.id)
+                .distinct()
             )
-            user_carrier_ids = [row[0] for row in user_carriers_result.all()]
+            user_carrier_ids = [row[0] for row in user_carriers_result.all() if row[0] is not None]
             
             if not user_carrier_ids:
                 # User has no uploaded statements, return empty list
@@ -589,11 +650,15 @@ async def get_earned_commission_stats(
         # For non-admin users, filter by their uploaded statements
         if not is_admin:
             # Get carriers that the user has worked with
+            # NOTE: Support both old (company_id) and new (carrier_id) format
             user_carriers_result = await db.execute(
-                select(func.distinct(StatementUpload.company_id))
+                select(
+                    func.coalesce(StatementUpload.carrier_id, StatementUpload.company_id).label('carrier_id')
+                )
                 .where(StatementUpload.user_id == current_user.id)
+                .distinct()
             )
-            user_carrier_ids = [row[0] for row in user_carriers_result.all()]
+            user_carrier_ids = [row[0] for row in user_carriers_result.all() if row[0] is not None]
             
             if not user_carrier_ids:
                 # User has no uploaded statements, return zeros
@@ -851,11 +916,18 @@ async def get_user_specific_carrier_earned_commission_stats(
             raise HTTPException(status_code=404, detail="Carrier not found")
 
         # Check if user has uploaded statements for this carrier
+        # NOTE: Support both old (company_id) and new (carrier_id) format
         user_carrier_check = await db.execute(
             select(func.count(StatementUpload.id))
             .where(
                 and_(
-                    StatementUpload.company_id == carrier_id,
+                    or_(
+                        StatementUpload.carrier_id == carrier_id,
+                        and_(
+                            StatementUpload.company_id == carrier_id,
+                            StatementUpload.carrier_id.is_(None)
+                        )
+                    ),
                     StatementUpload.user_id == current_user.id
                 )
             )
@@ -873,11 +945,18 @@ async def get_user_specific_carrier_earned_commission_stats(
             }
 
         # Get user's statement upload IDs for this carrier
+        # NOTE: Support both old (company_id) and new (carrier_id) format
         user_upload_ids_result = await db.execute(
             select(StatementUpload.id)
             .where(
                 and_(
-                    StatementUpload.company_id == carrier_id,
+                    or_(
+                        StatementUpload.carrier_id == carrier_id,
+                        and_(
+                            StatementUpload.company_id == carrier_id,
+                            StatementUpload.carrier_id.is_(None)
+                        )
+                    ),
                     StatementUpload.user_id == current_user.id
                 )
             )

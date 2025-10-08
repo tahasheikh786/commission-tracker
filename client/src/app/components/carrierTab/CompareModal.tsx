@@ -1,16 +1,7 @@
 import Modal from "../Modal";
 import ExtractedTable from "../../upload/components/ExtractedTable";
-import { useRef, useState } from "react";
+import { useState, useEffect } from "react";
 import { Download, ZoomIn, ZoomOut, ExternalLink } from "lucide-react";
-
-function getPdfUrl(statement: any) {
-  if (!statement?.file_name) return null;
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, '');
-  if (statement.file_name.startsWith("statements/")) {
-    return `${baseUrl}/pdfs/${encodeURIComponent(statement.file_name)}`;
-  }
-  return `${baseUrl}/pdfs/${encodeURIComponent(statement.file_name)}`;
-}
 
 type Props = {
   statement: any;
@@ -18,9 +9,53 @@ type Props = {
 };
 
 export default function CompareModal({ statement, onClose }: Props) {
-  const pdfUrl = getPdfUrl(statement);
-  const embedRef = useRef<HTMLDivElement>(null);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const [zoom, setZoom] = useState(1);
+
+  useEffect(() => {
+    const fetchPdfUrl = async () => {
+      if (!statement?.gcs_key && !statement?.file_name) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        // Step 1: Get signed URL from backend
+        const gcsKey = statement.gcs_key || statement.file_name;
+        const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, '');
+        const response = await fetch(`${baseUrl}/api/pdf-preview/?gcs_key=${encodeURIComponent(gcsKey)}`);
+        
+        if (response.ok) {
+          const data = await response.json();
+          const signedUrl = data.url;
+
+          // Step 2: Fetch the PDF as a blob to avoid CORS issues with iframe
+          const pdfResponse = await fetch(signedUrl);
+          if (pdfResponse.ok) {
+            const pdfBlob = await pdfResponse.blob();
+            
+            // Step 3: Create a local object URL from the blob
+            const objectUrl = URL.createObjectURL(pdfBlob);
+            setPdfUrl(objectUrl);
+          }
+        }
+        setLoading(false);
+      } catch (err) {
+        console.error('Error fetching PDF:', err);
+        setLoading(false);
+      }
+    };
+
+    fetchPdfUrl();
+
+    // Cleanup: revoke object URL when component unmounts
+    return () => {
+      if (pdfUrl && pdfUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(pdfUrl);
+      }
+    };
+  }, [statement]);
 
   const handleZoomIn = () => setZoom(z => Math.min(z + 0.2, 2));
   const handleZoomOut = () => setZoom(z => Math.max(z - 0.2, 0.5));
@@ -98,29 +133,36 @@ export default function CompareModal({ statement, onClose }: Props) {
                 <h3 className="font-semibold text-slate-800 dark:text-slate-200">Original PDF</h3>
               </div>
             </div>
-            <div className="flex-1 min-h-0 min-w-0 flex flex-col items-center justify-center">
-              {pdfUrl ? (
-                <div
-                  ref={embedRef}
-                  className="w-full h-full flex-1 flex flex-col items-center justify-center min-h-0 min-w-0"
-                  style={{ minHeight: 0, minWidth: 0 }}
-                >
-                  <embed
-                    src={pdfUrl}
-                    type="application/pdf"
-                    width="100%"
-                    height="100%"
-                    className="w-full h-full min-h-0 min-w-0 flex-1"
-                    style={{ minHeight: 0, minWidth: 0, flex: 1, transform: `scale(${zoom})`, transformOrigin: 'top left' }}
-                    aria-label="PDF preview"
-                  />
-                  <div className="text-xs text-slate-500 dark:text-slate-400 mt-2 px-2 text-center bg-slate-50 dark:bg-slate-700/50 rounded-lg p-3">
-                    If the PDF is blank, <b>your browser may block cross-origin (CORS) PDF previews for presigned URLs</b>.<br />
-                    <a href={pdfUrl} className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 underline font-medium" target="_blank" rel="noopener noreferrer">Open PDF in a new tab</a> to view or download.
+            <div className="flex-1 min-h-0 min-w-0 flex flex-col items-center justify-center p-4">
+              {loading ? (
+                <div className="flex flex-col items-center justify-center">
+                  <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-4"></div>
+                  <p className="text-sm text-slate-600 dark:text-slate-400">Loading PDF...</p>
+                </div>
+              ) : pdfUrl ? (
+                <div className="w-full h-full flex flex-col">
+                  <div className="flex-1 bg-gray-100 rounded-lg overflow-hidden">
+                    <iframe
+                      src={pdfUrl}
+                      width="100%"
+                      height="100%"
+                      className="w-full h-full border-0"
+                      style={{ 
+                        transform: `scale(${zoom})`, 
+                        transformOrigin: 'top left',
+                        minHeight: '500px'
+                      }}
+                      title="PDF Preview"
+                    />
+                  </div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400 mt-2 text-center">
+                    <a href={pdfUrl} className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 underline" target="_blank" rel="noopener noreferrer">
+                      Open PDF in a new tab
+                    </a>
                   </div>
                 </div>
               ) : (
-                <div className="text-slate-400 dark:text-slate-500 text-sm flex items-center justify-center h-full">No PDF file found.</div>
+                <div className="text-slate-400 dark:text-slate-500 text-sm">No PDF file found.</div>
               )}
             </div>
           </section>

@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Upload, Shield } from 'lucide-react';
+import { ArrowLeft, Upload, Shield, Sparkles, Building2, Calendar } from 'lucide-react';
 import BeautifulUploadZone from './BeautifulUploadZone';
 import { useAuth } from '@/context/AuthContext';
 import toast from 'react-hot-toast';
@@ -10,6 +10,9 @@ import toast from 'react-hot-toast';
 export default function UploadPageContent() {
   const router = useRouter();
   const { user } = useAuth();
+  const [extractedCarrier, setExtractedCarrier] = useState<string | null>(null);
+  const [extractedDate, setExtractedDate] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const handleUploadResult = (result: {
     tables: any[];
@@ -21,11 +24,23 @@ export default function UploadPageContent() {
     format_learning?: any;
     gcs_url?: string;
     gcs_key?: string;
+    extracted_carrier?: string;
+    extracted_date?: string;
+    document_metadata?: any;
   }) => {
     // Handle successful upload
     toast.success('Document uploaded and processed successfully!');
     
-    // Navigate to dashboard or show results
+    // Store extracted information
+    if (result.extracted_carrier) {
+      setExtractedCarrier(result.extracted_carrier);
+    }
+    if (result.extracted_date) {
+      setExtractedDate(result.extracted_date);
+    }
+    
+    // Navigate to dashboard with extracted information
+    // The dashboard will use this information when saving tables
     router.push('/');
   };
 
@@ -57,12 +72,51 @@ export default function UploadPageContent() {
         <div className="bg-white rounded-2xl shadow-lg border border-slate-200 p-8">
           <div className="text-center">
             <div className="w-20 h-20 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg">
-              <Upload className="h-10 w-10 text-white" />
+              <Sparkles className="h-10 w-10 text-white" />
             </div>
-            <h2 className="text-3xl font-bold text-slate-900 mb-3">Upload Commission Statements</h2>
+            <h2 className="text-3xl font-bold text-slate-900 mb-3">AI-Powered Commission Processing</h2>
             <p className="text-slate-600 mb-8 text-lg">
-              Upload your commission statements for AI-powered processing and analysis
+              Simply upload your statements - our AI will automatically detect the carrier and extract all data
             </p>
+            
+            {/* AI Extraction Status */}
+            {isProcessing && (
+              <div className="mb-8 p-6 bg-blue-50 border border-blue-200 rounded-xl">
+                <div className="flex items-center justify-center gap-3">
+                  <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                  <p className="text-blue-800 font-medium">
+                    AI is analyzing your document...
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Extracted Information Display */}
+            {(extractedCarrier || extractedDate) && (
+              <div className="mb-8 p-6 bg-emerald-50 border border-emerald-200 rounded-xl">
+                <h3 className="text-lg font-semibold text-emerald-800 mb-4">AI Detection Results</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {extractedCarrier && (
+                    <div className="flex items-center gap-3 p-3 bg-white rounded-lg border border-emerald-200">
+                      <Building2 className="h-5 w-5 text-emerald-600" />
+                      <div>
+                        <p className="text-sm text-emerald-600 font-medium">Carrier</p>
+                        <p className="text-emerald-800 font-semibold">{extractedCarrier}</p>
+                      </div>
+                    </div>
+                  )}
+                  {extractedDate && (
+                    <div className="flex items-center gap-3 p-3 bg-white rounded-lg border border-emerald-200">
+                      <Calendar className="h-5 w-5 text-emerald-600" />
+                      <div>
+                        <p className="text-sm text-emerald-600 font-medium">Statement Date</p>
+                        <p className="text-emerald-800 font-semibold">{extractedDate}</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
             
             {/* Functional Upload Zone */}
             <BeautifulUploadZone

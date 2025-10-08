@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.models import StatementUpload, Company
 from app.db.crud import save_edited_tables, get_edited_tables, update_upload_tables, delete_edited_tables
+from app.db import crud, schemas
 from app.config import get_db
 from app.utils.db_retry import with_db_retry
 from app.services.format_learning_service import FormatLearningService
@@ -38,6 +39,13 @@ class SaveTablesRequest(BaseModel):
     tables: List[TableData]
     company_id: str
     selected_statement_date: Optional[Dict[str, Any]] = None
+    extracted_carrier: Optional[str] = None
+    extracted_date: Optional[str] = None
+
+class UpdateExtractionMetadataRequest(BaseModel):
+    upload_id: str
+    carrier_name: Optional[str] = None
+    statement_date: Optional[str] = None
 
 
 class GetTablesRequest(BaseModel):
@@ -86,15 +94,32 @@ async def save_tables(request: SaveTablesRequest, db: AsyncSession = Depends(get
         saved_upload = await save_edited_tables(db, tables_data)
         logger.info(f"🎯 Table Editor API: Saved edited tables to database")
         
-        # Update the original upload with the edited tables and selected statement date
-        logger.info(f"🎯 Table Editor API: Updating upload with tables and statement date")
-        await update_upload_tables(db, request.upload_id, tables_data, request.selected_statement_date)
-        logger.info(f"🎯 Table Editor API: Successfully updated upload with statement date")
+        # Handle carrier creation and linking if carrier name is provided
+        carrier_id = None
+        if request.extracted_carrier:
+            logger.info(f"🎯 Table Editor API: Processing carrier: {request.extracted_carrier}")
+            
+            # Check if carrier already exists (use with_db_retry for consistency)
+            existing_carrier = await with_db_retry(db, crud.get_company_by_name, name=request.extracted_carrier)
+            if existing_carrier:
+                carrier_id = existing_carrier.id
+                logger.info(f"🎯 Table Editor API: Using existing carrier: {existing_carrier.id} ({existing_carrier.name})")
+            else:
+                # Create new carrier
+                carrier_data = schemas.CompanyCreate(name=request.extracted_carrier)
+                new_carrier = await with_db_retry(db, crud.create_company, company=carrier_data)
+                carrier_id = new_carrier.id
+                logger.info(f"🎯 Table Editor API: Created new carrier: {carrier_id} ({new_carrier.name})")
         
-        # Learn format patterns from the edited tables
-        if request.tables and len(request.tables) > 0:
+        # Update the original upload with the edited tables, selected statement date, and carrier info
+        logger.info(f"🎯 Table Editor API: Updating upload with tables, statement date, and carrier")
+        await update_upload_tables(db, request.upload_id, tables_data, request.selected_statement_date, carrier_id)
+        logger.info(f"🎯 Table Editor API: Successfully updated upload with statement date and carrier")
+        
+        # Learn format patterns from the edited tables (use carrier_id for carrier-specific learning)
+        if request.tables and len(request.tables) > 0 and carrier_id:
             try:
-                logger.info(f"🎯 Table Editor API: Learning format patterns from edited tables")
+                logger.info(f"🎯 Table Editor API: Learning format patterns from edited tables for carrier {carrier_id}")
                 
                 # Use the first table for format learning (most common case)
                 main_table = request.tables[0]
@@ -118,8 +143,9 @@ async def save_tables(request: SaveTablesRequest, db: AsyncSession = Depends(get
                 )
                 
                 # Create format learning record for table editor settings
+                # IMPORTANT: Use carrier_id (not user's company_id) for carrier-specific format learning
                 format_learning_data = {
-                    'company_id': request.company_id,
+                    'company_id': carrier_id,  # Use carrier_id for carrier-specific learning
                     'format_signature': format_signature,
                     'headers': main_table.header,
                     'table_structure': table_editor_settings['table_structure'],
@@ -131,22 +157,32 @@ async def save_tables(request: SaveTablesRequest, db: AsyncSession = Depends(get
                 # Save table editor format learning
                 await save_table_editor_format_learning(db, format_learning_data)
                 
-                logger.info(f"🎯 Table Editor API: Successfully learned format with signature: {format_signature}")
-                
+                logger.info(f"🎯 Table Editor API: Successfully learned format with signature: {format_signature} for carrier {carrier_id}")
                 logger.info(f"🎯 Table Editor API: Successfully learned table editor format patterns")
                 
             except Exception as e:
                 logger.error(f"🎯 Table Editor API: Error learning table editor format: {e}")
                 # Don't fail the save operation if format learning fails
+        elif not carrier_id:
+            logger.warning(f"🎯 Table Editor API: Skipping format learning - no carrier_id available")
         
         logger.info(f"🎯 Table Editor API: Successfully saved {len(tables_data)} edited tables")
+        
+        # Get carrier name for response
+        carrier_name = None
+        if carrier_id:
+            carrier = await with_db_retry(db, crud.get_company_by_id, company_id=carrier_id)
+            if carrier:
+                carrier_name = carrier.name
         
         return JSONResponse(
             status_code=200,
             content={
                 "success": True,
                 "message": f"Successfully saved {len(tables_data)} edited tables",
-                "saved_tables": tables_data
+                "saved_tables": tables_data,
+                "carrier_id": str(carrier_id) if carrier_id else None,
+                "carrier_name": carrier_name
             }
         )
         
@@ -305,6 +341,157 @@ async def export_tables(upload_id: str, format: str = "csv", db: AsyncSession = 
         logger.error(f"Error exporting tables: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to export tables: {str(e)}")
 
+
+@router.post("/update-extraction-metadata/")
+async def update_extraction_metadata(
+    request: UpdateExtractionMetadataRequest, 
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Update extracted carrier name and statement date metadata.
+    """
+    try:
+        logger.info(f"🎯 Table Editor API: Updating extraction metadata for upload_id: {request.upload_id}")
+        logger.info(f"🎯 Table Editor API: Carrier name: {request.carrier_name}")
+        logger.info(f"🎯 Table Editor API: Statement date: {request.statement_date}")
+        
+        # Update the upload record with new metadata
+        from app.db.crud import update_upload_metadata
+        
+        update_data = {}
+        if request.carrier_name is not None:
+            update_data['extracted_carrier'] = request.carrier_name
+        if request.statement_date is not None:
+            update_data['extracted_date'] = request.statement_date
+        
+        if update_data:
+            success = await update_upload_metadata(db, request.upload_id, update_data)
+            
+            if success:
+                logger.info(f"🎯 Table Editor API: Successfully updated extraction metadata")
+                return JSONResponse(
+                    status_code=200,
+                    content={
+                        "success": True,
+                        "message": "Extraction metadata updated successfully",
+                        "updated_fields": list(update_data.keys())
+                    }
+                )
+            else:
+                logger.error(f"🎯 Table Editor API: Failed to update extraction metadata")
+                raise HTTPException(status_code=404, detail=f"Upload not found: {request.upload_id}")
+        else:
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "success": True,
+                    "message": "No updates needed",
+                    "updated_fields": []
+                }
+            )
+        
+    except Exception as e:
+        logger.error(f"🎯 Table Editor API: Error updating extraction metadata: {e}")
+        raise HTTPException(status_code=500, detail=f"Error updating extraction metadata: {str(e)}")
+
+
+@router.post("/learn-format-patterns")
+async def learn_format_patterns(
+    request: SaveTablesRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """Learn format patterns from user edits and corrections."""
+    try:
+        if not request.tables or len(request.tables) == 0:
+            return JSONResponse(
+                status_code=400,
+                content={"success": False, "error": "No tables provided for learning"}
+            )
+        
+        # Get carrier_id from extracted carrier name
+        carrier_id = None
+        if request.extracted_carrier:
+            logger.info(f"🎯 Format Learning: Processing carrier: {request.extracted_carrier}")
+            existing_carrier = await with_db_retry(db, crud.get_company_by_name, name=request.extracted_carrier)
+            if existing_carrier:
+                carrier_id = existing_carrier.id
+                logger.info(f"🎯 Format Learning: Using existing carrier: {carrier_id}")
+            else:
+                carrier_data = schemas.CompanyCreate(name=request.extracted_carrier)
+                new_carrier = await with_db_retry(db, crud.create_company, company=carrier_data)
+                carrier_id = new_carrier.id
+                logger.info(f"🎯 Format Learning: Created new carrier: {carrier_id}")
+        
+        if not carrier_id:
+            logger.warning(f"🎯 Format Learning: No carrier_id available, using user's company_id")
+            carrier_id = request.company_id
+        
+        # Extract learning data from the edited tables
+        main_table = request.tables[0]
+        
+        # Create comprehensive format signature
+        format_signature = format_learning_service.generate_format_signature(
+            main_table.header,
+            {
+                "column_count": len(main_table.header),
+                "row_count": len(main_table.rows), 
+                "has_summary_rows": bool(main_table.summaryRows if hasattr(main_table, 'summaryRows') else False),
+                "carrier_name": request.extracted_carrier,
+                "date_pattern": request.extracted_date
+            }
+        )
+        
+        # Store format learning with enhanced metadata
+        # IMPORTANT: Use carrier_id for carrier-specific format learning
+        table_editor_settings = {
+            "headers": main_table.header,
+            "summary_rows": main_table.summaryRows if hasattr(main_table, 'summaryRows') and main_table.summaryRows else [],
+            "user_corrections": {
+                "carrier_name": request.extracted_carrier,
+                "statement_date": request.extracted_date
+            }
+        }
+        
+        # Create format learning record using Pydantic schema
+        format_learning = schemas.CarrierFormatLearningCreate(
+            company_id=carrier_id,  # Use carrier_id for carrier-specific learning
+            format_signature=format_signature,
+            headers=main_table.header,
+            table_structure={
+                "column_count": len(main_table.header),
+                "row_count": len(main_table.rows),
+                "has_summary_rows": bool(main_table.summaryRows if hasattr(main_table, 'summaryRows') else False),
+                "summary_row_patterns": main_table.summaryRows if hasattr(main_table, 'summaryRows') and main_table.summaryRows else []
+            },
+            field_mapping={},  # Empty for this endpoint
+            table_editor_settings=table_editor_settings,
+            confidence_score=95,  # High confidence for manually edited tables
+            usage_count=1
+        )
+        
+        # Save the learning data using crud
+        await with_db_retry(db, crud.save_carrier_format_learning, format_learning=format_learning)
+        
+        logger.info(f"Successfully learned format patterns with signature: {format_signature} for carrier {carrier_id}")
+        
+        return JSONResponse(
+            status_code=200,
+            content={
+                "success": True,
+                "message": "Format patterns learned successfully",
+                "format_signature": format_signature,
+                "carrier_id": str(carrier_id),
+                "learned_patterns": {
+                    "headers": len(main_table.header),
+                    "rows": len(main_table.rows),
+                    "summary_patterns": len(main_table.summaryRows) if hasattr(main_table, 'summaryRows') and main_table.summaryRows else 0
+                }
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"Format learning failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Format learning failed: {str(e)}")
 
 @router.get("/health")
 async def health_check():

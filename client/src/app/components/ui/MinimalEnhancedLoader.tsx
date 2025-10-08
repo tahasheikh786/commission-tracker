@@ -65,6 +65,14 @@ const EXTRACTION_STAGES: ProgressStage[] = [
     status: 'pending'
   },
   {
+    id: 'metadata_extraction',
+    name: 'Metadata Extraction',
+    description: 'Extracting carrier name and statement date with GPT-4',
+    icon: Brain,
+    estimatedDuration: '3-5 seconds',
+    status: 'pending'
+  },
+  {
     id: 'table_detection',
     name: 'Table Detection',
     description: 'AI-powered table and data structure identification',

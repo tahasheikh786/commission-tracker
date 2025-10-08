@@ -1,4 +1,4 @@
-import { Settings, Eye, EyeOff, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Brain } from 'lucide-react'
 
 type TableHeaderProps = {
   currentTableIdx: number
@@ -24,68 +24,47 @@ export default function TableHeader({
   isUsingAnotherExtraction
 }: TableHeaderProps) {
   return (
-    <div className="sticky top-0 z-10 bg-white/90 px-4 py-3 border-b font-semibold text-purple-700 flex items-center justify-between">
-      <span className="flex items-center gap-2">
-        <Settings size={16} />
-        Extracted Tables
-      </span>
-      <div className="flex items-center gap-2">
-        {/* Summary Row Toggle */}
-        <button
-          onClick={onToggleSummaryRows}
-          className={`px-3 py-1.5 rounded-lg flex items-center gap-2 text-sm ${
-            showSummaryRows 
-              ? 'bg-green-600 text-white hover:bg-green-700' 
-              : 'bg-gray-600 text-white hover:bg-gray-700'
-          }`}
-          title={showSummaryRows ? 'Hide summary rows' : 'Show summary rows'}
-        >
-          {showSummaryRows ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
-          {showSummaryRows ? 'Show All' : 'Hide Summary'}
-        </button>
-        
-        {/* Table Navigation */}
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => onNavigateTable('prev')}
-            disabled={currentTableIdx === 0}
-            className="p-1.5 text-gray-500 hover:text-gray-700 disabled:opacity-50 bg-white rounded border border-gray-200 hover:border-gray-300"
-          >
-            <ChevronLeft size={14} />
-          </button>
-          <span className="text-xs text-gray-600 font-medium min-w-[4rem] text-center">
-            {currentTableIdx + 1} of {tablesLength}
-          </span>
-          <button
-            onClick={() => onNavigateTable('next')}
-            disabled={currentTableIdx === tablesLength - 1}
-            className="p-1.5 text-gray-500 hover:text-gray-700 disabled:opacity-50 bg-white rounded border border-gray-200 hover:border-gray-300"
-          >
-            <ChevronRight size={14} />
-          </button>
+    <div className="px-6 py-4 border-b border-gray-100 bg-gray-50">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-4">
+          <h2 className="text-lg font-semibold text-gray-900">
+            Table {currentTableIdx + 1} of {tablesLength}
+          </h2>
+          <div className="flex items-center space-x-2">
+            <button 
+              onClick={() => onNavigateTable('prev')}
+              disabled={currentTableIdx === 0}
+              className="p-2 rounded-lg bg-white border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <button 
+              onClick={() => onNavigateTable('next')}
+              disabled={currentTableIdx >= tablesLength - 1}
+              className="p-2 rounded-lg bg-white border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronLeft className="h-4 w-4 rotate-180" />
+            </button>
+          </div>
         </div>
         
-        {/* GPT-5 Vision Improvement Button */}
-        {onImproveExtraction && (
-          <button
-            onClick={onImproveExtraction}
-            disabled={loading || isUsingAnotherExtraction || isImprovingExtraction}
-            className="px-3 py-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2 text-sm"
-            title="Use GPT-5 Vision to improve table extraction accuracy"
-          >
-            {isImprovingExtraction ? (
-              <>
-                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
-                Improving...
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-3 h-3" />
-                Improve with GPT-5
-              </>
-            )}
-          </button>
-        )}
+        {/* Essential Controls Only */}
+        <div className="flex items-center space-x-3">
+          {onImproveExtraction && (
+            <button
+              onClick={onImproveExtraction}
+              disabled={isImprovingExtraction}
+              className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors shadow-sm"
+            >
+              {isImprovingExtraction ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2" />
+              ) : (
+                <Brain className="h-4 w-4 mr-2" />
+              )}
+              Improve with AI
+            </button>
+          )}
+        </div>
       </div>
     </div>
   )

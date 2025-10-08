@@ -22,14 +22,14 @@ export default function DocumentPreview({ uploaded, zoom, onZoomIn, onZoomOut }:
 
   const handleDownload = () => {
     if (pdfDisplayUrl) {
-      const a = document.createElement('a');
-      a.href = pdfDisplayUrl;
-      a.download = uploaded?.file_name || 'document';
-      a.target = '_blank';
-      a.rel = 'noopener noreferrer';
-      a.click();
+      const a = document.createElement('a')
+      a.href = pdfDisplayUrl
+      a.download = uploaded?.file_name || 'document'
+      a.target = '_blank'
+      a.rel = 'noopener noreferrer'
+      a.click()
     }
-  };
+  }
 
   const getDocumentIcon = () => {
     if (isExcel) return <Table size={16} />
@@ -68,21 +68,22 @@ export default function DocumentPreview({ uploaded, zoom, onZoomIn, onZoomOut }:
   )
 
   const renderPdfPreview = () => (
-    <div className="w-full h-full flex flex-col items-center justify-center min-h-0 min-w-0 p-4">
-      <div className="w-full h-full overflow-auto">
-        <embed
+    <div className="w-full h-full flex flex-col min-h-0 min-w-0">
+      <div className="flex-1 overflow-hidden relative">
+        <iframe
           src={pdfDisplayUrl || undefined}
-          type="application/pdf"
-          width="100%"
-          height="100%"
-          className="w-full h-full"
-          style={{ transform: `scale(${zoom})`, transformOrigin: 'top left' }}
-          aria-label="PDF preview"
+          className="w-full h-full border-0"
+          style={{ 
+            transform: `scale(${zoom})`, 
+            transformOrigin: 'top left',
+            minHeight: '100%'
+          }}
+          title="PDF preview"
+          sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
         />
       </div>
-      <div className="text-xs text-gray-500 mt-2 px-2 text-center bg-white/80 rounded p-2">
-        If the PDF is blank, <b>your browser may block cross-origin (CORS) PDF previews</b>.<br />
-        <a href={pdfDisplayUrl || '#'} className="underline" target="_blank" rel="noopener noreferrer">Open PDF in a new tab</a> to view.
+      <div className="text-xs text-gray-500 mt-2 px-4 pb-2 text-center bg-white/80">
+        Can't see the PDF? <a href={pdfDisplayUrl || '#'} className="underline text-blue-600 hover:text-blue-800" target="_blank" rel="noopener noreferrer">Open in new tab</a>
       </div>
     </div>
   )

@@ -21,13 +21,17 @@ interface BeautifulUploadZoneProps {
   onParsed: (result: {
     tables: any[],
     upload_id?: string,
+    extraction_id?: string,
     file_name: string,
     file: File,
     quality_summary?: any,
     extraction_config?: any,
     format_learning?: any,
     gcs_url?: string,
-    gcs_key?: string
+    gcs_key?: string,
+    extracted_carrier?: string,
+    extracted_date?: string,
+    document_metadata?: any
   }) => void;
   disabled?: boolean;
   companyId: string;
@@ -122,15 +126,27 @@ export default function BeautifulUploadZone({
           console.log('WebSocket completion result.tables:', result.result?.tables);
           setIsUploading(false);
           if (result.result) {
+            // Use UUID from backend response, not the temporary uploadId
+            const backendUploadId = (result.result as any).upload_id || (result.result as any).extraction_id || uploadId;
+            
+            // Update local uploadId state with the UUID from backend
+            if (backendUploadId !== uploadId) {
+              setUploadId(backendUploadId);
+            }
+            
             onParsed({
               tables: result.result.tables || [],
-              upload_id: uploadId,
+              upload_id: backendUploadId,
+              extraction_id: (result.result as any).extraction_id, // Add extraction_id (UUID)
               file_name: uploadedFile?.name || '',
               file: uploadedFile!,
               quality_summary: result.result.quality_summary,
               extraction_config: result.result.metadata,
               gcs_url: result.result.gcs_url, // Add GCS URL for PDF preview
-              gcs_key: result.result.gcs_key // Add GCS key as backup
+              gcs_key: result.result.gcs_key, // Add GCS key as backup
+              extracted_carrier: (result.result as any).extracted_carrier,
+              extracted_date: (result.result as any).extracted_date,
+              document_metadata: (result.result as any).document_metadata
             });
           }
         },
@@ -239,15 +255,27 @@ export default function BeautifulUploadZone({
           console.log('BeautifulUploadZone: API response data:', response.data);
           console.log('BeautifulUploadZone: Tables from API:', response.data.tables);
           
+          // Use UUID from backend response
+          const backendUploadId = response.data.upload_id || response.data.extraction_id || newUploadId;
+          
+          // Update local uploadId state with the UUID from backend
+          if (backendUploadId !== newUploadId) {
+            setUploadId(backendUploadId);
+          }
+          
           onParsed({
             tables: response.data.tables || [],
-            upload_id: response.data.upload_id || newUploadId,
-            file_name: file.name,
+            upload_id: backendUploadId,
+            extraction_id: response.data.extraction_id, // Add extraction_id (UUID)
+            file_name: response.data.file_name || file.name,
             file: file,
             quality_summary: response.data.quality_summary,
             extraction_config: response.data.metadata,
             gcs_url: response.data.gcs_url, // Add GCS URL for PDF preview
-            gcs_key: response.data.gcs_key // Add GCS key as backup
+            gcs_key: response.data.gcs_key, // Add GCS key as backup
+            extracted_carrier: response.data.extracted_carrier,
+            extracted_date: response.data.extracted_date,
+            document_metadata: response.data.document_metadata
           });
         } else {
           setError(getCommissionSpecificErrorMessage(response.data.error || 'Processing failed', file.name));
@@ -263,15 +291,27 @@ export default function BeautifulUploadZone({
             console.log('WebSocket timeout - falling back to direct response handling');
             setIsUploading(false);
             if (response.data.success) {
+              // Use UUID from backend response
+              const backendUploadId = response.data.upload_id || response.data.extraction_id || newUploadId;
+              
+              // Update local uploadId state with the UUID from backend
+              if (backendUploadId !== newUploadId) {
+                setUploadId(backendUploadId);
+              }
+              
               onParsed({
                 tables: response.data.tables || [],
-                upload_id: response.data.upload_id || newUploadId,
-                file_name: file.name,
+                upload_id: backendUploadId,
+                extraction_id: response.data.extraction_id, // Add extraction_id (UUID)
+                file_name: response.data.file_name || file.name,
                 file: file,
                 quality_summary: response.data.quality_summary,
                 extraction_config: response.data.metadata,
                 gcs_url: response.data.gcs_url, // Add GCS URL for PDF preview
-                gcs_key: response.data.gcs_key // Add GCS key as backup
+                gcs_key: response.data.gcs_key, // Add GCS key as backup
+                extracted_carrier: response.data.extracted_carrier,
+                extracted_date: response.data.extracted_date,
+                document_metadata: response.data.document_metadata
               });
             }
           }
@@ -281,14 +321,28 @@ export default function BeautifulUploadZone({
     } catch (error: any) {
       setIsUploading(false);
       
+      // Disconnect websocket if connected
+      if (wsServiceRef.current) {
+        wsServiceRef.current.disconnect();
+      }
+      
       // Handle 409 conflict (duplicate file) specifically
       if (error.response?.status === 409) {
         const conflictData = error.response?.data;
         if (conflictData?.status === 'duplicate_detected') {
           const duplicateInfo = conflictData.duplicate_info;
-          const message = `This file has already been uploaded. ${duplicateInfo?.existing_file_name ? `Original upload: ${duplicateInfo.existing_file_name}` : ''}`;
-          setError(message);
-          toast.error('File already exists. Please upload a different file.');
+          const uploadDate = duplicateInfo?.existing_upload_date_formatted || 'a previous date';
+          
+          // Set user-friendly error message
+          const errorMsg = `This file was already uploaded on ${uploadDate}. Please upload a different file or check your existing uploads.`;
+          setError(errorMsg);
+          
+          // Show toast notification
+          toast.error('Duplicate File Detected', {
+            duration: 5000,
+            icon: '⚠️',
+          });
+          
           return;
         }
       }
@@ -299,10 +353,33 @@ export default function BeautifulUploadZone({
     }
   };
 
-  const handleCancel = () => {
+  const handleCancel = async () => {
     if (wsServiceRef.current) {
       wsServiceRef.current.disconnect();
     }
+    
+    // Cancel the extraction on the backend if we have an upload ID
+    if (uploadId) {
+      try {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/cancel-extraction/${uploadId}`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        
+        if (response.ok) {
+          toast.success('Extraction cancelled successfully');
+        } else {
+          console.warn('Failed to cancel extraction on backend:', response.statusText);
+        }
+      } catch (error) {
+        console.error('Error cancelling extraction:', error);
+        // Don't show error toast for cancellation failures as user is already cancelling
+      }
+    }
+    
     setIsUploading(false);
     setUploadProgress(0);
     setCurrentStage('');
