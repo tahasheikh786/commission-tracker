@@ -26,6 +26,7 @@ export default function RootLayout({
     <html lang="en" className="h-full">
       <body
         className={`${inter.variable} font-sans antialiased h-full bg-slate-50`}
+        suppressHydrationWarning={true}
       >
         <ThemeProvider>
           <AuthProvider>
