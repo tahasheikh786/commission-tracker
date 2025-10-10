@@ -23,18 +23,16 @@ import {
   Sun,
   ChevronLeft,
   ChevronRight,
-  Upload,
-  Sparkles
+  Upload
 } from "lucide-react";
 import { useTheme } from "@/context/ThemeContext";
-import DashboardEnhanceTab from "./components/dashboardTab/DashboardEnhanceTab";
 
 function HomePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, logout } = useAuth();
   const { theme, setTheme, actualTheme } = useTheme();
-  const [tab, setTab] = useState<"dashboard" | "carriers" | "earned-commission" | "analytics" | "enhanced-dashboard">("dashboard");
+  const [tab, setTab] = useState<"dashboard" | "carriers" | "earned-commission" | "analytics">("dashboard");
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
@@ -43,8 +41,8 @@ function HomePageContent() {
   // Handle URL parameters for tab selection
   useEffect(() => {
     const tabParam = searchParams?.get('tab')
-    if (tabParam && ['dashboard', 'carriers', 'earned-commission', 'analytics', 'enhanced-dashboard'].includes(tabParam)) {
-      setTab(tabParam as "dashboard" | "carriers" | "earned-commission" | "analytics" | "enhanced-dashboard")
+    if (tabParam && ['dashboard', 'carriers', 'earned-commission', 'analytics'].includes(tabParam)) {
+      setTab(tabParam as "dashboard" | "carriers" | "earned-commission" | "analytics")
     } else {
       // Default to dashboard if no tab parameter or invalid tab
       setTab("dashboard")
@@ -91,14 +89,6 @@ function HomePageContent() {
       description: "Upload & Process Documents",
       gradient: "from-blue-600 via-indigo-600 to-purple-600",
       bgGradient: "from-blue-50 via-indigo-50 to-purple-50"
-    },
-    {
-      id: "enhanced-dashboard" as const,
-      label: "Enhanced Dashboard",
-      icon: Sparkles,
-      description: "AI-Powered Upload with Analytics",
-      gradient: "from-purple-600 via-pink-600 to-rose-600",
-      bgGradient: "from-purple-50 via-pink-50 to-rose-50"
     },
     {
       id: "analytics" as const,
@@ -352,7 +342,6 @@ function HomePageContent() {
         <main className="flex-1 p-6 bg-slate-50 dark:bg-slate-900 overflow-y-auto main-content-scroll">
           <div className="max-w-none">
             {tab === "dashboard" && <DashboardTab />}
-            {tab === "enhanced-dashboard" && <DashboardEnhanceTab />}
             {tab === "analytics" && <DashboardTab showAnalytics={true} />}
             {tab === "earned-commission" && <EarnedCommissionTab />}
             {tab === "carriers" && <CarrierTab />}
