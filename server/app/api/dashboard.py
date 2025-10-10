@@ -1018,15 +1018,46 @@ async def get_user_specific_carrier_earned_commission_stats(
         raise HTTPException(status_code=500, detail=f"Error fetching user-specific carrier stats: {str(e)}")
 
 @router.get("/earned-commission/carriers")
-async def get_carriers_with_commission_data(db: AsyncSession = Depends(get_db)):
-    """Get all carriers that have earned commission data"""
+async def get_carriers_with_commission_data(
+    current_user: User = Depends(get_current_user_hybrid),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get carriers with earned commission data - user-specific for regular users, global for admins"""
     try:
-        result = await db.execute(
-            select(Company.id, Company.name, func.sum(EarnedCommission.commission_earned).label('total_commission'))
-            .join(EarnedCommission, Company.id == EarnedCommission.carrier_id)
-            .group_by(Company.id, Company.name)
-            .order_by(Company.name.asc())
-        )
+        # For admin users, show all carriers. For regular users, show only carriers they've worked with
+        is_admin = current_user.role == 'admin'
+        
+        if is_admin:
+            # Admin sees all carriers with commission data
+            result = await db.execute(
+                select(Company.id, Company.name, func.sum(EarnedCommission.commission_earned).label('total_commission'))
+                .join(EarnedCommission, Company.id == EarnedCommission.carrier_id)
+                .group_by(Company.id, Company.name)
+                .order_by(func.sum(EarnedCommission.commission_earned).desc())
+            )
+        else:
+            # Regular users see only carriers they've uploaded statements for
+            # Get user's carrier IDs
+            user_carriers_result = await db.execute(
+                select(
+                    func.coalesce(StatementUpload.carrier_id, StatementUpload.company_id).label('carrier_id')
+                )
+                .where(StatementUpload.user_id == current_user.id)
+                .distinct()
+            )
+            user_carrier_ids = [row[0] for row in user_carriers_result.all() if row[0] is not None]
+            
+            if not user_carrier_ids:
+                return []
+            
+            # Get commission totals for user's carriers
+            result = await db.execute(
+                select(Company.id, Company.name, func.sum(EarnedCommission.commission_earned).label('total_commission'))
+                .join(EarnedCommission, Company.id == EarnedCommission.carrier_id)
+                .where(Company.id.in_(user_carrier_ids))
+                .group_by(Company.id, Company.name)
+                .order_by(func.sum(EarnedCommission.commission_earned).desc())
+            )
         
         carriers = []
         for row in result.all():
@@ -1039,6 +1070,91 @@ async def get_carriers_with_commission_data(db: AsyncSession = Depends(get_db)):
         return carriers
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching carriers with commission data: {str(e)}")
+
+@router.get("/earned-commission/carriers-detailed")
+async def get_carriers_with_detailed_commission_data(
+    year: int = None,
+    current_user: User = Depends(get_current_user_hybrid),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get carriers with detailed commission data including statement counts"""
+    try:
+        # For admin users, show all carriers. For regular users, show only carriers they've worked with
+        is_admin = current_user.role == 'admin'
+        
+        # Build base query
+        if is_admin:
+            # Admin sees all carriers with commission data
+            # First get commission totals
+            commission_query = select(
+                Company.id,
+                Company.name,
+                func.sum(EarnedCommission.commission_earned).label('total_commission')
+            ).join(EarnedCommission, Company.id == EarnedCommission.carrier_id)
+            
+            # Filter by year if provided
+            if year:
+                commission_query = commission_query.where(EarnedCommission.statement_year == year)
+            
+            commission_query = commission_query.group_by(Company.id, Company.name).order_by(func.sum(EarnedCommission.commission_earned).desc())
+            
+            result = await db.execute(commission_query)
+        else:
+            # Regular users see only carriers they've uploaded statements for
+            # Get user's carrier IDs
+            user_carriers_result = await db.execute(
+                select(
+                    func.coalesce(StatementUpload.carrier_id, StatementUpload.company_id).label('carrier_id')
+                )
+                .where(StatementUpload.user_id == current_user.id)
+                .distinct()
+            )
+            user_carrier_ids = [row[0] for row in user_carriers_result.all() if row[0] is not None]
+            
+            if not user_carrier_ids:
+                return []
+            
+            # Get commission totals for user's carriers
+            commission_query = select(
+                Company.id,
+                Company.name,
+                func.sum(EarnedCommission.commission_earned).label('total_commission')
+            ).join(EarnedCommission, Company.id == EarnedCommission.carrier_id).where(Company.id.in_(user_carrier_ids))
+            
+            # Filter by year if provided
+            if year:
+                commission_query = commission_query.where(EarnedCommission.statement_year == year)
+            
+            commission_query = commission_query.group_by(Company.id, Company.name).order_by(func.sum(EarnedCommission.commission_earned).desc())
+            
+            result = await db.execute(commission_query)
+        
+        carriers = []
+        for row in result.all():
+            carrier_id = row.id
+            
+            # Count statements for this carrier
+            statement_count_query = select(func.count(StatementUpload.id)).where(
+                func.coalesce(StatementUpload.carrier_id, StatementUpload.company_id) == carrier_id
+            )
+            
+            # For regular users, only count their own statements
+            if not is_admin:
+                statement_count_query = statement_count_query.where(StatementUpload.user_id == current_user.id)
+            
+            statement_count_result = await db.execute(statement_count_query)
+            statement_count = statement_count_result.scalar() or 0
+            
+            carriers.append({
+                "id": str(carrier_id),
+                "name": row.name,
+                "total_commission": float(row.total_commission or 0),
+                "statement_count": int(statement_count)
+            })
+        
+        return carriers
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching detailed carriers commission data: {str(e)}")
 
 @router.get("/earned-commission/carrier/{carrier_id}/data")
 async def get_carrier_commission_data(carrier_id: UUID, db: AsyncSession = Depends(get_db)):

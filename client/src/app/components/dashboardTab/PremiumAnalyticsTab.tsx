@@ -1,32 +1,36 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  TrendingUp, DollarSign, Building2, Calendar, 
+import { motion } from 'framer-motion';
+import {
+  TrendingUp, DollarSign, Building2, Calendar,
   ArrowUpRight, ArrowDownRight, Filter, Download,
   Sparkles, BarChart3, PieChart, LineChart, Target,
-  Award, CheckCircle, AlertTriangle, ChevronRight,
-  TrendingDown, FileText, AlertCircle,
-  ExternalLink, ChevronDown, Settings
+  Award, CheckCircle, ChevronDown, Settings,
+  ExternalLink, RefreshCw, Eye, Search, SlidersHorizontal,
+  HelpCircle
 } from 'lucide-react';
-import { 
-  useEarnedCommissionStats,
-  useDashboardStats,
-  useAvailableYears,
-  useAllCommissionData,
-  useCarriersWithCommission
-} from '../../hooks/useDashboard';
-import { 
-  identifyTopPerformingCarriers,
-  extractMonthlyData,
-  calculateCommissionGrowth,
-  formatCurrency as utilFormatCurrency,
-  formatPercentage,
-  generateYearComparison
-} from '../../utils/analyticsUtils';
-import { generateInsights, Insight } from '../../utils/insightsEngine';
 
-// Chart.js imports for premium interactive charts
+// Import your existing hooks
+import { 
+  useEarnedCommissionStats, 
+  useDashboardStats, 
+  useAvailableYears, 
+  useAllCommissionData,
+  useCarriersWithCommission,
+  useCarrierPieChartData
+} from '../../hooks/useDashboard';
+
+// Import utilities
+import { 
+  identifyTopPerformingCarriers, 
+  extractMonthlyData, 
+  calculateCommissionGrowth, 
+  formatCurrency as utilFormatCurrency, 
+  formatPercentage 
+} from '../../utils/analyticsUtils';
+
+// Chart.js imports
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -42,6 +46,9 @@ import {
 } from 'chart.js';
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 
+// Import Premium Carrier Pie Chart
+import PremiumCarrierPieChart from './PremiumCarrierPieChart';
+
 ChartJS.register(
   CategoryScale,
   LinearScale,
@@ -55,191 +62,230 @@ ChartJS.register(
   Filler
 );
 
-interface HeroMetricCardProps {
-  title: string;
-  value: string | number;
-  change: number;
-  period: string;
-  icon: React.ElementType;
-  gradient: string;
-  primary?: boolean;
-  loading?: boolean;
+// Info Tooltip Component
+function InfoTooltip({ content }: { content: string }) {
+  const [isOpen, setIsOpen] = useState(false);
+  
+  return (
+    <div className="relative inline-block">
+      <button
+        onMouseEnter={() => setIsOpen(true)}
+        onMouseLeave={() => setIsOpen(false)}
+        onClick={() => setIsOpen(!isOpen)}
+        className="p-1 text-slate-400 hover:text-blue-600 transition-colors focus:outline-none"
+        aria-label="Chart information"
+      >
+        <HelpCircle className="w-4 h-4" />
+      </button>
+      
+      {isOpen && (
+        <motion.div
+          initial={{ opacity: 0, y: 5 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="absolute z-50 top-full right-0 mt-2 w-72 p-3 bg-slate-900 text-white text-xs rounded-lg shadow-xl border border-slate-700"
+          style={{ transform: 'translateX(0)' }}
+        >
+          <div className="flex items-start space-x-2">
+            <HelpCircle className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
+            <p className="leading-relaxed">{content}</p>
+          </div>
+          {/* Arrow */}
+          <div className="absolute -top-1 right-4 w-2 h-2 bg-slate-900 border-t border-l border-slate-700 transform rotate-45" />
+        </motion.div>
+      )}
+    </div>
+  );
 }
 
-function HeroMetricCard({ 
+// Individual Chart Filter Component
+function ChartFilter({ 
   title, 
+  options, 
   value, 
-  change, 
-  period, 
+  onChange, 
+  icon: Icon,
+  placeholder = "All"
+}: {
+  title?: string;
+  options: Array<{ value: string; label: string }>;
+  value: string;
+  onChange: (value: string) => void;
+  icon?: React.ComponentType<{ className?: string }>;
+  placeholder?: string;
+}) {
+  return (
+    <div className="flex items-center space-x-2">
+      {Icon && <Icon className="w-4 h-4 text-slate-500" />}
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="text-xs border-none bg-transparent text-slate-600 hover:text-slate-900 focus:outline-none focus:text-slate-900 font-medium cursor-pointer pr-6"
+      >
+        <option value="">{placeholder}</option>
+        {options.map(option => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+// Enhanced Chart Wrapper with Individual Filters
+function ChartWrapper({ 
+  title, 
+  subtitle, 
   icon: Icon, 
   gradient, 
-  primary = false,
-  loading = false
-}: HeroMetricCardProps) {
-  return (
-    <div 
-      className={`
-        group relative overflow-hidden rounded-2xl border transition-all duration-300 hover:scale-[1.02] hover:shadow-xl
-        ${primary 
-          ? 'bg-white dark:bg-slate-800 border-emerald-200 dark:border-emerald-800 shadow-lg shadow-emerald-500/20' 
-          : 'bg-white/80 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 backdrop-blur-sm hover:bg-white dark:hover:bg-slate-800'
-        }
-      `}
-      role="article"
-      aria-label={`${title}: ${loading ? 'Loading' : value}`}
-    >
-      <div className={`absolute inset-0 bg-gradient-to-br ${gradient} opacity-0 group-hover:opacity-5 transition-opacity duration-300`} aria-hidden="true"></div>
-      
-      <div className="relative p-4 md:p-6">
-        <div className="flex items-start justify-between mb-3 md:mb-4">
-          <div 
-            className={`w-10 h-10 md:w-12 md:h-12 rounded-xl bg-gradient-to-r ${gradient} flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300`}
-            aria-hidden="true"
-          >
-            <Icon className="w-5 h-5 md:w-6 md:h-6 text-white" />
-          </div>
-          <div className="flex items-center gap-1 text-sm" role="status">
-            {change > 0 ? (
-              <ArrowUpRight className="w-4 h-4 text-emerald-500" aria-hidden="true" />
-            ) : change < 0 ? (
-              <ArrowDownRight className="w-4 h-4 text-red-500" aria-hidden="true" />
-            ) : null}
-            <span className={change > 0 ? "text-emerald-600 font-medium" : change < 0 ? "text-red-600 font-medium" : "text-slate-600 font-medium"}>
-              {change !== 0 && `${Math.abs(change).toFixed(1)}%`}
-            </span>
-          </div>
-        </div>
-        
-        <div>
-          {loading ? (
-            <div className="w-24 md:w-32 h-8 md:h-9 bg-slate-200 dark:bg-slate-600 rounded animate-pulse mb-1"></div>
-          ) : (
-            <p className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white mb-1">{value}</p>
-          )}
-          <p className="text-xs md:text-sm text-slate-600 dark:text-slate-400">{title}</p>
-          <p className="text-xs text-slate-500 dark:text-slate-500 mt-1">{period}</p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function SmartInsightsPanel({ 
-  insights,
-  onNavigate
-}: { 
-  insights: Insight[];
-  onNavigate: (tab: string) => void;
+  children, 
+  filters = [],
+  actions = [],
+  loading = false,
+  className = "",
+  infoText
+}: {
+  title: string;
+  subtitle: string;
+  icon: React.ComponentType<{ className?: string }>;
+  gradient: string;
+  children: React.ReactNode;
+  filters?: React.ReactNode[];
+  actions?: Array<{
+    icon: React.ComponentType<{ className?: string }>;
+    title: string;
+    onClick: () => void;
+  }>;
+  loading?: boolean;
+  className?: string;
+  infoText?: string;
 }) {
-  if (insights.length === 0) {
-    return (
-      <div className="mb-8 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6">
-        <p className="text-slate-600 dark:text-slate-400">Upload statements to generate intelligent insights...</p>
-      </div>
-    );
-  }
-
   return (
-    <div className="mb-8">
-      <div className="flex items-center gap-3 mb-6">
-        <div className="w-8 h-8 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
-          <Sparkles className="w-4 h-4 text-white" />
+    <div className={`bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-lg transition-all duration-300 ${className}`}>
+      {/* Enhanced Header with Individual Filters */}
+      <div className="p-4 border-b border-slate-100 dark:border-slate-700">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <div className={`w-10 h-10 bg-gradient-to-r ${gradient} rounded-xl flex items-center justify-center shadow-lg`}>
+              <Icon className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <div className="flex items-center space-x-2">
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white">{title}</h3>
+                {infoText && <InfoTooltip content={infoText} />}
+              </div>
+              <p className="text-sm text-slate-600 dark:text-slate-400">{subtitle}</p>
+            </div>
+          </div>
+          
+          {/* Chart-specific filters and actions */}
+          <div className="flex items-center space-x-4">
+            {/* Individual Chart Filters */}
+            {filters.length > 0 && (
+              <div className="flex items-center space-x-3 px-3 py-1 bg-slate-50 dark:bg-slate-700 rounded-lg">
+                {filters.map((filter, index) => (
+                  <React.Fragment key={index}>
+                    {index > 0 && <div className="w-px h-4 bg-slate-300 dark:bg-slate-600" />}
+                    {filter}
+                  </React.Fragment>
+                ))}
+              </div>
+            )}
+            
+            {/* Chart Actions */}
+            <div className="flex items-center space-x-2">
+              {actions.map((action, index) => (
+                <button
+                  key={index}
+                  onClick={action.onClick}
+                  className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                  title={action.title}
+                >
+                  <action.icon className="w-4 h-4" />
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
-        <h2 className="text-xl font-bold text-slate-900 dark:text-white">AI-Powered Insights</h2>
-        <span className="text-xs bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 px-2 py-1 rounded-full font-medium">Live Analysis</span>
       </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {insights.slice(0, 6).map((insight, index) => (
-          <InsightCard key={index} insight={insight} onNavigate={onNavigate} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function InsightCard({ insight, onNavigate }: { insight: Insight; onNavigate: (tab: string) => void }) {
-  const colorClasses = {
-    achievement: 'border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-900/20',
-    opportunity: 'border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-900/20',
-    alert: 'border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900/20',
-    warning: 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20'
-  };
-
-  const iconColors = {
-    achievement: 'text-blue-600 dark:text-blue-400',
-    opportunity: 'text-emerald-600 dark:text-emerald-400',
-    alert: 'text-amber-600 dark:text-amber-400',
-    warning: 'text-red-600 dark:text-red-400'
-  };
-
-  const icons = {
-    achievement: Award,
-    opportunity: Target,
-    alert: AlertTriangle,
-    warning: AlertCircle
-  };
-
-  const Icon = icons[insight.type];
-
-  return (
-    <div 
-      className={`p-4 rounded-xl border ${colorClasses[insight.type]} group hover:shadow-md transition-all duration-200 cursor-pointer`}
-      onClick={() => insight.clickAction && onNavigate(insight.clickAction)}
-    >
-      <div className="flex items-start gap-3">
-        <div className={`mt-1 ${iconColors[insight.type]}`}>
-          <Icon className="w-5 h-5" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <h3 className="font-semibold text-slate-900 dark:text-white text-sm">{insight.title}</h3>
-            {insight.metric && (
-              <span className={`text-xs font-bold ${iconColors[insight.type]}`}>
-                {insight.metric}
-              </span>
-            )}
+      {/* Chart Content */}
+      <div className="p-4">
+        {loading ? (
+          <div className="h-80 flex items-center justify-center">
+            <div className="flex flex-col items-center space-y-3">
+              <div className="w-8 h-8 border-2 border-slate-200 border-t-blue-500 rounded-full animate-spin" />
+              <p className="text-sm text-slate-500">Loading data...</p>
+            </div>
           </div>
-          <p className="text-xs text-slate-600 dark:text-slate-400 mb-3 leading-relaxed">{insight.message}</p>
-          <button className={`text-xs font-medium ${iconColors[insight.type]} hover:underline`}>
-            {insight.action} →
-          </button>
-        </div>
+        ) : (
+          children
+        )}
       </div>
     </div>
   );
 }
 
-function MonthlyTrendsChart({ data, loading }: { data: any[]; loading: boolean }) {
-  const monthlyData = useMemo(() => extractMonthlyData(data), [data]);
-  
-  const chartData = useMemo(() => {
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const commissionByMonth = monthlyData.map(d => d.commission);
+// Enhanced Commission Trends Chart with Filters
+function CommissionTrendsChart({ data, loading }: { data: any; loading: boolean }) {
+  const [timeRange, setTimeRange] = useState('12m');
+  const [compareMode, setCompareMode] = useState('none');
+  const [viewType, setViewType] = useState('commission');
+
+  const processedData = useMemo(() => {
+    console.log('📈 Commission Trends - Raw Data:', data);
     
+    if (!data || !Array.isArray(data) || data.length === 0) {
+      console.log('⚠️ No data available for commission trends');
+      return null;
+    }
+    
+    const monthlyData = extractMonthlyData(data);
+    console.log('📈 Monthly Data Processed:', monthlyData);
+    
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    
+    // Apply time range filter
+    let filteredMonths = months;
+    let filteredData = monthlyData;
+    
+    if (timeRange === '6m') {
+      const currentMonth = new Date().getMonth();
+      filteredMonths = months.slice(Math.max(0, currentMonth - 5), currentMonth + 1);
+      filteredData = monthlyData.slice(Math.max(0, currentMonth - 5), currentMonth + 1);
+    } else if (timeRange === '3m') {
+      const currentMonth = new Date().getMonth();
+      filteredMonths = months.slice(Math.max(0, currentMonth - 2), currentMonth + 1);
+      filteredData = monthlyData.slice(Math.max(0, currentMonth - 2), currentMonth + 1);
+    }
+
+    const chartData = filteredData.map(d => viewType === 'commission' ? d.commission : d.count);
+    console.log('📈 Chart Data Points:', chartData);
+    console.log('📈 View Type:', viewType);
+    console.log('📈 Filtered Data:', filteredData);
+    
+    const datasets = [
+      {
+        label: viewType === 'commission' ? 'Commission Earned' : 'Statement Count',
+        data: chartData,
+        borderColor: 'rgb(16, 185, 129)',
+        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+        borderWidth: 3,
+        fill: true,
+        tension: 0.4,
+        pointBackgroundColor: 'rgb(16, 185, 129)',
+        pointBorderColor: '#fff',
+        pointBorderWidth: 2,
+        pointRadius: 6,
+        pointHoverRadius: 8,
+      }
+    ];
+
     return {
-      labels: months,
-      datasets: [
-        {
-          label: 'Commission Earned',
-          data: commissionByMonth,
-          borderColor: 'rgb(16, 185, 129)',
-          backgroundColor: 'rgba(16, 185, 129, 0.1)',
-          borderWidth: 3,
-          fill: true,
-          tension: 0.4,
-          pointBackgroundColor: 'rgb(16, 185, 129)',
-          pointBorderColor: '#fff',
-          pointBorderWidth: 2,
-          pointRadius: 6,
-          pointHoverRadius: 8,
-          pointHoverBackgroundColor: 'rgb(16, 185, 129)',
-          pointHoverBorderColor: '#fff',
-          pointHoverBorderWidth: 3,
-        }
-      ]
+      labels: filteredMonths,
+      datasets
     };
-  }, [monthlyData]);
+  }, [data, timeRange, viewType]);
 
   const chartOptions = {
     responsive: true,
@@ -249,9 +295,7 @@ function MonthlyTrendsChart({ data, loading }: { data: any[]; loading: boolean }
       intersect: false,
     },
     plugins: {
-      legend: { 
-        display: false 
-      },
+      legend: { display: false },
       tooltip: {
         backgroundColor: 'rgba(0, 0, 0, 0.8)',
         titleColor: 'white',
@@ -259,114 +303,181 @@ function MonthlyTrendsChart({ data, loading }: { data: any[]; loading: boolean }
         borderColor: 'rgba(16, 185, 129, 1)',
         borderWidth: 1,
         padding: 12,
-        displayColors: false,
         callbacks: {
-          label: (context: any) => `Commission: ${utilFormatCurrency(context.raw, true)}`
+          label: (context: any) => {
+            if (viewType === 'commission') {
+              return `Commission: ${utilFormatCurrency(context.raw, true)}`;
+            } else {
+              return `Statements: ${Math.round(context.raw)}`;
+            }
+          }
         }
       }
     },
     scales: {
       x: {
-        grid: { 
-          display: false,
-          drawBorder: false
-        },
-        ticks: { 
-          color: '#6B7280',
-          font: {
-            size: 12,
-            weight: 500
-          }
-        }
+        grid: { display: false },
+        ticks: { color: '#6B7280', font: { size: 12 } }
       },
       y: {
-        grid: { 
-          color: 'rgba(241, 245, 249, 0.5)',
-          drawBorder: false
-        },
+        grid: { color: 'rgba(241, 245, 249, 0.5)' },
         ticks: { 
           color: '#6B7280',
-          callback: (value: any) => utilFormatCurrency(value, true),
-          font: {
-            size: 11
+          callback: (value: any) => {
+            if (viewType === 'commission') {
+              return utilFormatCurrency(value, true);
+            } else {
+              return Math.round(value).toString();
+            }
           }
         }
       }
     }
   };
 
-  if (loading) {
-    return (
-      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-6">
-        <div className="h-80 flex items-center justify-center">
-          <div className="w-8 h-8 border-2 border-slate-200 dark:border-slate-600 border-t-emerald-500 rounded-full animate-spin"></div>
-        </div>
-      </div>
-    );
-  }
+  const filters = [
+    <ChartFilter
+      key="timeRange"
+      title="Time Range"
+      options={[
+        { value: '3m', label: 'Last 3 Months' },
+        { value: '6m', label: 'Last 6 Months' },
+        { value: '12m', label: 'Last 12 Months' }
+      ]}
+      value={timeRange}
+      onChange={setTimeRange}
+      icon={Calendar}
+    />,
+    <ChartFilter
+      key="viewType"
+      title="View"
+      options={[
+        { value: 'commission', label: 'Commission ($)' },
+        { value: 'statements', label: 'Statement Count' }
+      ]}
+      value={viewType}
+      onChange={setViewType}
+      icon={Eye}
+    />
+  ];
+
+  const actions = [
+    {
+      icon: Download,
+      title: 'Export Chart',
+      onClick: () => console.log('Export chart')
+    },
+    {
+      icon: ExternalLink,
+      title: 'View Details',
+      onClick: () => console.log('View details')
+    }
+  ];
 
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-6 hover:shadow-lg transition-all duration-300">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center shadow-lg">
-            <LineChart className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white">Commission Trends</h3>
-            <p className="text-sm text-slate-600 dark:text-slate-400">Monthly performance overview</p>
-          </div>
-        </div>
-        <button className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center space-x-1 transition-colors">
-          <span>View Details</span>
-          <ExternalLink className="w-4 h-4" />
-        </button>
-      </div>
-
+    <ChartWrapper
+      title="Commission Trends"
+      subtitle="Monthly performance analysis"
+      icon={LineChart}
+      gradient="from-emerald-500 to-teal-600"
+      filters={filters}
+      actions={actions}
+      loading={loading}
+      className="col-span-2"
+      infoText="This chart visualizes your commission earnings over time, helping you identify seasonal patterns, growth trends, and performance changes. Use the filters to switch between different time ranges and view either total commission amounts or statement counts."
+    >
       <div className="h-80">
-        <Line data={chartData} options={chartOptions} />
+        {processedData ? (
+          <Line data={processedData} options={chartOptions} />
+        ) : (
+          <div className="h-full flex items-center justify-center">
+            <div className="text-center">
+              <LineChart className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+              <p className="text-sm text-slate-500">No commission data available</p>
+              <p className="text-xs text-slate-400 mt-1">Upload statements to see trends</p>
+            </div>
+          </div>
+        )}
       </div>
-    </div>
+    </ChartWrapper>
   );
 }
 
-function TopCarriersChart({ carriers, loading, onNavigate }: { carriers: any[]; loading: boolean; onNavigate: (tab: string) => void }) {
-  const topCarriers = useMemo(() => carriers.slice(0, 8), [carriers]);
-  
-  const chartData = useMemo(() => {
+// Enhanced Top Carriers Chart with Filters
+function TopCarriersChart({ carriers, loading }: { carriers: any; loading: boolean }) {
+  const [sortBy, setSortBy] = useState('commission');
+  const [limit, setLimit] = useState('10');
+  const [planFilter, setPlanFilter] = useState('');
+
+  const processedData = useMemo(() => {
+    console.log('🏢 Top Carriers - Raw Data:', carriers);
+    console.log('🏢 First carrier sample:', carriers?.[0]);
+    
+    if (!carriers || !Array.isArray(carriers) || carriers.length === 0) {
+      console.log('⚠️ No carriers data available');
+      return null;
+    }
+
+    // Map carriers to standardized format
+    let filteredCarriers = carriers.map((c: any) => {
+      const standardized = {
+        id: c.id,
+        name: c.name || c.carrier_name || c.carriername || 'Unknown',
+        // The endpoint returns total_commission from earned_commission/carriers
+        commission: c.total_commission || c.totalCommission || c.totalcommission || 
+                   c.commissiontotal || c.commission_total || 0,
+        statementCount: c.statement_count || c.statementcount || c.statementCount || 
+                       c.total_statements || 0,
+        planType: c.plantype || c.plan_type || c.planType || null
+      };
+      console.log('🏢 Standardized carrier:', standardized);
+      return standardized;
+    });
+
+    console.log('🏢 Standardized carriers:', filteredCarriers);
+    
+    // Apply plan filter if selected
+    if (planFilter) {
+      filteredCarriers = filteredCarriers.filter((c: any) => c.planType === planFilter);
+    }
+
+    // Sort carriers
+    if (sortBy === 'commission') {
+      filteredCarriers.sort((a: any, b: any) => b.commission - a.commission);
+    } else if (sortBy === 'statements') {
+      filteredCarriers.sort((a: any, b: any) => b.statementCount - a.statementCount);
+    }
+
+    // Limit results
+    filteredCarriers = filteredCarriers.slice(0, parseInt(limit));
+    
+    console.log('🏢 Final carriers for chart:', filteredCarriers);
+
     return {
-      labels: topCarriers.map(c => c.name || 'Unknown'),
-      datasets: [
-        {
-          label: 'Commission ($)',
-          data: topCarriers.map(c => c.totalCommission || 0),
-          backgroundColor: [
-            'rgba(59, 130, 246, 0.8)',
-            'rgba(16, 185, 129, 0.8)',
-            'rgba(139, 92, 246, 0.8)',
-            'rgba(245, 158, 11, 0.8)',
-            'rgba(239, 68, 68, 0.8)',
-            'rgba(236, 72, 153, 0.8)',
-            'rgba(34, 197, 94, 0.8)',
-            'rgba(168, 85, 247, 0.8)',
-          ],
-          borderColor: [
-            'rgba(59, 130, 246, 1)',
-            'rgba(16, 185, 129, 1)',
-            'rgba(139, 92, 246, 1)',
-            'rgba(245, 158, 11, 1)',
-            'rgba(239, 68, 68, 1)',
-            'rgba(236, 72, 153, 1)',
-            'rgba(34, 197, 94, 1)',
-            'rgba(168, 85, 247, 1)',
-          ],
-          borderWidth: 2,
-          borderRadius: 8,
-          borderSkipped: false,
-        }
-      ]
+      labels: filteredCarriers.map((c: any) => c.name),
+      datasets: [{
+        label: 'Commission',
+        data: filteredCarriers.map((c: any) => c.commission),
+        backgroundColor: [
+          'rgba(59, 130, 246, 0.8)', 'rgba(16, 185, 129, 0.8)', 
+          'rgba(139, 92, 246, 0.8)', 'rgba(245, 158, 11, 0.8)',
+          'rgba(239, 68, 68, 0.8)', 'rgba(236, 72, 153, 0.8)',
+          'rgba(34, 197, 94, 0.8)', 'rgba(168, 85, 247, 0.8)',
+          'rgba(20, 184, 166, 0.8)', 'rgba(251, 146, 60, 0.8)'
+        ],
+        borderColor: [
+          'rgba(59, 130, 246, 1)', 'rgba(16, 185, 129, 1)',
+          'rgba(139, 92, 246, 1)', 'rgba(245, 158, 11, 1)',
+          'rgba(239, 68, 68, 1)', 'rgba(236, 72, 153, 1)',
+          'rgba(34, 197, 94, 1)', 'rgba(168, 85, 247, 1)',
+          'rgba(20, 184, 166, 1)', 'rgba(251, 146, 60, 1)'
+        ],
+        borderWidth: 2,
+        borderRadius: 8,
+        borderSkipped: false,
+      }]
     };
-  }, [topCarriers]);
+  }, [carriers, sortBy, limit, planFilter]);
 
   const chartOptions = {
     indexAxis: 'y' as const,
@@ -378,8 +489,6 @@ function TopCarriersChart({ carriers, loading, onNavigate }: { carriers: any[]; 
         backgroundColor: 'rgba(0, 0, 0, 0.8)',
         titleColor: 'white',
         bodyColor: 'white',
-        padding: 12,
-        displayColors: false,
         callbacks: {
           label: (context: any) => `Commission: ${utilFormatCurrency(context.raw, true)}`
         }
@@ -387,415 +496,242 @@ function TopCarriersChart({ carriers, loading, onNavigate }: { carriers: any[]; 
     },
     scales: {
       x: {
-        grid: { 
-          color: 'rgba(241, 245, 249, 0.5)',
-          drawBorder: false
-        },
+        grid: { color: 'rgba(241, 245, 249, 0.5)' },
         ticks: { 
           color: '#6B7280',
-          callback: (value: any) => utilFormatCurrency(value, true),
-          font: {
-            size: 11
-          }
+          callback: (value: any) => utilFormatCurrency(value, true)
         }
       },
       y: {
-        grid: { 
-          display: false,
-          drawBorder: false
-        },
-        ticks: { 
-          color: '#6B7280',
-          font: {
-            size: 12,
-            weight: 500
-          }
+        grid: { display: false },
+        ticks: { color: '#6B7280', font: { size: 11 } }
+      }
+    }
+  };
+
+  const filters = [
+    <ChartFilter
+      key="sortBy"
+      options={[
+        { value: 'commission', label: 'By Commission' },
+        { value: 'statements', label: 'By Statements' }
+      ]}
+      value={sortBy}
+      onChange={setSortBy}
+      icon={SlidersHorizontal}
+      placeholder="Sort by"
+    />,
+    <ChartFilter
+      key="limit"
+      options={[
+        { value: '5', label: 'Top 5' },
+        { value: '10', label: 'Top 10' },
+        { value: '15', label: 'Top 15' }
+      ]}
+      value={limit}
+      onChange={setLimit}
+      icon={Award}
+      placeholder="Show"
+    />
+  ];
+
+  const actions = [
+    {
+      icon: Download,
+      title: 'Export Data',
+      onClick: () => console.log('Export carriers data')
+    }
+  ];
+
+  return (
+    <ChartWrapper
+      title="Top Performing Carriers"
+      subtitle="By total commission volume"
+      icon={Award}
+      gradient="from-blue-500 to-indigo-600"
+      filters={filters}
+      actions={actions}
+      loading={loading}
+      infoText="This chart ranks your carriers by performance, showing which ones generate the most commission or have the highest statement volume. Use this to identify your most valuable partnerships and optimize your focus on high-performing carriers."
+    >
+      <div className="h-80">
+        {processedData ? (
+          <Bar data={processedData} options={chartOptions} />
+        ) : (
+          <div className="h-full flex items-center justify-center">
+            <div className="text-center">
+              <Building2 className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+              <p className="text-sm text-slate-500">No carrier data available</p>
+              <p className="text-xs text-slate-400 mt-1">Add carriers to see performance</p>
+            </div>
+          </div>
+        )}
+      </div>
+    </ChartWrapper>
+  );
+}
+
+// Enhanced Plan Distribution Chart with Filters
+function PlanDistributionChart({ data }: { data: any }) {
+  const [metric, setMetric] = useState('count');
+  const [minValue, setMinValue] = useState('0');
+
+  const processedData = useMemo(() => {
+    console.log('📊 Plan Distribution - Raw Data:', data);
+    
+    if (!data || !Array.isArray(data) || data.length === 0) {
+      console.log('⚠️ No data available for plan distribution');
+      return null;
+    }
+
+    const planData = data.reduce((acc: any, item: any) => {
+      const planType = item.plantype || item.plan_type || 'Other';
+      if (!acc[planType]) {
+        acc[planType] = { count: 0, commission: 0 };
+      }
+      acc[planType].count += 1;
+      acc[planType].commission += item.commissionearned || item.commission_earned || 0;
+      return acc;
+    }, {} as Record<string, { count: number; commission: number }>);
+    
+    console.log('📊 Plan Data Aggregated:', planData);
+
+    // Filter by minimum value
+    const minVal = parseInt(minValue);
+    const filteredData = Object.entries(planData)
+      .filter(([_, values]: [string, any]) => 
+        metric === 'count' ? values.count >= minVal : values.commission >= minVal
+      );
+
+    return {
+      labels: filteredData.map(([planType]) => planType),
+      datasets: [{
+        data: filteredData.map(([_, values]: [string, any]) => 
+          metric === 'count' ? values.count : values.commission
+        ),
+        backgroundColor: [
+          'rgba(99, 102, 241, 0.8)', 'rgba(16, 185, 129, 0.8)',
+          'rgba(245, 158, 11, 0.8)', 'rgba(239, 68, 68, 0.8)',
+          'rgba(168, 85, 247, 0.8)', 'rgba(236, 72, 153, 0.8)'
+        ],
+        borderColor: [
+          'rgba(99, 102, 241, 1)', 'rgba(16, 185, 129, 1)',
+          'rgba(245, 158, 11, 1)', 'rgba(239, 68, 68, 1)',
+          'rgba(168, 85, 247, 1)', 'rgba(236, 72, 153, 1)'
+        ],
+        borderWidth: 2,
+      }]
+    };
+  }, [data, metric, minValue]);
+
+  const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    cutout: '65%',
+    plugins: {
+      legend: {
+        position: 'bottom' as const,
+        labels: { padding: 15, usePointStyle: true, font: { size: 12 } }
+      },
+      tooltip: {
+        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+        titleColor: 'white',
+        bodyColor: 'white',
+        callbacks: {
+          label: (context: any) => 
+            metric === 'count'
+              ? `${context.label}: ${context.raw} statements`
+              : `${context.label}: ${utilFormatCurrency(context.raw, true)}`
         }
       }
     }
   };
 
-  if (loading) {
-    return (
-      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-6">
-        <div className="h-80 flex items-center justify-center">
-          <div className="w-8 h-8 border-2 border-slate-200 dark:border-slate-600 border-t-blue-500 rounded-full animate-spin"></div>
-        </div>
-      </div>
-    );
-  }
+  const filters = [
+    <ChartFilter
+      key="metric"
+      options={[
+        { value: 'count', label: 'Statement Count' },
+        { value: 'commission', label: 'Commission Value' }
+      ]}
+      value={metric}
+      onChange={setMetric}
+      icon={PieChart}
+      placeholder="View by"
+    />,
+    <ChartFilter
+      key="minValue"
+      options={[
+        { value: '0', label: 'Show All' },
+        { value: '5', label: 'Min 5+' },
+        { value: '10', label: 'Min 10+' }
+      ]}
+      value={minValue}
+      onChange={setMinValue}
+      icon={Filter}
+      placeholder="Filter"
+    />
+  ];
 
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-6 hover:shadow-lg transition-all duration-300">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
-            <Award className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white">Top Performing Carriers</h3>
-            <p className="text-sm text-slate-600 dark:text-slate-400">By total commission volume</p>
-          </div>
-        </div>
-        <button 
-          onClick={() => onNavigate('carriers')}
-          className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center space-x-1 transition-colors"
-        >
-          <span>View All</span>
-          <ChevronRight className="w-4 h-4" />
-        </button>
-      </div>
-
-      <div className="h-80">
-        <Bar data={chartData} options={chartOptions} />
-      </div>
-    </div>
-  );
-}
-
-function CarrierPerformanceMatrix({ carriers, onNavigate }: { carriers: any[]; onNavigate: (tab: string) => void }) {
-  const topCarriers = useMemo(() => carriers.slice(0, 8), [carriers]);
-  
-  return (
-    <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-6 hover:shadow-lg transition-all duration-300">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-600 rounded-xl flex items-center justify-center shadow-lg">
-            <BarChart3 className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white">Carrier Performance Overview</h3>
-            <p className="text-sm text-slate-600 dark:text-slate-400">Top carriers by commission earned</p>
-          </div>
-        </div>
-        <button 
-          onClick={() => onNavigate('carriers')}
-          className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center space-x-1 transition-colors"
-        >
-          <span>View All</span>
-          <ExternalLink className="w-4 h-4" />
-        </button>
-      </div>
-
-      <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-slate-200 dark:border-slate-700">
-              <th className="text-left py-3 px-4 font-semibold text-slate-600 dark:text-slate-400 text-sm">Rank</th>
-              <th className="text-left py-3 px-4 font-semibold text-slate-600 dark:text-slate-400 text-sm">Carrier</th>
-              <th className="text-right py-3 px-4 font-semibold text-slate-600 dark:text-slate-400 text-sm">Total Commission</th>
-              <th className="text-right py-3 px-4 font-semibold text-slate-600 dark:text-slate-400 text-sm">Statements</th>
-              <th className="text-right py-3 px-4 font-semibold text-slate-600 dark:text-slate-400 text-sm">Avg. per Statement</th>
-            </tr>
-          </thead>
-          <tbody>
-            {topCarriers.map((carrier, index) => {
-              const avgPerStatement = carrier.statement_count > 0 
-                ? (carrier.totalCommission / carrier.statement_count) 
-                : 0;
-              
-              return (
-                <tr 
-                  key={carrier.id || index} 
-                  className="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors cursor-pointer group"
-                  onClick={() => onNavigate('carriers')}
-                >
-                  <td className="py-4 px-4">
-                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-bold text-sm shadow-md">
-                      {index + 1}
-                    </div>
-                  </td>
-                  <td className="py-4 px-4">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-md">
-                        {(carrier.name || 'U').charAt(0).toUpperCase()}
-                      </div>
-                      <div>
-                        <p className="font-semibold text-slate-900 dark:text-white text-sm">{carrier.name || 'Unknown Carrier'}</p>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">Active</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="text-right py-4 px-4">
-                    <p className="font-bold text-emerald-600 dark:text-emerald-400 text-sm">
-                      {utilFormatCurrency(carrier.totalCommission || 0, true)}
-                    </p>
-                  </td>
-                  <td className="text-right py-4 px-4">
-                    <p className="text-slate-900 dark:text-white font-medium text-sm">{carrier.statement_count || 0}</p>
-                  </td>
-                  <td className="text-right py-4 px-4">
-                    <p className="text-slate-600 dark:text-slate-400 font-medium text-sm">
-                      {utilFormatCurrency(avgPerStatement, true)}
-                    </p>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-function PlanDistributionChart({ data }: { data: any[] }) {
-  const planData = useMemo(() => {
-    const planCounts = data.reduce((acc, item) => {
-      const planType = item.plan_type || 'Other';
-      acc[planType] = (acc[planType] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
-
-    return {
-      labels: Object.keys(planCounts),
-      datasets: [{
-        data: Object.values(planCounts),
-        backgroundColor: [
-          'rgba(99, 102, 241, 0.8)',
-          'rgba(16, 185, 129, 0.8)',
-          'rgba(245, 158, 11, 0.8)',
-          'rgba(239, 68, 68, 0.8)',
-          'rgba(168, 85, 247, 0.8)',
-        ],
-        borderColor: [
-          'rgba(99, 102, 241, 1)',
-          'rgba(16, 185, 129, 1)',
-          'rgba(245, 158, 11, 1)',
-          'rgba(239, 68, 68, 1)',
-          'rgba(168, 85, 247, 1)',
-        ],
-        borderWidth: 2,
-      }]
-    };
-  }, [data]);
-
-  return (
-    <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-6 hover:shadow-lg transition-all duration-300">
-      <div className="flex items-center space-x-3 mb-6">
-        <div className="w-10 h-10 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
-          <PieChart className="w-5 h-5 text-white" />
-        </div>
-        <div>
-          <h3 className="text-lg font-bold text-slate-900 dark:text-white">Plan Distribution</h3>
-          <p className="text-sm text-slate-600 dark:text-slate-400">By plan type</p>
-        </div>
-      </div>
-
+    <ChartWrapper
+      title="Plan Distribution"
+      subtitle="By plan type"
+      icon={PieChart}
+      gradient="from-indigo-500 to-purple-600"
+      filters={filters}
+      actions={[]}
+      loading={!data}
+      infoText="This doughnut chart breaks down your business by plan type (e.g., Medicare, ACA, Life Insurance), showing how your portfolio is distributed. Use the filters to view by either statement count or commission value to understand which plan types drive your revenue."
+    >
       <div className="h-64 flex items-center justify-center">
-        <Doughnut
-          data={planData}
-          options={{
-            responsive: true,
-            maintainAspectRatio: false,
-            cutout: '65%',
-            plugins: {
-              legend: {
-                position: 'bottom' as const,
-                labels: { 
-                  padding: 15,
-                  usePointStyle: true,
-                  font: {
-                    size: 12,
-                    weight: 500
-                  }
-                }
-              },
-              tooltip: {
-                backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                titleColor: 'white',
-                bodyColor: 'white',
-                padding: 12,
-              }
-            }
-          }}
-        />
+        {processedData ? (
+          <Doughnut data={processedData} options={chartOptions} />
+        ) : (
+          <div className="text-center">
+            <PieChart className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+            <p className="text-sm text-slate-500">No plan data available</p>
+            <p className="text-xs text-slate-400 mt-1">Upload statements to see distribution</p>
+          </div>
+        )}
       </div>
-    </div>
+    </ChartWrapper>
   );
 }
 
-function YearComparisonCard({ 
-  currentYear, 
-  currentData, 
-  previousData 
-}: { 
-  currentYear: number;
-  currentData: any[];
-  previousData: any[];
-}) {
-  const comparison = useMemo(() => 
-    generateYearComparison(currentYear, currentData, previousData),
-    [currentYear, currentData, previousData]
-  );
-
-  return (
-    <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-6 hover:shadow-lg transition-all duration-300">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
-            <Calendar className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white">Year-over-Year Comparison</h3>
-            <p className="text-sm text-slate-600 dark:text-slate-400">
-              {currentYear} vs {currentYear - 1}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <div className="space-y-6">
-        <div className="grid grid-cols-2 gap-4">
-          <div className="p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg">
-            <p className="text-xs text-indigo-600 dark:text-indigo-400 font-medium mb-1">{currentYear}</p>
-            <p className="text-2xl font-bold text-slate-900 dark:text-white">
-              {utilFormatCurrency(comparison.current, true)}
-            </p>
-          </div>
-          <div className="p-4 bg-slate-100 dark:bg-slate-700 rounded-lg">
-            <p className="text-xs text-slate-600 dark:text-slate-400 font-medium mb-1">{currentYear - 1}</p>
-            <p className="text-2xl font-bold text-slate-700 dark:text-slate-300">
-              {utilFormatCurrency(comparison.previous, true)}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between p-4 bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 rounded-lg">
-          <div>
-            <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">Growth</p>
-            <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
-              {utilFormatCurrency(comparison.growth, true)}
-            </p>
-          </div>
-          <div className="text-right">
-            <div className="flex items-center gap-1 mb-1">
-              {comparison.growthRate > 0 ? (
-                <TrendingUp className="w-5 h-5 text-emerald-500" />
-              ) : (
-                <TrendingDown className="w-5 h-5 text-red-500" />
-              )}
-              <p className={`text-2xl font-bold ${comparison.growthRate > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                {formatPercentage(Math.abs(comparison.growthRate))}
-              </p>
-            </div>
-            <p className="text-xs text-slate-500 dark:text-slate-500">
-              {comparison.growthRate > 0 ? 'increase' : 'decrease'}
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function KeyInsightsCard({ onNavigate }: { onNavigate: (tab: string) => void }) {
-  return (
-    <div className="bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 rounded-2xl border border-blue-200 dark:border-blue-800 p-6">
-      <div className="flex items-center space-x-3 mb-4">
-        <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
-          <Target className="w-5 h-5 text-white" />
-        </div>
-        <h3 className="text-lg font-bold text-slate-900 dark:text-white">Key Insights</h3>
-      </div>
-
-      <div className="space-y-4">
-        <div className="flex items-start space-x-3">
-          <div className="w-2 h-2 bg-emerald-500 rounded-full mt-2 flex-shrink-0"></div>
-          <div>
-            <p className="text-sm font-semibold text-slate-900 dark:text-white">Top Performance</p>
-            <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">Your top carrier is performing exceptionally well this year</p>
-          </div>
-        </div>
-        <div className="flex items-start space-x-3">
-          <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
-          <div>
-            <p className="text-sm font-semibold text-slate-900 dark:text-white">Growth Trend</p>
-            <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">Commission growth shows positive momentum</p>
-          </div>
-        </div>
-        <div className="flex items-start space-x-3">
-          <div className="w-2 h-2 bg-purple-500 rounded-full mt-2 flex-shrink-0"></div>
-          <div>
-            <p className="text-sm font-semibold text-slate-900 dark:text-white">Processing Quality</p>
-            <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">High success rate with quick turnaround times</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function QuickActionsCard({ onNavigate }: { onNavigate: (tab: string) => void }) {
-  return (
-    <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-6">
-      <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4">Quick Actions</h3>
-
-      <div className="space-y-3">
-        <button 
-          onClick={() => onNavigate('dashboard')}
-          className="w-full flex items-center justify-between p-3 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/30 rounded-lg transition-colors text-left group"
-        >
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center">
-              <BarChart3 className="w-4 h-4 text-white" />
-            </div>
-            <span className="text-sm font-semibold text-slate-900 dark:text-white">View Detailed Report</span>
-          </div>
-          <ExternalLink className="w-4 h-4 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300" />
-        </button>
-
-        <button 
-          onClick={() => onNavigate('carriers')}
-          className="w-full flex items-center justify-between p-3 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:hover:bg-emerald-900/30 rounded-lg transition-colors text-left group"
-        >
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-lg flex items-center justify-center">
-              <Building2 className="w-4 h-4 text-white" />
-            </div>
-            <span className="text-sm font-semibold text-slate-900 dark:text-white">Manage Carriers</span>
-          </div>
-          <ExternalLink className="w-4 h-4 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300" />
-        </button>
-
-        <button 
-          className="w-full flex items-center justify-between p-3 bg-purple-50 hover:bg-purple-100 dark:bg-purple-900/20 dark:hover:bg-purple-900/30 rounded-lg transition-colors text-left group"
-        >
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-gradient-to-r from-purple-500 to-pink-600 rounded-lg flex items-center justify-center">
-              <Settings className="w-4 h-4 text-white" />
-            </div>
-            <span className="text-sm font-semibold text-slate-900 dark:text-white">Analytics Settings</span>
-          </div>
-          <ExternalLink className="w-4 h-4 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300" />
-        </button>
-      </div>
-    </div>
-  );
-}
-
-export default function PremiumAnalyticsTab({ onNavigate }: { onNavigate: (tab: string) => void }) {
+// Main Component with 90% Width
+export default function PremiumAnalyticsTab({ onNavigate }: { onNavigate?: (tab: string) => void }) {
   const currentYear = new Date().getFullYear();
-  const [selectedYear, setSelectedYear] = useState<number>(currentYear);
+  const [selectedYear, setSelectedYear] = useState(currentYear);
 
-  // Fetch current year data
+  // Data hooks
   const { stats: currentStats, loading: currentStatsLoading } = useEarnedCommissionStats(selectedYear);
   const { stats: dashboardStats, loading: dashboardLoading } = useDashboardStats(true);
   const { data: currentYearData, loading: currentDataLoading } = useAllCommissionData(selectedYear);
   const { carriers, loading: carriersLoading } = useCarriersWithCommission();
   const { years: availableYears, loading: yearsLoading } = useAvailableYears();
-  
-  // Fetch previous year data for comparison
-  const { data: previousYearData } = useAllCommissionData(selectedYear - 1);
+  const { data: pieChartData, loading: pieChartLoading } = useCarrierPieChartData(selectedYear);
 
-  // Calculate real metrics from data
-  const realMetrics = useMemo(() => {
-    const totalCommission = currentStats?.total_commission || 0;
-    const previousYearTotal = previousYearData?.reduce((sum: number, d: any) => sum + (d.commission_earned || 0), 0) || 0;
-    const commissionGrowth = calculateCommissionGrowth(totalCommission, previousYearTotal);
+  const loading = currentStatsLoading || dashboardLoading || currentDataLoading;
+
+  // Hero metrics calculation with proper backend data integration
+  const heroMetrics = useMemo(() => {
+    console.log('📊 Current Stats:', currentStats);
+    console.log('📊 Dashboard Stats:', dashboardStats);
+    console.log('📊 Current Year Data:', currentYearData);
     
-    const totalCarriers = dashboardStats?.total_carriers || 0;
-    const totalStatements = dashboardStats?.total_statements || 0;
+    // Calculate total commission from current year data if stats not available
+    let totalCommission = 0;
+    if (currentStats?.totalcommission !== undefined) {
+      totalCommission = currentStats.totalcommission;
+    } else if (currentYearData && Array.isArray(currentYearData)) {
+      totalCommission = currentYearData.reduce((sum, item) => {
+        return sum + (item.commissionearned || item.commission_earned || 0);
+      }, 0);
+    }
+
+    const totalCarriers = dashboardStats?.total_carriers || carriers?.length || 0;
+    const totalStatements = dashboardStats?.total_statements || currentYearData?.length || 0;
     const approvedStatements = dashboardStats?.approved_statements || 0;
     const rejectedStatements = dashboardStats?.rejected_statements || 0;
     const totalProcessed = approvedStatements + rejectedStatements;
@@ -803,183 +739,207 @@ export default function PremiumAnalyticsTab({ onNavigate }: { onNavigate: (tab: 
 
     return {
       totalCommission,
-      commissionGrowth,
       totalCarriers,
       totalStatements,
-      successRate,
-      pending: dashboardStats?.pending_reviews || 0,
-      approved: approvedStatements,
-      rejected: rejectedStatements
+      successRate
     };
-  }, [currentStats, dashboardStats, previousYearData]);
-
-  // Generate intelligent insights
-  const intelligentInsights = useMemo(() => {
-    return generateInsights({
-      commissionData: currentYearData || [],
-      stats: { ...currentStats, ...dashboardStats },
-      carriers: carriers || [],
-      previousYearData: previousYearData || [],
-      pendingCount: realMetrics.pending,
-      approvedCount: realMetrics.approved,
-      rejectedCount: realMetrics.rejected
-    });
-  }, [currentYearData, currentStats, dashboardStats, carriers, previousYearData, realMetrics]);
-
-  // Process carriers for display
-  const topPerformers = useMemo(() => {
-    if (!currentYearData) return [];
-    return identifyTopPerformingCarriers(currentYearData, 8);
-  }, [currentYearData]);
-
-  const loading = currentStatsLoading || dashboardLoading || currentDataLoading;
+  }, [currentStats, dashboardStats, currentYearData, carriers]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/30 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
       
-      {/* Premium Sticky Header */}
-      <div className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 shadow-sm sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 md:px-6 py-4 md:py-6">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div className="flex items-center space-x-3 md:space-x-4">
-              <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
-                <BarChart3 className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <h1 className="text-xl md:text-2xl font-bold text-slate-900 dark:text-white">Commission Analytics</h1>
-                <p className="text-xs md:text-sm text-slate-600 dark:text-slate-400">Real-time insights and intelligent forecasting</p>
-              </div>
-              <div className="flex items-center px-2 md:px-3 py-1 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 rounded-full text-xs font-medium">
-                <Sparkles className="w-3 h-3 mr-1" />
-                AI-Powered
-              </div>
-            </div>
-            
-            {/* Premium Filter Controls */}
-            <div className="flex items-center space-x-2 md:space-x-3">
-              {!yearsLoading && availableYears && availableYears.length > 1 && (
-                <select
-                  value={selectedYear}
-                  onChange={(e) => setSelectedYear(Number(e.target.value))}
-                  className="px-3 md:px-4 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium text-slate-700 dark:text-white hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                >
-                  {availableYears.map(year => (
-                    <option key={year} value={year}>{year}</option>
-                  ))}
-                </select>
-              )}
-              
-              <button className="hidden md:flex items-center space-x-2 px-3 md:px-4 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium text-slate-700 dark:text-white hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors">
-                <Filter className="w-4 h-4" />
-                <span>Filters</span>
-                <ChevronDown className="w-4 h-4" />
-              </button>
-              
-              <button className="flex items-center space-x-2 px-3 md:px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors shadow-lg">
-                <Download className="w-4 h-4" />
-                <span className="hidden md:inline">Export</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 md:px-6 py-6 md:py-8">
+      {/* Full Width Content - 90% of screen width */}
+      <div className="w-full px-4 md:px-6 lg:px-8 py-6 md:py-8" style={{ maxWidth: '90vw', margin: '0 auto' }}>
         
-        {/* Hero Metrics - Using REAL DATA */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-6 md:mb-8">
-          <HeroMetricCard
-            title="Total Commission"
-            value={utilFormatCurrency(realMetrics.totalCommission, true)}
-            change={realMetrics.commissionGrowth}
-            period="vs last year"
-            icon={DollarSign}
-            gradient="from-emerald-500 to-teal-600"
-            primary={true}
-            loading={loading}
-          />
-          <HeroMetricCard
-            title="Active Carriers"
-            value={realMetrics.totalCarriers}
-            change={realMetrics.totalCarriers > 20 ? 8.3 : 0}
-            period="this year"
-            icon={Building2}
-            gradient="from-blue-500 to-indigo-600"
-            loading={loading}
-          />
-          <HeroMetricCard
-            title="Total Statements"
-            value={realMetrics.totalStatements}
-            change={realMetrics.totalStatements > 100 ? 12.8 : 0}
-            period="processed"
-            icon={FileText}
-            gradient="from-purple-500 to-violet-600"
-            loading={loading}
-          />
-          <HeroMetricCard
-            title="Success Rate"
-            value={`${realMetrics.successRate.toFixed(1)}%`}
-            change={realMetrics.successRate > 95 ? 2.1 : realMetrics.successRate < 85 ? -5.2 : 0}
-            period="processing quality"
-            icon={CheckCircle}
-            gradient="from-green-500 to-emerald-600"
-            loading={loading}
-          />
-        </div>
-
-        {/* AI Insights Panel */}
-        <section aria-label="AI-powered insights">
-          <SmartInsightsPanel 
-            insights={intelligentInsights}
-            onNavigate={onNavigate}
-          />
-        </section>
-
-        {/* Year-over-Year Comparison */}
-        {previousYearData && previousYearData.length > 0 && (
-          <div className="mb-6 md:mb-8">
-            <YearComparisonCard
-              currentYear={selectedYear}
-              currentData={currentYearData || []}
-              previousData={previousYearData}
-            />
-          </div>
-        )}
-
-        {/* Interactive Charts Grid - 2 Column */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8 mb-6 md:mb-8">
-          {/* Commission Trends - Takes 2 columns */}
-          <div className="lg:col-span-2">
-            <MonthlyTrendsChart data={currentYearData || []} loading={currentDataLoading} />
-          </div>
-          
-          {/* Top Carriers - Takes 1 column */}
-          <div className="lg:col-span-1">
-            <TopCarriersChart carriers={topPerformers} loading={carriersLoading} onNavigate={onNavigate} />
-          </div>
-        </div>
-
-        {/* Advanced Analytics Section - 3 Column */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8 mb-6 md:mb-8">
-          {/* Plan Distribution */}
-          {currentYearData && currentYearData.length > 0 && (
-            <PlanDistributionChart data={currentYearData} />
+        {/* Year Selector - Top Right */}
+        <div className="flex justify-end mb-6">
+          {!yearsLoading && availableYears && availableYears.length > 0 && (
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(Number(e.target.value))}
+              className="px-4 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium text-slate-700 dark:text-white hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+            >
+              {availableYears.map((year: number) => (
+                <option key={year} value={year}>{year}</option>
+              ))}
+            </select>
           )}
-          
-          {/* Key Insights */}
-          <KeyInsightsCard onNavigate={onNavigate} />
-          
-          {/* Quick Actions */}
-          <QuickActionsCard onNavigate={onNavigate} />
+        </div>
+        
+        {/* Hero Metrics - Full Width */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="group relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl border border-emerald-200 dark:border-emerald-800 p-6 shadow-lg shadow-emerald-500/20 hover:scale-105 transition-all duration-300"
+          >
+            <div className="absolute inset-0 bg-gradient-to-br from-emerald-500 to-teal-600 opacity-0 group-hover:opacity-5 transition-opacity" />
+            <div className="relative">
+              <div className="flex items-start justify-between mb-4">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                  <DollarSign className="w-6 h-6 text-white" />
+                </div>
+                <div className="flex items-center space-x-1 text-sm">
+                  <ArrowUpRight className="w-4 h-4 text-emerald-500" />
+                  <span className="font-semibold text-emerald-600">18.2%</span>
+                </div>
+              </div>
+              <div className="text-3xl font-bold text-slate-900 dark:text-white mb-1">
+                {utilFormatCurrency(heroMetrics.totalCommission, true)}
+              </div>
+              <div className="text-sm font-medium text-slate-600">Total Commission</div>
+              <div className="text-xs text-slate-500 mt-1">vs last year</div>
+            </div>
+          </motion.div>
+
+          {/* Additional hero metrics... */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="group relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl border border-blue-200 dark:border-blue-800 p-6 shadow-sm hover:scale-105 transition-all duration-300"
+          >
+            <div className="relative">
+              <div className="flex items-start justify-between mb-4">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg">
+                  <Building2 className="w-6 h-6 text-white" />
+                </div>
+                <div className="text-sm text-slate-600">+8.3%</div>
+              </div>
+              <div className="text-3xl font-bold text-slate-900 dark:text-white mb-1">
+                {heroMetrics.totalCarriers}
+              </div>
+              <div className="text-sm font-medium text-slate-600">Active Carriers</div>
+              <div className="text-xs text-slate-500 mt-1">this year</div>
+            </div>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className="group relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl border border-purple-200 dark:border-purple-800 p-6 shadow-sm hover:scale-105 transition-all duration-300"
+          >
+            <div className="relative">
+              <div className="flex items-start justify-between mb-4">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-r from-purple-500 to-violet-600 flex items-center justify-center shadow-lg">
+                  <BarChart3 className="w-6 h-6 text-white" />
+                </div>
+                <div className="text-sm text-slate-600">+12.8%</div>
+              </div>
+              <div className="text-3xl font-bold text-slate-900 dark:text-white mb-1">
+                {heroMetrics.totalStatements}
+              </div>
+              <div className="text-sm font-medium text-slate-600">Total Statements</div>
+              <div className="text-xs text-slate-500 mt-1">processed</div>
+            </div>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className="group relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl border border-green-200 dark:border-green-800 p-6 shadow-sm hover:scale-105 transition-all duration-300"
+          >
+            <div className="relative">
+              <div className="flex items-start justify-between mb-4">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-r from-green-500 to-emerald-600 flex items-center justify-center shadow-lg">
+                  <CheckCircle className="w-6 h-6 text-white" />
+                </div>
+                <div className="text-sm text-slate-600">+2.1%</div>
+              </div>
+              <div className="text-3xl font-bold text-slate-900 dark:text-white mb-1">
+                {heroMetrics.successRate.toFixed(1)}%
+              </div>
+              <div className="text-sm font-medium text-slate-600">Success Rate</div>
+              <div className="text-xs text-slate-500 mt-1">processing quality</div>
+            </div>
+          </motion.div>
         </div>
 
-        {/* Carrier Performance Matrix - Full Width */}
-        {topPerformers && topPerformers.length > 0 && (
-          <div className="mb-6 md:mb-8">
-            <CarrierPerformanceMatrix carriers={topPerformers} onNavigate={onNavigate} />
+        {/* Main Charts Grid - Full Width with Individual Filters */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+          {/* Commission Trends - Takes 2 columns with individual filters */}
+          <CommissionTrendsChart 
+            data={currentYearData} 
+            loading={currentDataLoading} 
+          />
+          
+          {/* Top Carriers - Takes 1 column with individual filters */}
+          <TopCarriersChart 
+            carriers={carriers} 
+            loading={carriersLoading} 
+          />
+        </div>
+
+        {/* Premium Carrier Distribution Pie Chart - Full Width */}
+        <div className="grid grid-cols-1 lg:grid-cols-1 gap-8 mb-8">
+          <PremiumCarrierPieChart 
+            data={pieChartData}
+            loading={pieChartLoading}
+            year={selectedYear}
+          />
+        </div>
+
+        {/* Secondary Charts - Full Width */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          <PlanDistributionChart data={currentYearData} />
+          
+          {/* Key Insights Card */}
+          <div className="bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 rounded-2xl border border-blue-200 dark:border-blue-800 p-6">
+            <div className="flex items-center space-x-3 mb-4">
+              <Target className="w-5 h-5 text-blue-600" />
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white">Key Insights</h3>
+              <InfoTooltip content="This section highlights the most important insights from your data, including top performer metrics and year-over-year growth trends to help you quickly understand your business performance." />
+            </div>
+            <div className="space-y-4">
+              <div className="flex items-start space-x-3">
+                <div className="w-2 h-2 bg-emerald-500 rounded-full mt-2" />
+                <div>
+                  <p className="text-sm font-semibold text-slate-900 dark:text-white">Top Performance</p>
+                  <p className="text-xs text-slate-600 dark:text-slate-400">Your leading carrier generates 68% of total commission</p>
+                </div>
+              </div>
+              <div className="flex items-start space-x-3">
+                <div className="w-2 h-2 bg-blue-500 rounded-full mt-2" />
+                <div>
+                  <p className="text-sm font-semibold text-slate-900 dark:text-white">Growth Trend</p>
+                  <p className="text-xs text-slate-600 dark:text-slate-400">18.2% increase compared to last year</p>
+                </div>
+              </div>
+            </div>
           </div>
-        )}
+
+          {/* Quick Actions */}
+          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-6">
+            <div className="flex items-center space-x-2 mb-4">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white">Quick Actions</h3>
+              <InfoTooltip content="Quick access links to commonly used features like viewing detailed reports and managing your carriers. Click any action to navigate directly to that section." />
+            </div>
+            <div className="space-y-3">
+              <button 
+                onClick={() => onNavigate?.('dashboard')}
+                className="w-full flex items-center justify-between p-3 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/30 rounded-lg transition-colors text-left"
+              >
+                <div className="flex items-center space-x-3">
+                  <BarChart3 className="w-4 h-4 text-blue-600" />
+                  <span className="text-sm font-medium">View Detailed Report</span>
+                </div>
+                <ExternalLink className="w-4 h-4 text-slate-400" />
+              </button>
+              <button 
+                onClick={() => onNavigate?.('carriers')}
+                className="w-full flex items-center justify-between p-3 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:hover:bg-emerald-900/30 rounded-lg transition-colors text-left"
+              >
+                <div className="flex items-center space-x-3">
+                  <Building2 className="w-4 h-4 text-emerald-600" />
+                  <span className="text-sm font-medium">Manage Carriers</span>
+                </div>
+                <ExternalLink className="w-4 h-4 text-slate-400" />
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

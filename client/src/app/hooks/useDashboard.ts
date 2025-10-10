@@ -298,9 +298,11 @@ export const useCarriersWithCommission = () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/dashboard/carriers`, {
+      // Use the earned-commission/carriers endpoint which includes total_commission
+      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/earned-commission/carriers`, {
         withCredentials: true
       });
+      console.log('🏢 Carriers with commission data fetched:', response.data);
       setCarriers(response.data);
     } catch (err) {
       setError('Error fetching carriers with commission data');
@@ -397,6 +399,43 @@ export const useAllCommissionData = (year?: number) => {
     } catch (err) {
       console.error('❌ Error fetching all commission data:', err);
       setError('Error fetching all commission data');
+    } finally {
+      setLoading(false);
+    }
+  }, [year]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  return { data, loading, error, refetch: fetchData };
+};
+
+export const useCarrierPieChartData = (year?: number) => {
+  const [data, setData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const url = year
+        ? `${process.env.NEXT_PUBLIC_API_URL}/api/earned-commission/carriers-detailed?year=${year}`
+        : `${process.env.NEXT_PUBLIC_API_URL}/api/earned-commission/carriers-detailed`;
+      
+      const response = await axios.get(url, { withCredentials: true });
+      
+      // Filter out carriers with zero commission
+      const filteredData = response.data.filter((carrier: any) => 
+        (carrier.total_commission || carrier.totalCommission || 0) > 0
+      );
+      
+      console.log('📊 Carrier Pie Chart Data:', filteredData);
+      setData(filteredData);
+    } catch (err) {
+      console.error('❌ Error fetching carrier pie chart data:', err);
+      setError('Error fetching carrier pie chart data');
     } finally {
       setLoading(false);
     }

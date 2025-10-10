@@ -118,14 +118,28 @@ export function extractMonthlyData(data: CommissionData[]): {
       const keys: (keyof typeof breakdown)[] = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
       
       keys.forEach((key, index) => {
-        monthlyData[index].commission += breakdown[key] || 0;
+        if (breakdown[key] && breakdown[key] > 0) {
+          monthlyData[index].commission += breakdown[key] || 0;
+          monthlyData[index].count += 1; // Increment count for each month that has data
+        }
       });
-    } else if (item.statement_month !== undefined) {
-      const monthIndex = item.statement_month - 1;
+    } else if (item.statement_month !== undefined || (item as any).statementmonth !== undefined) {
+      const monthIndex = (item.statement_month || (item as any).statementmonth || 1) - 1;
       if (monthIndex >= 0 && monthIndex < 12) {
-        monthlyData[monthIndex].commission += item.commission_earned;
-        monthlyData[monthIndex].invoice += item.invoice_total;
-        monthlyData[monthIndex].count += item.statement_count;
+        monthlyData[monthIndex].commission += item.commission_earned || (item as any).commissionearned || 0;
+        monthlyData[monthIndex].invoice += item.invoice_total || (item as any).invoicetotal || 0;
+        // Count each statement as 1 entry
+        monthlyData[monthIndex].count += 1;
+      }
+    } else if ((item as any).statementdate) {
+      // Handle date string format
+      const dateStr = (item as any).statementdate;
+      const date = new Date(dateStr);
+      if (!isNaN(date.getTime())) {
+        const monthIndex = date.getMonth();
+        monthlyData[monthIndex].commission += (item as any).commissionearned || item.commission_earned || 0;
+        monthlyData[monthIndex].invoice += (item as any).invoicetotal || item.invoice_total || 0;
+        monthlyData[monthIndex].count += 1;
       }
     }
   });
