@@ -823,7 +823,7 @@ export default function UnifiedTableEditor({
                   </div>
                   <div>
                     <h3 className="font-semibold text-gray-900">Accepted Field Mappings</h3>
-                    <p className="text-xs text-gray-500">Fields you've confirmed for database import</p>
+                    <p className="text-xs text-gray-500">Fields you&apos;ve confirmed for database import</p>
                   </div>
                 </>
               )}
@@ -865,7 +865,7 @@ export default function UnifiedTableEditor({
                       <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-left">
                         <p className="text-xs text-blue-800 font-medium mb-1">💡 Tip</p>
                         <p className="text-xs text-blue-700">
-                          You can also click "Accept All High Confidence" to quickly accept all mappings with 85%+ confidence
+                          You can also click &quot;Accept All High Confidence&quot; to quickly accept all mappings with 85%+ confidence
                         </p>
                       </div>
                     </div>
