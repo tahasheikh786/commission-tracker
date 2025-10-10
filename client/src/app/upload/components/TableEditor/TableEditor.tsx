@@ -33,7 +33,6 @@ import { useUndoRedo } from './hooks/useUndoRedo'
 import DocumentPreview from './components/DocumentPreview'
 import TableHeader from './components/TableHeader'
 import TableControls from './components/TableControls'
-import DateSelectionModal from '../DateSelectionModal'
 import { dateExtractionService, ExtractedDate } from '../../services/dateExtractionService'
 import { GPTCorrectionLoader, GPTExtractionLoader, DOCAIExtractionLoader, MistralExtractionLoader } from '../../../components/ui/FullScreenLoader'
 
@@ -1544,8 +1543,8 @@ export default function TableEditor({
           className="hidden"
         />
 
-        {/* Date Selection Modal */}
-        <DateSelectionModal
+        {/* Date Selection Modal - Temporarily disabled as component was removed */}
+        {/* <DateSelectionModal
           isOpen={showDateModal}
           onClose={() => {
             setShowDateModal(false)
@@ -1557,9 +1556,9 @@ export default function TableEditor({
           loading={dateExtractionLoading}
           extractedCarrier={extractedCarrier || undefined}
           extractedDate={extractedDate || undefined}
-          onCarrierUpdate={(carrier) => setExtractedCarrier(carrier)}
-          onDateUpdate={(date) => setExtractedDate(date)}
-        />
+          onCarrierUpdate={(carrier: string) => setExtractedCarrier(carrier)}
+          onDateUpdate={(date: string) => setExtractedDate(date)}
+        /> */}
 
       </div>
     </div>
