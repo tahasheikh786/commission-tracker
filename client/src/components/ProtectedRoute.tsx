@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Shield, AlertCircle } from 'lucide-react';
+import LoadingScreen from '@/app/components/LoadingScreen';
 
 interface ProtectedRouteProps {
   children: ReactNode;
@@ -56,18 +57,7 @@ export default function ProtectedRoute({
   }, [isAuthenticated, user, permissions, isLoading, requireAuth, requireAdmin, requireUpload, requireEdit, router]);
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="text-center"
-        >
-          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
-        </motion.div>
-      </div>
-    );
+    return <LoadingScreen message="Loading Commission Tracker..." />;
   }
 
   if (requireAuth && !isAuthenticated) {
