@@ -7,8 +7,11 @@ import pandas as pd
 import numpy as np
 from PIL import Image
 import io
+import logging
 import fitz  # PyMuPDF
 from pdfplumber.pdf import PDF
+
+logger = logging.getLogger(__name__)
 
 # Configuration constants for table stitching
 HEADER_SIMILARITY_THRESHOLD = 0.8
@@ -714,15 +717,32 @@ def _merge_table_group(group: List[Dict[str, Any]], canonical_header: List[str])
         "metadata": merged_metadata
     })
     
-    # Preserve summary_detection from base table if it exists
-    if "summary_detection" in base_table:
-        merged_table["summary_detection"] = base_table["summary_detection"]
-        # Update counts if summary rows were removed
-        if merged_table["summary_detection"].get("removed_indices"):
-            merged_table["summary_detection"]["original_row_count"] = len(all_rows)
-            merged_table["summary_detection"]["cleaned_row_count"] = len(all_rows)
-    
-    return merged_table
+    # **CRITICAL: Re-apply enhancements to the MERGED table with full row count**
+    # The enhancements were applied to individual tables before merging,
+    # but need to be re-applied to the merged table to work on all rows together
+    try:
+        from app.services.mistral.service import MistralDocumentAIService
+        
+        # Initialize service to get enhancement processors
+        mistral_service = MistralDocumentAIService()
+        
+        # Re-apply enhancements to the merged table
+        enhanced_merged = mistral_service._enhance_table_with_summary_detection(merged_table)
+        
+        logger.info(f"✅ Re-applied enhancements to merged table: {len(all_rows)} rows")
+        return enhanced_merged
+        
+    except Exception as e:
+        logger.warning(f"Failed to re-apply enhancements after merging: {e}")
+        # Fallback: preserve original summary_detection from base table if it exists
+        if "summary_detection" in base_table:
+            merged_table["summary_detection"] = base_table["summary_detection"]
+            # Update counts if summary rows were removed
+            if merged_table["summary_detection"].get("removed_indices"):
+                merged_table["summary_detection"]["original_row_count"] = len(all_rows)
+                merged_table["summary_detection"]["cleaned_row_count"] = len(all_rows)
+        
+        return merged_table
 
 def log_pipeline_performance(tables: List[Dict[str, Any]], original_tables: List[Dict[str, Any]], filename: str = "unknown"):
     """

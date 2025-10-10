@@ -52,297 +52,12 @@ from .utils import PDFProcessor, DataValidator, JSONProcessor, QualityAssessor, 
 # Import quality validation service
 from ..quality_validation_service import QualityValidationService
 
+# Import new enhancement modules
+from .enhanced_summary_detector import EnhancedSummaryRowDetector as NewEnhancedSummaryRowDetector
+from .bracket_processor import AccountingBracketProcessor
+from .enhancement_config import EnhancementConfig, EnhancementMonitor, get_global_monitor
+
 logger = logging.getLogger(__name__)
-
-
-class EnhancedSummaryRowDetector:
-    """
-    Commercial-grade summary row detector integrated into Mistral service
-    CRITICAL: This detector only removes rows with HIGH CONFIDENCE to avoid data loss
-    """
-    
-    def __init__(self):
-        # Financial summary keywords with conservative approach
-        self.summary_keywords = [
-            'total', 'subtotal', 'grand total', 'sum', 'aggregate',
-            'summary', 'overall', 'net', 'gross', 'balance',
-            'year to date', 'ytd', 'month to date', 'mtd'
-        ]
-        
-        # Conservative confidence thresholds - high bar for removal
-        self.high_confidence_threshold = 0.85  # Very high confidence required
-        self.medium_confidence_threshold = 0.70
-        
-        # ML components (lazy initialization)
-        self._anomaly_detector = None
-        self._scaler = None
-    
-    def detect_and_remove_summary_rows(self, table_data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        CONSERVATIVE summary row detection - only removes with very high confidence
-        
-        Args:
-            table_data: Dict with 'headers' and 'rows' keys
-            
-        Returns:
-            Enhanced table_data with summary detection metadata
-        """
-        headers = table_data.get('headers', [])
-        rows = table_data.get('rows', [])
-        
-        if not rows or len(rows) < 3:  # Need minimum rows for detection
-            return {**table_data, 'summary_detection': {'enabled': False, 'reason': 'insufficient_rows'}}
-        
-        try:
-            # Multi-strategy detection with conservative approach
-            detection_results = []
-            
-            # Strategy 1: Statistical Analysis (Conservative)
-            statistical_scores = self._analyze_statistical_patterns(rows, headers)
-            
-            # Strategy 2: Semantic Analysis (High precision keywords)
-            semantic_scores = self._analyze_semantic_patterns(rows)
-            
-            # Strategy 3: Position Analysis (End-of-table bias)
-            position_scores = self._analyze_position_patterns(rows)
-            
-            # Strategy 4: ML-based Anomaly Detection (Conservative threshold)
-            ml_scores = self._apply_conservative_ml_detection(rows, headers)
-            
-            # Combine scores with conservative weighting
-            summary_row_indices = []
-            confidence_scores = []
-            
-            for i in range(len(rows)):
-                # Weighted combination - require multiple indicators
-                combined_score = (
-                    statistical_scores[i] * 0.25 +
-                    semantic_scores[i] * 0.35 +  # Higher weight on semantic
-                    position_scores[i] * 0.20 +
-                    ml_scores[i] * 0.20
-                )
-                
-                confidence_scores.append(combined_score)
-                
-                # Multiple detection strategies:
-                # 1. Very high combined confidence (>= 0.85)
-                # 2. High semantic confidence (>= 0.9) + at least one other indicator
-                # 3. Multiple moderate indicators (at least 2 > 0.5)
-                indicators_count = sum([
-                    statistical_scores[i] > 0.5, 
-                    semantic_scores[i] > 0.6, 
-                    position_scores[i] > 0.5, 
-                    ml_scores[i] > 0.5
-                ])
-                
-                should_remove = (
-                    combined_score >= self.high_confidence_threshold or
-                    (semantic_scores[i] >= 0.9 and indicators_count >= 1) or
-                    indicators_count >= 2
-                )
-                
-                if should_remove:
-                    summary_row_indices.append(i)
-            
-            # Additional safety check - never remove more than 20% of rows
-            max_removable = max(1, len(rows) // 5)
-            if len(summary_row_indices) > max_removable:
-                # Keep only highest confidence detections
-                scored_indices = [(i, confidence_scores[i]) for i in summary_row_indices]
-                scored_indices.sort(key=lambda x: x[1], reverse=True)
-                summary_row_indices = [i for i, _ in scored_indices[:max_removable]]
-            
-            # Create cleaned table if summary rows detected
-            if summary_row_indices:
-                cleaned_rows = [row for i, row in enumerate(rows) if i not in summary_row_indices]
-                removed_rows = [rows[i] for i in summary_row_indices]
-                
-                avg_confidence = sum(confidence_scores[i] for i in summary_row_indices) / len(summary_row_indices)
-                
-                return {
-                    'headers': headers,
-                    'rows': cleaned_rows,
-                    'summary_detection': {
-                        'enabled': True,
-                        'removed_summary_rows': removed_rows,
-                        'removed_indices': summary_row_indices,
-                        'original_row_count': len(rows),
-                        'cleaned_row_count': len(cleaned_rows),
-                        'detection_confidence': avg_confidence,
-                        'detection_method': 'multi_strategy_conservative',
-                        'safety_checks_passed': True
-                    }
-                }
-            else:
-                return {
-                    **table_data,
-                    'summary_detection': {
-                        'enabled': True,
-                        'removed_summary_rows': [],
-                        'removed_indices': [],
-                        'detection_confidence': max(confidence_scores) if confidence_scores else 0.0,
-                        'detection_method': 'multi_strategy_conservative',
-                        'no_summary_rows_detected': True
-                    }
-                }
-                
-        except Exception as e:
-            logger.warning(f"Summary detection failed, preserving original data: {e}")
-            return {**table_data, 'summary_detection': {'enabled': False, 'error': str(e)}}
-    
-    def _analyze_statistical_patterns(self, rows, headers):
-        """Conservative statistical analysis"""
-        scores = []
-        expected_columns = len(headers) if headers else max(len(row) for row in rows if row)
-        
-        for row in rows:
-            score = 0.0
-            
-            # Column count deviation (conservative threshold)
-            if expected_columns > 0:
-                deviation = abs(len(row) - expected_columns) / expected_columns
-                if deviation > 0.3:  # Only flag major deviations
-                    score += 0.3
-            
-            # Data sparsity (conservative - only very sparse rows)
-            non_empty = sum(1 for cell in row if str(cell).strip())
-            if len(row) > 0:
-                density = non_empty / len(row)
-                if density < 0.3:  # Very sparse
-                    score += 0.2
-            
-            scores.append(min(score, 1.0))
-        
-        return scores
-    
-    def _analyze_semantic_patterns(self, rows):
-        """High-precision semantic analysis"""
-        scores = []
-        
-        # Common summary row patterns that are VERY specific and reliable
-        high_confidence_patterns = [
-            r'^\s*total\s+for\s+group\s*:',
-            r'^\s*total\s+for\s+vendor\s*:',
-            r'^\s*total\s+for\s+carrier\s*:',
-            r'^\s*total\s+for\s+company\s*:',
-            r'^\s*grand\s+total\s*:?',
-            r'^\s*overall\s+total\s*:?',
-            r'^\s*subtotal\s*:?',
-        ]
-        
-        for row in rows:
-            # Get first cell which usually contains the summary label
-            first_cell = str(row[0]).lower().strip() if row and len(row) > 0 else ''
-            row_text = ' '.join(str(cell) for cell in row).lower()
-            score = 0.0
-            
-            # Check for high-confidence patterns in first cell (most reliable indicator)
-            for pattern in high_confidence_patterns:
-                if re.search(pattern, first_cell):
-                    score = 1.0  # Maximum confidence for these obvious patterns
-                    break
-            
-            # If not found in first cell, check general keywords
-            if score < 1.0:
-                keyword_matches = 0
-                for keyword in self.summary_keywords:
-                    if keyword in row_text:
-                        keyword_matches += 1
-                
-                if keyword_matches > 0:
-                    score += min(keyword_matches * 0.4, 0.8)  # Cap at 0.8
-                
-                # Currency and percentage patterns (indicators of summaries)
-                if re.search(r'\$\s*[\d,]+\.?\d*', row_text):
-                    score += 0.1
-                if re.search(r'\d+\.?\d*%', row_text):
-                    score += 0.1
-            
-            scores.append(min(score, 1.0))
-        
-        return scores
-    
-    def _analyze_position_patterns(self, rows):
-        """Position-based analysis with end-table bias"""
-        scores = []
-        total_rows = len(rows)
-        
-        for i, row in enumerate(rows):
-            score = 0.0
-            
-            # Last few rows more likely to be summaries
-            if i >= total_rows - 2:  # Last 2 rows
-                score += 0.6
-            elif i >= total_rows - 4:  # Last 4 rows
-                score += 0.3
-            
-            # First row could be header summary
-            if i == 0:
-                score += 0.2
-                
-            scores.append(score)
-        
-        return scores
-    
-    def _apply_conservative_ml_detection(self, rows, headers):
-        """Conservative ML-based anomaly detection"""
-        scores = []
-        
-        try:
-            if not ML_AVAILABLE or len(rows) < 5:  # Need minimum samples
-                return [0.0] * len(rows)
-            
-            # Create feature vectors
-            features = []
-            for row in rows:
-                feature_vector = [
-                    len(row),  # Column count
-                    sum(1 for cell in row if str(cell).strip()),  # Non-empty cells
-                    sum(1 for cell in row if self._is_numeric_like(str(cell))),  # Numeric cells
-                    sum(len(str(cell)) for cell in row),  # Total character count
-                ]
-                features.append(feature_vector)
-            
-            # Lazy initialization of ML components
-            if self._scaler is None:
-                self._scaler = StandardScaler()
-                self._anomaly_detector = IsolationForest(
-                    contamination=0.1,  # Conservative - expect few outliers
-                    random_state=42
-                )
-            
-            # Fit and predict
-            scaled_features = self._scaler.fit_transform(features)
-            anomaly_scores = self._anomaly_detector.fit_predict(scaled_features)
-            anomaly_scores_proba = self._anomaly_detector.score_samples(scaled_features)
-            
-            # Convert to conservative scores (only flag clear outliers)
-            for i, (anomaly_label, anomaly_score) in enumerate(zip(anomaly_scores, anomaly_scores_proba)):
-                if anomaly_label == -1 and anomaly_score < -0.2:  # Conservative threshold
-                    scores.append(0.6)  # Moderate confidence from ML
-                else:
-                    scores.append(0.0)
-            
-        except Exception as e:
-            logger.debug(f"ML detection failed: {e}")
-            scores = [0.0] * len(rows)
-        
-        return scores
-    
-    def _is_numeric_like(self, text: str) -> bool:
-        """Check if text represents numeric data"""
-        text = str(text).strip()
-        if not text:
-            return False
-        
-        # Remove common formatting
-        cleaned = re.sub(r'[\$,£€¥%\s()+-]', '', text)
-        
-        try:
-            float(cleaned)
-            return True
-        except ValueError:
-            return False
 
 
 class LightweightPerformanceOptimizer:
@@ -431,8 +146,11 @@ class MistralDocumentAIService:
         self.date_extractor = DateExtractor()
         self.table_structure_detector = TableStructureDetector()
         
-        # Initialize enhanced components
-        self.summary_detector = EnhancedSummaryRowDetector()
+        # Initialize enhanced components (NEW: Professional-grade multi-strategy detection)
+        self.summary_detector = NewEnhancedSummaryRowDetector()  # Using new enhanced detector
+        self.bracket_processor = AccountingBracketProcessor()  # NEW: Bracket processing
+        self.enhancement_config = EnhancementConfig.from_env()  # NEW: Configuration
+        self.enhancement_monitor = get_global_monitor()  # NEW: Global monitor
         self.performance_optimizer = LightweightPerformanceOptimizer()
         
         # Performance and processing statistics
@@ -1179,36 +897,109 @@ Return structured JSON with all tables and business context analysis.
     
     def _enhance_table_with_summary_detection(self, table_dict: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Apply summary row detection to a single table while preserving extraction quality
+        Apply enhanced summary row detection and bracket processing to a single table
+        
+        NEW: Multi-strategy summary detection with >85% confidence threshold
+        NEW: Professional bracket processing for negative values
+        NEW: Performance monitoring and validation
         """
-        if not self.enable_summary_detection:
-            logger.info("Summary detection is disabled")
-            return table_dict
+        start_time = time.time()
+        
+        # Ensure summaryRows exists for frontend compatibility
+        table_dict['summaryRows'] = []
         
         try:
-            logger.info(f"Applying summary detection to table with {len(table_dict.get('rows', []))} rows")
+            logger.info(f"Applying enhancements to table with {len(table_dict.get('rows', []))} rows")
             
-            # Apply summary detection
-            enhanced_table = self.summary_detector.detect_and_remove_summary_rows(table_dict)
-            
-            # Update processing stats
-            summary_info = enhanced_table.get('summary_detection', {})
-            if summary_info.get('enabled') and summary_info.get('removed_indices'):
-                removed_count = len(summary_info['removed_indices'])
-                self.processing_stats['summary_rows_detected'] += removed_count
-                logger.info(f"✓ Summary detection: Removed {removed_count} rows with {summary_info.get('detection_confidence', 0):.2%} confidence")
-                logger.info(f"  Removed rows: {summary_info.get('removed_summary_rows', [])}")
+            # ENHANCEMENT 1: Apply bracket processing first (before summary detection)
+            if self.enhancement_config.bracket_processing_enabled:
+                logger.info("Phase 1: Applying professional bracket processing...")
+                enhanced_table = self.bracket_processor.process_table_data(table_dict)
+                
+                # Record bracket processing metrics
+                if 'bracket_processing' in enhanced_table:
+                    self.enhancement_monitor.record_bracket_processing(enhanced_table)
+                    bp_summary = self.bracket_processor.get_processing_summary()
+                    logger.info(f"✓ Bracket processing: {bp_summary['brackets_converted']} values converted " +
+                               f"({bp_summary['conversion_rate']:.1f}% conversion rate)")
             else:
-                logger.info(f"✓ Summary detection: No summary rows detected (confidence: {summary_info.get('detection_confidence', 0):.2%})")
+                enhanced_table = table_dict
+                logger.info("Bracket processing is disabled")
             
-            logger.debug(f"Table enhanced with summary detection: {summary_info}")
+            # ENHANCEMENT 2: Apply enhanced summary detection
+            if not self.enable_summary_detection or not self.enhancement_config.summary_detection_enabled:
+                logger.info("Summary detection is disabled")
+                return enhanced_table
+            
+            logger.info("Phase 2: Applying multi-strategy summary detection...")
+            enhanced_table = self.summary_detector.detect_and_remove_summary_rows(enhanced_table)
+            
+            # Update processing stats and record metrics
+            summary_info = enhanced_table.get('summary_detection', {})
+            
+            if summary_info.get('enabled'):
+                # Record summary detection metrics
+                self.enhancement_monitor.record_summary_detection(summary_info)
+                
+                if summary_info.get('removed_indices'):
+                    removed_count = len(summary_info['removed_indices'])
+                    confidence = summary_info.get('detection_confidence', 0)
+                    
+                    # CRITICAL FIX: When rows are REMOVED, summaryRows should be EMPTY
+                    # The removed_indices are already filtered out from the rows array
+                    # Setting summaryRows to removed_indices would highlight wrong rows
+                    enhanced_table['summaryRows'] = []
+                    self.processing_stats['summary_rows_detected'] += removed_count
+                    
+                    logger.info(f"✓ Summary detection: Removed {removed_count} rows with {confidence:.2%} confidence")
+                    logger.info(f"  Detection method: {summary_info.get('detection_method', 'unknown')}")
+                    logger.info(f"  Strategies used: {summary_info.get('strategies_used', [])}")
+                    
+                    # Log detailed evidence if available
+                    if 'removed_row_details' in summary_info and self.enhancement_config.enable_detailed_logging:
+                        for detail in summary_info['removed_row_details']:
+                            logger.info(f"  Row {detail['index']}: {detail['confidence']:.2%} - {detail['evidence']}")
+                else:
+                    logger.info(f"✓ Summary detection: No summary rows detected " +
+                               f"(confidence: {summary_info.get('detection_confidence', 0):.2%})")
+            
+            # Record performance
+            processing_time = time.time() - start_time
+            self.enhancement_monitor.record_performance(processing_time)
+            
+            logger.info(f"✓ Table enhancements completed in {processing_time:.2f}s")
             return enhanced_table
             
         except Exception as e:
-            logger.warning(f"Summary detection failed for table, preserving original: {e}")
+            logger.error(f"Table enhancement failed, preserving original: {e}")
             import traceback
-            logger.warning(traceback.format_exc())
+            logger.error(traceback.format_exc())
+            # CRITICAL FIX: Ensure summaryRows exists even on failure
+            if 'summaryRows' not in table_dict:
+                table_dict['summaryRows'] = []
             return table_dict
+    
+    def get_enhancement_metrics(self) -> Dict[str, Any]:
+        """
+        Get comprehensive metrics for all enhancements
+        
+        NEW: Provides detailed statistics on summary detection, bracket processing,
+        and overall performance for monitoring and debugging
+        """
+        try:
+            return {
+                'success': True,
+                'metrics': self.enhancement_monitor.get_metrics_summary(),
+                'configuration': self.enhancement_config.to_dict(),
+                'detector_stats': self.summary_detector.get_statistics(),
+                'bracket_processor_stats': self.bracket_processor.get_processing_summary()
+            }
+        except Exception as e:
+            logger.error(f"Failed to get enhancement metrics: {e}")
+            return {
+                'success': False,
+                'error': str(e)
+            }
     
     def _log_enhancement_metrics(self, result: Dict[str, Any]):
         """Log enhancement metrics for monitoring"""

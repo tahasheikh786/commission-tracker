@@ -8,8 +8,9 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { Pencil, Trash2, Plus, MoreVertical, MoreHorizontal } from 'lucide-react';
+import { Pencil, Trash2, Plus, MoreVertical, MoreHorizontal, AlertCircle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { isSummaryRow, getSummaryDetectionInfo } from '@/app/utils/summaryRowUtils';
 
 interface TableData {
   header: string[];
@@ -25,6 +26,8 @@ interface EditableTableViewProps {
   onTablesChange: (tables: TableData[]) => void;
   carrierName?: string;
   statementDate?: string;
+  brokerName?: string;
+  planType?: string;
 }
 
 interface CellEdit {
@@ -38,7 +41,9 @@ export default function EditableTableView({
   tables,
   onTablesChange,
   carrierName,
-  statementDate
+  statementDate,
+  brokerName,
+  planType
 }: EditableTableViewProps) {
   const [currentTableIdx, setCurrentTableIdx] = useState(0);
   const [editingCell, setEditingCell] = useState<CellEdit | null>(null);
@@ -218,6 +223,58 @@ export default function EditableTableView({
     setSelectedRows(new Set());
   };
 
+  // Mark selected rows as summary rows
+  const markSelectedAsSummaryRows = () => {
+    if (selectedRows.size === 0) return;
+    const newTables = [...tables];
+    
+    // Initialize summaryRows if it doesn't exist
+    if (!newTables[currentTableIdx].summaryRows) {
+      newTables[currentTableIdx].summaryRows = new Set();
+    }
+    
+    // Mark all selected rows as summary rows
+    selectedRows.forEach(rowIdx => {
+      newTables[currentTableIdx].summaryRows!.add(rowIdx);
+    });
+    
+    onTablesChange(newTables);
+    toast.success(`Marked ${selectedRows.size} rows as summary rows`);
+    setSelectedRows(new Set());
+  };
+
+  // Unmark selected rows as summary rows
+  const unmarkSelectedAsSummaryRows = () => {
+    if (selectedRows.size === 0) return;
+    const newTables = [...tables];
+    
+    if (newTables[currentTableIdx].summaryRows) {
+      // Unmark all selected rows
+      selectedRows.forEach(rowIdx => {
+        newTables[currentTableIdx].summaryRows!.delete(rowIdx);
+      });
+      
+      // Clean up empty summaryRows
+      if (newTables[currentTableIdx].summaryRows!.size === 0) {
+        delete newTables[currentTableIdx].summaryRows;
+      }
+    }
+    
+    onTablesChange(newTables);
+    toast.success(`Unmarked ${selectedRows.size} rows as summary rows`);
+    setSelectedRows(new Set());
+  };
+
+  // Check if any selected rows are summary rows
+  const hasSelectedSummaryRows = () => {
+    return Array.from(selectedRows).some(rowIdx => isSummaryRow(currentTable, rowIdx));
+  };
+
+  // Check if any selected rows are NOT summary rows
+  const hasSelectedNonSummaryRows = () => {
+    return Array.from(selectedRows).some(rowIdx => !isSummaryRow(currentTable, rowIdx));
+  };
+
   if (!tables || tables.length === 0 || !currentTable) {
     return (
       <div className="flex items-center justify-center h-full p-8">
@@ -231,75 +288,104 @@ export default function EditableTableView({
 
   return (
     <div className="h-full flex flex-col bg-white">
-      {/* Header with carrier and date info */}
-      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-gray-200 px-6 py-4 flex-shrink-0">
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900">Extracted Table Data</h3>
-            <p className="text-xs text-gray-600 mt-1">
-              Review and edit the extracted data before proceeding
-            </p>
+      {/* Header with table navigation */}
+      {tables.length > 1 && (
+      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-gray-200 px-6 py-3 flex-shrink-0">
+          <div className="flex items-center justify-center space-x-2">
+            <button
+              onClick={() => setCurrentTableIdx(Math.max(0, currentTableIdx - 1))}
+              disabled={currentTableIdx === 0}
+              className="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              Previous
+            </button>
+            <span className="text-sm text-gray-700 font-medium px-2">
+              Table {currentTableIdx + 1} of {tables.length}
+            </span>
+            <button
+              onClick={() => setCurrentTableIdx(Math.min(tables.length - 1, currentTableIdx + 1))}
+              disabled={currentTableIdx === tables.length - 1}
+              className="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              Next
+            </button>
           </div>
-          {tables.length > 1 && (
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={() => setCurrentTableIdx(Math.max(0, currentTableIdx - 1))}
-                disabled={currentTableIdx === 0}
-                className="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                Previous
-              </button>
-              <span className="text-sm text-gray-700 font-medium px-2">
-                Table {currentTableIdx + 1} of {tables.length}
-              </span>
-              <button
-                onClick={() => setCurrentTableIdx(Math.min(tables.length - 1, currentTableIdx + 1))}
-                disabled={currentTableIdx === tables.length - 1}
-                className="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                Next
-              </button>
-            </div>
-          )}
-        </div>
-        
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-white rounded-lg px-3 py-2 border border-gray-200">
-            <span className="text-xs text-gray-500 block mb-0.5">Carrier</span>
-            <span className="text-sm font-semibold text-gray-900">{carrierName || 'Unknown'}</span>
-          </div>
-          <div className="bg-white rounded-lg px-3 py-2 border border-gray-200">
-            <span className="text-xs text-gray-500 block mb-0.5">Date</span>
-            <span className="text-sm font-semibold text-gray-900">{statementDate || 'Not detected'}</span>
-          </div>
-          <div className="bg-white rounded-lg px-3 py-2 border border-gray-200">
-            <span className="text-xs text-gray-500 block mb-0.5">Columns</span>
-            <span className="text-sm font-semibold text-blue-600">{getTableHeaders(currentTable).length}</span>
-          </div>
-          <div className="bg-white rounded-lg px-3 py-2 border border-gray-200">
-            <span className="text-xs text-gray-500 block mb-0.5">Rows</span>
-            <span className="text-sm font-semibold text-blue-600">{getTableRows(currentTable).length}</span>
-          </div>
-        </div>
       </div>
+      )}
+        
+        {/* Summary Row Detection Info */}
+        {(() => {
+          const summaryInfo = getSummaryDetectionInfo(currentTable);
+          if (summaryInfo && summaryInfo.enabled && summaryInfo.count > 0) {
+            return (
+              <div className="bg-orange-50 border-b border-orange-300 px-6 py-3 flex-shrink-0">
+                <div className="flex items-start space-x-3">
+                  <AlertCircle className="w-5 h-5 text-orange-600 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-semibold text-orange-900">
+                        Summary Rows Detected
+                      </h4>
+                      <span className="text-xs font-medium text-orange-700 bg-orange-100 px-2 py-1 rounded-full">
+                        {Math.round(summaryInfo.confidence * 100)}% confidence
+                      </span>
+                    </div>
+                    <p className="text-xs text-orange-800 mt-1">
+                      {summaryInfo.count} summary row{summaryInfo.count !== 1 ? 's' : ''} detected using {summaryInfo.method.replace(/_/g, ' ')}. 
+                      These rows are highlighted in orange below.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            );
+          }
+          return null;
+        })()}
 
-      {/* Table controls */}
+      {/* Table controls - shown when rows are selected */}
       {selectedRows.size > 0 && (
         <div className="bg-blue-50 border-b border-blue-200 px-6 py-3 flex items-center justify-between flex-shrink-0">
           <span className="text-sm text-blue-800 font-medium">
             {selectedRows.size} row{selectedRows.size !== 1 ? 's' : ''} selected
           </span>
           <div className="flex items-center space-x-2">
+            {/* Mark as Summary Row button - show if any selected rows are NOT summary rows */}
+            {hasSelectedNonSummaryRows() && (
+              <button
+                onClick={markSelectedAsSummaryRows}
+                className="px-3 py-1.5 text-sm bg-orange-600 text-white rounded-md hover:bg-orange-700 flex items-center transition-colors shadow-sm"
+                title="Mark selected rows as summary rows"
+              >
+                <AlertCircle className="w-4 h-4 mr-1.5" />
+                Mark as Summary Row
+              </button>
+            )}
+            
+            {/* Unmark as Summary Row button - show if any selected rows ARE summary rows */}
+            {hasSelectedSummaryRows() && (
+              <button
+                onClick={unmarkSelectedAsSummaryRows}
+                className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center transition-colors shadow-sm"
+                title="Unmark selected rows as summary rows"
+              >
+                <AlertCircle className="w-4 h-4 mr-1.5" />
+                Unmark as Summary Row
+              </button>
+            )}
+            
             <button
               onClick={deleteSelectedRows}
               className="px-3 py-1.5 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 flex items-center transition-colors shadow-sm"
+              title="Delete selected rows"
             >
               <Trash2 className="w-4 h-4 mr-1.5" />
               Delete Selected
             </button>
+            
             <button
               onClick={clearRowSelection}
               className="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+              title="Clear selection"
             >
               Clear Selection
             </button>
@@ -308,13 +394,14 @@ export default function EditableTableView({
       )}
 
       {/* Table Container - Fixed height with scroll */}
-      <div className="flex-1 overflow-auto bg-gray-50">
+      <div className="flex-1 overflow-auto bg-gray-50 p-4">
         <div className="min-w-full inline-block align-middle">
-          <table className="min-w-full divide-y divide-gray-200 bg-white">
-            <thead className="bg-gradient-to-r from-gray-50 to-gray-100 sticky top-0 z-20 shadow-sm">
-              <tr className="border-b-2 border-gray-200">
-                {/* Checkbox column */}
-                <th className="px-6 py-3 text-left w-14 bg-gray-50">
+          <div className="border border-gray-300 rounded-lg overflow-hidden shadow-sm bg-white">
+            <table className="min-w-full divide-y divide-gray-300">
+              <thead className="bg-gradient-to-r from-gray-50 to-gray-100 sticky top-0 z-20">
+                <tr className="border-b-2 border-gray-300">
+                  {/* Checkbox column */}
+                  <th className="px-6 py-3 text-left w-14 bg-gray-50 border-r border-gray-200">
                   <input
                     type="checkbox"
                     checked={selectedRows.size === getTableRows(currentTable).length && getTableRows(currentTable).length > 0}
@@ -327,13 +414,13 @@ export default function EditableTableView({
                 {getTableHeaders(currentTable).map((header, colIdx) => (
                   <th
                     key={colIdx}
-                    className="px-6 py-3 text-left text-sm font-semibold text-gray-900 relative group bg-gray-50"
+                    className="px-6 py-3 text-left text-sm font-semibold text-gray-900 relative bg-gray-50 border-r border-gray-200"
                   >
                     <div className="flex items-center justify-between min-w-[120px]">
                       <span className="truncate font-semibold">{header}</span>
                       <button
                         onClick={() => setShowHeaderMenu(showHeaderMenu === colIdx ? null : colIdx)}
-                        className="ml-2 p-1.5 opacity-0 group-hover:opacity-100 hover:bg-gray-200 rounded-md transition-all"
+                        className="ml-2 p-1.5 hover:bg-gray-200 rounded-md transition-all opacity-70 hover:opacity-100"
                         data-header-menu={colIdx}
                       >
                         <MoreHorizontal size={14} className="text-gray-600" />
@@ -363,28 +450,37 @@ export default function EditableTableView({
             </thead>
             
             <tbody className="bg-white divide-y divide-gray-100">
-              {getTableRows(currentTable).map((row, rowIdx) => (
+              {getTableRows(currentTable).map((row, rowIdx) => {
+                const isRowSummary = isSummaryRow(currentTable, rowIdx);
+                return (
                 <tr
                   key={rowIdx}
                   className={`transition-colors ${
-                    selectedRows.has(rowIdx) 
-                      ? 'bg-blue-50 hover:bg-blue-100' 
-                      : 'hover:bg-gray-50'
+                    isRowSummary
+                      ? 'bg-orange-50 border-l-4 border-orange-400 hover:bg-orange-100'
+                      : selectedRows.has(rowIdx) 
+                        ? 'bg-blue-50 hover:bg-blue-100' 
+                        : 'hover:bg-gray-50'
                   }`}
+                  title={isRowSummary ? 'Summary Row - Contains total or aggregate data' : ''}
                 >
                   {/* Checkbox */}
-                  <td className="px-6 py-3">
+                  <td className="px-6 py-3 border-r border-gray-200" onClick={(e) => e.stopPropagation()}>
                     <input
                       type="checkbox"
                       checked={selectedRows.has(rowIdx)}
-                      onChange={() => toggleRowSelection(rowIdx)}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        toggleRowSelection(rowIdx);
+                      }}
+                      onClick={(e) => e.stopPropagation()}
                       className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
                     />
                   </td>
                   
                   {/* Row cells */}
                   {row.map((cell, colIdx) => (
-                    <td key={colIdx} className="px-6 py-3 text-sm text-gray-900">
+                    <td key={colIdx} className="px-6 py-3 text-sm text-gray-900 border-r border-gray-200">
                       {editingCell && editingCell.tableIdx === currentTableIdx && editingCell.rowIdx === rowIdx && editingCell.colIdx === colIdx ? (
                         <input
                           type="text"
@@ -433,9 +529,11 @@ export default function EditableTableView({
                     )}
                   </td>
                 </tr>
-              ))}
+              );
+              })}
             </tbody>
           </table>
+          </div>
         </div>
       </div>
 

@@ -76,6 +76,9 @@ def transform_gpt_extraction_response_to_client_format(gpt_result: Dict[str, Any
                 "header": headers,
                 "rows": rows,
                 "extractor": table.get("extractor", "gpt4o_vision"),
+                # CRITICAL FIX: Include summaryRows for frontend display
+                "summaryRows": table.get("summaryRows", []),
+                "summary_detection": table.get("summary_detection", {}),
                 "metadata": {
                     "extraction_method": "gpt4o_vision",
                     "processing_notes": table.get("processing_notes", ""),
@@ -803,6 +806,42 @@ async def extract_tables_gpt(
             max_pages=min(num_pages, 5)  # Limit to first 5 pages or total pages if less
         )
         
+        # Extract document metadata (carrier, date, broker) from first page
+        logger.info("Extracting document metadata (carrier, date, broker)...")
+        from app.services.enhanced_extraction_service import EnhancedExtractionService
+        enhanced_service = EnhancedExtractionService()
+        
+        # Create a mock progress tracker for metadata extraction
+        class MockProgressTracker:
+            def __init__(self):
+                self.upload_id = upload_id
+                
+        mock_tracker = MockProgressTracker()
+        gpt_metadata = await enhanced_service._extract_metadata_with_gpt(temp_pdf_path)
+        
+        # Store document metadata for response
+        document_metadata = {}
+        if gpt_metadata.get('success'):
+            document_metadata = {
+                "carrier_name": gpt_metadata.get('carrier_name'),
+                "carrier_confidence": gpt_metadata.get('carrier_confidence', 0.9),
+                "statement_date": gpt_metadata.get('statement_date'),
+                "date_confidence": gpt_metadata.get('date_confidence', 0.9),
+                "broker_company": gpt_metadata.get('broker_company'),  # Extract broker from metadata
+                "document_type": "commission_statement"
+            }
+            logger.info(f"Extracted metadata: carrier={document_metadata.get('carrier_name')}, date={document_metadata.get('statement_date')}, broker={document_metadata.get('broker_company')}")
+        else:
+            logger.warning(f"Metadata extraction failed: {gpt_metadata.get('error')}")
+            document_metadata = {
+                "carrier_name": None,
+                "carrier_confidence": 0.0,
+                "statement_date": None,
+                "date_confidence": 0.0,
+                "broker_company": None,
+                "document_type": "commission_statement"
+            }
+        
         # Clean up temporary file
         try:
             os.remove(temp_pdf_path)
@@ -917,6 +956,9 @@ async def extract_tables_gpt(
                 "rows": rows,
                 "extractor": extractor,
                 "structure_type": table.get("structure_type", "standard"),
+                # CRITICAL FIX: Include summaryRows for frontend display
+                "summaryRows": table.get("summaryRows", []),
+                "summary_detection": table.get("summary_detection", {}),
                 "metadata": {
                     "extraction_method": extractor,
                     "timestamp": datetime.now().isoformat(),
@@ -1008,6 +1050,7 @@ async def extract_tables_gpt(
                 "table_confidence": 0.95,
                 "model_used": "gpt4o_vision"
             },
+            "document_metadata": document_metadata,  # Add document metadata with carrier, date, and broker
             "document_info": {
                 "pdf_type": "commission_statement",
                 "total_tables": len(frontend_tables),
@@ -1161,6 +1204,9 @@ async def extract_tables_google_docai(
                 "header": headers,
                 "rows": rows,
                 "extractor": "google_docai",
+                # CRITICAL FIX: Include summaryRows for frontend display
+                "summaryRows": table.get("summaryRows", []),
+                "summary_detection": table.get("summary_detection", {}),
                 "metadata": {
                     "extraction_method": "google_docai",
                     "timestamp": datetime.now().isoformat(),
@@ -1385,6 +1431,9 @@ def transform_new_extraction_response_to_client_format(
             "name": table.get("name", f"Table_{i+1}"),
             "id": table.get("id", str(i)),
             "extractor": "new_advanced_pipeline",
+            # CRITICAL FIX: Include summaryRows for frontend display
+            "summaryRows": table.get("summaryRows", []),
+            "summary_detection": table.get("summary_detection", {}),
             "metadata": {
                 "extraction_method": "new_advanced_pipeline",
                 "confidence": table.get("confidence", 0.0),
@@ -1659,6 +1708,9 @@ async def extract_tables_mistral_frontend(
                 "extractor": "intelligent_mistral_document_ai",
                 "table_type": table.get("table_type", "commission_table"),
                 "company_name": table.get("company_name"),
+                # CRITICAL FIX: Include summaryRows for frontend display
+                "summaryRows": table.get("summaryRows", []),
+                "summary_detection": table.get("summary_detection", {}),
                 "metadata": {
                     "extraction_method": "intelligent_mistral_document_ai",
                     "timestamp": datetime.now().isoformat(),
@@ -1671,6 +1723,7 @@ async def extract_tables_mistral_frontend(
                     }
                 }
             }
+            logger.info(f"✓ Table {i+1}: Added summaryRows field with {len(table.get('summaryRows', []))} summary rows")
             frontend_tables.append(frontend_table)
         
         # Prepare INTELLIGENT response in the exact format expected by TableEditor

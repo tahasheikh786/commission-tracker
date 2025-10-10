@@ -15,7 +15,6 @@ import { FieldMapping, PlanTypeDetection } from '@/app/services/aiIntelligentMap
 import ActionBar, { MappingStats, ViewMode } from './ActionBar';
 import AIIntelligentMappingDisplay from '../AIIntelligentMappingDisplay';
 import DocumentPreview from '../../upload/components/TableEditor/components/DocumentPreview';
-import IntelligentTableDisplay from '../../upload/components/TableEditor/components/IntelligentTableDisplay';
 import EditableTableView from './EditableTableView';
 import PremiumProgressLoader, { UploadStep } from './PremiumProgressLoader';
 import { ArrowRight, Map, FileText, Table2 } from 'lucide-react';
@@ -33,6 +32,14 @@ export interface ExtractedData {
   upload_id?: string;
   company_id?: string;
   carrier_id?: string;
+  document_metadata?: {
+    carrier_name?: string;
+    carrier_confidence?: number;
+    statement_date?: string;
+    date_confidence?: number;
+    broker_company?: string;
+    document_type?: string;
+  };
   ai_intelligence?: {
     enabled: boolean;
     field_mapping: {
@@ -79,6 +86,8 @@ export default function UnifiedTableEditor({
   const [newlyAddedField, setNewlyAddedField] = useState<string | null>(null);
   const [approvalStep, setApprovalStep] = useState(0);
   const [approvalProgress, setApprovalProgress] = useState(0);
+  const [showPreview, setShowPreview] = useState(true);
+  const [isExtractingWithGPT, setIsExtractingWithGPT] = useState(false);
 
   // Get AI mappings from extracted data
   const aiMappings = extractedData.ai_intelligence?.field_mapping?.mappings || [];
@@ -610,6 +619,74 @@ export default function UnifiedTableEditor({
     });
   };
 
+  // Handle GPT extraction
+  const handleExtractWithGPT = async () => {
+    setIsExtractingWithGPT(true);
+    
+    try {
+      const upload_id = uploadData?.upload_id || uploadData?.id || extractedData?.upload_id;
+      const company_id = uploadData?.company_id || extractedData?.company_id || extractedData?.carrier_id;
+      
+      if (!upload_id || !company_id) {
+        throw new Error('Missing upload_id or company_id');
+      }
+
+      console.log('🚀 Starting GPT extraction...', { upload_id, company_id });
+      
+      // Call the GPT extraction endpoint
+      const formData = new FormData();
+      formData.append('upload_id', upload_id);
+      formData.append('company_id', company_id);
+      
+      const response = await axios.post(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/extract-tables-gpt/`,
+        formData,
+        { 
+          withCredentials: true,
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          }
+        }
+      );
+
+      if (response.data.success) {
+        console.log('✅ GPT extraction successful:', response.data);
+        
+        // Update tables with the new extraction
+        const newTables = response.data.tables || [];
+        const newDocumentMetadata = response.data.document_metadata || {};
+        
+        // Update local state
+        setTables(newTables);
+        
+        // Update parent with new extraction data including document_metadata
+        const updatedExtractedData = { 
+          ...extractedData, 
+          tables: newTables,
+          extraction_method: 'gpt4o_vision_enhanced',
+          document_metadata: newDocumentMetadata,
+          carrierName: newDocumentMetadata.carrier_name || extractedData.carrierName,
+          statementDate: newDocumentMetadata.statement_date || extractedData.statementDate,
+        };
+        
+        onDataUpdate(updatedExtractedData);
+        
+        toast.success(`GPT extraction completed! Extracted ${newTables.length} table(s) with metadata`);
+      } else {
+        throw new Error(response.data.error || 'GPT extraction failed');
+      }
+    } catch (error: any) {
+      console.error('❌ GPT extraction error:', error);
+      const errorMessage = error?.response?.data?.detail || 
+                          error?.response?.data?.message || 
+                          error?.message || 
+                          'Failed to extract with GPT';
+      toast.error(`Error: ${errorMessage}`);
+    } finally {
+      setIsExtractingWithGPT(false);
+    }
+  };
+
   return (
     <>
       {/* Premium Progress Loader - Shows during submission */}
@@ -683,24 +760,36 @@ export default function UnifiedTableEditor({
             )}
           </div>
           
-          {/* Metadata Display */}
-          <div className="flex items-center space-x-4">
-            <div className="px-3 py-1.5 bg-gray-100 rounded-lg">
-              <span className="text-xs text-gray-500 block">Carrier</span>
-              <span className="text-sm font-semibold text-gray-900">
+          {/* Metadata Display - Highlighted Professional Cards */}
+          <div className="flex items-center space-x-3">
+            <div className="px-4 py-2.5 bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-300 rounded-lg shadow-md hover:shadow-lg transition-shadow">
+              <span className="text-xs font-medium text-blue-600 block uppercase tracking-wide mb-0.5">Carrier</span>
+              <span className="text-base font-bold text-blue-900">
                 {extractedData?.carrierName || extractedData?.extracted_carrier || 'Unknown'}
               </span>
             </div>
-            <div className="px-3 py-1.5 bg-gray-100 rounded-lg">
-              <span className="text-xs text-gray-500 block">Date</span>
-              <span className="text-sm font-semibold text-gray-900">
-                {extractedData?.statementDate || extractedData?.extracted_date || 'Unknown'}
+            <div className="px-4 py-2.5 bg-gradient-to-br from-purple-50 to-purple-100 border-2 border-purple-300 rounded-lg shadow-md hover:shadow-lg transition-shadow">
+              <span className="text-xs font-medium text-purple-600 block uppercase tracking-wide mb-0.5">Broker</span>
+              <span className="text-base font-bold text-purple-900">
+                {extractedData?.document_metadata?.broker_company || 'Not detected'}
+              </span>
+            </div>
+            <div className="px-4 py-2.5 bg-gradient-to-br from-green-50 to-green-100 border-2 border-green-300 rounded-lg shadow-md hover:shadow-lg transition-shadow">
+              <span className="text-xs font-medium text-green-600 block uppercase tracking-wide mb-0.5">Plan Type</span>
+              <span className="text-base font-bold text-green-900">
+                {extractedData?.ai_intelligence?.plan_type_detection?.detected_plan_types?.[0]?.plan_type || 'Not detected'}
+              </span>
+            </div>
+            <div className="px-4 py-2.5 bg-gradient-to-br from-orange-50 to-orange-100 border-2 border-orange-300 rounded-lg shadow-md hover:shadow-lg transition-shadow">
+              <span className="text-xs font-medium text-orange-600 block uppercase tracking-wide mb-0.5">Statement Date</span>
+              <span className="text-base font-bold text-orange-900">
+                {extractedData?.statementDate || extractedData?.extracted_date || 'Not detected'}
               </span>
             </div>
             {viewMode === 'field_mapping' && (
-              <div className="px-3 py-1.5 bg-green-100 rounded-lg">
-                <span className="text-xs text-green-600 block">Accepted</span>
-                <span className="text-sm font-semibold text-green-700">
+              <div className="px-4 py-2.5 bg-gradient-to-br from-emerald-50 to-emerald-100 border-2 border-emerald-300 rounded-lg shadow-md">
+                <span className="text-xs font-medium text-emerald-600 block uppercase tracking-wide mb-0.5">Accepted</span>
+                <span className="text-base font-bold text-emerald-900">
                   {acceptedMappings.length} fields
                 </span>
               </div>
@@ -713,6 +802,7 @@ export default function UnifiedTableEditor({
       <div className="flex-1 flex overflow-hidden">
         
         {/* Left Panel - Document/Data Preview */}
+        {showPreview && (
         <div className={`bg-white border-r-2 border-gray-200 flex flex-col transition-all duration-700 ease-in-out ${
           viewMode === 'table_review' ? 'w-[35%]' : 'w-[35%]'
         } ${isTransitioning ? 'opacity-50' : 'opacity-100'}`}>
@@ -795,37 +885,75 @@ export default function UnifiedTableEditor({
             )}
           </div>
         </div>
+        )}
 
         {/* Right Panel - Table Data/Field Mapping */}
-        <div className={`w-[65%] bg-gray-50 flex flex-col transition-all duration-700 ease-in-out ${
+        <div className={`${showPreview ? 'w-[65%]' : 'w-full'} bg-gray-50 flex flex-col transition-all duration-700 ease-in-out ${
           isTransitioning ? 'opacity-50' : 'opacity-100'
         }`}>
           
           {/* Right Panel Header */}
           <div className="px-6 py-4 border-b-2 border-gray-200 bg-white flex-shrink-0">
-            <div className="flex items-center space-x-2">
-              {viewMode === 'table_review' ? (
-                <>
-                  <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-                    <Table2 className="w-4 h-4 text-green-600" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900">Extracted Table Data</h3>
-                    <p className="text-xs text-gray-500">Review and edit extracted values</p>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-                    <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                    </svg>
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900">Accepted Field Mappings</h3>
-                    <p className="text-xs text-gray-500">Fields you&apos;ve confirmed for database import</p>
-                  </div>
-                </>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                {viewMode === 'table_review' ? (
+                  <>
+                    <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                      <Table2 className="w-4 h-4 text-green-600" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-gray-900">Extracted Table Data</h3>
+                      <p className="text-xs text-gray-500">Review and edit extracted values</p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                      <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-gray-900">Accepted Field Mappings</h3>
+                      <p className="text-xs text-gray-500">Fields you&apos;ve confirmed for database import</p>
+                    </div>
+                  </>
+                )}
+              </div>
+              
+              {/* Action Buttons */}
+              {viewMode === 'table_review' && (
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={handleExtractWithGPT}
+                    disabled={isExtractingWithGPT}
+                    className="flex items-center space-x-2 px-3 py-1.5 text-sm text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                    title="Extract with GPT-4o Vision for improved accuracy"
+                  >
+                    {isExtractingWithGPT ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        <span>Extracting...</span>
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                        <span>Extract with GPT</span>
+                      </>
+                    )}
+                  </button>
+                  
+                  <button
+                    onClick={() => setShowPreview(!showPreview)}
+                    className="flex items-center space-x-2 px-3 py-1.5 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                    title={showPreview ? "Hide Preview" : "Show Preview"}
+                  >
+                    <FileText className="w-4 h-4" />
+                    <span>{showPreview ? 'Hide Preview' : 'Show Preview'}</span>
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -842,6 +970,8 @@ export default function UnifiedTableEditor({
                   onTablesChange={handleTablesChange}
                   carrierName={extractedData?.carrierName || extractedData?.extracted_carrier}
                   statementDate={extractedData?.statementDate || extractedData?.extracted_date}
+                  brokerName={extractedData?.document_metadata?.broker_company}
+                  planType={extractedData?.ai_intelligence?.plan_type_detection?.detected_plan_types?.[0]?.plan_type}
                 />
               </div>
             ) : (

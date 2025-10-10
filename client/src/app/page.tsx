@@ -6,6 +6,7 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import DashboardTab from "./components/dashboardTab/DashboardTab";
 import CarrierTab from "./components/carrierTab/CarrierTab";
 import EarnedCommissionTab from "./components/dashboardTab/EarnedCommissionTab";
+import PremiumAnalyticsTab from "./components/dashboardTab/PremiumAnalyticsTab";
 
 import { 
   Database, 
@@ -32,7 +33,7 @@ function HomePageContent() {
   const searchParams = useSearchParams();
   const { user, logout } = useAuth();
   const { theme, setTheme, actualTheme } = useTheme();
-  const [tab, setTab] = useState<"dashboard" | "carriers" | "earned-commission" | "analytics">("dashboard");
+  const [tab, setTab] = useState<"dashboard" | "carriers" | "earned-commission" | "analytics">("analytics");
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
@@ -44,8 +45,8 @@ function HomePageContent() {
     if (tabParam && ['dashboard', 'carriers', 'earned-commission', 'analytics'].includes(tabParam)) {
       setTab(tabParam as "dashboard" | "carriers" | "earned-commission" | "analytics")
     } else {
-      // Default to dashboard if no tab parameter or invalid tab
-      setTab("dashboard")
+      // Default to analytics if no tab parameter or invalid tab
+      setTab("analytics")
     }
   }, [searchParams])
 
@@ -83,20 +84,20 @@ function HomePageContent() {
 
   const tabConfig = [
     {
+      id: "analytics" as const,
+      label: "Analytics",
+      icon: BarChart3,
+      description: "Commission Analytics & Insights",
+      gradient: "from-emerald-600 via-teal-600 to-cyan-600",
+      bgGradient: "from-emerald-50 via-teal-50 to-cyan-50"
+    },
+    {
       id: "dashboard" as const,
       label: "Upload",
       icon: Upload,
       description: "Upload & Process Documents",
       gradient: "from-blue-600 via-indigo-600 to-purple-600",
       bgGradient: "from-blue-50 via-indigo-50 to-purple-50"
-    },
-    {
-      id: "analytics" as const,
-      label: "Analytics",
-      icon: BarChart3,
-      description: "Overview & Analytics",
-      gradient: "from-emerald-600 via-teal-600 to-cyan-600",
-      bgGradient: "from-emerald-50 via-teal-50 to-cyan-50"
     },
     {
       id: "earned-commission" as const,
@@ -170,7 +171,7 @@ function HomePageContent() {
               <button
                 key={tabItem.id}
                 onClick={() => {
-                  if (tabItem.id === 'dashboard') {
+                  if (tabItem.id === 'analytics') {
                     router.push('/');
                   } else {
                     router.push(`/?tab=${tabItem.id}`);
@@ -341,8 +342,8 @@ function HomePageContent() {
         {/* Main Content */}
         <main className="flex-1 p-6 bg-slate-50 dark:bg-slate-900 overflow-y-auto main-content-scroll">
           <div className="max-w-none">
+            {tab === "analytics" && <PremiumAnalyticsTab onNavigate={(newTab) => router.push(`/?tab=${newTab}`)} />}
             {tab === "dashboard" && <DashboardTab />}
-            {tab === "analytics" && <DashboardTab showAnalytics={true} />}
             {tab === "earned-commission" && <EarnedCommissionTab />}
             {tab === "carriers" && <CarrierTab />}
           </div>

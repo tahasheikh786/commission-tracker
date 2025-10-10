@@ -11,9 +11,103 @@ interface DocumentPreviewProps {
 export default function DocumentPreview({ uploaded, zoom, onZoomIn, onZoomOut }: DocumentPreviewProps) {
   const [pdfError, setPdfError] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   
-  // Use the GCS URL from the extraction response
-  const pdfUrl = uploaded?.gcs_url || uploaded?.pdf_url || uploaded?.file_url;
+  // Fetch signed URL for PDF preview
+  React.useEffect(() => {
+    const fetchPdfUrl = async () => {
+      // Check for gcs_key, file_name, or gcs_url
+      const gcsKey = uploaded?.gcs_key || uploaded?.file_name;
+      const existingUrl = uploaded?.gcs_url;
+      
+      console.log('📄 DocumentPreview - Attempting to load PDF:', { 
+        gcsKey, 
+        existingUrl, 
+        hasUploadedData: !!uploaded 
+      });
+      
+      if (!gcsKey && !existingUrl) {
+        console.warn('📄 No GCS key or URL found');
+        setIsLoading(false);
+        setPdfError(true);
+        return;
+      }
+
+      try {
+        // If we already have a signed GCS URL, try using it directly via proxy
+        if (existingUrl && existingUrl.includes('storage.googleapis.com')) {
+          console.log('📄 Using existing GCS URL via proxy');
+          // Use the GCS key to get a fresh signed URL via backend
+          const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, '');
+          const response = await fetch(`${baseUrl}/api/pdf-preview/?gcs_key=${encodeURIComponent(gcsKey)}`);
+          
+          if (response.ok) {
+            const data = await response.json();
+            const signedUrl = data.url;
+
+            // Step 2: Fetch the PDF as a blob to avoid CORS issues
+            const pdfResponse = await fetch(signedUrl);
+            if (pdfResponse.ok) {
+              const pdfBlob = await pdfResponse.blob();
+              
+              // Step 3: Create a local object URL from the blob
+              const objectUrl = URL.createObjectURL(pdfBlob);
+              console.log('✅ PDF loaded successfully via blob URL');
+              setPdfUrl(objectUrl);
+              setIsLoading(false);
+              setPdfError(false);
+              return;
+            }
+          }
+        }
+        
+        // Fallback: Use gcs_key to get signed URL from backend
+        if (gcsKey) {
+          console.log('📄 Fetching signed URL from backend for:', gcsKey);
+          const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, '');
+          const response = await fetch(`${baseUrl}/api/pdf-preview/?gcs_key=${encodeURIComponent(gcsKey)}`);
+          
+          if (response.ok) {
+            const data = await response.json();
+            const signedUrl = data.url;
+
+            // Fetch the PDF as a blob to avoid CORS issues
+            const pdfResponse = await fetch(signedUrl);
+            if (pdfResponse.ok) {
+              const pdfBlob = await pdfResponse.blob();
+              
+              // Create a local object URL from the blob
+              const objectUrl = URL.createObjectURL(pdfBlob);
+              console.log('✅ PDF loaded successfully via blob URL');
+              setPdfUrl(objectUrl);
+              setIsLoading(false);
+              setPdfError(false);
+              return;
+            } else {
+              throw new Error('Failed to fetch PDF from signed URL');
+            }
+          } else {
+            throw new Error('Failed to get signed URL from backend');
+          }
+        }
+        
+        throw new Error('No valid PDF source found');
+      } catch (err) {
+        console.error('❌ Error fetching PDF:', err);
+        setPdfError(true);
+        setIsLoading(false);
+      }
+    };
+
+    fetchPdfUrl();
+
+    // Cleanup: revoke object URL when component unmounts
+    return () => {
+      if (pdfUrl && pdfUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(pdfUrl);
+      }
+    };
+  }, [uploaded?.gcs_key, uploaded?.file_name, uploaded?.gcs_url]);
   
   // Debug logging
   console.log('📄 DocumentPreview - uploaded data:', {
