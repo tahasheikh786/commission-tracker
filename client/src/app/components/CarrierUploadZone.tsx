@@ -15,12 +15,10 @@ import {
   ArrowRight,
   Sparkles
 } from 'lucide-react';
-import EnhancedProgressLoader from './ui/EnhancedProgressLoader';
-import MinimalEnhancedLoader from './ui/MinimalEnhancedLoader';
-import CompanySelect from '../upload/components/CompanySelect';
+import PremiumProgressLoader from './upload/PremiumProgressLoader';
+import { useProgressWebSocket } from '../hooks/useProgressWebSocket';
 import toast from 'react-hot-toast';
 import axios from 'axios';
-import { WebSocketService, ProgressUpdate } from '../services/websocketService';
 
 interface CarrierUploadZoneProps {
   onParsed: (result: {
@@ -34,7 +32,9 @@ interface CarrierUploadZoneProps {
     gcs_url?: string,
     gcs_key?: string,
     extracted_carrier?: string,
-    extracted_date?: string
+    extracted_date?: string,
+    document_metadata?: any,
+    ai_intelligence?: any
   }) => void;
   selectedStatementDate?: any;
   extractionMethod?: string;
@@ -56,8 +56,41 @@ export default function CarrierUploadZone({
   const [error, setError] = useState<string | null>(null);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [uploadId, setUploadId] = useState<string | null>(null);
-  const [useMinimalLoader, setUseMinimalLoader] = useState(true); // Toggle between loaders
-  const wsServiceRef = useRef<WebSocketService | null>(null);
+  
+  // Memoize callbacks to prevent unnecessary re-renders
+  const handleExtractionComplete = useCallback((results: any) => {
+    setIsUploading(false);
+    if (results && results.success) {
+      onParsed({
+        tables: results.tables || [],
+        upload_id: results.upload_id,
+        file_name: results.file_name || uploadedFile?.name || '',
+        file: uploadedFile!,
+        quality_summary: results.quality_summary,
+        extraction_config: results.extraction_config,
+        gcs_url: results.gcs_url,
+        gcs_key: results.gcs_key,
+        extracted_carrier: results.extracted_carrier,
+        extracted_date: results.extracted_date,
+        document_metadata: results.document_metadata,
+        ai_intelligence: results.ai_intelligence  // ✅ ADD THIS
+      });
+    }
+  }, [uploadedFile, onParsed]);
+  
+  const handleWebSocketError = useCallback((errorMsg: string) => {
+    console.error('WebSocket error:', errorMsg);
+    setError(errorMsg);
+    setIsUploading(false);
+  }, []);
+  
+  // Use new WebSocket hook for premium progress tracking
+  const { progress: wsProgress } = useProgressWebSocket({
+    uploadId: uploadId || undefined,
+    autoConnect: true,  // ✅ Auto-connect when uploadId changes
+    onExtractionComplete: handleExtractionComplete,
+    onError: handleWebSocketError
+  });
 
   // Handle upload click
   const handleUploadClick = useCallback((e: React.MouseEvent) => {
@@ -124,64 +157,6 @@ export default function CarrierUploadZone({
     noKeyboard: true
   });
 
-  // Initialize WebSocket
-  const initializeWebSocket = useCallback(async (uploadId: string) => {
-    try {
-      console.log('Initializing WebSocket for upload_id:', uploadId);
-      wsServiceRef.current = new WebSocketService({
-        uploadId,
-        onProgress: (progressData: ProgressUpdate) => {
-          console.log('WebSocket progress update received:', progressData);
-          setCurrentStage(progressData.progress?.stage || '');
-          setStageProgress(progressData.progress?.progress_percentage || 0);
-          setStageMessage(progressData.progress?.message || '');
-          setEstimatedTime(progressData.progress?.stage_details?.estimated_duration || '');
-        },
-        onError: (errorData: ProgressUpdate) => {
-          console.log('WebSocket error received:', errorData);
-          setError(getCommissionSpecificErrorMessage(errorData.error?.message || 'Unknown error', uploadedFile?.name || ''));
-          setIsUploading(false);
-        },
-        onCompletion: (result: ProgressUpdate) => {
-          console.log('WebSocket completion received:', result);
-          setIsUploading(false);
-          if (result.result) {
-            // Use UUID from backend response, not the temporary uploadId
-            const backendUploadId = (result.result as any).upload_id || (result.result as any).extraction_id || uploadId;
-            
-            // Update local uploadId state with the UUID from backend
-            if (backendUploadId !== uploadId) {
-              setUploadId(backendUploadId);
-            }
-            
-            onParsed({
-              tables: result.result.tables || [],
-              upload_id: backendUploadId,
-              file_name: uploadedFile?.name || '',
-              file: uploadedFile!,
-              quality_summary: result.result.quality_summary,
-              extraction_config: result.result.metadata,
-              gcs_url: result.result.gcs_url,
-              gcs_key: result.result.gcs_key,
-              extracted_carrier: (result.result as any).extracted_carrier || (result.result as any).document_metadata?.carrier_name || (result.result as any).mistral_metadata?.document_metadata?.carrier_name,
-              extracted_date: (result.result as any).extracted_date || (result.result as any).document_metadata?.statement_date || (result.result as any).mistral_metadata?.document_metadata?.statement_date
-            });
-          }
-        },
-        onConnectionEstablished: () => {
-          console.log('🎉 WebSocket connection established for upload_id:', uploadId);
-        }
-      });
-
-      await wsServiceRef.current.connect();
-      console.log('WebSocket connection successful for upload_id:', uploadId);
-      
-      const connectionTest = await wsServiceRef.current.testConnection();
-      console.log('WebSocket connection test result:', connectionTest);
-    } catch (error) {
-      console.error('WebSocket connection failed for upload_id:', uploadId, error);
-    }
-  }, [uploadedFile, onParsed]);
 
   // Commission-specific error handling
   const getCommissionSpecificErrorMessage = (error: string, fileName: string) => {
@@ -219,9 +194,13 @@ export default function CarrierUploadZone({
 
     try {
       const newUploadId = `upload_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      console.log('🆔 Generated uploadId:', newUploadId);
       setUploadId(newUploadId);
 
-      await initializeWebSocket(newUploadId);
+      // Small delay to allow WebSocket to connect before API call
+      console.log('⏱️ Waiting 500ms for WebSocket to connect...');
+      await new Promise(resolve => setTimeout(resolve, 500));
+      console.log('✅ Proceeding with file upload');
 
       const formData = new FormData();
       formData.append('file', file);
@@ -232,6 +211,7 @@ export default function CarrierUploadZone({
         formData.append('statement_date', selectedStatementDate);
       }
 
+      console.log('📤 Starting API call with uploadId:', newUploadId);
       const response = await axios.post('/api/extract-tables-smart/', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
@@ -245,75 +225,11 @@ export default function CarrierUploadZone({
         },
       });
 
-      const wsConnected = wsServiceRef.current && wsServiceRef.current.getConnectionStatus().isConnected;
-      
-      if (!wsConnected) {
-        console.log('WebSocket not connected, handling response directly');
-        setIsUploading(false);
-        if (response.data.success) {
-          // Use UUID from backend response
-          const backendUploadId = response.data.upload_id || response.data.extraction_id || newUploadId;
-          
-          // Update local uploadId state with the UUID from backend
-          if (backendUploadId !== newUploadId) {
-            setUploadId(backendUploadId);
-          }
-          
-          onParsed({
-            tables: response.data.tables || [],
-            upload_id: backendUploadId,
-            file_name: response.data.file_name || file.name,
-            file: file,
-            quality_summary: response.data.quality_summary,
-            extraction_config: response.data.metadata,
-            gcs_url: response.data.gcs_url,
-            gcs_key: response.data.gcs_key,
-            extracted_carrier: response.data.document_metadata?.carrier_name,
-            extracted_date: response.data.document_metadata?.document_date
-          });
-        } else {
-          setError(getCommissionSpecificErrorMessage(response.data.error || 'Processing failed', file.name));
-        }
-      } else {
-        console.log('WebSocket connected, waiting for progress updates');
-        
-        setTimeout(() => {
-          if (isUploading) {
-            console.log('WebSocket timeout - falling back to direct response handling');
-            setIsUploading(false);
-            if (response.data.success) {
-              // Use UUID from backend response
-              const backendUploadId = response.data.upload_id || response.data.extraction_id || newUploadId;
-              
-              // Update local uploadId state with the UUID from backend
-              if (backendUploadId !== newUploadId) {
-                setUploadId(backendUploadId);
-              }
-              
-              onParsed({
-                tables: response.data.tables || [],
-                upload_id: backendUploadId,
-                file_name: response.data.file_name || file.name,
-                file: file,
-                quality_summary: response.data.quality_summary,
-                extraction_config: response.data.metadata,
-                gcs_url: response.data.gcs_url,
-                gcs_key: response.data.gcs_key,
-                extracted_carrier: response.data.document_metadata?.carrier_name,
-                extracted_date: response.data.document_metadata?.document_date
-              });
-            }
-          }
-        }, 30000);
-      }
+      // WebSocket will handle the progress updates automatically via useProgressWebSocket hook
+      console.log('Upload complete, WebSocket will handle progress updates');
 
     } catch (error: any) {
       setIsUploading(false);
-      
-      // Disconnect websocket if connected
-      if (wsServiceRef.current) {
-        wsServiceRef.current.disconnect();
-      }
       
       // Handle 409 conflict (duplicate file) specifically
       if (error.response?.status === 409) {
@@ -343,10 +259,6 @@ export default function CarrierUploadZone({
   };
 
   const handleCancel = async () => {
-    if (wsServiceRef.current) {
-      wsServiceRef.current.disconnect();
-    }
-    
     // Cancel the extraction on the backend if we have an upload ID
     if (uploadId) {
       try {
@@ -389,49 +301,18 @@ export default function CarrierUploadZone({
     setUploadProgress(0);
     setCurrentStage('');
     setStageProgress(0);
-    if (wsServiceRef.current) {
-      wsServiceRef.current.disconnect();
-    }
   };
 
-  // Cleanup WebSocket on unmount
-  useEffect(() => {
-    return () => {
-      if (wsServiceRef.current) {
-        wsServiceRef.current.disconnect();
-      }
-    };
-  }, []);
-
-  // Show loader when uploading
+  // PREMIUM: Show premium loader with step-by-step progress when processing
   if (isUploading) {
     return (
       <div className="w-full h-full">
-        {useMinimalLoader ? (
-          <MinimalEnhancedLoader
-            isVisible={true}
-            progress={stageProgress}
-            stage={currentStage}
-            message={stageMessage}
-            estimatedTime={estimatedTime}
-            fileName={uploadedFile?.name}
-            onCancel={handleCancel}
-            onRetry={error ? handleRetry : undefined}
-            error={error}
-          />
-        ) : (
-          <EnhancedProgressLoader
-            isVisible={true}
-            progress={stageProgress}
-            stage={currentStage}
-            message={stageMessage}
-            estimatedTime={estimatedTime}
-            fileName={uploadedFile?.name}
-            onCancel={handleCancel}
-            onRetry={error ? handleRetry : undefined}
-            error={error}
-          />
-        )}
+        <PremiumProgressLoader
+          currentStep={wsProgress.currentStep}
+          progress={wsProgress.percentage || stageProgress}
+          estimatedTime={wsProgress.estimatedTimeRemaining || estimatedTime}
+          isVisible={true}
+        />
       </div>
     );
   }
@@ -530,43 +411,6 @@ export default function CarrierUploadZone({
                     <Sparkles className="w-4 h-4" />
                     <span>AI Auto-Detection</span>
                   </div>
-                </div>
-                
-                {/* Loader Toggle */}
-                <div className="flex items-center justify-center gap-3">
-                  <span className="text-sm text-slate-600 dark:text-slate-400">Loader Style:</span>
-                  <button
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setUseMinimalLoader(!useMinimalLoader);
-                    }}
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onMouseUp={(e) => e.stopPropagation()}
-                    className={`px-3 py-1 rounded-lg text-xs font-medium transition-all duration-200 ${
-                      useMinimalLoader
-                        ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
-                        : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-600 hover:bg-slate-200 dark:hover:bg-slate-600'
-                    }`}
-                  >
-                    {useMinimalLoader ? 'Minimal' : 'Enhanced'}
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setUseMinimalLoader(!useMinimalLoader);
-                    }}
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onMouseUp={(e) => e.stopPropagation()}
-                    className={`px-3 py-1 rounded-lg text-xs font-medium transition-all duration-200 ${
-                      !useMinimalLoader
-                        ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800'
-                        : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-600 hover:bg-slate-200 dark:hover:bg-slate-600'
-                    }`}
-                  >
-                    Enhanced
-                  </button>
                 </div>
               </div>
 

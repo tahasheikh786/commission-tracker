@@ -211,6 +211,98 @@ class ConnectionManager:
         }
         await self.broadcast_to_upload(message, upload_id)
     
+    # ===== ENHANCED STEP-BASED PROGRESS EVENTS =====
+    
+    async def send_step_started(self, upload_id: str, step_index: int, step_id: str, step_title: str, 
+                                step_description: str, percentage: int):
+        """Send STEP_STARTED event for premium progress loader."""
+        message = {
+            'type': 'STEP_STARTED',
+            'upload_id': upload_id,
+            'stepIndex': step_index,
+            'stepId': step_id,
+            'stepTitle': step_title,
+            'stepDescription': step_description,
+            'percentage': percentage,
+            'message': step_description,
+            'timestamp': datetime.utcnow().isoformat()
+        }
+        await self.broadcast_to_upload(message, upload_id)
+        logger.info(f"Step started: {step_title} (Step {step_index + 1}) for upload_id {upload_id}")
+    
+    async def send_step_progress(self, upload_id: str, percentage: int, estimated_time: str = None):
+        """Send STEP_PROGRESS event for real-time progress updates."""
+        message = {
+            'type': 'STEP_PROGRESS',
+            'upload_id': upload_id,
+            'percentage': percentage,
+            'estimatedTime': estimated_time,
+            'timestamp': datetime.utcnow().isoformat()
+        }
+        await self.broadcast_to_upload(message, upload_id)
+        logger.debug(f"Step progress: {percentage}% for upload_id {upload_id}")
+    
+    async def send_step_completed(self, upload_id: str, step_index: int, step_id: str, percentage: int):
+        """Send STEP_COMPLETED event when a step finishes."""
+        message = {
+            'type': 'STEP_COMPLETED',
+            'upload_id': upload_id,
+            'stepIndex': step_index,
+            'stepId': step_id,
+            'percentage': percentage,
+            'timestamp': datetime.utcnow().isoformat()
+        }
+        await self.broadcast_to_upload(message, upload_id)
+        logger.info(f"Step completed: {step_id} (Step {step_index + 1}) for upload_id {upload_id}")
+    
+    async def send_extraction_complete(self, upload_id: str, results: Dict[str, Any]):
+        """Send EXTRACTION_COMPLETE event with full results."""
+        message = {
+            'type': 'EXTRACTION_COMPLETE',
+            'upload_id': upload_id,
+            'results': results,
+            'timestamp': datetime.utcnow().isoformat()
+        }
+        await self.broadcast_to_upload(message, upload_id)
+        logger.info(f"Extraction complete for upload_id {upload_id}")
+    
+    # Helper method for step-based workflow
+    UPLOAD_STEPS = [
+        {'id': 'upload', 'title': 'Uploading File', 'description': 'Securing your document...'},
+        {'id': 'extraction', 'title': 'Extracting Metadata', 'description': 'AI is analyzing document structure...'},
+        {'id': 'table_extraction', 'title': 'Processing Table Data', 'description': 'Extracting commission data...'},
+        {'id': 'ai_mapping', 'title': 'AI Field Mapping', 'description': 'Intelligently mapping database fields...'},
+        {'id': 'plan_detection', 'title': 'Detecting Plan Type', 'description': 'Identifying insurance plan category...'},
+        {'id': 'finalizing', 'title': 'Finalizing', 'description': 'Preparing your data for review...'}
+    ]
+    
+    async def emit_upload_step(self, upload_id: str, step_name: str, progress_percentage: int = None):
+        """
+        Emit a step event based on the step name from UPLOAD_STEPS.
+        This is a convenience method that automatically calculates step index and percentage.
+        """
+        step_index = next((i for i, s in enumerate(self.UPLOAD_STEPS) if s['id'] == step_name), -1)
+        
+        if step_index == -1:
+            logger.warning(f"Unknown step name: {step_name}")
+            return
+        
+        step_info = self.UPLOAD_STEPS[step_index]
+        
+        # Calculate percentage based on step if not provided
+        if progress_percentage is None:
+            # Each step represents a portion of the total progress
+            progress_percentage = int((step_index / len(self.UPLOAD_STEPS)) * 100)
+        
+        await self.send_step_started(
+            upload_id=upload_id,
+            step_index=step_index,
+            step_id=step_info['id'],
+            step_title=step_info['title'],
+            step_description=step_info['description'],
+            percentage=progress_percentage
+        )
+    
     def _get_stage_details(self, stage: str) -> Dict[str, Any]:
         """Get detailed information about a processing stage."""
         stage_details = {

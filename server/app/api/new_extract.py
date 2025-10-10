@@ -22,6 +22,7 @@ from datetime import datetime
 from uuid import uuid4, UUID
 from app.services.gcs_utils import upload_file_to_gcs, get_gcs_file_url, download_file_from_gcs, generate_gcs_signed_url
 from app.services.extraction_utils import stitch_multipage_tables
+from app.services.websocket_service import connection_manager
 import logging
 from typing import Optional, Dict, Any
 from fastapi.responses import JSONResponse
@@ -266,6 +267,10 @@ async def extract_tables_smart(
             # Fallback to public URL if signed URL generation fails
             gcs_url = get_gcs_file_url(gcs_key)
 
+        # Emit WebSocket: Step 1 - Upload started
+        if upload_id:
+            await connection_manager.emit_upload_step(upload_id, 'upload', 10)
+        
         # Create statement upload record for progress tracking
         db_upload = schemas.StatementUpload(
             id=upload_id_uuid,
@@ -275,7 +280,7 @@ async def extract_tables_smart(
             file_hash=file_hash,
             file_size=file_size,
             uploaded_at=datetime.utcnow(),
-            status="processing",
+            status="pending",  # Changed from "processing" to "pending"
             current_step="extraction",
             progress_data={
                 'extraction_method': extraction_method,
@@ -297,8 +302,16 @@ async def extract_tables_smart(
             upload_id=upload_id_uuid
         )
         
+        # Emit WebSocket: Step 2 - Extraction started
+        if upload_id:
+            await connection_manager.emit_upload_step(upload_id, 'extraction', 20)
+        
         # Get enhanced extraction service with websocket progress tracking
         enhanced_service = await get_enhanced_extraction_service_instance()
+        
+        # Emit WebSocket: Step 3 - Table extraction started
+        if upload_id:
+            await connection_manager.emit_upload_step(upload_id, 'table_extraction', 40)
         
         # Create extraction task for cancellation support
         async def extraction_task():
@@ -320,25 +333,20 @@ async def extract_tables_smart(
             extraction_result = await task
         except asyncio.CancelledError:
             logger.info(f"Extraction cancelled for upload {upload_id_str}")
-            # Update upload status to cancelled
-            update_data = schemas.StatementUploadUpdate(
-                status="cancelled",
-                current_step="cancelled",
-                progress_data={
-                    **db_upload.progress_data,
-                    'cancelled': True,
-                    'cancellation_time': datetime.utcnow().isoformat()
-                }
-            )
-            await with_db_retry(db, crud.update_statement_upload, upload_id=upload_id_uuid, update_data=update_data)
+            # Delete cancelled upload record (only 3 valid statuses: pending, approved, rejected)
+            try:
+                await with_db_retry(db, crud.delete_statement, statement_id=str(upload_id_uuid))
+                logger.info(f"🗑️  Deleted cancelled upload record: {upload_id_uuid}")
+            except Exception as delete_error:
+                logger.error(f"Failed to delete cancelled upload: {delete_error}")
             raise HTTPException(status_code=499, detail="Extraction cancelled by user")
         finally:
             # Clean up the task from running extractions
             running_extractions.pop(upload_id_str, None)
         
-        # Update upload record with results
+        # Update upload record with results - set to 'pending' for review
         update_data = schemas.StatementUploadUpdate(
-            status="extracted",
+            status="pending",  # Changed from "extracted" to "pending" for review workflow
             current_step="extracted",
             raw_data=extraction_result.get('tables', []),
             progress_data={
@@ -367,8 +375,18 @@ async def extract_tables_smart(
         extracted_carrier = document_metadata.get('carrier_name')
         extracted_date = document_metadata.get('statement_date')
         
+        # Initialize AI intelligence data
+        ai_field_mapping_data = None
+        ai_plan_type_data = None
+        
+        # Emit WebSocket step: AI Mapping
+        if upload_id:
+            await connection_manager.emit_upload_step(upload_id, 'ai_mapping', 60)
+        
         # Look up learned formats if carrier was detected
         format_learning_data = extraction_result.get('format_learning', {})
+        carrier_id_for_response = None  # Initialize carrier_id for response
+        
         if extracted_carrier and extraction_result.get('tables'):
             try:
                 from app.services.format_learning_service import FormatLearningService
@@ -376,8 +394,52 @@ async def extract_tables_smart(
                 
                 # Find carrier by name to get carrier_id
                 carrier = await with_db_retry(db, crud.get_company_by_name, name=extracted_carrier)
+                
+                # ⚠️ AUTO-CREATE CARRIER IF NOT FOUND
+                if not carrier:
+                    logger.info(f"🆕 Carrier '{extracted_carrier}' not found in database, creating automatically...")
+                    try:
+                        # Create new carrier
+                        carrier_data = schemas.CompanyCreate(name=extracted_carrier)
+                        carrier = await with_db_retry(db, crud.create_company, company=carrier_data)
+                        logger.info(f"✅ Auto-created carrier: {carrier.name} with ID {carrier.id}")
+                    except Exception as create_error:
+                        logger.error(f"❌ Failed to auto-create carrier '{extracted_carrier}': {create_error}")
+                        carrier = None
+                
                 if carrier:
-                    logger.info(f"🎯 Format Learning: Found carrier {carrier.name} with ID {carrier.id}")
+                    logger.info(f"🎯 Format Learning: Using carrier {carrier.name} with ID {carrier.id}")
+                    
+                    # Always save carrier_id for response
+                    carrier_id_for_response = str(carrier.id)
+                    
+                    # ⚠️ CRITICAL FIX: Update the carrier_id if extracted carrier differs from uploaded carrier
+                    if str(carrier.id) != str(company_id):
+                        logger.warning(f"🚨 CARRIER MISMATCH DETECTED: File uploaded to {company_id} but extracted as {carrier.name} ({carrier.id})")
+                        logger.info(f"🔄 Reassigning file to correct carrier: {carrier.name}")
+                        
+                        # Update the upload record with the correct carrier
+                        carrier_update_data = schemas.StatementUploadUpdate(
+                            company_id=carrier.id
+                        )
+                        await with_db_retry(db, crud.update_statement_upload, upload_id=upload_id_uuid, update_data=carrier_update_data)
+                        
+                        # Also update the GCS key to move file to correct carrier folder
+                        old_gcs_key = gcs_key
+                        new_gcs_key = f"statements/{carrier.id}/{file.filename}"
+                        
+                        # Move file in GCS (copy to new location and delete old)
+                        from app.services.gcs_utils import copy_gcs_file, delete_gcs_file
+                        if copy_gcs_file(old_gcs_key, new_gcs_key):
+                            delete_gcs_file(old_gcs_key)
+                            gcs_key = new_gcs_key
+                            gcs_url = generate_gcs_signed_url(gcs_key) or get_gcs_file_url(gcs_key)
+                            logger.info(f"✅ File moved to correct carrier folder in GCS: {new_gcs_key}")
+                        else:
+                            logger.warning(f"⚠️ Failed to move file in GCS, keeping original location")
+                        
+                        # Update company_id for all subsequent operations
+                        company_id = str(carrier.id)
                     
                     # Get first table for format matching
                     first_table = extraction_result['tables'][0]
@@ -412,16 +474,91 @@ async def extract_tables_smart(
                         }
                     else:
                         logger.info(f"🎯 Format Learning: No matching format found (score: {match_score})")
+                        
+                    # ===== AI INTELLIGENT FIELD MAPPING =====
+                    # Get AI-powered field mapping suggestions
+                    try:
+                        from app.services.ai_field_mapping_service import AIFieldMappingService
+                        from app.services.ai_plan_type_detection_service import AIPlanTypeDetectionService
+                        
+                        ai_mapping_service = AIFieldMappingService()
+                        ai_plan_service = AIPlanTypeDetectionService()
+                        
+                        if ai_mapping_service.is_available() and first_table:
+                            logger.info("🤖 AI Intelligence: Generating smart field mappings and plan type detection")
+                            
+                            # Get AI field mapping suggestions
+                            ai_field_mapping_result = await ai_mapping_service.get_intelligent_field_mappings(
+                                db=db,
+                                extracted_headers=headers,
+                                table_sample_data=first_table.get('rows', [])[:5],  # First 5 rows
+                                carrier_id=carrier.id,
+                                document_context={
+                                    'carrier_name': carrier.name,
+                                    'statement_date': extracted_date,
+                                    'document_type': 'commission_statement'
+                                }
+                            )
+                            
+                            if ai_field_mapping_result.get('success'):
+                                ai_field_mapping_data = {
+                                    "ai_enabled": True,
+                                    "mappings": ai_field_mapping_result.get('mappings', []),
+                                    "unmapped_fields": ai_field_mapping_result.get('unmapped_fields', []),
+                                    "confidence": ai_field_mapping_result.get('overall_confidence', 0.0),
+                                    "statistics": ai_field_mapping_result.get('mapping_statistics', {}),
+                                    "learned_format_used": ai_field_mapping_result.get('learned_format_used', False)
+                                }
+                                logger.info(f"✅ AI Field Mapping: {len(ai_field_mapping_result.get('mappings', []))} mappings with {ai_field_mapping_result.get('overall_confidence', 0):.2f} confidence")
+                            
+                            # Get AI plan type detection
+                            if ai_plan_service.is_available():
+                                ai_plan_result = await ai_plan_service.detect_plan_types(
+                                    db=db,
+                                    document_context={
+                                        'carrier_name': carrier.name,
+                                        'statement_date': extracted_date,
+                                        'document_type': 'commission_statement'
+                                    },
+                                    table_headers=headers,
+                                    table_sample_data=first_table.get('rows', [])[:5],
+                                    extracted_carrier=carrier.name
+                                )
+                                
+                                if ai_plan_result.get('success'):
+                                    ai_plan_type_data = {
+                                        "ai_enabled": True,
+                                        "detected_plan_types": ai_plan_result.get('detected_plan_types', []),
+                                        "confidence": ai_plan_result.get('overall_confidence', 0.0),
+                                        "multi_plan_document": ai_plan_result.get('multi_plan_document', False),
+                                        "statistics": ai_plan_result.get('detection_statistics', {})
+                                    }
+                                    
+                                    # Emit WebSocket step: Plan Detection Complete
+                                    if upload_id:
+                                        await connection_manager.emit_upload_step(upload_id, 'plan_detection', 80)
+                                    logger.info(f"✅ AI Plan Detection: {len(ai_plan_result.get('detected_plan_types', []))} plan types with {ai_plan_result.get('overall_confidence', 0):.2f} confidence")
+                        
+                    except Exception as ai_error:
+                        logger.warning(f"AI intelligence generation failed (non-critical): {str(ai_error)}")
+                        # AI is optional, don't fail the extraction
+                        pass
+                    
             except Exception as e:
                 logger.warning(f"Format learning lookup failed: {str(e)}")
         
-        # Prepare client response
+        # Emit WebSocket step: Finalizing
+        if upload_id:
+            await connection_manager.emit_upload_step(upload_id, 'finalizing', 95)
+        
+        # Prepare client response with AI intelligence
         client_response = {
             "success": True,
             "upload_id": str(upload_id_uuid),
             "tables": extraction_result.get('tables', []),
             "file_name": file.filename,
             "company_id": company_id,
+            "carrier_id": carrier_id_for_response,  # Add carrier_id
             "extraction_method": extraction_method,
             "file_type": file_ext,
             "processing_time": processing_time,
@@ -432,7 +569,22 @@ async def extract_tables_smart(
             "extracted_carrier": extracted_carrier,
             "extracted_date": extracted_date,
             "document_metadata": document_metadata,
-            "message": f"Successfully extracted {len(extraction_result.get('tables', []))} tables using {extraction_method} method"
+            
+            # ===== AI INTELLIGENCE DATA =====
+            "ai_intelligence": {
+                "enabled": ai_field_mapping_data is not None or ai_plan_type_data is not None,
+                "field_mapping": ai_field_mapping_data or {"ai_enabled": False},
+                "plan_type_detection": ai_plan_type_data or {"ai_enabled": False},
+                "overall_confidence": (
+                    (ai_field_mapping_data.get('confidence', 0.0) + ai_plan_type_data.get('confidence', 0.0)) / 2
+                    if ai_field_mapping_data and ai_plan_type_data
+                    else ai_field_mapping_data.get('confidence', 0.0) if ai_field_mapping_data
+                    else ai_plan_type_data.get('confidence', 0.0) if ai_plan_type_data
+                    else 0.0
+                )
+            },
+            
+            "message": f"Successfully extracted {len(extraction_result.get('tables', []))} tables using {extraction_method} method with AI intelligence"
         }
         
         # Record user contribution
@@ -475,15 +627,52 @@ async def extract_tables_smart(
             "file_name": gcs_key  # Use full GCS path as file_name for PDF preview
         })
         
+        # Emit WebSocket: EXTRACTION_COMPLETE with full results
+        if upload_id:
+            # Convert all UUID objects to strings for JSON serialization
+            def convert_uuids_to_strings(obj):
+                """Recursively convert UUID objects to strings for JSON serialization"""
+                if isinstance(obj, UUID):
+                    return str(obj)
+                elif isinstance(obj, dict):
+                    return {k: convert_uuids_to_strings(v) for k, v in obj.items()}
+                elif isinstance(obj, list):
+                    return [convert_uuids_to_strings(item) for item in obj]
+                else:
+                    return obj
+            
+            # Create a JSON-safe copy of the response
+            json_safe_response = convert_uuids_to_strings(client_response)
+            
+            await connection_manager.send_extraction_complete(upload_id, json_safe_response)
+            logger.info(f"✅ Extraction complete! Sent results via WebSocket for upload_id: {upload_id}")
+        
         return client_response
         
     except HTTPException:
+        # Delete failed upload record (only 3 valid statuses: pending, approved, rejected)
+        try:
+            if upload_id_uuid:
+                await with_db_retry(db, crud.delete_statement, statement_id=str(upload_id_uuid))
+                logger.info(f"🗑️  Deleted failed upload record: {upload_id_uuid}")
+        except Exception as delete_error:
+            logger.error(f"Failed to delete upload record after error: {delete_error}")
+        
         # Clean up file on error
         if os.path.exists(file_path):
             os.remove(file_path)
         raise
     except Exception as e:
         logger.error(f"Smart extraction error: {str(e)}")
+        
+        # Delete failed upload record (only 3 valid statuses: pending, approved, rejected)
+        try:
+            if upload_id_uuid:
+                await with_db_retry(db, crud.delete_statement, statement_id=str(upload_id_uuid))
+                logger.info(f"🗑️  Deleted failed upload record: {upload_id_uuid}")
+        except Exception as delete_error:
+            logger.error(f"Failed to delete upload record after error: {delete_error}")
+        
         # Clean up file on error
         if os.path.exists(file_path):
             os.remove(file_path)
@@ -1288,7 +1477,7 @@ async def extract_with_intelligence(
             buffer.write(file_content)
         
         # Use intelligent extraction service
-        from app.services.mistral import MistralDocumentAIService
+        from app.services.mistral.service import MistralDocumentAIService
         extraction_service = MistralDocumentAIService()
         
         if not extraction_service.is_available():
@@ -1379,7 +1568,7 @@ async def extract_tables_mistral_frontend(
         logger.info(f"Processing PDF: {temp_pdf_path} (downloaded from GCS)")
         
         # Use the INTELLIGENT Mistral Document AI service for extraction
-        from app.services.mistral import MistralDocumentAIService
+        from app.services.mistral.service import MistralDocumentAIService
         mistral_service = MistralDocumentAIService()
         
         if not mistral_service.is_available():

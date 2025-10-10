@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @config "../../tailwind.config.ts";
+@import "./styles/animations.css";
 
 *,
 *::before,

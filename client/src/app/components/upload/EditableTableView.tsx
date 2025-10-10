@@ -1,0 +1,621 @@
+/**
+ * Editable Table View Component
+ * 
+ * Provides full CRUD operations for table editing within the review interface.
+ * Includes: add/delete rows, add/delete columns, edit cells, inline editing, and validation.
+ */
+
+"use client";
+
+import React, { useState, useEffect } from 'react';
+import { Pencil, Trash2, Plus, MoreVertical, MoreHorizontal } from 'lucide-react';
+import { toast } from 'react-hot-toast';
+
+interface TableData {
+  header: string[];
+  headers?: string[];
+  rows: string[][];
+  name?: string;
+  id?: string;
+  summaryRows?: Set<number>;
+}
+
+interface EditableTableViewProps {
+  tables: TableData[];
+  onTablesChange: (tables: TableData[]) => void;
+  carrierName?: string;
+  statementDate?: string;
+}
+
+interface CellEdit {
+  tableIdx: number;
+  rowIdx: number;
+  colIdx: number;
+  value: string;
+}
+
+export default function EditableTableView({
+  tables,
+  onTablesChange,
+  carrierName,
+  statementDate
+}: EditableTableViewProps) {
+  const [currentTableIdx, setCurrentTableIdx] = useState(0);
+  const [editingCell, setEditingCell] = useState<CellEdit | null>(null);
+  const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
+  const [showHeaderMenu, setShowHeaderMenu] = useState<number | null>(null);
+  const [showRowMenu, setShowRowMenu] = useState<number | null>(null);
+
+  const currentTable = tables[currentTableIdx];
+  
+  // Helper to safely get table headers (handles both 'header' and 'headers' properties)
+  const getTableHeaders = (table: TableData | undefined): string[] => {
+    if (!table) return [];
+    return table.header || table.headers || [];
+  };
+  
+  // Helper to safely get table rows
+  const getTableRows = (table: TableData | undefined): string[][] => {
+    if (!table) return [];
+    return table.rows || [];
+  };
+
+  // Close menus when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
+      if (!target.closest('[data-header-menu]') && !target.closest('[data-row-menu]')) {
+        setShowHeaderMenu(null);
+        setShowRowMenu(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Row operations
+  const addRowAbove = (tableIdx: number, rowIdx: number) => {
+    const newTables = [...tables];
+    const headers = getTableHeaders(newTables[tableIdx]);
+    const newRow = new Array(headers.length).fill('');
+    newTables[tableIdx].rows.splice(rowIdx, 0, newRow);
+    onTablesChange(newTables);
+    toast.success('Row added above');
+  };
+
+  const addRowBelow = (tableIdx: number, rowIdx: number) => {
+    const newTables = [...tables];
+    const headers = getTableHeaders(newTables[tableIdx]);
+    const newRow = new Array(headers.length).fill('');
+    newTables[tableIdx].rows.splice(rowIdx + 1, 0, newRow);
+    onTablesChange(newTables);
+    toast.success('Row added below');
+  };
+
+  const deleteRow = (tableIdx: number, rowIdx: number) => {
+    const newTables = [...tables];
+    newTables[tableIdx].rows.splice(rowIdx, 1);
+    onTablesChange(newTables);
+    toast.success('Row deleted');
+  };
+
+  const deleteSelectedRows = () => {
+    if (selectedRows.size === 0) return;
+    const newTables = [...tables];
+    const sortedIndices = Array.from(selectedRows).sort((a, b) => b - a);
+    sortedIndices.forEach(rowIdx => {
+      newTables[currentTableIdx].rows.splice(rowIdx, 1);
+    });
+    onTablesChange(newTables);
+    setSelectedRows(new Set());
+    toast.success(`Deleted ${selectedRows.size} rows`);
+  };
+
+  // Column operations
+  const addColumn = (tableIdx: number, colIdx: number) => {
+    const newTables = [...tables];
+    const headers = getTableHeaders(newTables[tableIdx]);
+    const columnName = `Column ${headers.length + 1}`;
+    
+    // Ensure header property exists
+    if (!newTables[tableIdx].header) {
+      newTables[tableIdx].header = [...headers];
+    }
+    
+    newTables[tableIdx].header.splice(colIdx + 1, 0, columnName);
+    newTables[tableIdx].rows.forEach(row => {
+      row.splice(colIdx + 1, 0, '');
+    });
+    onTablesChange(newTables);
+    toast.success('Column added');
+  };
+
+  const deleteColumn = (tableIdx: number, colIdx: number) => {
+    const newTables = [...tables];
+    const headers = getTableHeaders(newTables[tableIdx]);
+    
+    // Ensure header property exists
+    if (!newTables[tableIdx].header) {
+      newTables[tableIdx].header = [...headers];
+    }
+    
+    newTables[tableIdx].header.splice(colIdx, 1);
+    newTables[tableIdx].rows.forEach(row => {
+      row.splice(colIdx, 1);
+    });
+    onTablesChange(newTables);
+    toast.success('Column deleted');
+  };
+
+  const renameColumn = (tableIdx: number, colIdx: number, newName: string) => {
+    const newTables = [...tables];
+    const headers = getTableHeaders(newTables[tableIdx]);
+    
+    // Ensure header property exists
+    if (!newTables[tableIdx].header) {
+      newTables[tableIdx].header = [...headers];
+    }
+    
+    newTables[tableIdx].header[colIdx] = newName;
+    onTablesChange(newTables);
+    toast.success('Column renamed');
+  };
+
+  // Cell editing
+  const startCellEdit = (tableIdx: number, rowIdx: number, colIdx: number) => {
+    const rows = getTableRows(tables[tableIdx]);
+    const cellValue = rows[rowIdx]?.[colIdx] || '';
+    
+    setEditingCell({
+      tableIdx,
+      rowIdx,
+      colIdx,
+      value: cellValue
+    });
+  };
+
+  const saveCellEdit = () => {
+    if (!editingCell) return;
+    const newTables = [...tables];
+    
+    // Ensure rows exist
+    if (!newTables[editingCell.tableIdx].rows) {
+      newTables[editingCell.tableIdx].rows = [];
+    }
+    if (!newTables[editingCell.tableIdx].rows[editingCell.rowIdx]) {
+      newTables[editingCell.tableIdx].rows[editingCell.rowIdx] = [];
+    }
+    
+    newTables[editingCell.tableIdx].rows[editingCell.rowIdx][editingCell.colIdx] = editingCell.value;
+    onTablesChange(newTables);
+    setEditingCell(null);
+  };
+
+  const cancelCellEdit = () => {
+    setEditingCell(null);
+  };
+
+  // Row selection
+  const toggleRowSelection = (rowIdx: number) => {
+    setSelectedRows(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(rowIdx)) {
+        newSet.delete(rowIdx);
+      } else {
+        newSet.add(rowIdx);
+      }
+      return newSet;
+    });
+  };
+
+  const selectAllRows = () => {
+    const rows = getTableRows(currentTable);
+    const allIndices = rows.map((_, idx) => idx);
+    setSelectedRows(new Set(allIndices));
+  };
+
+  const clearRowSelection = () => {
+    setSelectedRows(new Set());
+  };
+
+  if (!tables || tables.length === 0 || !currentTable) {
+    return (
+      <div className="flex items-center justify-center h-full p-8">
+        <div className="text-center">
+          <div className="text-gray-500 text-lg mb-2">No tables extracted</div>
+          <div className="text-gray-400 text-sm">The extracted data will appear here</div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-full flex flex-col bg-white">
+      {/* Header with carrier and date info */}
+      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-gray-200 px-6 py-4 flex-shrink-0">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">Extracted Table Data</h3>
+            <p className="text-xs text-gray-600 mt-1">
+              Review and edit the extracted data before proceeding
+            </p>
+          </div>
+          {tables.length > 1 && (
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setCurrentTableIdx(Math.max(0, currentTableIdx - 1))}
+                disabled={currentTableIdx === 0}
+                className="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                Previous
+              </button>
+              <span className="text-sm text-gray-700 font-medium px-2">
+                Table {currentTableIdx + 1} of {tables.length}
+              </span>
+              <button
+                onClick={() => setCurrentTableIdx(Math.min(tables.length - 1, currentTableIdx + 1))}
+                disabled={currentTableIdx === tables.length - 1}
+                className="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                Next
+              </button>
+            </div>
+          )}
+        </div>
+        
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="bg-white rounded-lg px-3 py-2 border border-gray-200">
+            <span className="text-xs text-gray-500 block mb-0.5">Carrier</span>
+            <span className="text-sm font-semibold text-gray-900">{carrierName || 'Unknown'}</span>
+          </div>
+          <div className="bg-white rounded-lg px-3 py-2 border border-gray-200">
+            <span className="text-xs text-gray-500 block mb-0.5">Date</span>
+            <span className="text-sm font-semibold text-gray-900">{statementDate || 'Not detected'}</span>
+          </div>
+          <div className="bg-white rounded-lg px-3 py-2 border border-gray-200">
+            <span className="text-xs text-gray-500 block mb-0.5">Columns</span>
+            <span className="text-sm font-semibold text-blue-600">{getTableHeaders(currentTable).length}</span>
+          </div>
+          <div className="bg-white rounded-lg px-3 py-2 border border-gray-200">
+            <span className="text-xs text-gray-500 block mb-0.5">Rows</span>
+            <span className="text-sm font-semibold text-blue-600">{getTableRows(currentTable).length}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Table controls */}
+      {selectedRows.size > 0 && (
+        <div className="bg-blue-50 border-b border-blue-200 px-6 py-3 flex items-center justify-between flex-shrink-0">
+          <span className="text-sm text-blue-800 font-medium">
+            {selectedRows.size} row{selectedRows.size !== 1 ? 's' : ''} selected
+          </span>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={deleteSelectedRows}
+              className="px-3 py-1.5 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 flex items-center transition-colors shadow-sm"
+            >
+              <Trash2 className="w-4 h-4 mr-1.5" />
+              Delete Selected
+            </button>
+            <button
+              onClick={clearRowSelection}
+              className="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+            >
+              Clear Selection
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Table Container - Fixed height with scroll */}
+      <div className="flex-1 overflow-auto bg-gray-50">
+        <div className="min-w-full inline-block align-middle">
+          <table className="min-w-full divide-y divide-gray-200 bg-white">
+            <thead className="bg-gradient-to-r from-gray-50 to-gray-100 sticky top-0 z-20 shadow-sm">
+              <tr className="border-b-2 border-gray-200">
+                {/* Checkbox column */}
+                <th className="px-6 py-3 text-left w-14 bg-gray-50">
+                  <input
+                    type="checkbox"
+                    checked={selectedRows.size === getTableRows(currentTable).length && getTableRows(currentTable).length > 0}
+                    onChange={(e) => e.target.checked ? selectAllRows() : clearRowSelection()}
+                    className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                  />
+                </th>
+                
+                {/* Column headers */}
+                {getTableHeaders(currentTable).map((header, colIdx) => (
+                  <th
+                    key={colIdx}
+                    className="px-6 py-3 text-left text-sm font-semibold text-gray-900 relative group bg-gray-50"
+                  >
+                    <div className="flex items-center justify-between min-w-[120px]">
+                      <span className="truncate font-semibold">{header}</span>
+                      <button
+                        onClick={() => setShowHeaderMenu(showHeaderMenu === colIdx ? null : colIdx)}
+                        className="ml-2 p-1.5 opacity-0 group-hover:opacity-100 hover:bg-gray-200 rounded-md transition-all"
+                        data-header-menu={colIdx}
+                      >
+                        <MoreHorizontal size={14} className="text-gray-600" />
+                      </button>
+                    </div>
+                    
+                    {/* Header menu */}
+                    {showHeaderMenu === colIdx && (
+                      <HeaderMenu
+                        tableIdx={currentTableIdx}
+                        colIdx={colIdx}
+                        currentName={header}
+                        onRename={renameColumn}
+                        onAddColumn={addColumn}
+                        onDeleteColumn={deleteColumn}
+                        onClose={() => setShowHeaderMenu(null)}
+                      />
+                    )}
+                  </th>
+                ))}
+                
+                {/* Actions column */}
+                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900 w-24 bg-gray-50">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            
+            <tbody className="bg-white divide-y divide-gray-100">
+              {getTableRows(currentTable).map((row, rowIdx) => (
+                <tr
+                  key={rowIdx}
+                  className={`transition-colors ${
+                    selectedRows.has(rowIdx) 
+                      ? 'bg-blue-50 hover:bg-blue-100' 
+                      : 'hover:bg-gray-50'
+                  }`}
+                >
+                  {/* Checkbox */}
+                  <td className="px-6 py-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedRows.has(rowIdx)}
+                      onChange={() => toggleRowSelection(rowIdx)}
+                      className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                    />
+                  </td>
+                  
+                  {/* Row cells */}
+                  {row.map((cell, colIdx) => (
+                    <td key={colIdx} className="px-6 py-3 text-sm text-gray-900">
+                      {editingCell && editingCell.tableIdx === currentTableIdx && editingCell.rowIdx === rowIdx && editingCell.colIdx === colIdx ? (
+                        <input
+                          type="text"
+                          value={editingCell.value}
+                          onChange={(e) => setEditingCell({ ...editingCell, value: e.target.value })}
+                          onBlur={saveCellEdit}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') saveCellEdit();
+                            if (e.key === 'Escape') cancelCellEdit();
+                          }}
+                          className="w-full px-3 py-1.5 border-2 border-blue-400 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
+                          autoFocus
+                        />
+                      ) : (
+                        <div
+                          className="cursor-pointer hover:bg-blue-50 rounded-md px-3 py-1.5 transition-colors min-h-[32px] flex items-center"
+                          onClick={() => startCellEdit(currentTableIdx, rowIdx, colIdx)}
+                          title="Click to edit"
+                        >
+                          {cell || <span className="text-gray-400">-</span>}
+                        </div>
+                      )}
+                    </td>
+                  ))}
+                  
+                  {/* Row actions */}
+                  <td className="px-6 py-3 relative">
+                    <button
+                      onClick={() => setShowRowMenu(showRowMenu === rowIdx ? null : rowIdx)}
+                      className="p-2 hover:bg-gray-200 rounded-md transition-colors text-gray-600 hover:text-gray-900"
+                      data-row-menu={rowIdx}
+                      title="Row actions"
+                    >
+                      <MoreVertical size={16} />
+                    </button>
+                    
+                    {showRowMenu === rowIdx && (
+                      <RowMenu
+                        tableIdx={currentTableIdx}
+                        rowIdx={rowIdx}
+                        onAddRowAbove={addRowAbove}
+                        onAddRowBelow={addRowBelow}
+                        onDeleteRow={deleteRow}
+                        onClose={() => setShowRowMenu(null)}
+                      />
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Footer info */}
+      <div className="bg-gradient-to-r from-gray-50 to-gray-100 border-t-2 border-gray-200 px-6 py-3 flex-shrink-0">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <span className="text-sm font-medium text-gray-700">
+              <span className="text-blue-600 font-semibold">{getTableRows(currentTable).length}</span> row{getTableRows(currentTable).length !== 1 ? 's' : ''}
+              <span className="mx-2 text-gray-400">×</span>
+              <span className="text-blue-600 font-semibold">{getTableHeaders(currentTable).length}</span> column{getTableHeaders(currentTable).length !== 1 ? 's' : ''}
+            </span>
+            {selectedRows.size > 0 && (
+              <span className="text-sm text-blue-600 font-medium">
+                • {selectedRows.size} selected
+              </span>
+            )}
+          </div>
+          <div className="flex items-center space-x-1 text-sm text-gray-600">
+            <Pencil className="w-3.5 h-3.5" />
+            <span>Click any cell to edit • Use menus for more actions</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Header Menu Component
+function HeaderMenu({
+  tableIdx,
+  colIdx,
+  currentName,
+  onRename,
+  onAddColumn,
+  onDeleteColumn,
+  onClose
+}: {
+  tableIdx: number;
+  colIdx: number;
+  currentName: string;
+  onRename: (tableIdx: number, colIdx: number, newName: string) => void;
+  onAddColumn: (tableIdx: number, colIdx: number) => void;
+  onDeleteColumn: (tableIdx: number, colIdx: number) => void;
+  onClose: () => void;
+}) {
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [newName, setNewName] = useState(currentName);
+
+  const handleRename = () => {
+    if (newName.trim()) {
+      onRename(tableIdx, colIdx, newName.trim());
+      setIsRenaming(false);
+      onClose();
+    }
+  };
+
+  return (
+    <div
+      className="absolute top-full left-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-xl z-50 min-w-[220px]"
+      data-header-menu
+    >
+      {isRenaming ? (
+        <div className="p-4">
+          <label className="text-xs font-medium text-gray-700 block mb-2">Column Name</label>
+          <input
+            type="text"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleRename()}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            placeholder="Enter column name"
+            autoFocus
+          />
+          <div className="flex gap-2 mt-3">
+            <button
+              onClick={handleRename}
+              className="flex-1 px-3 py-1.5 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700 transition-colors font-medium"
+            >
+              Save
+            </button>
+            <button
+              onClick={() => setIsRenaming(false)}
+              className="flex-1 px-3 py-1.5 bg-gray-200 text-gray-700 rounded-md text-sm hover:bg-gray-300 transition-colors font-medium"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="p-2">
+          <button
+            onClick={() => setIsRenaming(true)}
+            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
+          >
+            <Pencil className="w-4 h-4 text-blue-600" />
+            <span className="font-medium">Rename Column</span>
+          </button>
+          <button
+            onClick={() => {
+              onAddColumn(tableIdx, colIdx);
+              onClose();
+            }}
+            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
+          >
+            <Plus className="w-4 h-4 text-green-600" />
+            <span className="font-medium">Add Column After</span>
+          </button>
+          <div className="border-t border-gray-200 my-2"></div>
+          <button
+            onClick={() => {
+              onDeleteColumn(tableIdx, colIdx);
+              onClose();
+            }}
+            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 rounded-md transition-colors"
+          >
+            <Trash2 className="w-4 h-4" />
+            <span className="font-medium">Delete Column</span>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Row Menu Component
+function RowMenu({
+  tableIdx,
+  rowIdx,
+  onAddRowAbove,
+  onAddRowBelow,
+  onDeleteRow,
+  onClose
+}: {
+  tableIdx: number;
+  rowIdx: number;
+  onAddRowAbove: (tableIdx: number, rowIdx: number) => void;
+  onAddRowBelow: (tableIdx: number, rowIdx: number) => void;
+  onDeleteRow: (tableIdx: number, rowIdx: number) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="absolute right-0 top-full mt-2 bg-white border border-gray-200 rounded-lg shadow-xl z-50 min-w-[200px]"
+      data-row-menu
+    >
+      <div className="p-2">
+        <button
+          onClick={() => {
+            onAddRowAbove(tableIdx, rowIdx);
+            onClose();
+          }}
+          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
+        >
+          <Plus className="w-4 h-4 text-green-600" />
+          <span className="font-medium">Add Row Above</span>
+        </button>
+        <button
+          onClick={() => {
+            onAddRowBelow(tableIdx, rowIdx);
+            onClose();
+          }}
+          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
+        >
+          <Plus className="w-4 h-4 text-green-600" />
+          <span className="font-medium">Add Row Below</span>
+        </button>
+        <div className="border-t border-gray-200 my-2"></div>
+        <button
+          onClick={() => {
+            onDeleteRow(tableIdx, rowIdx);
+            onClose();
+          }}
+          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 rounded-md transition-colors"
+        >
+          <Trash2 className="w-4 h-4" />
+          <span className="font-medium">Delete Row</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+

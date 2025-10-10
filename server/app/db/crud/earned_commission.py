@@ -453,54 +453,65 @@ def extract_field_mappings_once(field_config):
     # Look for these specific database fields in the field_config
     for field in field_config:
         if isinstance(field, dict):
-            field_name = field.get('field', '')
-            field_label = field.get('label', '')
+            # Support both old format (field/label) and new format (display_name/source_field)
+            field_name = field.get('field', '') or field.get('display_name', '')
+            field_label = field.get('label', '') or field.get('source_field', '')
+            display_name = field.get('display_name', '') or field.get('label', '')
+            
+            # Use display_name as the target field name (what we'll look for in row data)
+            # Use source_field/label as the source field name (what maps to display_name)
+            target_field = display_name
             
             # Check for company/client name fields
             if (field_name.lower() in ['company name', 'client name', 'companyname', 'clientname'] or 
-                field_label.lower() in ['company name', 'client name', 'companyname', 'clientname'] or
-                'company' in field_name.lower() or 'company' in field_label.lower() or
-                'client' in field_name.lower() or 'client' in field_label.lower()):
-                mappings['client_name_field'] = field_label
+                display_name.lower() in ['company name', 'client name', 'companyname', 'clientname'] or
+                'company' in field_name.lower() or 'company' in display_name.lower() or
+                'client' in field_name.lower() or 'client' in display_name.lower()):
+                mappings['client_name_field'] = field_label or target_field
             
             # Check for commission earned fields
-            elif (field_name.lower() in ['commission earned', 'commissionearned', 'commission_earned'] or 
-                  field_label.lower() in ['commission earned', 'commissionearned', 'commission_earned'] or
-                  'commission' in field_name.lower() and 'earned' in field_name.lower() or
-                  'commission' in field_label.lower() and 'earned' in field_label.lower()):
-                mappings['commission_earned_field'] = field_label
+            elif (field_name.lower() in ['commission earned', 'commissionearned', 'commission_earned', 'commission paid', 'total commission paid'] or 
+                  display_name.lower() in ['commission earned', 'commissionearned', 'commission_earned', 'commission paid', 'total commission paid'] or
+                  'commission' in field_name.lower() and ('earned' in field_name.lower() or 'paid' in field_name.lower()) or
+                  'commission' in display_name.lower() and ('earned' in display_name.lower() or 'paid' in display_name.lower())):
+                mappings['commission_earned_field'] = field_label or target_field
             
             # Check for invoice total fields
             elif (field_name.lower() in ['invoice total', 'invoicetotal', 'invoice_total', 'premium amount', 'premiumamount'] or 
-                  field_label.lower() in ['invoice total', 'invoicetotal', 'invoice_total', 'premium amount', 'premiumamount'] or
+                  display_name.lower() in ['invoice total', 'invoicetotal', 'invoice_total', 'premium amount', 'premiumamount'] or
                   'invoice' in field_name.lower() and 'total' in field_name.lower() or
-                  'invoice' in field_label.lower() and 'total' in field_label.lower() or
+                  'invoice' in display_name.lower() and 'total' in display_name.lower() or
                   'premium' in field_name.lower() and 'amount' in field_name.lower() or
-                  'premium' in field_label.lower() and 'amount' in field_label.lower()):
-                mappings['invoice_total_field'] = field_label
+                  'premium' in display_name.lower() and 'amount' in display_name.lower()):
+                mappings['invoice_total_field'] = field_label or target_field
     
     # If we didn't find the fields, try alternative field names
     if not mappings['client_name_field']:
         for field in field_config:
             if isinstance(field, dict):
-                field_name = field.get('field', '').lower()
-                field_label = field.get('label', '').lower()
+                field_name = (field.get('field', '') or field.get('display_name', '')).lower()
+                field_label = (field.get('label', '') or field.get('source_field', '')).lower()
+                display_name = (field.get('display_name', '') or field.get('label', '')).lower()
                 
                 # Try alternative client name patterns
-                if any(keyword in field_name or keyword in field_label for keyword in ['group', 'employer', 'organization']):
-                    mappings['client_name_field'] = field.get('label', '')
+                if any(keyword in field_name or keyword in field_label or keyword in display_name for keyword in ['group', 'employer', 'organization']):
+                    mappings['client_name_field'] = field.get('source_field', '') or field.get('label', '')
                     break
     
     if not mappings['commission_earned_field']:
         for field in field_config:
             if isinstance(field, dict):
-                field_name = field.get('field', '').lower()
-                field_label = field.get('label', '').lower()
+                field_name = (field.get('field', '') or field.get('display_name', '')).lower()
+                field_label = (field.get('label', '') or field.get('source_field', '')).lower()
+                display_name = (field.get('display_name', '') or field.get('label', '')).lower()
                 
                 # Try alternative commission patterns
-                if any(keyword in field_name or keyword in field_label for keyword in ['commission', 'earned', 'paid', 'amount']):
-                    mappings['commission_earned_field'] = field.get('label', '')
+                if any(keyword in field_name or keyword in field_label or keyword in display_name for keyword in ['commission', 'earned', 'paid', 'amount']):
+                    mappings['commission_earned_field'] = field.get('source_field', '') or field.get('label', '')
                     break
+    
+    # Debug logging to help troubleshoot field mapping issues
+    print(f"🔍 Extracted field mappings: {mappings}")
     
     return mappings
 

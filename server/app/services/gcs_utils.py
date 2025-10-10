@@ -260,6 +260,48 @@ class GCSService:
             logger.error(f"Unexpected error generating signed URL: {e}")
             return None
     
+    def copy_file(self, source_key: str, dest_key: str) -> bool:
+        """
+        Copy a file within Google Cloud Storage.
+        
+        Args:
+            source_key: Source GCS object key (path in bucket)
+            dest_key: Destination GCS object key (path in bucket)
+            
+        Returns:
+            bool: True if copy successful, False otherwise
+        """
+        if not self.is_available():
+            logger.error("GCS not available or not properly configured")
+            return False
+        
+        try:
+            # Get source blob
+            source_blob = self.bucket.blob(source_key)
+            
+            # Check if source exists
+            if not source_blob.exists():
+                logger.error(f"Source file not found in GCS: {source_key}")
+                return False
+            
+            # Copy to destination
+            destination_blob = self.bucket.copy_blob(
+                source_blob, self.bucket, dest_key
+            )
+            
+            logger.info(f"✅ File copied in GCS: {source_key} -> {dest_key}")
+            return True
+            
+        except NotFound:
+            logger.error(f"Source file not found in GCS: {source_key}")
+            return False
+        except GoogleCloudError as e:
+            logger.error(f"GCS copy error: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"Unexpected error copying in GCS: {e}")
+            return False
+    
     def delete_file(self, gcs_key: str) -> bool:
         """
         Delete a file from Google Cloud Storage.
@@ -395,3 +437,11 @@ def download_file_from_gcs(gcs_key: str, local_path: str = None) -> Optional[str
 def generate_gcs_signed_url(gcs_key: str, expiration_hours: int = 1) -> Optional[str]:
     """Generate signed URL for GCS file (replaces generate_presigned_url)."""
     return gcs_service.generate_signed_url(gcs_key, expiration_hours)
+
+def copy_gcs_file(source_key: str, dest_key: str) -> bool:
+    """Copy file within GCS."""
+    return gcs_service.copy_file(source_key, dest_key)
+
+def delete_gcs_file(gcs_key: str) -> bool:
+    """Delete file from GCS."""
+    return gcs_service.delete_file(gcs_key)

@@ -225,7 +225,7 @@ async def process_commission_data_with_date(
         logger.info(f"🎯 Commission Processing: Statement date: {statement_date}")
         
         # Parse the statement date
-        date_value = statement_date.get('date_value', '')
+        date_value = statement_date.get('date') or statement_date.get('date_value', '')
         if not date_value:
             logger.warning(f"🎯 Commission Processing: No statement date provided")
             print("No statement date provided")
@@ -252,23 +252,27 @@ async def process_commission_data_with_date(
         auto_fill_invoice = False
         
         # Look for common field names in the mapping
-        for display_name, column_name in mapping.items():
-            display_lower = display_name.lower()
-            if any(keyword in display_lower for keyword in ['company', 'client', 'group', 'name']):
-                client_name_col = column_name
-                logger.info(f"🎯 Commission Processing: Found client name column: {column_name}")
-            elif any(keyword in display_lower for keyword in ['invoice', 'premium', 'total', 'amount']):
-                invoice_total_col = column_name
-                logger.info(f"🎯 Commission Processing: Found invoice total column: {column_name}")
+        # mapping is { original_header: mapped_database_field }
+        # We need to use original_header to find the column index in headers array
+        for original_header, mapped_field in mapping.items():
+            mapped_lower = mapped_field.lower()
+            
+            # Check the mapped field name to understand what this column represents
+            if any(keyword in mapped_lower for keyword in ['client', 'company', 'group']) and 'name' in mapped_lower:
+                client_name_col = original_header  # Use original header, not mapped field
+                logger.info(f"🎯 Commission Processing: Found client name column: {original_header} -> {mapped_field}")
+            elif any(keyword in mapped_lower for keyword in ['invoice', 'premium']) and 'total' in mapped_lower:
+                invoice_total_col = original_header  # Use original header, not mapped field
+                logger.info(f"🎯 Commission Processing: Found invoice total column: {original_header} -> {mapped_field}")
                 
                 # Check if this is auto-filled with zero
-                if column_name == '__AUTO_FILL_ZERO__':
+                if mapped_field == '__AUTO_FILL_ZERO__':
                     auto_fill_invoice = True
                     invoice_total_col = None  # We'll handle this specially
                     logger.info(f"🎯 Commission Processing: Invoice total will be auto-filled with $0.00")
-            elif any(keyword in display_lower for keyword in ['commission', 'earned', 'paid']):
-                commission_col = column_name
-                logger.info(f"🎯 Commission Processing: Found commission column: {column_name}")
+            elif any(keyword in mapped_lower for keyword in ['commission']) and any(k in mapped_lower for k in ['earned', 'paid', 'amount']):
+                commission_col = original_header  # Use original header, not mapped field
+                logger.info(f"🎯 Commission Processing: Found commission column: {original_header} -> {mapped_field}")
         
         # If we can't find the columns, try to infer from headers
         if not client_name_col:

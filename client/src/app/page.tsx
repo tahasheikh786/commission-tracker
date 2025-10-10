@@ -6,7 +6,6 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import DashboardTab from "./components/dashboardTab/DashboardTab";
 import CarrierTab from "./components/carrierTab/CarrierTab";
 import EarnedCommissionTab from "./components/dashboardTab/EarnedCommissionTab";
-import DemosTab from "./components/demosTab/DemosTab";
 
 import { 
   Database, 
@@ -24,8 +23,7 @@ import {
   Sun,
   ChevronLeft,
   ChevronRight,
-  Upload,
-  TestTube
+  Upload
 } from "lucide-react";
 import { useTheme } from "@/context/ThemeContext";
 
@@ -34,7 +32,7 @@ function HomePageContent() {
   const searchParams = useSearchParams();
   const { user, logout } = useAuth();
   const { theme, setTheme, actualTheme } = useTheme();
-  const [tab, setTab] = useState<"dashboard" | "carriers" | "earned-commission" | "analytics" | "demos">("dashboard");
+  const [tab, setTab] = useState<"dashboard" | "carriers" | "earned-commission" | "analytics">("dashboard");
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
@@ -43,8 +41,8 @@ function HomePageContent() {
   // Handle URL parameters for tab selection
   useEffect(() => {
     const tabParam = searchParams?.get('tab')
-    if (tabParam && ['dashboard', 'carriers', 'earned-commission', 'analytics', 'demos'].includes(tabParam)) {
-      setTab(tabParam as "dashboard" | "carriers" | "earned-commission" | "analytics" | "demos")
+    if (tabParam && ['dashboard', 'carriers', 'earned-commission', 'analytics'].includes(tabParam)) {
+      setTab(tabParam as "dashboard" | "carriers" | "earned-commission" | "analytics")
     } else {
       // Default to dashboard if no tab parameter or invalid tab
       setTab("dashboard")
@@ -115,16 +113,7 @@ function HomePageContent() {
       description: "Manage Carriers & Statements",
       gradient: "from-orange-600 via-red-600 to-pink-600",
       bgGradient: "from-orange-50 via-red-50 to-pink-50"
-    },
-    // Temporarily hidden - demos button
-    // {
-    //   id: "demos" as const,
-    //   label: "Demos",
-    //   icon: TestTube,
-    //   description: "Test & Demo Center",
-    //   gradient: "from-orange-600 via-red-600 to-pink-600",
-    //   bgGradient: "from-orange-50 via-red-50 to-pink-50"
-    // },
+    }
   ];
 
   return (
@@ -356,7 +345,6 @@ function HomePageContent() {
             {tab === "analytics" && <DashboardTab showAnalytics={true} />}
             {tab === "earned-commission" && <EarnedCommissionTab />}
             {tab === "carriers" && <CarrierTab />}
-            {tab === "demos" && <DemosTab />}
           </div>
         </main>
       </div>

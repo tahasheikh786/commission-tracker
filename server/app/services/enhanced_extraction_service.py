@@ -15,7 +15,7 @@ from app.services.websocket_service import create_progress_tracker
 from app.services.new_extraction_service import NewExtractionService
 from app.services.gpt4o_vision_service import GPT4oVisionService
 from app.services.extractor_google_docai import GoogleDocAIExtractor
-from app.services.mistral import MistralDocumentAIService
+from app.services.mistral.service import MistralDocumentAIService
 from app.services.excel_extraction_service import ExcelExtractionService
 
 logger = logging.getLogger(__name__)

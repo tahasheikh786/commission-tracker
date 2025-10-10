@@ -12,10 +12,10 @@ import {
   AlertCircle,
   Shield
 } from 'lucide-react';
-import EnhancedProgressLoader from '../../components/ui/EnhancedProgressLoader';
+import PremiumProgressLoader from '../../components/upload/PremiumProgressLoader';
 import toast from 'react-hot-toast';
 import axios from 'axios';
-import { WebSocketService, ProgressUpdate } from '../../services/websocketService';
+import { useProgressWebSocket } from '../../hooks/useProgressWebSocket';
 
 interface BeautifulUploadZoneProps {
   onParsed: (result: {
@@ -31,7 +31,8 @@ interface BeautifulUploadZoneProps {
     gcs_key?: string,
     extracted_carrier?: string,
     extracted_date?: string,
-    document_metadata?: any
+    document_metadata?: any,
+    ai_intelligence?: any
   }) => void;
   disabled?: boolean;
   companyId: string;
@@ -58,7 +59,43 @@ export default function BeautifulUploadZone({
   const [error, setError] = useState<string | null>(null);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [uploadId, setUploadId] = useState<string | null>(null);
-  const wsServiceRef = useRef<WebSocketService | null>(null);
+  
+  // Memoize callbacks to prevent unnecessary re-renders
+  const handleExtractionComplete = useCallback((results: any) => {
+    setIsUploading(false);
+    if (results && results.success) {
+      onParsed({
+        tables: results.tables || [],
+        upload_id: results.upload_id,
+        extraction_id: results.extraction_id,
+        file_name: results.file_name || uploadedFile?.name || '',
+        file: uploadedFile!,
+        quality_summary: results.quality_summary,
+        extraction_config: results.extraction_config,
+        format_learning: results.format_learning,
+        gcs_url: results.gcs_url,
+        gcs_key: results.gcs_key,
+        extracted_carrier: results.extracted_carrier,
+        extracted_date: results.extracted_date,
+        document_metadata: results.document_metadata,
+        ai_intelligence: results.ai_intelligence  // ✅ ADD THIS
+      });
+    }
+  }, [uploadedFile, onParsed]);
+  
+  const handleWebSocketError = useCallback((errorMsg: string) => {
+    console.error('WebSocket error:', errorMsg);
+    setError(errorMsg);
+    setIsUploading(false);
+  }, []);
+  
+  // Use new WebSocket hook for premium progress tracking
+  const { progress: wsProgress } = useProgressWebSocket({
+    uploadId: uploadId || undefined,
+    autoConnect: true,  // ✅ Auto-connect when uploadId changes
+    onExtractionComplete: handleExtractionComplete,
+    onError: handleWebSocketError
+  });
 
   // FIXED: Proper click handler implementation
   const handleUploadClick = useCallback((e: React.MouseEvent) => {
@@ -103,74 +140,6 @@ export default function BeautifulUploadZone({
     noKeyboard: true
   });
 
-  // ENHANCED: Real-time WebSocket integration
-  const initializeWebSocket = useCallback(async (uploadId: string) => {
-    try {
-      console.log('Initializing WebSocket for upload_id:', uploadId);
-      wsServiceRef.current = new WebSocketService({
-        uploadId,
-        onProgress: (progressData: ProgressUpdate) => {
-          console.log('WebSocket progress update received:', progressData);
-          setCurrentStage(progressData.progress?.stage || '');
-          setStageProgress(progressData.progress?.progress_percentage || 0);
-          setStageMessage(progressData.progress?.message || '');
-          setEstimatedTime(progressData.progress?.stage_details?.estimated_duration || '');
-        },
-        onError: (errorData: ProgressUpdate) => {
-          console.log('WebSocket error received:', errorData);
-          setError(getCommissionSpecificErrorMessage(errorData.error?.message || 'Unknown error', uploadedFile?.name || ''));
-          setIsUploading(false);
-        },
-        onCompletion: (result: ProgressUpdate) => {
-          console.log('WebSocket completion received:', result);
-          console.log('WebSocket completion result.tables:', result.result?.tables);
-          setIsUploading(false);
-          if (result.result) {
-            // Use UUID from backend response, not the temporary uploadId
-            const backendUploadId = (result.result as any).upload_id || (result.result as any).extraction_id || uploadId;
-            
-            // Update local uploadId state with the UUID from backend
-            if (backendUploadId !== uploadId) {
-              setUploadId(backendUploadId);
-            }
-            
-            onParsed({
-              tables: result.result.tables || [],
-              upload_id: backendUploadId,
-              extraction_id: (result.result as any).extraction_id, // Add extraction_id (UUID)
-              file_name: uploadedFile?.name || '',
-              file: uploadedFile!,
-              quality_summary: result.result.quality_summary,
-              extraction_config: result.result.metadata,
-              gcs_url: result.result.gcs_url, // Add GCS URL for PDF preview
-              gcs_key: result.result.gcs_key, // Add GCS key as backup
-              extracted_carrier: (result.result as any).extracted_carrier,
-              extracted_date: (result.result as any).extracted_date,
-              document_metadata: (result.result as any).document_metadata
-            });
-          }
-        },
-        onConnectionEstablished: () => {
-          console.log('🎉 WebSocket connection established for upload_id:', uploadId);
-          console.log('WebSocket connection details:', {
-            uploadId,
-            connectionStatus: wsServiceRef.current?.getConnectionStatus(),
-            timestamp: new Date().toISOString()
-          });
-        }
-      });
-
-      await wsServiceRef.current.connect();
-      console.log('WebSocket connection successful for upload_id:', uploadId);
-      
-      // Test the connection to verify it's working
-      const connectionTest = await wsServiceRef.current.testConnection();
-      console.log('WebSocket connection test result:', connectionTest);
-    } catch (error) {
-      console.error('WebSocket connection failed for upload_id:', uploadId, error);
-      // Continue without WebSocket
-    }
-  }, [uploadedFile, onParsed]);
 
   // ENHANCED: Commission-specific error handling
   const getCommissionSpecificErrorMessage = (error: string, fileName: string) => {
@@ -209,10 +178,13 @@ export default function BeautifulUploadZone({
     try {
       // Generate upload ID
       const newUploadId = `upload_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      console.log('🆔 Generated uploadId:', newUploadId);
       setUploadId(newUploadId);
 
-      // Initialize WebSocket connection
-      await initializeWebSocket(newUploadId);
+      // Small delay to allow WebSocket to connect before API call
+      console.log('⏱️ Waiting 500ms for WebSocket to connect...');
+      await new Promise(resolve => setTimeout(resolve, 500));
+      console.log('✅ Proceeding with file upload');
 
       const formData = new FormData();
       formData.append('file', file);
@@ -225,6 +197,7 @@ export default function BeautifulUploadZone({
       }
 
       // Start upload with progress tracking
+      console.log('📤 Starting API call with uploadId:', newUploadId);
       const response = await axios.post('/api/extract-tables-smart/', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
@@ -238,93 +211,11 @@ export default function BeautifulUploadZone({
         },
       });
 
-      // If WebSocket is not working, handle response directly
-      // Check if WebSocket connection is actually established
-      const wsConnected = wsServiceRef.current && wsServiceRef.current.getConnectionStatus().isConnected;
-      
-      console.log('WebSocket connection status:', {
-        wsServiceExists: !!wsServiceRef.current,
-        wsConnected,
-        connectionStatus: wsServiceRef.current?.getConnectionStatus()
-      });
-      
-      if (!wsConnected) {
-        console.log('WebSocket not connected, handling response directly');
-        setIsUploading(false);
-        if (response.data.success) {
-          console.log('BeautifulUploadZone: API response data:', response.data);
-          console.log('BeautifulUploadZone: Tables from API:', response.data.tables);
-          
-          // Use UUID from backend response
-          const backendUploadId = response.data.upload_id || response.data.extraction_id || newUploadId;
-          
-          // Update local uploadId state with the UUID from backend
-          if (backendUploadId !== newUploadId) {
-            setUploadId(backendUploadId);
-          }
-          
-          onParsed({
-            tables: response.data.tables || [],
-            upload_id: backendUploadId,
-            extraction_id: response.data.extraction_id, // Add extraction_id (UUID)
-            file_name: response.data.file_name || file.name,
-            file: file,
-            quality_summary: response.data.quality_summary,
-            extraction_config: response.data.metadata,
-            gcs_url: response.data.gcs_url, // Add GCS URL for PDF preview
-            gcs_key: response.data.gcs_key, // Add GCS key as backup
-            extracted_carrier: response.data.extracted_carrier,
-            extracted_date: response.data.extracted_date,
-            document_metadata: response.data.document_metadata
-          });
-        } else {
-          setError(getCommissionSpecificErrorMessage(response.data.error || 'Processing failed', file.name));
-        }
-      } else {
-        console.log('WebSocket connected, waiting for progress updates');
-        // WebSocket is connected, let it handle the progress updates
-        // Don't set isUploading to false here - let WebSocket handle completion
-        
-        // Add a fallback timeout in case WebSocket doesn't send completion
-        setTimeout(() => {
-          if (isUploading) {
-            console.log('WebSocket timeout - falling back to direct response handling');
-            setIsUploading(false);
-            if (response.data.success) {
-              // Use UUID from backend response
-              const backendUploadId = response.data.upload_id || response.data.extraction_id || newUploadId;
-              
-              // Update local uploadId state with the UUID from backend
-              if (backendUploadId !== newUploadId) {
-                setUploadId(backendUploadId);
-              }
-              
-              onParsed({
-                tables: response.data.tables || [],
-                upload_id: backendUploadId,
-                extraction_id: response.data.extraction_id, // Add extraction_id (UUID)
-                file_name: response.data.file_name || file.name,
-                file: file,
-                quality_summary: response.data.quality_summary,
-                extraction_config: response.data.metadata,
-                gcs_url: response.data.gcs_url, // Add GCS URL for PDF preview
-                gcs_key: response.data.gcs_key, // Add GCS key as backup
-                extracted_carrier: response.data.extracted_carrier,
-                extracted_date: response.data.extracted_date,
-                document_metadata: response.data.document_metadata
-              });
-            }
-          }
-        }, 30000); // 30 second timeout
-      }
+      // WebSocket will handle the progress updates automatically via useProgressWebSocket hook
+      console.log('Upload complete, WebSocket will handle progress updates');
 
     } catch (error: any) {
       setIsUploading(false);
-      
-      // Disconnect websocket if connected
-      if (wsServiceRef.current) {
-        wsServiceRef.current.disconnect();
-      }
       
       // Handle 409 conflict (duplicate file) specifically
       if (error.response?.status === 409) {
@@ -354,10 +245,6 @@ export default function BeautifulUploadZone({
   };
 
   const handleCancel = async () => {
-    if (wsServiceRef.current) {
-      wsServiceRef.current.disconnect();
-    }
-    
     // Cancel the extraction on the backend if we have an upload ID
     if (uploadId) {
       try {
@@ -394,29 +281,15 @@ export default function BeautifulUploadZone({
     }
   };
 
-  // Cleanup WebSocket on unmount
-  useEffect(() => {
-    return () => {
-      if (wsServiceRef.current) {
-        wsServiceRef.current.disconnect();
-      }
-    };
-  }, []);
-
-  // ENHANCED: Show loader instead of upload zone when processing
+  // PREMIUM: Show premium loader with step-by-step progress when processing
   if (isUploading) {
     return (
       <div className="w-full">
-        <EnhancedProgressLoader
+        <PremiumProgressLoader
+          currentStep={wsProgress.currentStep}
+          progress={wsProgress.percentage || stageProgress}
+          estimatedTime={wsProgress.estimatedTimeRemaining || estimatedTime}
           isVisible={true}
-          progress={stageProgress}
-          stage={currentStage}
-          message={stageMessage}
-          estimatedTime={estimatedTime}
-          fileName={uploadedFile?.name}
-          onCancel={handleCancel}
-          onRetry={error ? handleRetry : undefined}
-          error={error}
         />
       </div>
     );

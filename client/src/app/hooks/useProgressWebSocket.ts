@@ -1,0 +1,347 @@
+/**
+ * WebSocket Progress Integration Hook
+ * 
+ * Real-time progress tracking for upload and extraction process
+ */
+
+import { useState, useEffect, useCallback, useRef } from 'react';
+
+const WS_BASE_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000';
+
+export interface ProgressState {
+  currentStep: number;
+  percentage: number;
+  message: string;
+  estimatedTimeRemaining: string | null;
+  isConnected: boolean;
+  error: string | null;
+}
+
+export interface ProgressMessage {
+  type: 'STEP_STARTED' | 'STEP_PROGRESS' | 'STEP_COMPLETED' | 'EXTRACTION_COMPLETE' | 'ERROR';
+  stepIndex?: number;
+  stepId?: string;
+  message?: string;
+  percentage?: number;
+  estimatedTime?: string;
+  results?: any;
+  error?: string;
+}
+
+interface UseProgressWebSocketOptions {
+  uploadId?: string;
+  onExtractionComplete?: (results: any) => void;
+  onError?: (error: string) => void;
+  autoConnect?: boolean;
+}
+
+export function useProgressWebSocket({
+  uploadId,
+  onExtractionComplete,
+  onError,
+  autoConnect = true
+}: UseProgressWebSocketOptions = {}) {
+  const [progress, setProgress] = useState<ProgressState>({
+    currentStep: 0,
+    percentage: 0,
+    message: '',
+    estimatedTimeRemaining: null,
+    isConnected: false,
+    error: null
+  });
+
+  const wsRef = useRef<WebSocket | null>(null);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectAttemptsRef = useRef(0);
+  const maxReconnectAttempts = 5;
+  
+  // Store callbacks in refs to avoid recreating connect/disconnect on every render
+  const onExtractionCompleteRef = useRef(onExtractionComplete);
+  const onErrorRef = useRef(onError);
+  const disconnectRef = useRef<(() => void) | null>(null);
+  
+  useEffect(() => {
+    onExtractionCompleteRef.current = onExtractionComplete;
+    onErrorRef.current = onError;
+  }, [onExtractionComplete, onError]);
+
+  const disconnect = useCallback(() => {
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+
+    if (wsRef.current) {
+      wsRef.current.close(1000, 'Client disconnect');
+      wsRef.current = null;
+    }
+
+    setProgress(prev => ({
+      ...prev,
+      isConnected: false
+    }));
+  }, []);
+  
+  // Store disconnect in ref
+  useEffect(() => {
+    disconnectRef.current = disconnect;
+  }, [disconnect]);
+
+  const connect = useCallback(() => {
+    if (!uploadId) {
+      console.log('⚠️ Cannot connect WebSocket: uploadId is missing');
+      return;
+    }
+
+    // Close existing connection if any
+    if (wsRef.current) {
+      console.log('🔌 Closing existing WebSocket connection');
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+
+    try {
+      // Get auth token if available
+      const token = localStorage.getItem('token');
+      const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
+      // Build WebSocket URL with optional auth params
+      let wsUrl = `${WS_BASE_URL}/api/ws/progress/${uploadId}?session_id=${sessionId}`;
+      if (token) {
+        wsUrl += `&token=${token}`;
+      }
+      
+      console.log('🔌 Connecting to WebSocket:', wsUrl.replace(/token=[^&]+/, 'token=***'));
+
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        console.log('✅ WebSocket connected successfully for uploadId:', uploadId);
+        setProgress(prev => ({
+          ...prev,
+          isConnected: true,
+          error: null
+        }));
+        reconnectAttemptsRef.current = 0;
+        
+        // Send a ping to confirm connection
+        try {
+          ws.send(JSON.stringify({ type: 'ping', timestamp: Date.now() }));
+        } catch (error) {
+          console.error('Failed to send ping:', error);
+        }
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data: ProgressMessage = JSON.parse(event.data);
+          console.log('📨 WebSocket message:', data);
+
+          handleProgressMessage(data);
+        } catch (error) {
+          console.error('Failed to parse WebSocket message:', error);
+        }
+      };
+
+      ws.onerror = (error) => {
+        console.error('❌ WebSocket error for uploadId:', uploadId, error);
+        console.error('WebSocket readyState:', ws.readyState);
+        console.error('WebSocket URL was:', wsUrl.replace(/token=[^&]+/, 'token=***'));
+        setProgress(prev => ({
+          ...prev,
+          error: 'Connection error occurred',
+          isConnected: false
+        }));
+        if (onErrorRef.current) {
+          onErrorRef.current('WebSocket connection error');
+        }
+      };
+
+      ws.onclose = (event) => {
+        console.log('🔌 WebSocket disconnected for uploadId:', uploadId);
+        console.log('Close code:', event.code, 'Reason:', event.reason || 'No reason provided');
+        console.log('Was clean:', event.wasClean);
+        
+        setProgress(prev => ({
+          ...prev,
+          isConnected: false
+        }));
+
+        // Attempt to reconnect if not a normal closure
+        if (event.code !== 1000 && event.code !== 1008 && reconnectAttemptsRef.current < maxReconnectAttempts) {
+          const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 10000);
+          console.log(`🔄 Reconnecting in ${delay}ms (attempt ${reconnectAttemptsRef.current + 1}/${maxReconnectAttempts})...`);
+          
+          reconnectTimeoutRef.current = setTimeout(() => {
+            reconnectAttemptsRef.current++;
+            connect();
+          }, delay);
+        } else {
+          console.log('❌ Not reconnecting - code:', event.code, 'attempts:', reconnectAttemptsRef.current);
+        }
+      };
+    } catch (error) {
+      console.error('Failed to connect WebSocket:', error);
+      setProgress(prev => ({
+        ...prev,
+        error: 'Failed to establish connection',
+        isConnected: false
+      }));
+    }
+  }, [uploadId]);
+
+  const handleProgressMessage = useCallback((data: ProgressMessage) => {
+    switch (data.type) {
+      case 'STEP_STARTED':
+        setProgress(prev => ({
+          ...prev,
+          currentStep: data.stepIndex ?? prev.currentStep,
+          message: data.message || '',
+          percentage: data.percentage ?? prev.percentage,
+          estimatedTimeRemaining: data.estimatedTime ?? prev.estimatedTimeRemaining
+        }));
+        break;
+
+      case 'STEP_PROGRESS':
+        setProgress(prev => ({
+          ...prev,
+          percentage: data.percentage ?? prev.percentage,
+          estimatedTimeRemaining: data.estimatedTime ?? prev.estimatedTimeRemaining,
+          message: data.message || prev.message
+        }));
+        break;
+
+      case 'STEP_COMPLETED':
+        setProgress(prev => ({
+          ...prev,
+          percentage: data.percentage ?? prev.percentage,
+          message: data.message || `Step ${prev.currentStep + 1} completed`
+        }));
+        break;
+
+      case 'EXTRACTION_COMPLETE':
+        setProgress(prev => ({
+          ...prev,
+          currentStep: 5, // Final step (0-indexed, so step 6 = index 5)
+          percentage: 100,
+          message: 'Extraction complete!'
+        }));
+        if (onExtractionCompleteRef.current && data.results) {
+          onExtractionCompleteRef.current(data.results);
+        }
+        // Close connection after completion
+        setTimeout(() => {
+          if (disconnectRef.current) {
+            disconnectRef.current();
+          }
+        }, 1000);
+        break;
+
+      case 'ERROR':
+        const errorMessage = data.error || 'An error occurred during processing';
+        setProgress(prev => ({
+          ...prev,
+          error: errorMessage,
+          isConnected: false
+        }));
+        if (onErrorRef.current) {
+          onErrorRef.current(errorMessage);
+        }
+        break;
+
+      default:
+        console.warn('Unknown message type:', data.type);
+    }
+  }, []);
+
+  const reset = useCallback(() => {
+    disconnect();
+    setProgress({
+      currentStep: 0,
+      percentage: 0,
+      message: '',
+      estimatedTimeRemaining: null,
+      isConnected: false,
+      error: null
+    });
+    reconnectAttemptsRef.current = 0;
+  }, [disconnect]);
+
+  // Auto-connect when uploadId is available
+  useEffect(() => {
+    if (autoConnect && uploadId) {
+      connect();
+    }
+
+    return () => {
+      disconnect();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uploadId, autoConnect]);
+
+  return {
+    progress,
+    connect,
+    disconnect,
+    reset,
+    isConnected: progress.isConnected
+  };
+}
+
+/**
+ * Simplified hook for basic progress tracking without WebSocket
+ */
+export function useSimulatedProgress(duration: number = 20000) {
+  const [progress, setProgress] = useState({
+    currentStep: 0,
+    percentage: 0,
+    message: ''
+  });
+
+  const [isRunning, setIsRunning] = useState(false);
+
+  const start = useCallback(() => {
+    setIsRunning(true);
+    const startTime = Date.now();
+    const steps = 6;
+
+    const interval = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const percentage = Math.min((elapsed / duration) * 100, 100);
+      const currentStep = Math.min(Math.floor((elapsed / duration) * steps), steps - 1);
+
+      setProgress({
+        currentStep,
+        percentage,
+        message: `Processing step ${currentStep + 1} of ${steps}`
+      });
+
+      if (percentage >= 100) {
+        clearInterval(interval);
+        setIsRunning(false);
+      }
+    }, 100);
+
+    return () => clearInterval(interval);
+  }, [duration]);
+
+  const reset = useCallback(() => {
+    setProgress({
+      currentStep: 0,
+      percentage: 0,
+      message: ''
+    });
+    setIsRunning(false);
+  }, []);
+
+  return {
+    progress,
+    isRunning,
+    start,
+    reset
+  };
+}
+
+export default useProgressWebSocket;
+

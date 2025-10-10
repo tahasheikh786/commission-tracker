@@ -15,6 +15,7 @@ import DashboardTable from "../../upload/components/DashboardTable";
 import DashboardTableFullPage from "@/app/upload/components/DashboardTableFullPage";
 import TableEditor from "../../upload/components/TableEditor/TableEditor";
 import FieldMapper from "../../upload/components/FieldMapper";
+import UnifiedTableEditor from "../upload/UnifiedTableEditor";
 import toast from 'react-hot-toast';
 import { useSubmission } from "@/context/SubmissionContext";
 import { ApprovalLoader } from "../../components/ui/FullScreenLoader";
@@ -47,6 +48,7 @@ export default function DashboardTab({ showAnalytics = false }: DashboardTabProp
   const [fetchingMapping, setFetchingMapping] = useState(false);
   const [showFieldMapper, setShowFieldMapper] = useState(false);
   const [showTableEditor, setShowTableEditor] = useState(false);
+  const [showUnifiedEditor, setShowUnifiedEditor] = useState(false);
   const [skipped, setSkipped] = useState(false);
   const [mappingAutoApplied, setMappingAutoApplied] = useState(false);
   const [showRejectModal, setShowRejectModal] = useState(false);
@@ -168,7 +170,14 @@ export default function DashboardTab({ showAnalytics = false }: DashboardTabProp
   }, [databaseFields.length, fieldConfig.length]);
 
   // Handle upload result
-  function handleUploadResult({ tables, upload_id, extraction_id, file_name, file, plan_types, field_config, quality_summary, extraction_config, format_learning, extracted_carrier, extracted_date, gcs_url, gcs_key, document_metadata }: any) {
+  function handleUploadResult({ tables, upload_id, extraction_id, file_name, file, plan_types, field_config, quality_summary, extraction_config, format_learning, extracted_carrier, extracted_date, gcs_url, gcs_key, document_metadata, ai_intelligence }: any) {
+    console.log('🔍 handleUploadResult received ai_intelligence:', {
+      has_ai_intelligence: !!ai_intelligence,
+      field_mapping_count: ai_intelligence?.field_mapping?.mappings?.length || 0,
+      plan_types_count: ai_intelligence?.plan_type_detection?.detected_plan_types?.length || 0,
+      ai_intelligence_structure: ai_intelligence
+    });
+    
     if (file && !originalFile) {
       setOriginalFile(file);
     }
@@ -186,23 +195,47 @@ export default function DashboardTab({ showAnalytics = false }: DashboardTabProp
       gcs_key, 
       extracted_carrier,
       extracted_date,
-      document_metadata 
+      document_metadata,
+      ai_intelligence  // ✅ CRITICAL FIX: Include AI intelligence data
     });
     setFinalTables([]);
     setFieldConfig(field_config || []);
     setFormatLearning(format_learning);
     
-    // Handle automatic carrier detection
+    // ⚠️ CRITICAL: Handle carrier detection and auto-creation
     if (extracted_carrier) {
-      // Find or create company based on extracted carrier
-      const existingCompany = carriers?.find(c => c.name.toLowerCase().includes(extracted_carrier.toLowerCase()));
-      if (existingCompany) {
-        setCompany(existingCompany);
-        toast.success(`Auto-detected carrier: ${extracted_carrier}`);
+      // The backend will auto-create the carrier if it doesn't exist
+      // We just need to set it in the frontend state
+      
+      // Check if extracted carrier matches currently selected carrier
+      const currentCarrierMatches = company && (
+        company.name.toLowerCase().includes(extracted_carrier.toLowerCase()) ||
+        extracted_carrier.toLowerCase().includes(company.name.toLowerCase())
+      );
+      
+      if (currentCarrierMatches) {
+        // Perfect match - carrier is correct
+        toast.success(`✅ Carrier verified: ${extracted_carrier}`);
       } else {
-        // Create a temporary company object for the extracted carrier
-        setCompany({ id: 'auto-detected', name: extracted_carrier });
-        toast.success(`Auto-detected carrier: ${extracted_carrier}`);
+        // Backend has auto-reassigned to correct carrier
+        // Show success message that carrier was detected/created
+        if (company) {
+          toast.success(
+            `🎯 Carrier detected: "${extracted_carrier}". File has been automatically assigned to the correct carrier.`,
+            { duration: 6000 }
+          );
+        } else {
+          toast.success(
+            `🎯 Carrier detected: "${extracted_carrier}". Carrier has been auto-created and file assigned.`,
+            { duration: 6000 }
+          );
+        }
+        
+        // Set company to extracted carrier so UI shows correct info
+        setCompany({ 
+          id: 'auto-detected', 
+          name: extracted_carrier 
+        });
       }
     }
     
@@ -228,7 +261,8 @@ export default function DashboardTab({ showAnalytics = false }: DashboardTabProp
     
     fetchMappingRef.current = false;
     setShowFieldMapper(false);
-    setShowTableEditor(true);
+    setShowTableEditor(false);
+    setShowUnifiedEditor(true);  // Use new unified editor
     setSkipped(false);
     setShowRejectModal(false);
     setRejectReason('');
@@ -398,6 +432,7 @@ export default function DashboardTab({ showAnalytics = false }: DashboardTabProp
     fetchMappingRef.current = false;
     setShowFieldMapper(false);
     setShowTableEditor(false);
+    setShowUnifiedEditor(false);  // Reset unified editor
     setSkipped(false);
     setMappingAutoApplied(false);
     setShowRejectModal(false);
@@ -475,6 +510,92 @@ export default function DashboardTab({ showAnalytics = false }: DashboardTabProp
   ];
 
   // Render full-page components if active
+  
+  // NEW: Unified Table Editor with AI Intelligence
+  // Note: We allow rendering even if company is a temporary object (id: 'temp-extracted')
+  if (showUnifiedEditor && uploaded) {
+    console.log('🔍 DashboardTab - Rendering UnifiedTableEditor with:', {
+      tables: uploaded.tables?.length,
+      ai_intelligence: uploaded.ai_intelligence,
+      gcs_url: uploaded.gcs_url,
+      extracted_carrier: uploaded.extracted_carrier,
+      company: company?.name || 'Not set'
+    });
+    
+    return (
+      <div className="fixed inset-0 bg-white dark:bg-gray-900 z-50">
+        <UnifiedTableEditor
+          extractedData={{
+            tables: uploaded.tables || [],
+            planType: uploaded.document_metadata?.plan_type,
+            planTypeConfidence: uploaded.document_metadata?.plan_type_confidence,
+            carrierName: uploaded.extracted_carrier,
+            statementDate: uploaded.extracted_date,
+            gcs_url: uploaded.gcs_url,
+            file_name: uploaded.file_name,
+            extracted_carrier: uploaded.extracted_carrier,
+            extracted_date: uploaded.extracted_date,
+            upload_id: uploaded.upload_id || uploaded.id,
+            company_id: company?.id || uploaded.company_id,
+            carrier_id: uploaded.carrier_id,
+            ai_intelligence: uploaded.ai_intelligence
+          }}
+          uploadData={uploaded}
+          databaseFields={databaseFields.map(f => ({
+            id: f.field,
+            display_name: f.label,
+            description: f.label
+          }))}
+          onDataUpdate={(data) => {
+            setUploaded({ ...uploaded, tables: data.tables });
+          }}
+          onSubmit={async (finalData) => {
+            try {
+              setSavingMapping(true);
+              
+              // Save mappings to backend
+              const config = {
+                mapping: finalData.field_mappings,
+                plan_types: finalData.plan_types || planTypes || [],
+                field_config: databaseFields,
+                table_data: uploaded.tables?.[0]?.rows || [],
+                headers: uploaded.tables?.[0]?.header || [],
+                selected_statement_date: selectedStatementDate
+              };
+              
+              // Only save mapping if company is set and not a temporary ID
+              if (company && company.id && !company.id.includes('temp') && !company.id.includes('auto')) {
+                await axios.post(
+                  `${process.env.NEXT_PUBLIC_API_URL}/api/companies/${company.id}/mapping/`,
+                  config,
+                  { withCredentials: true }
+                );
+              } else {
+                console.log('⚠️ Skipping mapping save - carrier not yet persisted in database');
+              }
+              
+              // Update local state
+              setMapping(finalData.field_mappings);
+              setFieldConfig(databaseFields);
+              setPlanTypes(finalData.plan_types || planTypes || []);
+              setShowUnifiedEditor(false);
+              
+              // Apply mappings and continue to final review
+              applyMapping(uploaded.tables, finalData.field_mappings, databaseFields);
+              
+              toast.success('Mappings saved successfully! 🎉');
+            } catch (error) {
+              console.error('Error saving mappings:', error);
+              toast.error('Failed to save mappings');
+            } finally {
+              setSavingMapping(false);
+            }
+          }}
+        />
+      </div>
+    );
+  }
+  
   if (showTableEditor) {
     return (
       <div className="fixed inset-0 bg-white z-50">
@@ -617,7 +738,7 @@ export default function DashboardTab({ showAnalytics = false }: DashboardTabProp
   }
 
   // Render full-page dashboard table if we have final tables
-  if (finalTables.length > 0 && !showFieldMapper && !showTableEditor) {
+  if (finalTables.length > 0 && !showFieldMapper && !showTableEditor && !showUnifiedEditor) {
     return (
       <DashboardTableFullPage
         tables={finalTables}

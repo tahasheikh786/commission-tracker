@@ -706,12 +706,21 @@ def _merge_table_group(group: List[Dict[str, Any]], canonical_header: List[str])
         "merged_from_tables": [table.get("metadata", {}).get("table_id", i) for i, table in enumerate(group)]
     }
     
-    # Create merged table
-    merged_table = {
+    # Create merged table - preserve ALL fields from base table
+    merged_table = base_table.copy()  # Start with all fields from base table
+    merged_table.update({
         "headers": best_headers,
         "rows": all_rows,
         "metadata": merged_metadata
-    }
+    })
+    
+    # Preserve summary_detection from base table if it exists
+    if "summary_detection" in base_table:
+        merged_table["summary_detection"] = base_table["summary_detection"]
+        # Update counts if summary rows were removed
+        if merged_table["summary_detection"].get("removed_indices"):
+            merged_table["summary_detection"]["original_row_count"] = len(all_rows)
+            merged_table["summary_detection"]["cleaned_row_count"] = len(all_rows)
     
     return merged_table
 

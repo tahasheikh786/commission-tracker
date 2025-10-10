@@ -38,6 +38,10 @@ Pillow>=10.0.0
 numpy>=1.24.0,<2.0.0
 scipy>=1.10.0
 scikit-image>=0.21.0
+scikit-learn>=1.3.0,<2.0.0  # For ML-based summary detection
+
+# System monitoring and optimization
+psutil>=5.9.0,<6.0.0  # For performance monitoring
 
 # Data processing
 pandas>=2.0.0,<3.0.0
