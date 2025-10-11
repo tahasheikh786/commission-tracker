@@ -9,7 +9,7 @@ import { useTheme } from '@/context/ThemeContext';
  * only renders after the component has mounted on the client
  */
 export function useThemeHydration() {
-  const { actualTheme } = useTheme();
+  const { actualTheme, theme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -21,6 +21,6 @@ export function useThemeHydration() {
     actualTheme,
     isDark: mounted && actualTheme === 'dark',
     isLight: mounted && actualTheme === 'light',
-    isSystem: mounted && actualTheme === 'system'
+    isSystem: mounted && theme === 'system'
   };
 }

@@ -200,7 +200,7 @@ export default function LandingPage() {
           <div className="border-t border-slate-800 mt-6 sm:mt-8 pt-6 sm:pt-8">
             <div className="text-center max-w-4xl mx-auto">
               <blockquote className="text-base sm:text-lg 2xl:text-lg text-slate-300 dark:text-slate-200 italic max-w-3xl mx-auto mb-4">
-                "Commission Tracker has revolutionized how we manage our commission data. The automation saves us hours every week."
+                &quot;Commission Tracker has revolutionized how we manage our commission data. The automation saves us hours every week.&quot;
               </blockquote>
               <div className="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-4">
                 <div className="text-sm sm:text-base 2xl:text-base font-semibold text-slate-200 dark:text-slate-100">Sarah Johnson</div>

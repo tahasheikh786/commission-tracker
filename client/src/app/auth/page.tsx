@@ -350,7 +350,7 @@ export default function UnifiedAuthPage() {
                 ))}
               </div>
               <p className="text-sm italic text-blue-50 mb-3">
-                "Commission Tracker revolutionized our sales operations. The automation saved us 20 hours per week."
+                &quot;Commission Tracker revolutionized our sales operations. The automation saved us 20 hours per week.&quot;
               </p>
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center font-bold">

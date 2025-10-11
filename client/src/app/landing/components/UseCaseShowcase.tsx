@@ -100,7 +100,7 @@ export default function UseCaseShowcase() {
             Built for every type of financial professional
           </h2>
           <p className="text-base sm:text-lg lg:text-xl 2xl:text-xl text-slate-600 dark:text-slate-400 max-w-3xl mx-auto">
-            Whether you're an individual agent or a large brokerage firm, Commission Tracker adapts to your needs.
+            Whether you&apos;re an individual agent or a large brokerage firm, Commission Tracker adapts to your needs.
           </p>
         </motion.div>
 
@@ -137,7 +137,7 @@ export default function UseCaseShowcase() {
                   ))}
                 </div>
                 <blockquote className="text-sm sm:text-base text-slate-600 dark:text-slate-400 mb-3 sm:mb-4 italic">
-                  "{testimonial.content}"
+                  &quot;{testimonial.content}&quot;
                 </blockquote>
                 <div className="flex items-center gap-2 sm:gap-3">
                   <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-semibold text-sm sm:text-base">

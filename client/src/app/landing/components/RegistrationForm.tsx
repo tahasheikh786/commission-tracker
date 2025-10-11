@@ -50,7 +50,7 @@ export default function RegistrationForm({ onSubmit }: RegistrationFormProps) {
           Welcome aboard! 🎉
         </h3>
         <p className="text-slate-600 dark:text-slate-400 mb-4">
-          We've sent you a confirmation email with next steps.
+          We&apos;ve sent you a confirmation email with next steps.
         </p>
         <div className="text-sm text-slate-500 dark:text-slate-400">
           Redirecting to registration...
