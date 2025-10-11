@@ -36,10 +36,8 @@ export default function LandingPage() {
   const [lastScrollY, setLastScrollY] = useState(0);
 
   const handleGetStarted = (email: string) => {
-    // Store email in localStorage for the registration wizard
-    localStorage.setItem('registrationEmail', email);
-    // Navigate to registration wizard
-    router.push('/register');
+    // Navigate to unified auth page
+    router.push('/auth');
   };
 
   // Handle scroll behavior for header visibility
@@ -94,19 +92,13 @@ export default function LandingPage() {
 
             {/* Desktop Navigation */}
             <div className="hidden md:flex items-center space-x-2 sm:space-x-4">
-              <Link 
-                href="/login"
-                className="text-sm sm:text-base text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition-colors"
-              >
-                Sign In
-              </Link>
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                onClick={() => router.push('/register')}
+                onClick={() => router.push('/auth')}
                 className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-3 py-1.5 sm:px-6 sm:py-2 rounded-lg text-sm sm:text-base font-semibold hover:from-blue-700 hover:to-purple-700 transition-all duration-200 cursor-pointer"
               >
-                Get Started
+                Sign In / Sign Up
               </motion.button>
             </div>
 
@@ -135,23 +127,16 @@ export default function LandingPage() {
                 className="md:hidden border-t border-slate-200 dark:border-slate-700 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md"
               >
                 <div className="py-4 space-y-4">
-                  <Link 
-                    href="/login"
-                    className="block px-4 py-2 text-base text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
-                    onClick={() => setIsMobileMenuOpen(false)}
-                  >
-                    Sign In
-                  </Link>
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={() => {
-                      router.push('/register');
+                      router.push('/auth');
                       setIsMobileMenuOpen(false);
                     }}
                     className="w-full mx-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-lg text-base font-semibold hover:from-blue-700 hover:to-purple-700 transition-all duration-200 cursor-pointer"
                   >
-                    Get Started
+                    Sign In / Sign Up
                   </motion.button>
                 </div>
               </motion.div>

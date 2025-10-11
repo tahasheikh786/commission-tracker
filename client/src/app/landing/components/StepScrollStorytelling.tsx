@@ -5,7 +5,6 @@ import { Parallax, ParallaxLayer } from '@react-spring/parallax';
 import { motion } from 'framer-motion';
 import { Upload, Brain, BarChart3, FileText, FileSpreadsheet, CheckCircle, Database } from 'lucide-react';
 import { useSectionVisibility } from '@/hooks/useSectionVisibility';
-import SectionDebugInfo from './SectionDebugInfo';
 
 export default function InAction() {
     const [currentStep, setCurrentStep] = useState(0);
@@ -681,18 +680,6 @@ export default function InAction() {
             className="relative w-full max-w-screen-2xl h-screen mx-auto py-12 sm:py-16 lg:py-20 px-4 sm:px-6 lg:px-8 xl:px-12 overflow-hidden flex items-center justify-center"
             style={{ direction: 'rtl' }}
         >
-            {/* Debug Info - Remover en producción */}
-            <SectionDebugInfo
-                isFullyVisible={isFullyVisible}
-                scrollProgress={scrollProgress}
-                isIntersecting={isIntersecting}
-                intersectionRatio={intersectionRatio}
-                isStorytellingActive={isStorytellingActive}
-                currentStep={currentStep}
-                isAdjusting={isAdjusting}
-                show={false} // Cambiar a false en producción
-            />
-
             <Parallax 
                 ref={parallaxRef} 
                 pages={3}

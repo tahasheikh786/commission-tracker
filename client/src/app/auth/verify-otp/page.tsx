@@ -35,7 +35,7 @@ function VerifyOTPContent() {
   // Redirect if no email or purpose
   useEffect(() => {
     if (!email || !purpose) {
-      router.push('/auth/login');
+      router.push('/landing');
     }
   }, [email, purpose, router]);
 
@@ -88,11 +88,7 @@ function VerifyOTPContent() {
   };
 
   const handleBack = () => {
-    if (purpose === 'login') {
-      router.push('/auth/login');
-    } else {
-      router.push('/auth/signup');
-    }
+    router.push('/auth');
   };
 
   const formatEmail = (email: string) => {

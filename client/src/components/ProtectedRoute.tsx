@@ -32,8 +32,8 @@ export default function ProtectedRoute({
     if (isLoading) return;
 
     if (requireAuth && !isAuthenticated) {
-      console.log('ProtectedRoute: Not authenticated, redirecting to login');
-      router.push('/auth/login');
+      console.log('ProtectedRoute: Not authenticated, redirecting to landing');
+      router.push('/landing');
       return;
     }
 

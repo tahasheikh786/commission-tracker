@@ -223,8 +223,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setPermissions(null);
     saveAuthState(null);
 
-    // Redirect to login
-    router.push('/auth/login');
+    // Redirect to landing
+    router.push('/landing');
   }, [router, saveAuthState]);
 
   // Proactive token refresh function
