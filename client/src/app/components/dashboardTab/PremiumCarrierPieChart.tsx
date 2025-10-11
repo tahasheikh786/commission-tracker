@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Pie } from 'react-chartjs-2';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
@@ -12,7 +12,7 @@ ChartJS.register(ArcElement, Tooltip, Legend);
 // Info Tooltip Component
 function InfoTooltip({ content }: { content: string }) {
   const [isOpen, setIsOpen] = useState(false);
-  
+
   return (
     <div className="relative inline-block">
       <button
@@ -24,7 +24,7 @@ function InfoTooltip({ content }: { content: string }) {
       >
         <HelpCircle className="w-4 h-4" />
       </button>
-      
+
       {isOpen && (
         <motion.div
           initial={{ opacity: 0, y: 5 }}
@@ -105,24 +105,31 @@ export default function PremiumCarrierPieChart({ data, loading, year }: PremiumC
     });
 
     // Calculate percentages
-    const total = filterType === 'commission' 
+    const total = filterType === 'commission'
       ? filtered.reduce((sum, carrier) => sum + (carrier.total_commission || carrier.totalCommission || 0), 0)
       : filtered.reduce((sum, carrier) => sum + (carrier.statement_count || carrier.statementCount || 0), 0);
 
     return filtered.map(carrier => ({
       ...carrier,
-      percentage: filterType === 'commission' 
+      percentage: filterType === 'commission'
         ? ((carrier.total_commission || carrier.totalCommission || 0) / total) * 100
         : ((carrier.statement_count || carrier.statementCount || 0) / total) * 100
     })).sort((a, b) => (b.percentage || 0) - (a.percentage || 0));
   }, [data, searchTerm, filterType]);
 
+  // Auto-select first carrier when data loads
+  useEffect(() => {
+    if (processedData && processedData.length > 0 && !selectedCarrier) {
+      setSelectedCarrier(processedData[0]);
+    }
+  }, [processedData, selectedCarrier]);
+
   // Chart configuration
   const chartData = useMemo(() => ({
     labels: processedData.map(carrier => carrier.name),
     datasets: [{
-      data: processedData.map(carrier => 
-        filterType === 'commission' 
+      data: processedData.map(carrier =>
+        filterType === 'commission'
           ? (carrier.total_commission || carrier.totalCommission || 0)
           : (carrier.statement_count || carrier.statementCount || 0)
       ),
@@ -164,7 +171,7 @@ export default function PremiumCarrierPieChart({ data, loading, year }: PremiumC
       if (canvas) {
         canvas.style.cursor = elements.length > 0 ? 'pointer' : 'default';
       }
-      
+
       if (elements.length > 0) {
         const index = elements[0].index;
         setHoveredIndex(index);
@@ -227,11 +234,10 @@ export default function PremiumCarrierPieChart({ data, loading, year }: PremiumC
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={() => setFilterType('commission')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                filterType === 'commission'
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${filterType === 'commission'
                   ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300'
                   : 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-gray-400'
-              }`}
+                }`}
             >
               <DollarSign className="w-4 h-4 mr-2 inline" />
               Commission
@@ -240,11 +246,10 @@ export default function PremiumCarrierPieChart({ data, loading, year }: PremiumC
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={() => setFilterType('statements')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                filterType === 'statements'
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${filterType === 'statements'
                   ? 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300'
                   : 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-gray-400'
-              }`}
+                }`}
             >
               <FileText className="w-4 h-4 mr-2 inline" />
               Statements
@@ -270,10 +275,10 @@ export default function PremiumCarrierPieChart({ data, loading, year }: PremiumC
           {/* Chart */}
           <div className="lg:col-span-2">
             <div className="relative h-80 flex items-center justify-center">
-              <div className="w-full h-full relative">
+              <div className="w-full h-full relative overflow-visible">
                 {/* Add shadow effect for hovered slice */}
                 {hoveredIndex !== null && (
-                  <div 
+                  <div
                     className="absolute inset-0 pointer-events-none"
                     style={{
                       background: `radial-gradient(circle at center, ${PREMIUM_COLORS[hoveredIndex % PREMIUM_COLORS.length].replace('0.8', '0.1')} 0%, transparent 70%)`,
@@ -282,7 +287,24 @@ export default function PremiumCarrierPieChart({ data, loading, year }: PremiumC
                     }}
                   />
                 )}
-                <Pie ref={chartRef} data={chartData} options={chartOptions} />
+                <div className="relative w-full h-full flex items-center justify-center overflow-visible">
+                  <Pie
+                    ref={chartRef}
+                    data={chartData}
+                    options={{
+                      ...chartOptions,
+                      layout: {
+                        padding: {
+                          top: 10,
+                          bottom: 10,
+                          left: 10,
+                          right: 10,
+                        }
+                      },
+                      maintainAspectRatio: false,
+                    }}
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -292,11 +314,11 @@ export default function PremiumCarrierPieChart({ data, loading, year }: PremiumC
             {processedData.map((carrier, index) => {
               const commission = carrier.total_commission || carrier.totalCommission || 0;
               const statementCount = carrier.statement_count || carrier.statementCount || 0;
-              
+
               const handleMouseEnter = () => {
                 setHoveredIndex(index);
                 setHoveredCarrier(carrier);
-                
+
                 // Trigger chart hover effect
                 if (chartRef.current) {
                   const chart = chartRef.current;
@@ -308,13 +330,13 @@ export default function PremiumCarrierPieChart({ data, loading, year }: PremiumC
                   chart.update();
                 }
               };
-              
+
               const handleMouseLeave = () => {
                 // Don't clear hover if item is selected
                 if (selectedCarrier?.id !== carrier.id) {
                   setHoveredIndex(null);
                   setHoveredCarrier(null);
-                  
+
                   // Clear chart hover effect
                   if (chartRef.current) {
                     const chart = chartRef.current;
@@ -323,18 +345,17 @@ export default function PremiumCarrierPieChart({ data, loading, year }: PremiumC
                   }
                 }
               };
-              
+
               return (
                 <motion.div
                   key={carrier.id}
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: index * 0.05 }}
-                  className={`p-3 rounded-lg border transition-all cursor-pointer ${
-                    hoveredIndex === index || selectedCarrier?.id === carrier.id
+                  className={`p-3 rounded-lg border transition-all cursor-pointer ${hoveredIndex === index || selectedCarrier?.id === carrier.id
                       ? 'border-blue-200 bg-blue-50 shadow-md dark:border-blue-800 dark:bg-blue-900/20'
                       : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50 dark:border-slate-700 dark:hover:border-slate-600 dark:hover:bg-slate-700/50'
-                  }`}
+                    }`}
                   onClick={() => setSelectedCarrier(carrier)}
                   onMouseEnter={handleMouseEnter}
                   onMouseLeave={handleMouseLeave}
@@ -359,7 +380,7 @@ export default function PremiumCarrierPieChart({ data, loading, year }: PremiumC
                         {formatPercentage(carrier.percentage || 0)}
                       </p>
                       <p className="text-sm text-gray-500 dark:text-gray-400">
-                        {filterType === 'commission' 
+                        {filterType === 'commission'
                           ? formatCurrency(commission, true)
                           : statementCount
                         }
@@ -379,13 +400,13 @@ export default function PremiumCarrierPieChart({ data, loading, year }: PremiumC
             const carrierIndex = processedData.findIndex(c => c.id === displayCarrier?.id);
             const carrierColor = PREMIUM_COLORS[carrierIndex % PREMIUM_COLORS.length];
             const carrierHoverColor = PREMIUM_HOVER_COLORS[carrierIndex % PREMIUM_HOVER_COLORS.length];
-            
+
             // Extract RGB values from rgba string
             const rgbMatch = carrierColor.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
             const r = rgbMatch ? rgbMatch[1] : '59';
             const g = rgbMatch ? rgbMatch[2] : '130';
             const b = rgbMatch ? rgbMatch[3] : '246';
-            
+
             return (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -393,10 +414,10 @@ export default function PremiumCarrierPieChart({ data, loading, year }: PremiumC
                 exit={{ opacity: 0, y: -20 }}
                 className="mt-6 p-4 rounded-xl border"
                 style={{
-                  background: selectedCarrier 
+                  background: selectedCarrier
                     ? `linear-gradient(135deg, rgba(${r}, ${g}, ${b}, 0.15) 0%, rgba(${r}, ${g}, ${b}, 0.05) 100%)`
                     : `linear-gradient(135deg, rgba(${r}, ${g}, ${b}, 0.08) 0%, rgba(${r}, ${g}, ${b}, 0.03) 100%)`,
-                  borderColor: selectedCarrier 
+                  borderColor: selectedCarrier
                     ? carrierHoverColor.replace('1)', '0.3)')
                     : carrierColor.replace('0.8', '0.2')
                 }}
@@ -407,10 +428,10 @@ export default function PremiumCarrierPieChart({ data, loading, year }: PremiumC
                       className="w-3 h-3 rounded-full"
                       style={{ backgroundColor: carrierHoverColor }}
                     />
-                    <h4 
+                    <h4
                       className="text-lg font-bold"
-                      style={{ 
-                        color: selectedCarrier 
+                      style={{
+                        color: selectedCarrier
                           ? carrierHoverColor.replace('1)', '1)')
                           : `rgba(${r}, ${g}, ${b}, 0.9)`
                       }}
@@ -418,9 +439,9 @@ export default function PremiumCarrierPieChart({ data, loading, year }: PremiumC
                       {displayCarrier?.name}
                     </h4>
                     {!selectedCarrier && hoveredCarrier && (
-                      <span 
+                      <span
                         className="text-xs px-2 py-1 rounded-full font-medium"
-                        style={{ 
+                        style={{
                           backgroundColor: carrierColor.replace('0.8', '0.2'),
                           color: carrierHoverColor
                         }}
@@ -441,13 +462,13 @@ export default function PremiumCarrierPieChart({ data, loading, year }: PremiumC
                 </div>
                 <div className="grid grid-cols-3 gap-4">
                   <div className="text-center">
-                    <p 
+                    <p
                       className="text-2xl font-bold"
                       style={{ color: carrierHoverColor }}
                     >
                       {formatCurrency((displayCarrier?.total_commission || displayCarrier?.totalCommission || 0), true)}
                     </p>
-                    <p 
+                    <p
                       className="text-sm"
                       style={{ color: carrierColor.replace('0.8', '0.7') }}
                     >
@@ -455,13 +476,13 @@ export default function PremiumCarrierPieChart({ data, loading, year }: PremiumC
                     </p>
                   </div>
                   <div className="text-center">
-                    <p 
+                    <p
                       className="text-2xl font-bold"
                       style={{ color: carrierHoverColor }}
                     >
                       {displayCarrier?.statement_count || displayCarrier?.statementCount || 0}
                     </p>
-                    <p 
+                    <p
                       className="text-sm"
                       style={{ color: carrierColor.replace('0.8', '0.7') }}
                     >
@@ -469,13 +490,13 @@ export default function PremiumCarrierPieChart({ data, loading, year }: PremiumC
                     </p>
                   </div>
                   <div className="text-center">
-                    <p 
+                    <p
                       className="text-2xl font-bold"
                       style={{ color: carrierHoverColor }}
                     >
                       {formatPercentage(displayCarrier?.percentage || 0)}
                     </p>
-                    <p 
+                    <p
                       className="text-sm"
                       style={{ color: carrierColor.replace('0.8', '0.7') }}
                     >

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import {
   TrendingUp, DollarSign, Building2, Calendar,
@@ -12,22 +12,22 @@ import {
 } from 'lucide-react';
 
 // Import your existing hooks
-import { 
-  useEarnedCommissionStats, 
-  useDashboardStats, 
-  useAvailableYears, 
+import {
+  useEarnedCommissionStats,
+  useDashboardStats,
+  useAvailableYears,
   useAllCommissionData,
   useCarriersWithCommission,
   useCarrierPieChartData
 } from '../../hooks/useDashboard';
 
 // Import utilities
-import { 
-  identifyTopPerformingCarriers, 
-  extractMonthlyData, 
-  calculateCommissionGrowth, 
-  formatCurrency as utilFormatCurrency, 
-  formatPercentage 
+import {
+  identifyTopPerformingCarriers,
+  extractMonthlyData,
+  calculateCommissionGrowth,
+  formatCurrency as utilFormatCurrency,
+  formatPercentage
 } from '../../utils/analyticsUtils';
 
 // Chart.js imports
@@ -49,6 +49,16 @@ import { Line, Bar, Doughnut } from 'react-chartjs-2';
 // Import Premium Carrier Pie Chart
 import PremiumCarrierPieChart from './PremiumCarrierPieChart';
 
+// Import Carrier Upload Zone and related components
+import MinimalUploadZone from '../MinimalUploadZone';
+import CarriersModal from './CarriersModal';
+import UnifiedTableEditor from '../upload/UnifiedTableEditor';
+import toast from 'react-hot-toast';
+import axios from 'axios';
+import { useSubmission } from '@/context/SubmissionContext';
+
+type FieldConfig = { field: string, label: string }
+
 ChartJS.register(
   CategoryScale,
   LinearScale,
@@ -65,7 +75,7 @@ ChartJS.register(
 // Info Tooltip Component
 function InfoTooltip({ content }: { content: string }) {
   const [isOpen, setIsOpen] = useState(false);
-  
+
   return (
     <div className="relative inline-block">
       <button
@@ -77,7 +87,7 @@ function InfoTooltip({ content }: { content: string }) {
       >
         <HelpCircle className="w-4 h-4" />
       </button>
-      
+
       {isOpen && (
         <motion.div
           initial={{ opacity: 0, y: 5 }}
@@ -98,11 +108,11 @@ function InfoTooltip({ content }: { content: string }) {
 }
 
 // Individual Chart Filter Component
-function ChartFilter({ 
-  title, 
-  options, 
-  value, 
-  onChange, 
+function ChartFilter({
+  title,
+  options,
+  value,
+  onChange,
   icon: Icon,
   placeholder = "All"
 }: {
@@ -115,15 +125,15 @@ function ChartFilter({
 }) {
   return (
     <div className="flex items-center space-x-2">
-      {Icon && <Icon className="w-4 h-4 text-slate-500" />}
+      {Icon && <Icon className="w-4 h-4 text-slate-500 dark:text-slate-400" />}
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="text-xs border-none bg-transparent text-slate-600 hover:text-slate-900 focus:outline-none focus:text-slate-900 font-medium cursor-pointer pr-6"
+        className="text-xs border-none bg-transparent text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white focus:outline-none focus:text-slate-900 dark:focus:text-white font-medium cursor-pointer pr-6"
       >
-        <option value="">{placeholder}</option>
+        <option value="" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">{placeholder}</option>
         {options.map(option => (
-          <option key={option.value} value={option.value}>
+          <option key={option.value} value={option.value} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">
             {option.label}
           </option>
         ))}
@@ -133,12 +143,12 @@ function ChartFilter({
 }
 
 // Enhanced Chart Wrapper with Individual Filters
-function ChartWrapper({ 
-  title, 
-  subtitle, 
-  icon: Icon, 
-  gradient, 
-  children, 
+function ChartWrapper({
+  title,
+  subtitle,
+  icon: Icon,
+  gradient,
+  children,
   filters = [],
   actions = [],
   loading = false,
@@ -177,7 +187,7 @@ function ChartWrapper({
               <p className="text-sm text-slate-600 dark:text-slate-400">{subtitle}</p>
             </div>
           </div>
-          
+
           {/* Chart-specific filters and actions */}
           <div className="flex items-center space-x-4">
             {/* Individual Chart Filters */}
@@ -191,7 +201,7 @@ function ChartWrapper({
                 ))}
               </div>
             )}
-            
+
             {/* Chart Actions */}
             <div className="flex items-center space-x-2">
               {actions.map((action, index) => (
@@ -208,7 +218,7 @@ function ChartWrapper({
           </div>
         </div>
       </div>
-      
+
       {/* Chart Content */}
       <div className="p-4">
         {loading ? (
@@ -234,21 +244,21 @@ function CommissionTrendsChart({ data, loading }: { data: any; loading: boolean 
 
   const processedData = useMemo(() => {
     console.log('📈 Commission Trends - Raw Data:', data);
-    
+
     if (!data || !Array.isArray(data) || data.length === 0) {
       console.log('⚠️ No data available for commission trends');
       return null;
     }
-    
+
     const monthlyData = extractMonthlyData(data);
     console.log('📈 Monthly Data Processed:', monthlyData);
-    
+
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    
+
     // Apply time range filter
     let filteredMonths = months;
     let filteredData = monthlyData;
-    
+
     if (timeRange === '6m') {
       const currentMonth = new Date().getMonth();
       filteredMonths = months.slice(Math.max(0, currentMonth - 5), currentMonth + 1);
@@ -263,7 +273,7 @@ function CommissionTrendsChart({ data, loading }: { data: any; loading: boolean 
     console.log('📈 Chart Data Points:', chartData);
     console.log('📈 View Type:', viewType);
     console.log('📈 Filtered Data:', filteredData);
-    
+
     const datasets = [
       {
         label: viewType === 'commission' ? 'Commission Earned' : 'Statement Count',
@@ -321,7 +331,7 @@ function CommissionTrendsChart({ data, loading }: { data: any; loading: boolean 
       },
       y: {
         grid: { color: 'rgba(241, 245, 249, 0.5)' },
-        ticks: { 
+        ticks: {
           color: '#6B7280',
           callback: (value: any) => {
             if (viewType === 'commission') {
@@ -412,7 +422,7 @@ function TopCarriersChart({ carriers, loading }: { carriers: any; loading: boole
   const processedData = useMemo(() => {
     console.log('🏢 Top Carriers - Raw Data:', carriers);
     console.log('🏢 First carrier sample:', carriers?.[0]);
-    
+
     if (!carriers || !Array.isArray(carriers) || carriers.length === 0) {
       console.log('⚠️ No carriers data available');
       return null;
@@ -424,10 +434,10 @@ function TopCarriersChart({ carriers, loading }: { carriers: any; loading: boole
         id: c.id,
         name: c.name || c.carrier_name || c.carriername || 'Unknown',
         // The endpoint returns total_commission from earned_commission/carriers
-        commission: c.total_commission || c.totalCommission || c.totalcommission || 
-                   c.commissiontotal || c.commission_total || 0,
-        statementCount: c.statement_count || c.statementcount || c.statementCount || 
-                       c.total_statements || 0,
+        commission: c.total_commission || c.totalCommission || c.totalcommission ||
+          c.commissiontotal || c.commission_total || 0,
+        statementCount: c.statement_count || c.statementcount || c.statementCount ||
+          c.total_statements || 0,
         planType: c.plantype || c.plan_type || c.planType || null
       };
       console.log('🏢 Standardized carrier:', standardized);
@@ -435,7 +445,7 @@ function TopCarriersChart({ carriers, loading }: { carriers: any; loading: boole
     });
 
     console.log('🏢 Standardized carriers:', filteredCarriers);
-    
+
     // Apply plan filter if selected
     if (planFilter) {
       filteredCarriers = filteredCarriers.filter((c: any) => c.planType === planFilter);
@@ -450,7 +460,7 @@ function TopCarriersChart({ carriers, loading }: { carriers: any; loading: boole
 
     // Limit results
     filteredCarriers = filteredCarriers.slice(0, parseInt(limit));
-    
+
     console.log('🏢 Final carriers for chart:', filteredCarriers);
 
     return {
@@ -459,7 +469,7 @@ function TopCarriersChart({ carriers, loading }: { carriers: any; loading: boole
         label: 'Commission',
         data: filteredCarriers.map((c: any) => c.commission),
         backgroundColor: [
-          'rgba(59, 130, 246, 0.8)', 'rgba(16, 185, 129, 0.8)', 
+          'rgba(59, 130, 246, 0.8)', 'rgba(16, 185, 129, 0.8)',
           'rgba(139, 92, 246, 0.8)', 'rgba(245, 158, 11, 0.8)',
           'rgba(239, 68, 68, 0.8)', 'rgba(236, 72, 153, 0.8)',
           'rgba(34, 197, 94, 0.8)', 'rgba(168, 85, 247, 0.8)',
@@ -497,7 +507,7 @@ function TopCarriersChart({ carriers, loading }: { carriers: any; loading: boole
     scales: {
       x: {
         grid: { color: 'rgba(241, 245, 249, 0.5)' },
-        ticks: { 
+        ticks: {
           color: '#6B7280',
           callback: (value: any) => utilFormatCurrency(value, true)
         }
@@ -578,7 +588,7 @@ function PlanDistributionChart({ data }: { data: any }) {
 
   const processedData = useMemo(() => {
     console.log('📊 Plan Distribution - Raw Data:', data);
-    
+
     if (!data || !Array.isArray(data) || data.length === 0) {
       console.log('⚠️ No data available for plan distribution');
       return null;
@@ -593,20 +603,20 @@ function PlanDistributionChart({ data }: { data: any }) {
       acc[planType].commission += item.commissionearned || item.commission_earned || 0;
       return acc;
     }, {} as Record<string, { count: number; commission: number }>);
-    
+
     console.log('📊 Plan Data Aggregated:', planData);
 
     // Filter by minimum value
     const minVal = parseInt(minValue);
     const filteredData = Object.entries(planData)
-      .filter(([_, values]: [string, any]) => 
+      .filter(([_, values]: [string, any]) =>
         metric === 'count' ? values.count >= minVal : values.commission >= minVal
       );
 
     return {
       labels: filteredData.map(([planType]) => planType),
       datasets: [{
-        data: filteredData.map(([_, values]: [string, any]) => 
+        data: filteredData.map(([_, values]: [string, any]) =>
           metric === 'count' ? values.count : values.commission
         ),
         backgroundColor: [
@@ -638,7 +648,7 @@ function PlanDistributionChart({ data }: { data: any }) {
         titleColor: 'white',
         bodyColor: 'white',
         callbacks: {
-          label: (context: any) => 
+          label: (context: any) =>
             metric === 'count'
               ? `${context.label}: ${context.raw} statements`
               : `${context.label}: ${utilFormatCurrency(context.raw, true)}`
@@ -703,6 +713,21 @@ function PlanDistributionChart({ data }: { data: any }) {
 export default function PremiumAnalyticsTab({ onNavigate }: { onNavigate?: (tab: string) => void }) {
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState(currentYear);
+  const [carriersModalOpen, setCarriersModalOpen] = useState(false);
+
+  // Upload and processing states - NEW 2-STEP FLOW ONLY
+  const [company, setCompany] = useState<{ id: string, name: string } | null>(null);
+  const [uploaded, setUploaded] = useState<any>(null);
+  const [databaseFields, setDatabaseFields] = useState<FieldConfig[]>([]);
+  const [loadingFields, setLoadingFields] = useState(false);
+  const [showUnifiedEditor, setShowUnifiedEditor] = useState(false);
+  const [savingMapping, setSavingMapping] = useState(false);
+  const [planTypes, setPlanTypes] = useState<string[]>([]);
+  const [selectedStatementDate, setSelectedStatementDate] = useState<any>(null);
+  const [extractionMethod, setExtractionMethod] = useState('smart');
+
+  // Context hooks
+  const { refreshTrigger } = useSubmission();
 
   // Data hooks
   const { stats: currentStats, loading: currentStatsLoading } = useEarnedCommissionStats(selectedYear);
@@ -714,12 +739,101 @@ export default function PremiumAnalyticsTab({ onNavigate }: { onNavigate?: (tab:
 
   const loading = currentStatsLoading || dashboardLoading || currentDataLoading;
 
+  // Handle upload result - NEW 2-STEP FLOW
+  const handleUploadResult = useCallback(({ tables, upload_id, extraction_id, file_name, file, plan_types, extracted_carrier, extracted_date, gcs_url, gcs_key, document_metadata, ai_intelligence }: any) => {
+    console.log('🔍 handleUploadResult received ai_intelligence:', {
+      has_ai_intelligence: !!ai_intelligence,
+      field_mapping_count: ai_intelligence?.field_mapping?.mappings?.length || 0,
+      plan_types_count: ai_intelligence?.plan_type_detection?.detected_plan_types?.length || 0,
+    });
+
+    // Set uploaded data with AI intelligence
+    setUploaded({
+      tables,
+      upload_id,
+      extraction_id: extraction_id || upload_id,
+      id: extraction_id || upload_id,
+      file_name,
+      file,
+      gcs_url,
+      gcs_key,
+      extracted_carrier,
+      extracted_date,
+      document_metadata,
+      ai_intelligence
+    });
+
+    // Handle carrier detection and auto-creation
+    if (extracted_carrier) {
+      const currentCarrierMatches = company && (
+        company.name.toLowerCase().includes(extracted_carrier.toLowerCase()) ||
+        extracted_carrier.toLowerCase().includes(company.name.toLowerCase())
+      );
+
+      if (currentCarrierMatches) {
+        toast.success(`✅ Carrier verified: ${extracted_carrier}`);
+      } else {
+        if (company) {
+          toast.success(
+            `🎯 Carrier detected: "${extracted_carrier}". File has been automatically assigned to the correct carrier.`,
+            { duration: 6000 }
+          );
+        } else {
+          toast.success(
+            `🎯 Carrier detected: "${extracted_carrier}". Carrier has been auto-created and file assigned.`,
+            { duration: 6000 }
+          );
+        }
+
+        setCompany({
+          id: 'auto-detected',
+          name: extracted_carrier
+        });
+      }
+    }
+
+    // Handle extracted date
+    if (extracted_date) {
+      const dateInfo = {
+        date: extracted_date,
+        confidence: document_metadata?.date_confidence || 0.8,
+        source: 'ai_extraction'
+      };
+      setSelectedStatementDate(dateInfo);
+      toast.success(`Auto-detected statement date: ${extracted_date}`);
+    }
+
+    // Set plan types
+    if (plan_types) setPlanTypes(plan_types);
+
+    // Open UnifiedTableEditor for the new 2-step flow
+    setShowUnifiedEditor(true);
+  }, [company]);
+
+  const handleSaveMapping = useCallback(async (mapping: any) => {
+    setSavingMapping(true);
+    try {
+      // Save mapping logic here
+      console.log('Saving mapping:', mapping);
+      toast.success('Mapping saved successfully');
+      setShowUnifiedEditor(false);
+      setUploaded(null);
+      // Trigger refresh
+      window.location.reload();
+    } catch (error) {
+      console.error('Error saving mapping:', error);
+      toast.error('Failed to save mapping');
+    } finally {
+      setSavingMapping(false);
+    }
+  }, []);
+
   // Hero metrics calculation with proper backend data integration
   const heroMetrics = useMemo(() => {
     console.log('📊 Current Stats:', currentStats);
     console.log('📊 Dashboard Stats:', dashboardStats);
     console.log('📊 Current Year Data:', currentYearData);
-    
+
     // Calculate total commission from current year data if stats not available
     let totalCommission = 0;
     if (currentStats?.totalcommission !== undefined) {
@@ -746,11 +860,10 @@ export default function PremiumAnalyticsTab({ onNavigate }: { onNavigate?: (tab:
   }, [currentStats, dashboardStats, currentYearData, carriers]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/30 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
-      
+    <>
       {/* Full Width Content - 90% of screen width */}
       <div className="w-full px-4 md:px-6 lg:px-8 py-6 md:py-8" style={{ maxWidth: '90vw', margin: '0 auto' }}>
-        
+
         {/* Year Selector - Top Right */}
         <div className="flex justify-end mb-6">
           {!yearsLoading && availableYears && availableYears.length > 0 && (
@@ -765,7 +878,7 @@ export default function PremiumAnalyticsTab({ onNavigate }: { onNavigate?: (tab:
             </select>
           )}
         </div>
-        
+
         {/* Hero Metrics - Full Width */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <motion.div
@@ -787,8 +900,8 @@ export default function PremiumAnalyticsTab({ onNavigate }: { onNavigate?: (tab:
               <div className="text-3xl font-bold text-slate-900 dark:text-white mb-1">
                 {utilFormatCurrency(heroMetrics.totalCommission, true)}
               </div>
-              <div className="text-sm font-medium text-slate-600">Total Commission</div>
-              <div className="text-xs text-slate-500 mt-1">vs last year</div>
+              <div className="text-sm font-medium text-slate-600 dark:text-slate-300">Total Commission</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">vs last year</div>
             </div>
           </motion.div>
 
@@ -804,13 +917,13 @@ export default function PremiumAnalyticsTab({ onNavigate }: { onNavigate?: (tab:
                 <div className="w-12 h-12 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg">
                   <Building2 className="w-6 h-6 text-white" />
                 </div>
-                <div className="text-sm text-slate-600">+8.3%</div>
+                <div className="text-sm text-slate-600 dark:text-slate-300">+8.3%</div>
               </div>
               <div className="text-3xl font-bold text-slate-900 dark:text-white mb-1">
                 {heroMetrics.totalCarriers}
               </div>
-              <div className="text-sm font-medium text-slate-600">Active Carriers</div>
-              <div className="text-xs text-slate-500 mt-1">this year</div>
+              <div className="text-sm font-medium text-slate-600 dark:text-slate-300">Active Carriers</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">this year</div>
             </div>
           </motion.div>
 
@@ -825,13 +938,13 @@ export default function PremiumAnalyticsTab({ onNavigate }: { onNavigate?: (tab:
                 <div className="w-12 h-12 rounded-xl bg-gradient-to-r from-purple-500 to-violet-600 flex items-center justify-center shadow-lg">
                   <BarChart3 className="w-6 h-6 text-white" />
                 </div>
-                <div className="text-sm text-slate-600">+12.8%</div>
+                <div className="text-sm text-slate-600 dark:text-slate-300">+12.8%</div>
               </div>
               <div className="text-3xl font-bold text-slate-900 dark:text-white mb-1">
                 {heroMetrics.totalStatements}
               </div>
-              <div className="text-sm font-medium text-slate-600">Total Statements</div>
-              <div className="text-xs text-slate-500 mt-1">processed</div>
+              <div className="text-sm font-medium text-slate-600 dark:text-slate-300">Total Statements</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">processed</div>
             </div>
           </motion.div>
 
@@ -846,13 +959,13 @@ export default function PremiumAnalyticsTab({ onNavigate }: { onNavigate?: (tab:
                 <div className="w-12 h-12 rounded-xl bg-gradient-to-r from-green-500 to-emerald-600 flex items-center justify-center shadow-lg">
                   <CheckCircle className="w-6 h-6 text-white" />
                 </div>
-                <div className="text-sm text-slate-600">+2.1%</div>
+                <div className="text-sm text-slate-600 dark:text-slate-300">+2.1%</div>
               </div>
               <div className="text-3xl font-bold text-slate-900 dark:text-white mb-1">
                 {heroMetrics.successRate.toFixed(1)}%
               </div>
-              <div className="text-sm font-medium text-slate-600">Success Rate</div>
-              <div className="text-xs text-slate-500 mt-1">processing quality</div>
+              <div className="text-sm font-medium text-slate-600 dark:text-slate-300">Success Rate</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">processing quality</div>
             </div>
           </motion.div>
         </div>
@@ -860,31 +973,41 @@ export default function PremiumAnalyticsTab({ onNavigate }: { onNavigate?: (tab:
         {/* Main Charts Grid - Full Width with Individual Filters */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
           {/* Commission Trends - Takes 2 columns with individual filters */}
-          <CommissionTrendsChart 
-            data={currentYearData} 
-            loading={currentDataLoading} 
+          <CommissionTrendsChart
+            data={currentYearData}
+            loading={currentDataLoading}
           />
-          
+
           {/* Top Carriers - Takes 1 column with individual filters */}
-          <TopCarriersChart 
-            carriers={carriers} 
-            loading={carriersLoading} 
+          <TopCarriersChart
+            carriers={carriers}
+            loading={carriersLoading}
           />
         </div>
 
-        {/* Premium Carrier Distribution Pie Chart - Full Width */}
-        <div className="grid grid-cols-1 lg:grid-cols-1 gap-8 mb-8">
-          <PremiumCarrierPieChart 
-            data={pieChartData}
-            loading={pieChartLoading}
-            year={selectedYear}
-          />
+        {/* Premium Carrier Distribution Pie Chart - 1/3 upload left, 2/3 distribution right */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+          <div className="lg:col-span-1">
+            <MinimalUploadZone
+              onParsed={handleUploadResult}
+              selectedStatementDate={selectedStatementDate}
+              extractionMethod={extractionMethod}
+              onExtractionMethodChange={setExtractionMethod}
+            />
+          </div>
+          <div className="lg:col-span-2">
+            <PremiumCarrierPieChart
+              data={pieChartData}
+              loading={pieChartLoading}
+              year={selectedYear}
+            />
+          </div>
         </div>
 
         {/* Secondary Charts - Full Width */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           <PlanDistributionChart data={currentYearData} />
-          
+
           {/* Key Insights Card */}
           <div className="bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 rounded-2xl border border-blue-200 dark:border-blue-800 p-6">
             <div className="flex items-center space-x-3 mb-4">
@@ -917,7 +1040,7 @@ export default function PremiumAnalyticsTab({ onNavigate }: { onNavigate?: (tab:
               <InfoTooltip content="Quick access links to commonly used features like viewing detailed reports and managing your carriers. Click any action to navigate directly to that section." />
             </div>
             <div className="space-y-3">
-              <button 
+              <button
                 onClick={() => onNavigate?.('dashboard')}
                 className="w-full flex items-center justify-between p-3 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/30 rounded-lg transition-colors text-left"
               >
@@ -927,7 +1050,7 @@ export default function PremiumAnalyticsTab({ onNavigate }: { onNavigate?: (tab:
                 </div>
                 <ExternalLink className="w-4 h-4 text-slate-400" />
               </button>
-              <button 
+              <button
                 onClick={() => onNavigate?.('carriers')}
                 className="w-full flex items-center justify-between p-3 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:hover:bg-emerald-900/30 rounded-lg transition-colors text-left"
               >
@@ -941,6 +1064,82 @@ export default function PremiumAnalyticsTab({ onNavigate }: { onNavigate?: (tab:
           </div>
         </div>
       </div>
-    </div>
+
+      {/* Unified Table Editor Modal - Full Screen */}
+      {showUnifiedEditor && uploaded && (
+        <div className="fixed inset-0 bg-white dark:bg-gray-900 z-50">
+          <UnifiedTableEditor
+            extractedData={{
+              tables: uploaded.tables || [],
+              planType: uploaded.document_metadata?.plan_type,
+              planTypeConfidence: uploaded.document_metadata?.plan_type_confidence,
+              carrierName: uploaded.extracted_carrier,
+              statementDate: uploaded.extracted_date,
+              gcs_url: uploaded.gcs_url,
+              file_name: uploaded.file_name,
+              extracted_carrier: uploaded.extracted_carrier,
+              extracted_date: uploaded.extracted_date,
+              upload_id: uploaded.upload_id || uploaded.id,
+              company_id: company?.id || uploaded.company_id,
+              carrier_id: uploaded.carrier_id,
+              document_metadata: uploaded.document_metadata,
+              ai_intelligence: uploaded.ai_intelligence
+            }}
+            uploadData={uploaded}
+            databaseFields={databaseFields.map(f => ({
+              id: f.field,
+              display_name: f.label,
+              description: f.label
+            }))}
+            onDataUpdate={(data) => {
+              setUploaded({ ...uploaded, tables: data.tables });
+            }}
+            onSubmit={async (finalData) => {
+              try {
+                setSavingMapping(true);
+
+                // Save mappings to backend
+                const config = {
+                  mapping: finalData.field_mappings,
+                  plan_types: finalData.plan_types || planTypes || [],
+                  field_config: databaseFields,
+                  table_data: uploaded.tables?.[0]?.rows || [],
+                  headers: uploaded.tables?.[0]?.header || [],
+                  selected_statement_date: selectedStatementDate
+                };
+
+                // Only save mapping if company is set and not a temporary ID
+                if (company && company.id && !company.id.includes('temp') && !company.id.includes('auto')) {
+                  await axios.post(
+                    `${process.env.NEXT_PUBLIC_API_URL}/api/companies/${company.id}/mapping/`,
+                    config,
+                    { withCredentials: true }
+                  );
+                } else {
+                  console.log('⚠️ Skipping mapping save - carrier not yet persisted in database');
+                }
+
+                // Update local state
+                setPlanTypes(finalData.plan_types || planTypes || []);
+                setShowUnifiedEditor(false);
+
+                toast.success('Data submitted successfully! 🎉');
+
+                // Navigate back to dashboard
+                setTimeout(() => {
+                  window.location.href = '/?tab=dashboard';
+                }, 1000);
+
+              } catch (error) {
+                console.error('Error saving mappings:', error);
+                toast.error('Failed to save mappings');
+              } finally {
+                setSavingMapping(false);
+              }
+            }}
+          />
+        </div>
+      )}
+    </>
   );
 }
