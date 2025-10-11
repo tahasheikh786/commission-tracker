@@ -198,58 +198,15 @@ export default function UnifiedAuthPage() {
 
   return (
     <div className={`min-h-screen ${actualTheme === 'dark' ? 'dark' : ''}`}>
-      {/* Premium Header */}
-      <motion.div 
-        initial={{ y: -20, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        className="fixed top-0 left-0 right-0 z-50 bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl border-b border-slate-200/50 dark:border-slate-700/50"
-      >
-        <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <Link href="/landing" className="flex items-center space-x-3 group">
-              <div className="w-9 h-9 bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 rounded-xl flex items-center justify-center transition-all duration-300 group-hover:scale-105 group-hover:shadow-lg">
-                <Database className="w-5 h-5 text-white" />
-              </div>
-              <div className="hidden sm:block">
-                <div className="text-lg font-bold bg-gradient-to-r from-slate-800 via-slate-700 to-slate-600 dark:from-slate-100 dark:via-slate-200 dark:to-slate-300 bg-clip-text text-transparent">
-                  Commission Tracker
-                </div>
-                <div className="text-xs text-slate-500 dark:text-slate-400 -mt-0.5">Enterprise SaaS</div>
-              </div>
-            </Link>
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setTheme(actualTheme === 'dark' ? 'light' : 'dark')}
-                className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-300 cursor-pointer"
-                aria-label="Toggle theme"
-              >
-                {actualTheme === 'dark' ? (
-                  <Sun className="w-5 h-5 text-slate-400" />
-                ) : (
-                  <Moon className="w-5 h-5 text-slate-600" />
-                )}
-              </button>
-              <Link
-                href="/landing"
-                className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-300"
-                aria-label="Close"
-              >
-                <X className="w-5 h-5 text-slate-600 dark:text-slate-400" />
-              </Link>
-            </div>
-          </div>
-        </div>
-      </motion.div>
 
       {/* Premium Split Layout */}
-      <div className="flex min-h-screen pt-16">
+      <div className="flex min-h-screen">
         {/* Left Panel - Brand Experience (40%) */}
         <motion.div 
           initial={{ x: -50, opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
           transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
-          className="hidden lg:flex lg:w-[40%] relative bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-700 dark:from-blue-900 dark:via-indigo-900 dark:to-purple-900 overflow-hidden"
+          className="hidden lg:flex lg:w-[40%] relative bg-gradient-to-br from-blue-800 via-purple-800 to-pink-800 dark:from-blue-800 dark:via-purple-800 dark:to-pink-800 overflow-hidden"
         >
           {/* Animated Background Pattern */}
           <div className="absolute inset-0 opacity-10">
@@ -370,8 +327,29 @@ export default function UnifiedAuthPage() {
           initial={{ x: 50, opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
           transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
-          className="flex-1 lg:w-[60%] flex items-center justify-center p-6 sm:p-8 lg:p-12 bg-slate-50 dark:bg-slate-900"
+          className="flex-1 lg:w-[60%] flex items-center justify-center p-6 sm:p-8 lg:p-12 bg-slate-50 dark:bg-slate-900 relative"
         >
+          {/* Theme Toggle and Close Button - Top Right */}
+          <div className="absolute top-6 right-6 flex items-center gap-2 z-10">
+            <button
+              onClick={() => setTheme(actualTheme === 'dark' ? 'light' : 'dark')}
+              className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-300 cursor-pointer"
+              aria-label="Toggle theme"
+            >
+              {actualTheme === 'dark' ? (
+                <Sun className="w-5 h-5 text-slate-400" />
+              ) : (
+                <Moon className="w-5 h-5 text-slate-600" />
+              )}
+            </button>
+            <Link
+              href="/landing"
+              className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-300"
+              aria-label="Close"
+            >
+              <X className="w-5 h-5 text-slate-600 dark:text-slate-400" />
+            </Link>
+          </div>
           <div className="w-full max-w-lg">
             {/* Premium Card with Glassmorphism */}
             <motion.div
@@ -380,8 +358,23 @@ export default function UnifiedAuthPage() {
               transition={{ delay: 0.3, duration: 0.5 }}
               className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl rounded-3xl shadow-2xl border border-slate-200/50 dark:border-slate-700/50 overflow-hidden max-h-[90vh] flex flex-col"
             >
+              {/* Logo and Title */}
+              <div className="px-6 sm:px-8 pt-8 pb-6">
+                <Link href="/landing" className="flex flex-col items-center space-y-3 group mb-6">
+                  <div className="w-16 h-16 bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 rounded-xl flex items-center justify-center transition-all duration-300 group-hover:scale-105 group-hover:shadow-lg">
+                    <Database className="w-8 h-8 text-white" />
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold bg-gradient-to-r from-slate-800 via-slate-700 to-slate-600 dark:from-slate-100 dark:via-slate-200 dark:to-slate-300 bg-clip-text text-transparent">
+                      Commission Tracker
+                    </div>
+                    <div className="text-sm text-slate-500 dark:text-slate-400 mt-1">Enterprise SaaS</div>
+                  </div>
+                </Link>
+              </div>
+
               {/* Tab Header with Sliding Indicator */}
-              <div className="relative px-6 sm:px-8 pt-8">
+              <div className="relative px-6 sm:px-8">
                 <div className="flex gap-1 bg-slate-100 dark:bg-slate-700/50 p-1 rounded-xl relative">
                   <motion.div
                     className="absolute inset-y-1 bg-white dark:bg-slate-600 rounded-lg shadow-sm"
@@ -398,7 +391,7 @@ export default function UnifiedAuthPage() {
                   <button
                     type="button"
                     onClick={() => setActiveTab('login')}
-                    className={`relative z-10 flex-1 px-6 py-3 text-sm font-semibold rounded-lg transition-colors duration-200 ${
+                    className={`relative z-10 flex-1 px-6 py-3 text-sm font-semibold rounded-lg transition-colors duration-200 cursor-pointer ${
                       activeTab === 'login'
                         ? 'text-slate-900 dark:text-slate-100'
                         : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
@@ -409,7 +402,7 @@ export default function UnifiedAuthPage() {
                   <button
                     type="button"
                     onClick={() => setActiveTab('signup')}
-                    className={`relative z-10 flex-1 px-6 py-3 text-sm font-semibold rounded-lg transition-colors duration-200 ${
+                    className={`relative z-10 flex-1 px-6 py-3 text-sm font-semibold rounded-lg transition-colors duration-200 cursor-pointer ${
                       activeTab === 'signup'
                         ? 'text-slate-900 dark:text-slate-100'
                         : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'

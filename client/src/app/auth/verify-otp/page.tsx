@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { motion } from 'framer-motion';
-import { Mail, Building2, ArrowLeft, ArrowRight, Clock, CheckCircle, AlertCircle, Moon, Sun } from 'lucide-react';
+import { Mail, Building2, ArrowLeft, ArrowRight, Clock, CheckCircle, AlertCircle, Moon, Sun, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
 
@@ -103,17 +103,30 @@ function VerifyOTPContent() {
   return (
     <div className={`min-h-screen flex items-center justify-center p-4 ${actualTheme === 'dark' ? 'dark' : ''}`}>
       <div className="absolute inset-0 bg-slate-50 dark:bg-slate-900"></div>
+      
+      {/* Theme Toggle and Close Button - Top Right */}
+      <div className="absolute top-6 right-6 flex items-center gap-2 z-10">
+        <button
+          onClick={() => setTheme(actualTheme === 'dark' ? 'light' : 'dark')}
+          className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-300 cursor-pointer"
+          aria-label="Toggle theme"
+        >
+          {actualTheme === 'dark' ? (
+            <Sun className="w-5 h-5 text-slate-400" />
+          ) : (
+            <Moon className="w-5 h-5 text-slate-600" />
+          )}
+        </button>
+        <Link
+          href="/landing"
+          className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-300"
+          aria-label="Close"
+        >
+          <X className="w-5 h-5 text-slate-600 dark:text-slate-400" />
+        </Link>
+      </div>
+      
       <div className="w-full max-w-md relative z-10">
-        {/* Theme Toggle */}
-        <div className="absolute top-4 right-4 z-20">
-          <button
-            onClick={() => setTheme(actualTheme === 'dark' ? 'light' : 'dark')}
-            className="p-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-sm cursor-pointer"
-            aria-label={`Switch to ${actualTheme === 'dark' ? 'light' : 'dark'} mode`}
-          >
-            {actualTheme === 'dark' ? <Sun className="w-5 h-5 text-slate-300" /> : <Moon className="w-5 h-5 text-slate-600" />}
-          </button>
-        </div>
         {/* Logo and Header */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
