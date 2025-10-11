@@ -8,7 +8,7 @@
 
 "use client";
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 import { FieldMapping, PlanTypeDetection } from '@/app/services/aiIntelligentMappingService';
@@ -17,7 +17,7 @@ import AIIntelligentMappingDisplay from '../AIIntelligentMappingDisplay';
 import DocumentPreview from '../../upload/components/TableEditor/components/DocumentPreview';
 import EditableTableView from './EditableTableView';
 import PremiumProgressLoader, { UploadStep } from './PremiumProgressLoader';
-import { ArrowRight, Map, FileText, Table2 } from 'lucide-react';
+import { ArrowRight, Map, FileText, Table2, PanelLeftClose, PanelLeftOpen, Pencil } from 'lucide-react';
 
 export interface ExtractedData {
   tables: any[];
@@ -78,7 +78,7 @@ export default function UnifiedTableEditor({
 }: UnifiedTableEditorProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('table_review');
   const [userMappings, setUserMappings] = useState<Record<string, string>>({});
-  const [acceptedMappings, setAcceptedMappings] = useState<Array<{field: string, mapsTo: string, confidence: number, sample: string}>>([]);
+  const [acceptedMappings, setAcceptedMappings] = useState<Array<{ field: string, mapsTo: string, confidence: number, sample: string }>>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [tables, setTables] = useState(extractedData.tables || []);
@@ -89,13 +89,54 @@ export default function UnifiedTableEditor({
   const [showPreview, setShowPreview] = useState(true);
   const [isExtractingWithGPT, setIsExtractingWithGPT] = useState(false);
 
+  // Prevent navigation when user has unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      // Check if user has made changes (has accepted mappings or is in field mapping mode)
+      const hasChanges = acceptedMappings.length > 0 || viewMode === 'field_mapping';
+      
+      if (hasChanges) {
+        e.preventDefault();
+        e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+        return 'You have unsaved changes. Are you sure you want to leave?';
+      }
+    };
+
+    const handlePopState = (e: PopStateEvent) => {
+      // Check if user has made changes
+      const hasChanges = acceptedMappings.length > 0 || viewMode === 'field_mapping';
+      
+      if (hasChanges) {
+        // Show confirmation dialog
+        const confirmed = window.confirm('You have unsaved changes. Are you sure you want to leave?');
+        if (!confirmed) {
+          // Push the current state back to prevent navigation
+          window.history.pushState(null, '', window.location.href);
+        }
+      }
+    };
+
+    // Add event listeners
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('popstate', handlePopState);
+
+    // Push initial state to prevent back navigation
+    window.history.pushState(null, '', window.location.href);
+
+    // Cleanup
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [acceptedMappings.length, viewMode]);
+
   // Get AI mappings from extracted data
   const aiMappings = extractedData.ai_intelligence?.field_mapping?.mappings || [];
 
   // Auto-accept high-confidence learned format mappings
   React.useEffect(() => {
     const fieldMapping = extractedData.ai_intelligence?.field_mapping;
-    
+
     // Only auto-accept if:
     // 1. AI field mapping is enabled
     // 2. A learned format was used
@@ -108,16 +149,16 @@ export default function UnifiedTableEditor({
       acceptedMappings.length === 0
     ) {
       const tableHeaders = tables?.[0]?.header || tables?.[0]?.headers || [];
-      
+
       // Auto-accept all high-confidence mappings from learned format
       const autoAcceptedMappings = aiMappings
         .filter(mapping => mapping.confidence >= 0.85)
         .map(mapping => {
-          const colIndex = tableHeaders.findIndex((h: string) => 
+          const colIndex = tableHeaders.findIndex((h: string) =>
             h.toLowerCase() === mapping.extracted_field.toLowerCase()
           );
-          const sampleData = colIndex >= 0 && tables?.[0]?.rows?.[0] 
-            ? tables[0].rows[0][colIndex] 
+          const sampleData = colIndex >= 0 && tables?.[0]?.rows?.[0]
+            ? tables[0].rows[0][colIndex]
             : 'N/A';
 
           return {
@@ -131,14 +172,14 @@ export default function UnifiedTableEditor({
       if (autoAcceptedMappings.length > 0) {
         console.log(`🎯 Auto-accepting ${autoAcceptedMappings.length} high-confidence learned mappings`);
         setAcceptedMappings(autoAcceptedMappings);
-        
+
         // Also populate user mappings
         const mappingsUpdate: Record<string, string> = {};
         autoAcceptedMappings.forEach(mapping => {
           mappingsUpdate[mapping.field] = mapping.mapsTo;
         });
         setUserMappings(mappingsUpdate);
-        
+
         // Show success toast
         toast.success(`Auto-accepted ${autoAcceptedMappings.length} field mappings from learned format!`, {
           duration: 3000,
@@ -186,13 +227,13 @@ export default function UnifiedTableEditor({
       estimatedDuration: 1000
     }
   ];
-  
-  
+
+
   // Calculate mapping statistics
   const mappingStats: MappingStats = useMemo(() => {
     const allMappings = [...aiMappings];
     const total = allMappings.length;
-    
+
     // Get list of accepted field names (check case-insensitively)
     const acceptedFieldNames = new Set(
       acceptedMappings.map(m => m.field.toLowerCase())
@@ -200,17 +241,17 @@ export default function UnifiedTableEditor({
     const userMappedFieldNames = new Set(
       Object.keys(userMappings).map(k => k.toLowerCase())
     );
-    
+
     // Count mappings by status, considering user acceptances
     let mapped = 0;
     let needsReview = 0;
     let unmapped = 0;
-    
+
     allMappings.forEach(mapping => {
       const fieldNameLower = mapping.extracted_field.toLowerCase();
-      const isAccepted = acceptedFieldNames.has(fieldNameLower) || 
-                        userMappedFieldNames.has(fieldNameLower);
-      
+      const isAccepted = acceptedFieldNames.has(fieldNameLower) ||
+        userMappedFieldNames.has(fieldNameLower);
+
       if (isAccepted || mapping.confidence >= 0.8) {
         mapped++;
       } else if (mapping.confidence >= 0.6) {
@@ -238,17 +279,17 @@ export default function UnifiedTableEditor({
 
   const handleModeTransition = async (newMode: ViewMode) => {
     if (isTransitioning) return;
-    
+
     setIsTransitioning(true);
-    
+
     // Small delay for exit animation
     await new Promise(resolve => setTimeout(resolve, 150));
-    
+
     setViewMode(newMode);
-    
+
     // Small delay for enter animation
     await new Promise(resolve => setTimeout(resolve, 150));
-    
+
     setIsTransitioning(false);
   };
 
@@ -261,17 +302,17 @@ export default function UnifiedTableEditor({
       // Debug logging to see what data we have
       console.log('📦 Debug - uploadData:', uploadData);
       console.log('📦 Debug - extractedData:', extractedData);
-      
+
       const upload_id = uploadData?.upload_id || uploadData?.id || extractedData?.upload_id;
       const company_id = uploadData?.company_id || extractedData?.company_id;
       const carrier_id = extractedData?.carrier_id || uploadData?.carrier_id;
-      
+
       console.log('🔍 Extracted values:', { upload_id, company_id, carrier_id });
-      
+
       if (!upload_id) {
         throw new Error('Upload ID is missing');
       }
-      
+
       if (!carrier_id && !company_id) {
         console.error('❌ Missing IDs - uploadData:', uploadData);
         console.error('❌ Missing IDs - extractedData:', extractedData);
@@ -290,7 +331,7 @@ export default function UnifiedTableEditor({
 
       // Merge AI mappings with user mappings (including accepted mappings)
       const finalMappings = { ...userMappings };
-      
+
       // Add accepted mappings
       acceptedMappings.forEach(mapping => {
         if (!finalMappings[mapping.field]) {
@@ -310,7 +351,7 @@ export default function UnifiedTableEditor({
       setApprovalStep(0);
       setApprovalProgress(20);
       console.log('📊 Step 1: Saving table data...');
-      
+
       const saveTablesResponse = await axios.post(
         `${process.env.NEXT_PUBLIC_API_URL}/api/table-editor/save-tables/`,
         {
@@ -334,7 +375,7 @@ export default function UnifiedTableEditor({
       // ✅ CRITICAL: Get updated carrier_id from response
       const updatedCarrierId = saveTablesResponse.data?.carrier_id || carrier_id || company_id;
       const updatedCarrierName = saveTablesResponse.data?.carrier_name || extractedData?.carrierName || extractedData?.extracted_carrier;
-      
+
       console.log('✅ Step 1 completed: Tables saved');
       console.log('Updated Carrier ID:', updatedCarrierId);
       console.log('Updated Carrier Name:', updatedCarrierName);
@@ -343,7 +384,7 @@ export default function UnifiedTableEditor({
       // STEP 2: Learn Format Patterns
       setApprovalStep(1);
       console.log('🧠 Step 2: Learning format patterns...');
-      
+
       try {
         await axios.post(
           `${process.env.NEXT_PUBLIC_API_URL}/api/table-editor/learn-format-patterns`,
@@ -367,13 +408,13 @@ export default function UnifiedTableEditor({
         console.warn('⚠️ Format learning failed, continuing...', learningError);
         // Continue even if format learning fails
       }
-      
+
       setApprovalProgress(60);
 
       // STEP 3: Save Field Mappings
       setApprovalStep(2);
       console.log('🗺️ Step 3: Saving field mappings...');
-      
+
       // Convert mappings to field config format for database fields
       const fieldConfig = Object.entries(finalMappings).map(([extractedField, mappedTo]) => ({
         display_name: mappedTo,
@@ -417,13 +458,13 @@ export default function UnifiedTableEditor({
       // STEP 4: Process Commission Data (Final Approval)
       setApprovalStep(3);
       console.log('💰 Step 4: Processing commission data...');
-      
+
       // Prepare final data for approval
       // Transform rows from arrays to dictionaries for backend processing
       const finalData = tables.map(table => {
         const tableHeaders = table.header || table.headers || [];
         const tableRows = table.rows || [];
-        
+
         // Convert each row from array to dictionary with header names as keys
         const transformedRows = tableRows.map((row: any[]) => {
           const rowDict: Record<string, any> = {};
@@ -432,14 +473,14 @@ export default function UnifiedTableEditor({
           });
           return rowDict;
         });
-        
+
         return {
           name: table.name || 'Unnamed Table',
           header: tableHeaders,
           rows: transformedRows  // Now an array of dictionaries
         };
       });
-      
+
       console.log('📦 Transformed final data sample:', finalData[0]?.rows[0]);
 
       // planTypes already defined above in Step 3
@@ -457,31 +498,31 @@ export default function UnifiedTableEditor({
       );
 
       console.log('✅ Step 4 completed: Commission data processed');
-      
+
       // STEP 5: Finalizing
       setApprovalStep(4);
       setApprovalProgress(100);
       console.log('🎉 Step 5: Finalizing...');
-      
+
       // Show success message
       toast.success('Statement approved successfully! 🎉');
-      
+
       // Wait a moment to show completion
       await new Promise(resolve => setTimeout(resolve, 1000));
-      
+
       // Redirect to dashboard
       console.log('✅ All steps completed! Redirecting to dashboard...');
       window.location.href = '/?tab=dashboard';
 
     } catch (error: any) {
       console.error('❌ Submission error:', error);
-      
+
       // Show specific error message
-      const errorMessage = error?.response?.data?.detail || 
-                          error?.response?.data?.message || 
-                          error?.message || 
-                          'Failed to approve statement';
-      
+      const errorMessage = error?.response?.data?.detail ||
+        error?.response?.data?.message ||
+        error?.message ||
+        'Failed to approve statement';
+
       toast.error(`Error: ${errorMessage}`);
       setIsSubmitting(false);
     }
@@ -502,11 +543,11 @@ export default function UnifiedTableEditor({
   // Handle accepting a single mapping
   const handleAcceptMapping = (mapping: FieldMapping) => {
     const tableHeaders = tables?.[0]?.header || tables?.[0]?.headers || [];
-    const colIndex = tableHeaders.findIndex((h: string) => 
+    const colIndex = tableHeaders.findIndex((h: string) =>
       h.toLowerCase() === mapping.extracted_field.toLowerCase()
     );
-    const sampleData = colIndex >= 0 && tables?.[0]?.rows?.[0] 
-      ? tables[0].rows[0][colIndex] 
+    const sampleData = colIndex >= 0 && tables?.[0]?.rows?.[0]
+      ? tables[0].rows[0][colIndex]
       : 'N/A';
 
     // Check if already accepted
@@ -523,10 +564,10 @@ export default function UnifiedTableEditor({
 
     setAcceptedMappings(prev => [...prev, newMapping]);
     setNewlyAddedField(mapping.extracted_field);
-    
+
     // Clear animation after 1 second
     setTimeout(() => setNewlyAddedField(null), 1000);
-    
+
     // Also update user mappings
     handleMappingChange(mapping.extracted_field, mapping.mapped_to);
   };
@@ -535,15 +576,15 @@ export default function UnifiedTableEditor({
   const handleAcceptAllMappings = () => {
     const highConfidenceMappings = aiMappings.filter(m => m.confidence >= 0.8);
     const tableHeaders = tables?.[0]?.header || tables?.[0]?.headers || [];
-    
+
     const newMappings = highConfidenceMappings
       .filter(mapping => !acceptedMappings.some(m => m.field === mapping.extracted_field))
       .map(mapping => {
-        const colIndex = tableHeaders.findIndex((h: string) => 
+        const colIndex = tableHeaders.findIndex((h: string) =>
           h.toLowerCase() === mapping.extracted_field.toLowerCase()
         );
-        const sampleData = colIndex >= 0 && tables?.[0]?.rows?.[0] 
-          ? tables[0].rows[0][colIndex] 
+        const sampleData = colIndex >= 0 && tables?.[0]?.rows?.[0]
+          ? tables[0].rows[0][colIndex]
           : 'N/A';
 
         return {
@@ -555,7 +596,7 @@ export default function UnifiedTableEditor({
       });
 
     setAcceptedMappings(prev => [...prev, ...newMappings]);
-    
+
     // Animate each one sequentially
     newMappings.forEach((mapping, index) => {
       setTimeout(() => {
@@ -575,11 +616,11 @@ export default function UnifiedTableEditor({
   // Handle custom mapping selection
   const handleCustomMapping = (extractedField: string, selectedHeader: string) => {
     const tableHeaders = tables?.[0]?.header || tables?.[0]?.headers || [];
-    const colIndex = tableHeaders.findIndex((h: string) => 
+    const colIndex = tableHeaders.findIndex((h: string) =>
       h.toLowerCase() === selectedHeader.toLowerCase()
     );
-    const sampleData = colIndex >= 0 && tables?.[0]?.rows?.[0] 
-      ? tables[0].rows[0][colIndex] 
+    const sampleData = colIndex >= 0 && tables?.[0]?.rows?.[0]
+      ? tables[0].rows[0][colIndex]
       : 'N/A';
 
     // Find if already accepted and update it
@@ -610,7 +651,7 @@ export default function UnifiedTableEditor({
   // Handle removing an accepted mapping
   const handleRemoveMapping = (fieldName: string) => {
     setAcceptedMappings(prev => prev.filter(m => m.field !== fieldName));
-    
+
     // Also remove from user mappings
     setUserMappings(prev => {
       const updated = { ...prev };
@@ -622,26 +663,26 @@ export default function UnifiedTableEditor({
   // Handle GPT extraction
   const handleExtractWithGPT = async () => {
     setIsExtractingWithGPT(true);
-    
+
     try {
       const upload_id = uploadData?.upload_id || uploadData?.id || extractedData?.upload_id;
       const company_id = uploadData?.company_id || extractedData?.company_id || extractedData?.carrier_id;
-      
+
       if (!upload_id || !company_id) {
         throw new Error('Missing upload_id or company_id');
       }
 
       console.log('🚀 Starting GPT extraction...', { upload_id, company_id });
-      
+
       // Call the GPT extraction endpoint
       const formData = new FormData();
       formData.append('upload_id', upload_id);
       formData.append('company_id', company_id);
-      
+
       const response = await axios.post(
         `${process.env.NEXT_PUBLIC_API_URL}/api/extract-tables-gpt/`,
         formData,
-        { 
+        {
           withCredentials: true,
           headers: {
             'Content-Type': 'multipart/form-data'
@@ -651,36 +692,36 @@ export default function UnifiedTableEditor({
 
       if (response.data.success) {
         console.log('✅ GPT extraction successful:', response.data);
-        
+
         // Update tables with the new extraction
         const newTables = response.data.tables || [];
         const newDocumentMetadata = response.data.document_metadata || {};
-        
+
         // Update local state
         setTables(newTables);
-        
+
         // Update parent with new extraction data including document_metadata
-        const updatedExtractedData = { 
-          ...extractedData, 
+        const updatedExtractedData = {
+          ...extractedData,
           tables: newTables,
           extraction_method: 'gpt4o_vision_enhanced',
           document_metadata: newDocumentMetadata,
           carrierName: newDocumentMetadata.carrier_name || extractedData.carrierName,
           statementDate: newDocumentMetadata.statement_date || extractedData.statementDate,
         };
-        
+
         onDataUpdate(updatedExtractedData);
-        
+
         toast.success(`GPT extraction completed! Extracted ${newTables.length} table(s) with metadata`);
       } else {
         throw new Error(response.data.error || 'GPT extraction failed');
       }
     } catch (error: any) {
       console.error('❌ GPT extraction error:', error);
-      const errorMessage = error?.response?.data?.detail || 
-                          error?.response?.data?.message || 
-                          error?.message || 
-                          'Failed to extract with GPT';
+      const errorMessage = error?.response?.data?.detail ||
+        error?.response?.data?.message ||
+        error?.message ||
+        'Failed to extract with GPT';
       toast.error(`Error: ${errorMessage}`);
     } finally {
       setIsExtractingWithGPT(false);
@@ -697,416 +738,408 @@ export default function UnifiedTableEditor({
         isVisible={isSubmitting}
       />
 
-      <div className="h-screen bg-gray-50 flex flex-col overflow-hidden">
-        
+      <div className="h-screen bg-gray-50 dark:bg-slate-900 flex flex-col overflow-hidden">
+
         {/* Premium Header */}
-      <div className="bg-white shadow-sm border-b border-gray-200 px-6 py-4 flex-shrink-0 z-10">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-3">
-              {viewMode === 'table_review' ? (
-                <>
-                  <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <FileText className="w-5 h-5 text-blue-600" />
-                  </div>
-                  <div>
-                    <h1 className="text-lg font-semibold text-gray-900">Review Extracted Data</h1>
-                    <p className="text-xs text-gray-500">Verify and edit table contents</p>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                  <Map className="w-5 h-5 text-green-600" />
-                  </div>
-                  <div>
-                    <h1 className="text-lg font-semibold text-gray-900">AI Field Mapping</h1>
-                    <p className="text-xs text-gray-500">Review intelligent field suggestions</p>
-                  </div>
-                </>
-              )}
-            </div>
-            
-            {/* Progress Indicator */}
-            <div className="flex items-center space-x-2 ml-4 px-3 py-1.5 bg-gray-100 rounded-full">
-              <div className={`w-2 h-2 rounded-full ${viewMode === 'table_review' ? 'bg-blue-600 animate-pulse' : 'bg-green-600'}`} />
-              <span className="text-sm font-medium text-gray-700">
-                Step {viewMode === 'table_review' ? '1' : '2'} of 2
-              </span>
-            </div>
-
-            {/* Plan Type Detection - Compact */}
-            {viewMode === 'field_mapping' && extractedData.ai_intelligence?.plan_type_detection && (
-              <div className="ml-4 px-4 py-2 bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-200 rounded-lg">
-                <div className="flex items-center space-x-2">
-                  <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                  </svg>
-                  <div>
-                    <span className="text-xs text-purple-600 font-semibold block">Plan Type</span>
-                    <span className="text-sm font-bold text-gray-900">
-                      {extractedData.ai_intelligence.plan_type_detection.detected_plan_types[0]?.plan_type || 'Unknown'}
-                    </span>
-                  </div>
-                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ml-2 ${
-                    extractedData.ai_intelligence.plan_type_detection.confidence >= 0.8 ? 'bg-green-100 text-green-800' :
-                    extractedData.ai_intelligence.plan_type_detection.confidence >= 0.6 ? 'bg-yellow-100 text-yellow-800' :
-                    'bg-red-100 text-red-800'
-                  }`}>
-                    {Math.round(extractedData.ai_intelligence.plan_type_detection.confidence * 100)}%
-                  </span>
-                </div>
-              </div>
-            )}
-          </div>
-          
-          {/* Metadata Display - Highlighted Professional Cards */}
-          <div className="flex items-center space-x-3">
-            <div className="px-4 py-2.5 bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-300 rounded-lg shadow-md hover:shadow-lg transition-shadow">
-              <span className="text-xs font-medium text-blue-600 block uppercase tracking-wide mb-0.5">Carrier</span>
-              <span className="text-base font-bold text-blue-900">
-                {extractedData?.carrierName || extractedData?.extracted_carrier || 'Unknown'}
-              </span>
-            </div>
-            <div className="px-4 py-2.5 bg-gradient-to-br from-purple-50 to-purple-100 border-2 border-purple-300 rounded-lg shadow-md hover:shadow-lg transition-shadow">
-              <span className="text-xs font-medium text-purple-600 block uppercase tracking-wide mb-0.5">Broker</span>
-              <span className="text-base font-bold text-purple-900">
-                {extractedData?.document_metadata?.broker_company || 'Not detected'}
-              </span>
-            </div>
-            <div className="px-4 py-2.5 bg-gradient-to-br from-green-50 to-green-100 border-2 border-green-300 rounded-lg shadow-md hover:shadow-lg transition-shadow">
-              <span className="text-xs font-medium text-green-600 block uppercase tracking-wide mb-0.5">Plan Type</span>
-              <span className="text-base font-bold text-green-900">
-                {extractedData?.ai_intelligence?.plan_type_detection?.detected_plan_types?.[0]?.plan_type || 'Not detected'}
-              </span>
-            </div>
-            <div className="px-4 py-2.5 bg-gradient-to-br from-orange-50 to-orange-100 border-2 border-orange-300 rounded-lg shadow-md hover:shadow-lg transition-shadow">
-              <span className="text-xs font-medium text-orange-600 block uppercase tracking-wide mb-0.5">Statement Date</span>
-              <span className="text-base font-bold text-orange-900">
-                {extractedData?.statementDate || extractedData?.extracted_date || 'Not detected'}
-              </span>
-            </div>
-            {viewMode === 'field_mapping' && (
-              <div className="px-4 py-2.5 bg-gradient-to-br from-emerald-50 to-emerald-100 border-2 border-emerald-300 rounded-lg shadow-md">
-                <span className="text-xs font-medium text-emerald-600 block uppercase tracking-wide mb-0.5">Accepted</span>
-                <span className="text-base font-bold text-emerald-900">
-                  {acceptedMappings.length} fields
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Main Content Area - Premium 2-Column Layout */}
-      <div className="flex-1 flex overflow-hidden">
-        
-        {/* Left Panel - Document/Data Preview */}
-        {showPreview && (
-        <div className={`bg-white border-r-2 border-gray-200 flex flex-col transition-all duration-700 ease-in-out ${
-          viewMode === 'table_review' ? 'w-[35%]' : 'w-[35%]'
-        } ${isTransitioning ? 'opacity-50' : 'opacity-100'}`}>
-
-          {/* Left Panel Content */}
-          <div className="flex-1 flex flex-col overflow-hidden">
-            {viewMode === 'table_review' ? (
-              // Show PDF Preview in table review mode
-              <div className={`flex-1 flex flex-col transition-opacity duration-500 ${
-                isTransitioning ? 'opacity-0' : 'opacity-100'
-              }`}>
-                <DocumentPreview
-                  uploaded={uploadData || extractedData}
-                  zoom={zoom}
-                  onZoomIn={() => setZoom(prev => Math.min(prev + 0.1, 2))}
-                  onZoomOut={() => setZoom(prev => Math.max(prev - 0.1, 0.5))}
-                />
-              </div>
-            ) : (
-              // Show Table + Field Mapping Suggestions in field mapping mode
-              <div className={`h-full overflow-auto p-4 space-y-4 transition-opacity duration-500 ${
-                isTransitioning ? 'opacity-0' : 'opacity-100'
-              }`}>
-                {/* Extracted Table Preview */}
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">Extracted Table Preview</h4>
-                  <div className="text-xs text-gray-600">
-                    {tables?.[0]?.headers?.length || tables?.[0]?.header?.length || 0} columns × {tables?.[0]?.rows?.length || 0} rows
-                  </div>
-                </div>
-                
-                {/* Compact Table Display */}
-                {tables?.[0] && (
-                  <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-                    <div className="overflow-x-auto max-h-64">
-                      <table className="min-w-full text-xs">
-                        <thead className="bg-gray-50 sticky top-0">
-                          <tr>
-                            {(tables[0].headers || tables[0].header || []).map((header: string, idx: number) => (
-                              <th key={idx} className="px-3 py-2 text-left font-medium text-gray-700 border-b">
-                                {header}
-                              </th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(tables[0].rows || []).slice(0, 4).map((row: string[], rowIdx: number) => (
-                            <tr key={rowIdx} className="hover:bg-gray-50">
-                              {row.map((cell: string, cellIdx: number) => (
-                                <td key={cellIdx} className="px-3 py-2 border-b border-gray-100 text-gray-600">
-                                  {cell}
-                                </td>
-                              ))}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                    {(tables[0].rows?.length || 0) > 4 && (
-                      <div className="p-2 bg-gray-50 text-xs text-gray-500 text-center border-t">
-                        Showing 4 of {tables[0].rows?.length} rows
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Field Mapping Suggestions - Will pass handlers */}
-                {extractedData.ai_intelligence && (
-                  <AIIntelligentMappingDisplay
-                    aiIntelligence={extractedData.ai_intelligence}
-                    tableHeaders={tables?.[0]?.header || tables?.[0]?.headers || []}
-                    acceptedFields={acceptedMappings.map(m => m.field)}
-                    onAcceptMapping={handleAcceptMapping}
-                    onAcceptAllMappings={handleAcceptAllMappings}
-                    onCustomMapping={handleCustomMapping}
-                    onReviewMappings={() => console.log('Review mappings')}
-                  />
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-        )}
-
-        {/* Right Panel - Table Data/Field Mapping */}
-        <div className={`${showPreview ? 'w-[65%]' : 'w-full'} bg-gray-50 flex flex-col transition-all duration-700 ease-in-out ${
-          isTransitioning ? 'opacity-50' : 'opacity-100'
-        }`}>
-          
-          {/* Right Panel Header */}
-          <div className="px-6 py-4 border-b-2 border-gray-200 bg-white flex-shrink-0">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
+        <div className="bg-white dark:bg-slate-800 shadow-sm border-b border-gray-200 dark:border-slate-700 px-6 py-4 flex-shrink-0 z-10">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-3">
                 {viewMode === 'table_review' ? (
                   <>
-                    <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-                      <Table2 className="w-4 h-4 text-green-600" />
+                    <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                      <FileText className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                     </div>
                     <div>
-                      <h3 className="font-semibold text-gray-900">Extracted Table Data</h3>
-                      <p className="text-xs text-gray-500">Review and edit extracted values</p>
+                      <h1 className="text-lg font-semibold text-gray-900 dark:text-white">Review Extracted Data</h1>
+                      <p className="text-xs text-gray-500 dark:text-slate-400">Verify and edit table contents</p>
                     </div>
                   </>
                 ) : (
                   <>
-                    <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-                      <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                      </svg>
+                    <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+                      <Map className="w-5 h-5 text-green-600 dark:text-green-400" />
                     </div>
                     <div>
-                      <h3 className="font-semibold text-gray-900">Accepted Field Mappings</h3>
-                      <p className="text-xs text-gray-500">Fields you&apos;ve confirmed for database import</p>
+                      <h1 className="text-lg font-semibold text-gray-900 dark:text-white">AI Field Mapping</h1>
+                      <p className="text-xs text-gray-500 dark:text-slate-400">Review intelligent field suggestions</p>
                     </div>
                   </>
                 )}
               </div>
-              
-              {/* Action Buttons */}
-              {viewMode === 'table_review' && (
-                <div className="flex items-center space-x-2">
-                  <button
-                    onClick={handleExtractWithGPT}
-                    disabled={isExtractingWithGPT}
-                    className="flex items-center space-x-2 px-3 py-1.5 text-sm text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
-                    title="Extract with GPT-4o Vision for improved accuracy"
-                  >
-                    {isExtractingWithGPT ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                        <span>Extracting...</span>
-                      </>
-                    ) : (
-                      <>
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                        </svg>
-                        <span>Extract with GPT</span>
-                      </>
-                    )}
-                  </button>
-                  
-                  <button
-                    onClick={() => setShowPreview(!showPreview)}
-                    className="flex items-center space-x-2 px-3 py-1.5 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-                    title={showPreview ? "Hide Preview" : "Show Preview"}
-                  >
-                    <FileText className="w-4 h-4" />
-                    <span>{showPreview ? 'Hide Preview' : 'Show Preview'}</span>
-                  </button>
+
+              {/* Progress Indicator */}
+              <div className="flex items-center space-x-2 ml-4 px-3 py-1.5 bg-gray-100 dark:bg-slate-700 rounded-full">
+                <div className={`w-2 h-2 rounded-full ${viewMode === 'table_review' ? 'bg-blue-600 animate-pulse' : 'bg-green-600'}`} />
+                <span className="text-sm font-medium text-gray-700 dark:text-slate-300">
+                  Step {viewMode === 'table_review' ? '1' : '2'} of 2
+                </span>
+              </div>
+
+              {/* Plan Type Detection - Compact */}
+              {viewMode === 'field_mapping' && extractedData.ai_intelligence?.plan_type_detection && (
+                <div className="ml-4 px-4 py-2 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 border-2 border-purple-200 dark:border-purple-800 rounded-lg">
+                  <div className="flex items-center space-x-2">
+                    <svg className="w-5 h-5 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                    </svg>
+                    <div>
+                      <span className="text-xs text-purple-600 dark:text-purple-400 font-semibold block">Plan Type</span>
+                      <span className="text-sm font-bold text-gray-900 dark:text-white">
+                        {extractedData.ai_intelligence.plan_type_detection.detected_plan_types[0]?.plan_type || 'Unknown'}
+                      </span>
+                    </div>
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ml-2 ${extractedData.ai_intelligence.plan_type_detection.confidence >= 0.8 ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' :
+                        extractedData.ai_intelligence.plan_type_detection.confidence >= 0.6 ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300' :
+                          'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300'
+                      }`}>
+                      {Math.round(extractedData.ai_intelligence.plan_type_detection.confidence * 100)}%
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Metadata Display - Highlighted Professional Cards */}
+            <div className="flex items-center space-x-3">
+              <div className="px-3 py-2 bg-white dark:bg-slate-800 border border-blue-900 dark:border-blue-400 rounded-md">
+                <span className="text-xs block mb-1 text-blue-900 dark:text-blue-400">Carrier</span>
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {extractedData?.carrierName || extractedData?.extracted_carrier || 'Unknown'}
+                </span>
+              </div>
+              <div className="px-3 py-2 bg-white dark:bg-slate-800 border rounded-md border-purple-900 dark:border-purple-400">
+                <span className="text-xs block mb-1 text-purple-900 dark:text-purple-400">Broker</span>
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {extractedData?.document_metadata?.broker_company || 'Not detected'}
+                </span>
+              </div>
+              <div className="px-3 py-2 bg-white dark:bg-slate-800 border rounded-md border-green-900 dark:border-green-400">
+                <span className="text-xs block mb-1 text-green-900 dark:text-green-400">Plan Type</span>
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {extractedData?.ai_intelligence?.plan_type_detection?.detected_plan_types?.[0]?.plan_type || 'Not detected'}
+                </span>
+              </div>
+              <div className="px-3 py-2 bg-white dark:bg-slate-800 border rounded-md border-orange-900 dark:border-orange-400">
+                <span className="text-xs block mb-1 text-orange-900 dark:text-orange-400">Statement Date</span>
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {extractedData?.statementDate || extractedData?.extracted_date || 'Not detected'}
+                </span>
+              </div>
+              {viewMode === 'field_mapping' && (
+                <div className="px-3 py-2 bg-white dark:bg-slate-800 border rounded-md border-emerald-900 dark:border-emerald-400">
+                  <span className="text-xs block mb-1 text-emerald-900 dark:text-emerald-400">Accepted</span>
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {acceptedMappings.length} fields
+                  </span>
                 </div>
               )}
             </div>
           </div>
+        </div>
 
-          {/* Right Panel Content */}
-          <div className="flex-1 overflow-hidden">
-            {viewMode === 'table_review' ? (
-              // Show editable table in review mode
-              <div className={`h-full overflow-auto transition-opacity duration-500 ${
-                isTransitioning ? 'opacity-0' : 'opacity-100'
-              }`}>
-                <EditableTableView
-                  tables={tables}
-                  onTablesChange={handleTablesChange}
-                  carrierName={extractedData?.carrierName || extractedData?.extracted_carrier}
-                  statementDate={extractedData?.statementDate || extractedData?.extracted_date}
-                  brokerName={extractedData?.document_metadata?.broker_company}
-                  planType={extractedData?.ai_intelligence?.plan_type_detection?.detected_plan_types?.[0]?.plan_type}
-                />
-              </div>
-            ) : (
-              // Show Accepted Mappings Table in mapping mode
-              <div className={`h-full flex flex-col transition-opacity duration-500 ${
-                isTransitioning ? 'opacity-0' : 'opacity-100'
-              }`}>
-                {acceptedMappings.length === 0 ? (
-                  // Empty State
-                  <div className="flex-1 flex items-center justify-center p-8">
-                    <div className="text-center max-w-md">
-                      <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <svg className="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-                        </svg>
-                      </div>
-                      <h3 className="text-lg font-semibold text-gray-900 mb-2">No Fields Accepted Yet</h3>
-                      <p className="text-sm text-gray-600 mb-4">
-                        Click the <span className="inline-flex items-center mx-1 px-1.5 py-0.5 bg-green-100 text-green-700 rounded text-xs font-medium">✓ Accept</span> button on field mappings in the left panel to add them here
-                      </p>
-                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-left">
-                        <p className="text-xs text-blue-800 font-medium mb-1">💡 Tip</p>
-                        <p className="text-xs text-blue-700">
-                          You can also click &quot;Accept All High Confidence&quot; to quickly accept all mappings with 85%+ confidence
-                        </p>
-                      </div>
-                    </div>
+        {/* Main Content Area - Premium 2-Column Layout */}
+        <div className="flex-1 flex overflow-hidden">
+
+          {/* Left Panel - Document/Data Preview */}
+          {showPreview && (
+            <div className={`bg-white dark:bg-slate-800 border-r-2 border-gray-200 dark:border-slate-700 flex flex-col transition-all duration-700 ease-in-out ${viewMode === 'table_review' ? 'w-[35%]' : 'w-[35%]'
+              } ${isTransitioning ? 'opacity-50' : 'opacity-100'}`}>
+
+              {/* Left Panel Content */}
+              <div className="flex-1 flex flex-col overflow-hidden">
+                {viewMode === 'table_review' ? (
+                  // Show PDF Preview in table review mode
+                  <div className={`flex-1 flex flex-col transition-opacity duration-500 ${isTransitioning ? 'opacity-0' : 'opacity-100'
+                    }`}>
+                    <DocumentPreview
+                      uploaded={uploadData || extractedData}
+                      zoom={zoom}
+                      onZoomIn={() => setZoom(prev => Math.min(prev + 0.1, 2))}
+                      onZoomOut={() => setZoom(prev => Math.max(prev - 0.1, 0.5))}
+                    />
                   </div>
                 ) : (
-                  // Accepted Mappings Table
-                  <div className="flex-1 overflow-auto p-4">
-                    <div className="bg-white rounded-xl border-2 border-green-200 overflow-hidden shadow-sm">
-                      <div className="overflow-auto max-h-full">
-                        <table className="min-w-full">
-                          <thead className="bg-gradient-to-r from-green-50 to-emerald-50 sticky top-0 z-10">
-                            <tr className="border-b-2 border-green-200">
-                              <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Extracted Field</th>
-                              <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Maps To</th>
-                              <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Confidence</th>
-                              <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Sample Data</th>
-                              <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 w-20">Action</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-100">
-                            {acceptedMappings.map((mapping, idx) => (
-                              <tr 
-                                key={mapping.field}
-                                className={`transition-all duration-500 ${
-                                  newlyAddedField === mapping.field 
-                                    ? 'bg-green-100 animate-pulse' 
-                                    : 'bg-white hover:bg-green-50'
-                                }`}
-                                style={{
-                                  animation: newlyAddedField === mapping.field 
-                                    ? 'slideIn 0.5s ease-out' 
-                                    : undefined
-                                }}
-                              >
-                                <td className="px-4 py-3">
-                                  <div className="flex items-center space-x-2">
-                                    <svg className="w-4 h-4 text-green-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                    </svg>
-                                    <span className="font-mono text-sm font-medium text-blue-600">{mapping.field}</span>
-                                  </div>
-                                </td>
-                                <td className="px-4 py-3 text-sm text-gray-900 font-medium">{mapping.mapsTo}</td>
-                                <td className="px-4 py-3">
-                                  <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
-                                    mapping.confidence >= 0.8 ? 'bg-green-100 text-green-800' :
-                                    mapping.confidence >= 0.6 ? 'bg-yellow-100 text-yellow-800' :
-                                    'bg-red-100 text-red-800'
-                                  }`}>
-                                    {Math.round(mapping.confidence * 100)}%
-                                  </span>
-                                </td>
-                                <td className="px-4 py-3 text-sm text-gray-600 font-mono max-w-xs truncate" title={mapping.sample}>
-                                  {mapping.sample || <span className="text-gray-400">N/A</span>}
-                                </td>
-                                <td className="px-4 py-3">
-                                  <button
-                                    onClick={() => {
-                                      handleRemoveMapping(mapping.field);
-                                      toast.success(`Removed: ${mapping.field}`);
-                                    }}
-                                    className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-all hover:scale-110 active:scale-95"
-                                    title="Remove mapping"
-                                    type="button"
-                                  >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                    </svg>
-                                  </button>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                  // Show Table + Field Mapping Suggestions in field mapping mode
+                  <div className={`h-full overflow-auto p-4 space-y-4 transition-opacity duration-500 ${isTransitioning ? 'opacity-0' : 'opacity-100'
+                    }`}>
+                    {/* Extracted Table Preview */}
+                    <div className="bg-gray-50 dark:bg-slate-700 rounded-lg p-3">
+                      <h4 className="text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Extracted Table Preview</h4>
+                      <div className="text-xs text-gray-600 dark:text-slate-400">
+                        {tables?.[0]?.headers?.length || tables?.[0]?.header?.length || 0} columns × {tables?.[0]?.rows?.length || 0} rows
                       </div>
-                      <div className="bg-gradient-to-r from-green-50 to-emerald-50 px-4 py-3 border-t-2 border-green-200">
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-gray-700 font-medium">
-                            <span className="text-green-600 font-bold">{acceptedMappings.length}</span> field{acceptedMappings.length !== 1 ? 's' : ''} accepted
-                          </span>
-                          <span className="text-gray-600 text-xs">
-                            {aiMappings.length - acceptedMappings.length} remaining
-                          </span>
+                    </div>
+
+                    {/* Compact Table Display */}
+                    {tables?.[0] && (
+                      <div className="bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
+                        <div className="overflow-x-auto max-h-64">
+                          <table className="min-w-full text-xs">
+                            <thead className="bg-gray-50 dark:bg-slate-700 sticky top-0">
+                              <tr>
+                                {(tables[0].headers || tables[0].header || []).map((header: string, idx: number) => (
+                                  <th key={idx} className="px-3 py-2 text-left font-medium text-gray-700 dark:text-slate-300 border-b border-gray-200 dark:border-slate-600">
+                                    {header}
+                                  </th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {(tables[0].rows || []).slice(0, 4).map((row: string[], rowIdx: number) => (
+                                <tr key={rowIdx} className="hover:bg-gray-50 dark:hover:bg-slate-700">
+                                  {row.map((cell: string, cellIdx: number) => (
+                                    <td key={cellIdx} className="px-3 py-2 border-b border-gray-100 dark:border-slate-600 text-gray-600 dark:text-slate-400">
+                                      {cell}
+                                    </td>
+                                  ))}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                        {(tables[0].rows?.length || 0) > 4 && (
+                          <div className="p-2 bg-gray-50 dark:bg-slate-700 text-xs text-gray-500 dark:text-slate-400 text-center border-t border-gray-200 dark:border-slate-600">
+                            Showing 4 of {tables[0].rows?.length} rows
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Field Mapping Suggestions - Will pass handlers */}
+                    {extractedData.ai_intelligence && (
+                      <AIIntelligentMappingDisplay
+                        aiIntelligence={extractedData.ai_intelligence}
+                        tableHeaders={tables?.[0]?.header || tables?.[0]?.headers || []}
+                        acceptedFields={acceptedMappings.map(m => m.field)}
+                        onAcceptMapping={handleAcceptMapping}
+                        onAcceptAllMappings={handleAcceptAllMappings}
+                        onCustomMapping={handleCustomMapping}
+                        onReviewMappings={() => console.log('Review mappings')}
+                      />
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Right Panel - Table Data/Field Mapping */}
+          <div className={`${showPreview ? 'w-[65%]' : 'w-full'} bg-gray-50 dark:bg-slate-900 flex flex-col transition-all duration-700 ease-in-out ${isTransitioning ? 'opacity-50' : 'opacity-100'
+            } ${!showPreview ? 'ml-auto' : ''}`}>
+
+            {/* Right Panel Header */}
+            <div className="px-6 py-4 border-b-2 border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex-shrink-0">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  {viewMode === 'table_review' ? (
+                    <>
+                      <button
+                        onClick={() => setShowPreview(!showPreview)}
+                        className="flex items-center justify-center w-8 h-8 text-gray-700 dark:text-slate-300 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 rounded-lg transition-colors cursor-pointer"
+                        title={showPreview ? "Hide Preview" : "Show Preview"}
+                      >
+                        {showPreview ? (
+                          <PanelLeftClose className="w-4 h-4" />
+                        ) : (
+                          <PanelLeftOpen className="w-4 h-4" />
+                        )}
+                      </button>
+                      <div className="w-8 h-8 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+                        <Table2 className="w-4 h-4 text-green-600 dark:text-green-400" />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-gray-900 dark:text-white">Extracted Table Data</h3>
+                        <p className="text-xs text-gray-500 dark:text-slate-400">Review and edit extracted values</p>
+                      </div>
+                      <button
+                        onClick={handleExtractWithGPT}
+                        disabled={isExtractingWithGPT}
+                        className="flex items-center space-x-2 px-3 py-1.5 text-sm text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm cursor-pointer"
+                        title="Extract with GPT-4o Vision for improved accuracy"
+                      >
+                        {isExtractingWithGPT ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                            <span>Extracting...</span>
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                            </svg>
+                            <span>Extract with GPT</span>
+                          </>
+                        )}
+                      </button>
+                      <div className="flex items-center space-x-1 text-sm text-gray-600 dark:text-slate-400">
+                        <Pencil className="w-3.5 h-3.5 text-gray-600 dark:text-slate-400" />
+                        <span>Click any cell to edit • Use menus for more actions</span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="w-8 h-8 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+                        <svg className="w-4 h-4 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                        </svg>
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-gray-900 dark:text-white">Accepted Field Mappings</h3>
+                        <p className="text-xs text-gray-500 dark:text-slate-400">Fields you&apos;ve confirmed for database import</p>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+              </div>
+            </div>
+
+            {/* Right Panel Content */}
+            <div className="flex-1 overflow-hidden">
+              {viewMode === 'table_review' ? (
+                // Show editable table in review mode
+                <div className={`h-full overflow-auto transition-opacity duration-500 ${isTransitioning ? 'opacity-0' : 'opacity-100'
+                  }`}>
+                  <EditableTableView
+                    tables={tables}
+                    onTablesChange={handleTablesChange}
+                    carrierName={extractedData?.carrierName || extractedData?.extracted_carrier}
+                    statementDate={extractedData?.statementDate || extractedData?.extracted_date}
+                    brokerName={extractedData?.document_metadata?.broker_company}
+                    planType={extractedData?.ai_intelligence?.plan_type_detection?.detected_plan_types?.[0]?.plan_type}
+                  />
+                </div>
+              ) : (
+                // Show Accepted Mappings Table in mapping mode
+                <div className={`h-full flex flex-col transition-opacity duration-500 ${isTransitioning ? 'opacity-0' : 'opacity-100'
+                  }`}>
+                  {acceptedMappings.length === 0 ? (
+                    // Empty State
+                    <div className="flex-1 flex items-center justify-center p-8">
+                      <div className="text-center max-w-md">
+                        <div className="w-20 h-20 bg-gray-100 dark:bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                          <svg className="w-10 h-10 text-gray-400 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                          </svg>
+                        </div>
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">No Fields Accepted Yet</h3>
+                        <p className="text-sm text-gray-600 dark:text-slate-400 mb-4">
+                          Click the <span className="inline-flex items-center mx-1 px-1.5 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded text-xs font-medium">✓ Accept</span> button on field mappings in the left panel to add them here
+                        </p>
+                        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-3 text-left">
+                          <p className="text-xs text-blue-800 dark:text-blue-300 font-medium mb-1">💡 Tip</p>
+                          <p className="text-xs text-blue-700 dark:text-blue-400">
+                            You can also click &quot;Accept All High Confidence&quot; to quickly accept all mappings with 85%+ confidence
+                          </p>
                         </div>
                       </div>
                     </div>
-                  </div>
-                )}
-              </div>
-            )}
+                  ) : (
+                    // Accepted Mappings Table
+                    <div className="flex-1 overflow-auto p-4">
+                      <div className="bg-white dark:bg-slate-800 rounded-xl border-2 border-green-200 dark:border-green-800 overflow-hidden shadow-sm">
+                        <div className="overflow-auto max-h-full">
+                          <table className="min-w-full">
+                            <thead className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 sticky top-0 z-10">
+                              <tr className="border-b-2 border-green-200 dark:border-green-700">
+                                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">Extracted Field</th>
+                                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">Maps To</th>
+                                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">Confidence</th>
+                                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white">Sample Data</th>
+                                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-white w-20">Action</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
+                              {acceptedMappings.map((mapping, idx) => (
+                                <tr
+                                  key={mapping.field}
+                                  className={`transition-all duration-500 ${newlyAddedField === mapping.field
+                                      ? 'bg-green-100 dark:bg-green-900/30 animate-pulse'
+                                      : 'bg-white dark:bg-slate-800 hover:bg-green-50 dark:hover:bg-green-900/20'
+                                    }`}
+                                  style={{
+                                    animation: newlyAddedField === mapping.field
+                                      ? 'slideIn 0.5s ease-out'
+                                      : undefined
+                                  }}
+                                >
+                                  <td className="px-4 py-3">
+                                    <div className="flex items-center space-x-2">
+                                      <svg className="w-4 h-4 text-green-600 dark:text-green-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                      </svg>
+                                      <span className="font-mono text-sm font-medium text-blue-600 dark:text-blue-400">{mapping.field}</span>
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-3 text-sm text-gray-900 dark:text-slate-300 font-medium">{mapping.mapsTo}</td>
+                                  <td className="px-4 py-3">
+                                    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${mapping.confidence >= 0.8 ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' :
+                                        mapping.confidence >= 0.6 ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300' :
+                                          'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300'
+                                      }`}>
+                                      {Math.round(mapping.confidence * 100)}%
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400 font-mono max-w-xs truncate" title={mapping.sample}>
+                                    {mapping.sample || <span className="text-gray-400 dark:text-slate-500">N/A</span>}
+                                  </td>
+                                  <td className="px-4 py-3">
+                                    <button
+                                      onClick={() => {
+                                        handleRemoveMapping(mapping.field);
+                                        toast.success(`Removed: ${mapping.field}`);
+                                      }}
+                                      className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-all hover:scale-110 active:scale-95 cursor-pointer"
+                                      title="Remove mapping"
+                                      type="button"
+                                    >
+                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                      </svg>
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                        <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 px-4 py-3 border-t-2 border-green-200 dark:border-green-700">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-gray-700 dark:text-slate-300 font-medium">
+                              <span className="text-green-600 dark:text-green-400 font-bold">{acceptedMappings.length}</span> field{acceptedMappings.length !== 1 ? 's' : ''} accepted
+                            </span>
+                            <span className="text-gray-600 dark:text-slate-400 text-xs">
+                              {aiMappings.length - acceptedMappings.length} remaining
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Action Bar - Context Sensitive */}
-      <ActionBar
-        viewMode={viewMode}
-        mappingStats={mappingStats}
-        onModeChange={handleModeTransition}
-        onFinalSubmit={handleFinalSubmission}
-        isSubmitting={isSubmitting}
-        canProceed={
-          // Allow submission if:
-          // 1. No fields need review, OR
-          // 2. All AI mappings have been explicitly accepted by the user
-          mappingStats.needsReview === 0 || 
-          acceptedMappings.length >= aiMappings.length
-        }
-        isTransitioning={isTransitioning}
-      />
-    </div>
+        {/* Action Bar - Context Sensitive */}
+        <ActionBar
+          viewMode={viewMode}
+          mappingStats={mappingStats}
+          onModeChange={handleModeTransition}
+          onFinalSubmit={handleFinalSubmission}
+          isSubmitting={isSubmitting}
+          canProceed={
+            // Allow submission if:
+            // 1. No fields need review, OR
+            // 2. All AI mappings have been explicitly accepted by the user
+            mappingStats.needsReview === 0 ||
+            acceptedMappings.length >= aiMappings.length
+          }
+          isTransitioning={isTransitioning}
+        />
+      </div>
     </>
   );
 }

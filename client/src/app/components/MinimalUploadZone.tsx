@@ -56,7 +56,7 @@ export default function CarrierUploadZone({
   const [error, setError] = useState<string | null>(null);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [uploadId, setUploadId] = useState<string | null>(null);
-  
+
   // Memoize callbacks to prevent unnecessary re-renders
   const handleExtractionComplete = useCallback((results: any) => {
     setIsUploading(false);
@@ -77,13 +77,13 @@ export default function CarrierUploadZone({
       });
     }
   }, [uploadedFile, onParsed]);
-  
+
   const handleWebSocketError = useCallback((errorMsg: string) => {
     console.error('WebSocket error:', errorMsg);
     setError(errorMsg);
     setIsUploading(false);
   }, []);
-  
+
   // Use new WebSocket hook for premium progress tracking
   const { progress: wsProgress } = useProgressWebSocket({
     uploadId: uploadId || undefined,
@@ -96,21 +96,21 @@ export default function CarrierUploadZone({
   const handleUploadClick = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     if (isUploading) return;
-    
+
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.pdf,.xlsx,.xls,.xlsm,.xlsb';
     input.multiple = false;
-    
+
     input.onchange = (event) => {
       const files = (event.target as HTMLInputElement).files;
       if (files && files.length > 0) {
         handleFileUpload([files[0]]);
       }
     };
-    
+
     input.click();
   }, [isUploading]);
 
@@ -118,21 +118,21 @@ export default function CarrierUploadZone({
   const handleSelectFilesClick = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     if (isUploading) return;
-    
+
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.pdf,.xlsx,.xls,.xlsm,.xlsb';
     input.multiple = false;
-    
+
     input.onchange = (event) => {
       const files = (event.target as HTMLInputElement).files;
       if (files && files.length > 0) {
         handleFileUpload([files[0]]);
       }
     };
-    
+
     input.click();
   }, [isUploading]);
 
@@ -161,7 +161,7 @@ export default function CarrierUploadZone({
   // Commission-specific error handling
   const getCommissionSpecificErrorMessage = (error: string, fileName: string) => {
     const fileExt = fileName.split('.').pop()?.toLowerCase();
-    
+
     if (error.includes('No tables found')) {
       return `No commission tables detected in ${fileName}. Please ensure your document contains commission statement tables with clear headers and data rows.`;
     }
@@ -177,7 +177,7 @@ export default function CarrierUploadZone({
     if (error.includes('carrier not supported')) {
       return `This carrier format is not yet supported. Currently supported: Aetna, Blue Cross Blue Shield, Cigna, Humana, United Healthcare.`;
     }
-    
+
     return `Processing error: ${error}. Please check your commission statement format and try again.`;
   };
 
@@ -206,7 +206,7 @@ export default function CarrierUploadZone({
       formData.append('file', file);
       formData.append('extraction_method', 'mistral');
       formData.append('upload_id', newUploadId);
-      
+
       if (selectedStatementDate) {
         formData.append('statement_date', selectedStatementDate);
       }
@@ -230,28 +230,28 @@ export default function CarrierUploadZone({
 
     } catch (error: any) {
       setIsUploading(false);
-      
+
       // Handle 409 conflict (duplicate file) specifically
       if (error.response?.status === 409) {
         const conflictData = error.response?.data;
         if (conflictData?.status === 'duplicate_detected') {
           const duplicateInfo = conflictData.duplicate_info;
           const uploadDate = duplicateInfo?.existing_upload_date_formatted || 'a previous date';
-          
+
           // Set user-friendly error message
           const errorMsg = `This file was already uploaded on ${uploadDate}. Please upload a different file or check your existing uploads.`;
           setError(errorMsg);
-          
+
           // Show toast notification
           toast.error('Duplicate File Detected', {
             duration: 5000,
             icon: '⚠️',
           });
-          
+
           return;
         }
       }
-      
+
       const errorMessage = error.response?.data?.error || error.message || 'Upload failed';
       setError(getCommissionSpecificErrorMessage(errorMessage, file.name));
       toast.error('Upload failed. Please try again.');
@@ -269,7 +269,7 @@ export default function CarrierUploadZone({
             'Content-Type': 'application/json',
           },
         });
-        
+
         if (response.ok) {
           toast.success('Extraction cancelled successfully');
         } else {
@@ -280,7 +280,7 @@ export default function CarrierUploadZone({
         // Don't show error toast for cancellation failures as user is already cancelling
       }
     }
-    
+
     setIsUploading(false);
     setUploadProgress(0);
     setCurrentStage('');
@@ -339,15 +339,15 @@ export default function CarrierUploadZone({
         {...getRootProps()}
         onClick={handleUploadClick}
         className={`
-          relative border-2 border-dashed rounded-2xl p-8 md:p-12 text-center transition-all duration-300 h-full flex flex-col justify-center
+          relative border-2 border-dashed rounded-2xl p-4 md:p-4 text-center transition-all duration-300 h-full flex flex-col justify-center
           ${isDragActive
-            ? 'border-blue-400 dark:border-blue-500 bg-blue-50 dark:bg-blue-900/20 scale-[1.02] cursor-pointer' 
+            ? 'border-blue-400 dark:border-blue-500 bg-blue-50 dark:bg-blue-900/20 scale-[1.02] cursor-pointer'
             : 'border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/50 hover:border-blue-300 dark:hover:border-blue-500 hover:bg-blue-25 dark:hover:bg-blue-900/10 cursor-pointer'
           }
         `}
       >
         <input {...getInputProps()} />
-        
+
         <AnimatePresence mode="wait">
           {isDragActive ? (
             <motion.div
@@ -378,7 +378,7 @@ export default function CarrierUploadZone({
                 <div className="w-20 h-20 mx-auto bg-gradient-to-r from-green-500 to-blue-600 rounded-full flex items-center justify-center">
                   <FileSpreadsheet className="w-10 h-10 text-white" />
                 </div>
-                
+
                 <div>
                   <h3 className="text-xl font-bold text-slate-800 dark:text-slate-200 mb-2">
                     Ready to Upload
@@ -429,30 +429,30 @@ export default function CarrierUploadZone({
             </motion.div>
           )}
         </AnimatePresence>
+        {/* Error Display */}
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-6 p-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl"
+          >
+            <div className="flex items-start">
+              <AlertCircle className="w-6 h-6 text-red-500 flex-shrink-0 mt-1" />
+              <div className="flex-1">
+                <p className="text-red-800 dark:text-red-200 font-semibold mb-2 text-lg">Upload Error</p>
+                <p className="text-red-700 dark:text-red-300 mb-4">{error}</p>
+                <button
+                  onClick={handleRetry}
+                  className="px-4 py-2 bg-red-100 dark:bg-red-800/30 text-red-700 dark:text-red-200 rounded-lg text-sm hover:bg-red-200 dark:hover:bg-red-800/50 transition-colors"
+                >
+                  Try Again
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
       </div>
 
-      {/* Error Display */}
-      {error && (
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mt-6 p-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl"
-        >
-          <div className="flex items-start gap-4">
-            <AlertCircle className="w-6 h-6 text-red-500 flex-shrink-0 mt-1" />
-            <div className="flex-1">
-              <p className="text-red-800 dark:text-red-200 font-semibold mb-2 text-lg">Upload Error</p>
-              <p className="text-red-700 dark:text-red-300 mb-4">{error}</p>
-              <button
-                onClick={handleRetry}
-                className="px-4 py-2 bg-red-100 dark:bg-red-800/30 text-red-700 dark:text-red-200 rounded-lg text-sm hover:bg-red-200 dark:hover:bg-red-800/50 transition-colors"
-              >
-                Try Again
-              </button>
-            </div>
-          </div>
-        </motion.div>
-      )}
     </div>
   );
 }
