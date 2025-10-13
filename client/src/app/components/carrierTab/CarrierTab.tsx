@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react";
 import CarrierList from "./CarrierList";
 import CarrierStatementsTable from "./CarrierStatementsTable";
 import EditMappingModal from "./EditMappingModal";
-import CompareModal from "./CompareModal";
+import CompareModalEnhanced from "./CompareModalEnhanced";
 import StatementPreviewModal from "./StatementPreviewModal";
 import DatabaseFieldsManager from "./DatabaseFieldsManager";
 import PlanTypesManager from "./PlanTypesManager";
@@ -522,7 +522,7 @@ export default function CarrierTab() {
         />
       )}
       {showCompareIdx !== null && statements[showCompareIdx] && (
-        <CompareModal
+        <CompareModalEnhanced
           statement={statements[showCompareIdx]}
           onClose={() => setShowCompareIdx(null)}
         />
