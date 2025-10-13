@@ -228,17 +228,17 @@ export default function TableViewerModal({
         <div className="p-6 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-700">
           <div className="flex items-center justify-center">
                               {/* Table Metadata */}
-                              {currentTable.metadata && (
+                              {currentTable?.metadata && (
                     <div className="bg-gray-50 dark:bg-slate-700 p-4 rounded-lg">
                       <h4 className="text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Table Information</h4>
                       <div className="grid grid-cols-2 gap-4 text-sm">
-                        {currentTable.extractor && (
+                        {currentTable?.extractor && (
                           <div>
                             <span className="text-gray-600 dark:text-slate-400">Extractor:</span>
                             <span className="ml-2 text-gray-900 dark:text-slate-200">{currentTable.extractor}</span>
                           </div>
                         )}
-                        {currentTable.metadata.extraction_method && (
+                        {currentTable?.metadata?.extraction_method && (
                           <div>
                             <span className="text-gray-600 dark:text-slate-400">Method:</span>
                             <span className="ml-2 text-gray-900 dark:text-slate-200">{currentTable.metadata.extraction_method}</span>
