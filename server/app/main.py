@@ -8,7 +8,7 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from collections import defaultdict
 import time
 import os
-from app.api import company, mapping, review, statements, database_fields, plan_types, table_editor, improve_extraction, pending, dashboard, format_learning, new_extract, summary_rows, date_extraction, excel_extract, user_management, admin, otp_auth, auth, websocket, ai_intelligent_mapping
+from app.api import company, mapping, review, statements, database_fields, plan_types, table_editor, improve_extraction, pending, dashboard, format_learning, new_extract, summary_rows, date_extraction, excel_extract, user_management, admin, otp_auth, auth, websocket, ai_intelligent_mapping, pdf_proxy
 from app.utils.auth_utils import cleanup_expired_sessions
 from app.db.database import get_db
 from app.security_config import (
@@ -148,6 +148,7 @@ app.include_router(date_extraction.router)
 app.include_router(excel_extract.router)
 app.include_router(ai_intelligent_mapping.router)
 app.include_router(websocket.router, tags=["WebSocket"])
+app.include_router(pdf_proxy.router, tags=["PDF"])  # No prefix needed - Next.js rewrites strip /api
 
 # Background task for session cleanup
 async def cleanup_sessions_periodically():

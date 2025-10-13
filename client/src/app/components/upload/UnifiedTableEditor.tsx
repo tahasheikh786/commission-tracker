@@ -14,8 +14,8 @@ import toast from 'react-hot-toast';
 import { FieldMapping, PlanTypeDetection } from '@/app/services/aiIntelligentMappingService';
 import ActionBar, { MappingStats, ViewMode } from './ActionBar';
 import AIIntelligentMappingDisplay from '../AIIntelligentMappingDisplay';
-import DocumentPreview from '../../upload/components/TableEditor/components/DocumentPreview';
-import EditableTableView from './EditableTableView';
+import { CollapsibleDocumentPreview, ExtractedDataTable } from '../review-extracted-data';
+import '../review-extracted-data/styles.css';
 import PremiumProgressLoader, { UploadStep } from './PremiumProgressLoader';
 import { ArrowRight, Map, FileText, Table2 } from 'lucide-react';
 
@@ -80,14 +80,24 @@ export default function UnifiedTableEditor({
   const [userMappings, setUserMappings] = useState<Record<string, string>>({});
   const [acceptedMappings, setAcceptedMappings] = useState<Array<{field: string, mapsTo: string, confidence: number, sample: string}>>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [zoom, setZoom] = useState(1);
-  const [tables, setTables] = useState(extractedData.tables || []);
+  // Normalize tables: ensure summaryRows is a Set
+  const [tables, setTables] = useState(() => {
+    const initialTables = extractedData.tables || [];
+    return initialTables.map(table => ({
+      ...table,
+      summaryRows: table.summaryRows instanceof Set 
+        ? table.summaryRows 
+        : new Set(Array.isArray(table.summaryRows) ? table.summaryRows : [])
+    }));
+  });
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [newlyAddedField, setNewlyAddedField] = useState<string | null>(null);
   const [approvalStep, setApprovalStep] = useState(0);
   const [approvalProgress, setApprovalProgress] = useState(0);
-  const [showPreview, setShowPreview] = useState(true);
+  const [isPreviewCollapsed, setIsPreviewCollapsed] = useState(false);
   const [isExtractingWithGPT, setIsExtractingWithGPT] = useState(false);
+  const [currentTableIdx, setCurrentTableIdx] = useState(0);
+  const [showSummaryRows, setShowSummaryRows] = useState(true);
 
   // Get AI mappings from extracted data
   const aiMappings = extractedData.ai_intelligence?.field_mapping?.mappings || [];
@@ -129,7 +139,6 @@ export default function UnifiedTableEditor({
         });
 
       if (autoAcceptedMappings.length > 0) {
-        console.log(`🎯 Auto-accepting ${autoAcceptedMappings.length} high-confidence learned mappings`);
         setAcceptedMappings(autoAcceptedMappings);
         
         // Also populate user mappings
@@ -220,18 +229,7 @@ export default function UnifiedTableEditor({
       }
     });
 
-    // Debug logging
-    console.log('📊 Mapping Stats Debug:', {
-      total,
-      mapped,
-      needsReview,
-      unmapped,
-      acceptedCount: acceptedMappings.length,
-      userMappingsCount: Object.keys(userMappings).length,
-      aiMappingsFields: allMappings.map(m => m.extracted_field),
-      acceptedFields: acceptedMappings.map(m => m.field),
-      userMappedFields: Object.keys(userMappings)
-    });
+    
 
     return { mapped, needsReview, unmapped, total };
   }, [aiMappings, userMappings, acceptedMappings]);
@@ -259,22 +257,17 @@ export default function UnifiedTableEditor({
 
     try {
       // Debug logging to see what data we have
-      console.log('📦 Debug - uploadData:', uploadData);
-      console.log('📦 Debug - extractedData:', extractedData);
       
       const upload_id = uploadData?.upload_id || uploadData?.id || extractedData?.upload_id;
       const company_id = uploadData?.company_id || extractedData?.company_id;
       const carrier_id = extractedData?.carrier_id || uploadData?.carrier_id;
       
-      console.log('🔍 Extracted values:', { upload_id, company_id, carrier_id });
       
       if (!upload_id) {
         throw new Error('Upload ID is missing');
       }
       
       if (!carrier_id && !company_id) {
-        console.error('❌ Missing IDs - uploadData:', uploadData);
-        console.error('❌ Missing IDs - extractedData:', extractedData);
         throw new Error('Company ID or Carrier ID is required. Please check the extraction response.');
       }
 
@@ -298,18 +291,11 @@ export default function UnifiedTableEditor({
         }
       });
 
-      console.log('🚀 Starting approval process...');
-      console.log('Upload ID:', upload_id);
-      console.log('Company ID:', company_id);
-      console.log('Carrier ID:', carrier_id);
-      console.log('Using company_id for API:', carrier_id || company_id);
-      console.log('Statement Date Object:', statementDateObj);
-      console.log('Final Mappings:', finalMappings);
+   
 
       // STEP 1: Save Table Data
       setApprovalStep(0);
       setApprovalProgress(20);
-      console.log('📊 Step 1: Saving table data...');
       
       const saveTablesResponse = await axios.post(
         `${process.env.NEXT_PUBLIC_API_URL}/api/table-editor/save-tables/`,
@@ -335,14 +321,10 @@ export default function UnifiedTableEditor({
       const updatedCarrierId = saveTablesResponse.data?.carrier_id || carrier_id || company_id;
       const updatedCarrierName = saveTablesResponse.data?.carrier_name || extractedData?.carrierName || extractedData?.extracted_carrier;
       
-      console.log('✅ Step 1 completed: Tables saved');
-      console.log('Updated Carrier ID:', updatedCarrierId);
-      console.log('Updated Carrier Name:', updatedCarrierName);
       setApprovalProgress(40);
 
       // STEP 2: Learn Format Patterns
       setApprovalStep(1);
-      console.log('🧠 Step 2: Learning format patterns...');
       
       try {
         await axios.post(
@@ -362,7 +344,6 @@ export default function UnifiedTableEditor({
           },
           { withCredentials: true }
         );
-        console.log('✅ Step 2 completed: Format patterns learned');
       } catch (learningError) {
         console.warn('⚠️ Format learning failed, continuing...', learningError);
         // Continue even if format learning fails
@@ -372,7 +353,6 @@ export default function UnifiedTableEditor({
 
       // STEP 3: Save Field Mappings
       setApprovalStep(2);
-      console.log('🗺️ Step 3: Saving field mappings...');
       
       // Convert mappings to field config format for database fields
       const fieldConfig = Object.entries(finalMappings).map(([extractedField, mappedTo]) => ({
@@ -403,7 +383,6 @@ export default function UnifiedTableEditor({
         selected_statement_date: statementDateObj
       };
 
-      console.log('📤 Mapping payload:', mappingPayload);
 
       await axios.post(
         `${process.env.NEXT_PUBLIC_API_URL}/api/companies/${updatedCarrierId}/mapping/?upload_id=${upload_id}`, // Use updated carrier_id
@@ -411,12 +390,10 @@ export default function UnifiedTableEditor({
         { withCredentials: true }
       );
 
-      console.log('✅ Step 3 completed: Field mappings saved');
       setApprovalProgress(80);
 
       // STEP 4: Process Commission Data (Final Approval)
       setApprovalStep(3);
-      console.log('💰 Step 4: Processing commission data...');
       
       // Prepare final data for approval
       // Transform rows from arrays to dictionaries for backend processing
@@ -440,7 +417,6 @@ export default function UnifiedTableEditor({
         };
       });
       
-      console.log('📦 Transformed final data sample:', finalData[0]?.rows[0]);
 
       // planTypes already defined above in Step 3
 
@@ -456,12 +432,10 @@ export default function UnifiedTableEditor({
         { withCredentials: true }
       );
 
-      console.log('✅ Step 4 completed: Commission data processed');
       
       // STEP 5: Finalizing
       setApprovalStep(4);
       setApprovalProgress(100);
-      console.log('🎉 Step 5: Finalizing...');
       
       // Show success message
       toast.success('Statement approved successfully! 🎉');
@@ -470,7 +444,6 @@ export default function UnifiedTableEditor({
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       // Redirect to dashboard
-      console.log('✅ All steps completed! Redirecting to dashboard...');
       window.location.href = '/?tab=dashboard';
 
     } catch (error: any) {
@@ -495,8 +468,15 @@ export default function UnifiedTableEditor({
   };
 
   const handleTablesChange = (updatedTables: any[]) => {
-    setTables(updatedTables);
-    onDataUpdate({ ...extractedData, tables: updatedTables });
+    // Normalize tables to ensure summaryRows is a Set
+    const normalizedTables = updatedTables.map(table => ({
+      ...table,
+      summaryRows: table.summaryRows instanceof Set 
+        ? table.summaryRows 
+        : new Set(Array.isArray(table.summaryRows) ? table.summaryRows : [])
+    }));
+    setTables(normalizedTables);
+    onDataUpdate({ ...extractedData, tables: normalizedTables });
   };
 
   // Handle accepting a single mapping
@@ -631,7 +611,6 @@ export default function UnifiedTableEditor({
         throw new Error('Missing upload_id or company_id');
       }
 
-      console.log('🚀 Starting GPT extraction...', { upload_id, company_id });
       
       // Call the GPT extraction endpoint
       const formData = new FormData();
@@ -650,10 +629,14 @@ export default function UnifiedTableEditor({
       );
 
       if (response.data.success) {
-        console.log('✅ GPT extraction successful:', response.data);
         
         // Update tables with the new extraction
-        const newTables = response.data.tables || [];
+        const newTables = (response.data.tables || []).map((table: any) => ({
+          ...table,
+          summaryRows: table.summaryRows instanceof Set 
+            ? table.summaryRows 
+            : new Set(Array.isArray(table.summaryRows) ? table.summaryRows : [])
+        }));
         const newDocumentMetadata = response.data.document_metadata || {};
         
         // Update local state
@@ -802,26 +785,22 @@ export default function UnifiedTableEditor({
       <div className="flex-1 flex overflow-hidden">
         
         {/* Left Panel - Document/Data Preview */}
-        {showPreview && (
-        <div className={`bg-white border-r-2 border-gray-200 flex flex-col transition-all duration-700 ease-in-out ${
-          viewMode === 'table_review' ? 'w-[35%]' : 'w-[35%]'
-        } ${isTransitioning ? 'opacity-50' : 'opacity-100'}`}>
+        {viewMode === 'table_review' && (
+          <CollapsibleDocumentPreview
+            uploaded={uploadData || extractedData}
+            isCollapsed={isPreviewCollapsed}
+            onToggleCollapse={() => setIsPreviewCollapsed(!isPreviewCollapsed)}
+          />
+        )}
+
+        {viewMode === 'field_mapping' && !isPreviewCollapsed && (
+        <div className={`bg-white border-r-2 border-gray-200 flex flex-col transition-all duration-700 ease-in-out w-[35%] ${
+          isTransitioning ? 'opacity-50' : 'opacity-100'
+        }`}>
 
           {/* Left Panel Content */}
           <div className="flex-1 flex flex-col overflow-hidden">
-            {viewMode === 'table_review' ? (
-              // Show PDF Preview in table review mode
-              <div className={`flex-1 flex flex-col transition-opacity duration-500 ${
-                isTransitioning ? 'opacity-0' : 'opacity-100'
-              }`}>
-                <DocumentPreview
-                  uploaded={uploadData || extractedData}
-                  zoom={zoom}
-                  onZoomIn={() => setZoom(prev => Math.min(prev + 0.1, 2))}
-                  onZoomOut={() => setZoom(prev => Math.max(prev - 0.1, 0.5))}
-                />
-              </div>
-            ) : (
+            {(
               // Show Table + Field Mapping Suggestions in field mapping mode
               <div className={`h-full overflow-auto p-4 space-y-4 transition-opacity duration-500 ${
                 isTransitioning ? 'opacity-0' : 'opacity-100'
@@ -888,7 +867,7 @@ export default function UnifiedTableEditor({
         )}
 
         {/* Right Panel - Table Data/Field Mapping */}
-        <div className={`${showPreview ? 'w-[65%]' : 'w-full'} bg-gray-50 flex flex-col transition-all duration-700 ease-in-out ${
+        <div className={`${isPreviewCollapsed ? 'w-full' : viewMode === 'table_review' ? 'flex-1' : 'w-[65%]'} bg-gray-50 flex flex-col transition-all duration-700 ease-in-out ${
           isTransitioning ? 'opacity-50' : 'opacity-100'
         }`}>
           
@@ -944,15 +923,6 @@ export default function UnifiedTableEditor({
                       </>
                     )}
                   </button>
-                  
-                  <button
-                    onClick={() => setShowPreview(!showPreview)}
-                    className="flex items-center space-x-2 px-3 py-1.5 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-                    title={showPreview ? "Hide Preview" : "Show Preview"}
-                  >
-                    <FileText className="w-4 h-4" />
-                    <span>{showPreview ? 'Hide Preview' : 'Show Preview'}</span>
-                  </button>
                 </div>
               )}
             </div>
@@ -961,18 +931,29 @@ export default function UnifiedTableEditor({
           {/* Right Panel Content */}
           <div className="flex-1 overflow-hidden">
             {viewMode === 'table_review' ? (
-              // Show editable table in review mode
-              <div className={`h-full overflow-auto transition-opacity duration-500 ${
+              // Show new ExtractedDataTable in review mode
+              <div className={`h-full transition-opacity duration-500 ${
                 isTransitioning ? 'opacity-0' : 'opacity-100'
               }`}>
-                <EditableTableView
-                  tables={tables}
-                  onTablesChange={handleTablesChange}
-                  carrierName={extractedData?.carrierName || extractedData?.extracted_carrier}
-                  statementDate={extractedData?.statementDate || extractedData?.extracted_date}
-                  brokerName={extractedData?.document_metadata?.broker_company}
-                  planType={extractedData?.ai_intelligence?.plan_type_detection?.detected_plan_types?.[0]?.plan_type}
-                />
+                {tables && tables.length > 0 && tables[currentTableIdx] && (
+                  <ExtractedDataTable
+                    table={tables[currentTableIdx]}
+                    onTableChange={(updatedTable) => {
+                      const updatedTables = [...tables];
+                      updatedTables[currentTableIdx] = updatedTable;
+                      handleTablesChange(updatedTables);
+                    }}
+                    showSummaryRows={showSummaryRows}
+                    onToggleSummaryRows={() => setShowSummaryRows(!showSummaryRows)}
+                  />
+                )}
+                {tables && tables.length === 0 && (
+                  <div className="flex items-center justify-center h-full">
+                    <div className="text-center">
+                      <div className="text-gray-500 text-lg">No tables available</div>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               // Show Accepted Mappings Table in mapping mode

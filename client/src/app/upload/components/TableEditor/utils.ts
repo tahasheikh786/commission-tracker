@@ -3,7 +3,7 @@ import { TableData, DataType, FormatValidationResult } from './types'
 /**
  * Simplified PDF URL function that constructs a proxy URL to stream the PDF
  * Uses the backend proxy endpoint to avoid CORS issues
- * In development, uses relative URLs to leverage Next.js proxy
+ * CRITICAL: Must use full backend URL, not relative path
  */
 export function getPdfUrl(uploaded: any): string | null {
   if (!uploaded?.gcs_key && !uploaded?.file_name) {
@@ -12,21 +12,11 @@ export function getPdfUrl(uploaded: any): string | null {
 
   const gcsKey = uploaded.gcs_key || uploaded.file_name
   
-  // In development (localhost), use relative URL to leverage Next.js proxy
-  // In production, use the full API URL
-  const isDevelopment = typeof window !== 'undefined' && (
-    window.location.hostname === 'localhost' || 
-    window.location.hostname === '127.0.0.1'
-  )
+  // CRITICAL: Use full backend URL, not relative path
+  // Relative paths like /api/pdf-proxy/ call Next.js server, not the FastAPI backend
+  const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'
   
-  if (isDevelopment) {
-    // Use relative URL to avoid CORS issues in development
-    return `/api/pdf-proxy/?gcs_key=${encodeURIComponent(gcsKey)}`
-  } else {
-    // In production, use the full API URL
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || ''
-    return `${apiUrl}/pdf-proxy/?gcs_key=${encodeURIComponent(gcsKey)}`
-  }
+  return `${backendUrl}/pdf-proxy/?gcs_key=${encodeURIComponent(gcsKey)}`
 }
 
 export const detectDataType = (value: string): DataType => {

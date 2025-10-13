@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
-import { Download, ZoomIn, ZoomOut, FileText, ExternalLink, AlertCircle } from 'lucide-react';
+'use client'
+
+import React, { useState, useEffect, useRef } from 'react';
+import { Download, ZoomIn, ZoomOut, FileText, ExternalLink, AlertCircle, RefreshCw } from 'lucide-react';
 
 interface DocumentPreviewProps {
   uploaded: any;
@@ -9,318 +11,267 @@ interface DocumentPreviewProps {
 }
 
 export default function DocumentPreview({ uploaded, zoom, onZoomIn, onZoomOut }: DocumentPreviewProps) {
-  const [pdfError, setPdfError] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
-  
-  // Fetch signed URL for PDF preview
-  React.useEffect(() => {
-    const fetchPdfUrl = async () => {
-      // Check for gcs_key, file_name, or gcs_url
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const mountedRef = useRef(true);
+  const currentBlobUrlRef = useRef<string | null>(null);
+
+  // Extract file information
+  const fileName = uploaded?.file_name || uploaded?.fileName || 'document.pdf';
+  const isPdf = fileName.toLowerCase().endsWith('.pdf');
+
+  // Fetch PDF from backend proxy
+  useEffect(() => {
+    mountedRef.current = true;
+
+    const fetchPdf = async () => {
       const gcsKey = uploaded?.gcs_key || uploaded?.file_name;
-      const existingUrl = uploaded?.gcs_url;
       
-      console.log('📄 DocumentPreview - Attempting to load PDF:', { 
-        gcsKey, 
-        existingUrl, 
-        hasUploadedData: !!uploaded 
-      });
-      
-      if (!gcsKey && !existingUrl) {
-        console.warn('📄 No GCS key or URL found');
+      if (!gcsKey) {
+        console.warn('No GCS key found');
         setIsLoading(false);
-        setPdfError(true);
+        setError(true);
         return;
       }
 
       try {
-        // If we already have a signed GCS URL, try using it directly via proxy
-        if (existingUrl && existingUrl.includes('storage.googleapis.com')) {
-          console.log('📄 Using existing GCS URL via proxy');
-          // Use the GCS key to get a fresh signed URL via backend
-          const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, '');
-          const response = await fetch(`${baseUrl}/api/pdf-preview/?gcs_key=${encodeURIComponent(gcsKey)}`);
-          
-          if (response.ok) {
-            const data = await response.json();
-            const signedUrl = data.url;
+        setIsLoading(true);
+        setError(false);
 
-            // Step 2: Fetch the PDF as a blob to avoid CORS issues
-            const pdfResponse = await fetch(signedUrl);
-            if (pdfResponse.ok) {
-              const pdfBlob = await pdfResponse.blob();
-              
-              // Step 3: Create a local object URL from the blob
-              const objectUrl = URL.createObjectURL(pdfBlob);
-              console.log('✅ PDF loaded successfully via blob URL');
-              setPdfUrl(objectUrl);
-              setIsLoading(false);
-              setPdfError(false);
-              return;
-            }
-          }
-        }
+        console.log('🔄 Fetching PDF from GCS:', gcsKey);
         
-        // Fallback: Use gcs_key to get signed URL from backend
-        if (gcsKey) {
-          console.log('📄 Fetching signed URL from backend for:', gcsKey);
-          const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, '');
-          const response = await fetch(`${baseUrl}/api/pdf-preview/?gcs_key=${encodeURIComponent(gcsKey)}`);
-          
-          if (response.ok) {
-            const data = await response.json();
-            const signedUrl = data.url;
+        // Use backend proxy to fetch PDF (avoids CORS)
+        const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        const proxyUrl = `${backendUrl}/api/pdf-proxy?gcs_key=${encodeURIComponent(gcsKey)}`;
+        console.log('📡 Proxy URL:', proxyUrl);
+        
+        const response = await fetch(proxyUrl, {
+          method: 'GET',
+          headers: {
+            'Cache-Control': 'no-cache',
+          },
+        });
 
-            // Fetch the PDF as a blob to avoid CORS issues
-            const pdfResponse = await fetch(signedUrl);
-            if (pdfResponse.ok) {
-              const pdfBlob = await pdfResponse.blob();
-              
-              // Create a local object URL from the blob
-              const objectUrl = URL.createObjectURL(pdfBlob);
-              console.log('✅ PDF loaded successfully via blob URL');
-              setPdfUrl(objectUrl);
-              setIsLoading(false);
-              setPdfError(false);
-              return;
-            } else {
-              throw new Error('Failed to fetch PDF from signed URL');
-            }
-          } else {
-            throw new Error('Failed to get signed URL from backend');
-          }
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
+
+        const blob = await response.blob();
         
-        throw new Error('No valid PDF source found');
+        if (!mountedRef.current) return;
+
+        // Cleanup old blob URL before creating new one
+        if (currentBlobUrlRef.current) {
+          URL.revokeObjectURL(currentBlobUrlRef.current);
+        }
+
+        // Create blob URL for iframe
+        const url = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+        currentBlobUrlRef.current = url;
+        
+        console.log('✅ PDF loaded successfully, blob URL:', url);
+        setPdfUrl(url);
+        setIsLoading(false);
+        setError(false);
+        setRetryCount(0);
+
       } catch (err) {
-        console.error('❌ Error fetching PDF:', err);
-        setPdfError(true);
+        console.error('❌ PDF load error:', err);
+        
+        if (!mountedRef.current) return;
+
+        // Retry logic (up to 2 retries)
+        if (retryCount < 2) {
+          console.log(`🔄 Retrying... (${retryCount + 1}/2)`);
+          setTimeout(() => {
+            if (mountedRef.current) {
+              setRetryCount(retryCount + 1);
+            }
+          }, 1000 * (retryCount + 1));
+          return;
+        }
+
+        setError(true);
         setIsLoading(false);
       }
     };
 
-    fetchPdfUrl();
+    if (uploaded && (uploaded.gcs_key || uploaded.file_name)) {
+      fetchPdf();
+    } else {
+      setIsLoading(false);
+      setError(true);
+    }
 
-    // Cleanup: revoke object URL when component unmounts
     return () => {
-      if (pdfUrl && pdfUrl.startsWith('blob:')) {
-        URL.revokeObjectURL(pdfUrl);
+      mountedRef.current = false;
+      // Cleanup blob URL using ref
+      if (currentBlobUrlRef.current) {
+        URL.revokeObjectURL(currentBlobUrlRef.current);
+        currentBlobUrlRef.current = null;
       }
     };
-  }, [uploaded?.gcs_key, uploaded?.file_name, uploaded?.gcs_url]);
-  
-  // Debug logging
-  console.log('📄 DocumentPreview - uploaded data:', {
-    has_gcs_url: !!uploaded?.gcs_url,
-    gcs_url: uploaded?.gcs_url,
-    uploaded_keys: uploaded ? Object.keys(uploaded) : []
-  });
-  
-  // Check file type
-  const fileName = uploaded?.file_name || uploaded?.fileName || 'document';
-  const isPdf = fileName.toLowerCase().endsWith('.pdf');
-  const isExcel = fileName.toLowerCase().match(/\.(xlsx?|xlsm|xlsb)$/);
+  }, [uploaded?.gcs_key, uploaded?.file_name, retryCount]);
+
+  // Manual retry handler
+  const handleRetry = () => {
+    setRetryCount(0);
+    setError(false);
+    setIsLoading(true);
+    // Trigger refetch by incrementing retry
+    setTimeout(() => setRetryCount(prev => prev + 1), 100);
+  };
 
   const handleDownload = () => {
     if (pdfUrl) {
       const a = document.createElement('a');
       a.href = pdfUrl;
       a.download = fileName;
-      a.target = '_blank';
-      a.rel = 'noopener noreferrer';
       a.click();
     }
   };
 
-  const handlePdfError = () => {
-    console.error('PDF Preview Error: Failed to load PDF');
-    setPdfError(true);
-    setIsLoading(false);
-  };
-
-  const handlePdfLoad = () => {
-    console.log('PDF loaded successfully');
-    setIsLoading(false);
-    setPdfError(false);
-  };
+  if (!isPdf) {
+    return (
+      <div className="w-2/5 flex flex-col bg-gray-50 rounded-lg border border-gray-200">
+        <div className="flex-1 flex items-center justify-center p-8">
+          <div className="text-center">
+            <FileText className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-600 font-medium">Document Preview</p>
+            <p className="text-sm text-gray-500 mt-2">Preview not available for this file type</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="flex-1 flex flex-col bg-gray-50">
-      
-      {/* Controls Header */}
-      <div className="flex items-center justify-between p-4 bg-white border-b border-gray-200 flex-shrink-0">
-        <div className="flex items-center space-x-3">
-          <div className="flex items-center space-x-2">
-            <FileText className="w-4 h-4 text-gray-500" />
-            <span className="text-sm font-medium text-gray-700 truncate max-w-48">
-              {fileName}
-            </span>
-          </div>
-          
-          {isPdf && (
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={onZoomOut}
-                className="p-1.5 rounded-md hover:bg-gray-100 text-gray-600"
-                title="Zoom Out"
-              >
-                <ZoomOut className="w-4 h-4" />
-              </button>
-              
-              <span className="text-xs text-gray-500 px-2">
-                {Math.round(zoom * 100)}%
-              </span>
-              
-              <button
-                onClick={onZoomIn}
-                className="p-1.5 rounded-md hover:bg-gray-100 text-gray-600"
-                title="Zoom In"
-              >
-                <ZoomIn className="w-4 h-4" />
-              </button>
-            </div>
-          )}
+    <div className="w-2/5 flex flex-col bg-white rounded-lg border border-gray-200 shadow-sm h-full">
+      {/* Header Controls */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-gray-50">
+        <div className="flex items-center gap-2">
+          <FileText className="w-4 h-4 text-gray-600" />
+          <span className="text-sm font-medium text-gray-700 truncate max-w-[200px]">
+            {fileName}
+          </span>
         </div>
+        
+        <div className="flex items-center gap-2">
+          {/* Zoom Controls */}
+          <button
+            onClick={onZoomOut}
+            className="p-1.5 hover:bg-gray-200 rounded transition-colors"
+            title="Zoom Out"
+          >
+            <ZoomOut className="w-4 h-4 text-gray-600" />
+          </button>
+          <span className="text-xs text-gray-600 min-w-[45px] text-center">
+            {Math.round(zoom * 100)}%
+          </span>
+          <button
+            onClick={onZoomIn}
+            className="p-1.5 hover:bg-gray-200 rounded transition-colors"
+            title="Zoom In"
+          >
+            <ZoomIn className="w-4 h-4 text-gray-600" />
+          </button>
 
-        <div className="flex items-center space-x-2">
+          <div className="w-px h-4 bg-gray-300 mx-1" />
+          
+          {/* Download Button */}
           {pdfUrl && (
-            <button
-              onClick={handleDownload}
-              className="flex items-center space-x-1 px-3 py-1.5 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
-              title="Download"
-            >
-              <Download className="w-4 h-4" />
-              <span>Download</span>
-            </button>
+            <>
+              <button
+                onClick={handleDownload}
+                className="p-1.5 hover:bg-gray-200 rounded transition-colors"
+                title="Download"
+              >
+                <Download className="w-4 h-4 text-gray-600" />
+              </button>
+              <button
+                onClick={() => window.open(pdfUrl, '_blank')}
+                className="p-1.5 hover:bg-gray-200 rounded transition-colors"
+                title="Open in new tab"
+              >
+                <ExternalLink className="w-4 h-4 text-gray-600" />
+              </button>
+            </>
           )}
           
-          {pdfUrl && (
+          {/* Retry Button */}
+          {error && (
             <button
-              onClick={() => window.open(pdfUrl, '_blank')}
-              className="flex items-center space-x-1 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
-              title="Open in new tab"
+              onClick={handleRetry}
+              className="p-1.5 hover:bg-orange-100 rounded transition-colors"
+              title="Retry"
             >
-              <ExternalLink className="w-4 h-4" />
+              <RefreshCw className="w-4 h-4 text-orange-600" />
             </button>
           )}
         </div>
       </div>
-
-      {/* Document Content */}
-      <div className="flex-1 overflow-auto bg-gray-100 p-4">
-        {isPdf && pdfUrl ? (
-          pdfError ? (
-            // Error Fallback UI
-            <div className="flex flex-col items-center justify-center h-full bg-white rounded-lg shadow-sm p-8">
-              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
-                <AlertCircle className="w-8 h-8 text-red-600" />
-              </div>
-              <h3 className="text-lg font-semibold text-gray-800 mb-2">PDF Preview Unavailable</h3>
-              <p className="text-gray-600 mb-6 text-center max-w-md">
-                Unable to display the PDF preview. You can still download or open it in a new tab.
-              </p>
-              <div className="flex items-center space-x-3">
-                <button
-                  onClick={handleDownload}
-                  className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  <Download className="w-4 h-4" />
-                  <span>Download PDF</span>
-                </button>
-                <button
-                  onClick={() => window.open(pdfUrl, '_blank')}
-                  className="flex items-center space-x-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                  <span>Open in New Tab</span>
-                </button>
-              </div>
-            </div>
-          ) : (
-            // PDF Display with object/embed approach
-            <div className="w-full h-full min-h-[600px] bg-white rounded-lg shadow-sm overflow-hidden">
-              {isLoading && (
-                <div className="absolute inset-0 flex items-center justify-center bg-white z-10">
-                  <div className="text-center">
-                    <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
-                    <p className="text-sm text-gray-600">Loading PDF...</p>
-                  </div>
-                </div>
+      
+      {/* PDF Content */}
+      <div className="flex-1 bg-gray-100 p-4 relative overflow-hidden">
+        {isLoading && (
+          <div className="absolute inset-4 flex items-center justify-center bg-white z-50 rounded">
+            <div className="text-center">
+              <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+              <p className="text-sm text-gray-600">Loading PDF...</p>
+              {retryCount > 0 && (
+                <p className="text-xs text-orange-600 mt-1">Retry {retryCount}/2</p>
               )}
-              <object
-                data={`${pdfUrl}#view=FitH&toolbar=1&navpanes=0`}
-                type="application/pdf"
-                className="w-full h-full border-0"
-                style={{ 
-                  minHeight: '600px',
-                  transform: `scale(${zoom})`,
-                  transformOrigin: 'top left',
-                  width: zoom !== 1 ? `${100 / zoom}%` : '100%',
-                  height: zoom !== 1 ? `${100 / zoom}%` : '100%',
-                }}
-                onLoad={handlePdfLoad}
-                onError={handlePdfError}
-              >
-                <embed
-                  src={`${pdfUrl}#view=FitH&toolbar=1&navpanes=0`}
-                  type="application/pdf"
-                  className="w-full h-full border-0"
-                  style={{ 
-                    minHeight: '600px',
-                    transform: `scale(${zoom})`,
-                    transformOrigin: 'top left'
-                  }}
-                  onLoad={handlePdfLoad}
-                  onError={handlePdfError}
-                />
-                <div className="flex flex-col items-center justify-center h-full p-8">
-                  <FileText className="w-12 h-12 text-gray-400 mb-4" />
-                  <p className="text-gray-600 mb-4">Your browser does not support inline PDF viewing</p>
-                  <button
-                    onClick={handleDownload}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                  >
-                    Download PDF
-                  </button>
-                </div>
-              </object>
             </div>
-          )
-        ) : isExcel ? (
-          <div className="bg-white rounded-lg p-8 text-center shadow-sm">
-            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <FileText className="w-8 h-8 text-green-600" />
-            </div>
-            <h3 className="text-lg font-semibold text-gray-800 mb-2">Excel Document</h3>
-            <p className="text-gray-600 mb-4">
-              {fileName}
-            </p>
-            <p className="text-sm text-gray-500 mb-4">
-              Excel files are processed for table extraction. The extracted data is shown on the right panel.
-            </p>
-            {pdfUrl && (
+          </div>
+        )}
+        
+        {error && !isLoading && (
+          <div className="absolute inset-4 flex items-center justify-center bg-white rounded">
+            <div className="text-center p-8">
+              <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-gray-800 mb-2">Preview Unavailable</h3>
+              <p className="text-sm text-gray-600 mb-4">Unable to load PDF preview</p>
               <button
-                onClick={handleDownload}
-                className="inline-flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                onClick={handleRetry}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
-                <Download className="w-4 h-4" />
-                <span>Download Original</span>
+                Retry Loading
               </button>
-            )}
-          </div>
-        ) : (
-          <div className="bg-white rounded-lg p-8 text-center shadow-sm">
-            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <FileText className="w-8 h-8 text-gray-500" />
             </div>
-            <h3 className="text-lg font-semibold text-gray-800 mb-2">Document Preview</h3>
-            <p className="text-gray-600 mb-4">
-              Preview not available for this file type
-            </p>
-            <p className="text-sm text-gray-500">
-              The extracted data is available in the right panel
-            </p>
           </div>
+        )}
+        
+        {pdfUrl && !isLoading && !error && (
+          <iframe
+            ref={iframeRef}
+            src={`${pdfUrl}#view=FitH&toolbar=0&navpanes=0`}
+            className="absolute inset-4 rounded bg-white"
+            style={{
+              border: 'none',
+              width: 'calc(100% - 2rem)',
+              height: 'calc(100% - 2rem)',
+            }}
+            title="PDF Preview"
+            onLoad={() => {
+              console.log('✅ PDF iframe loaded successfully');
+              setIsLoading(false);
+              setError(false);
+            }}
+            onError={() => {
+              console.error('❌ PDF iframe error');
+              setError(true);
+              setIsLoading(false);
+            }}
+            // 🔥 CHROME 2024 CRITICAL ATTRIBUTES - Optimized for blob URLs:
+            sandbox="allow-same-origin allow-scripts allow-modals allow-forms allow-popups allow-presentation"
+            referrerPolicy="no-referrer-when-downgrade"
+            allow="fullscreen"
+            loading="eager"
+            name="pdf-preview-frame"
+          />
         )}
       </div>
     </div>

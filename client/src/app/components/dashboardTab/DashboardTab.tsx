@@ -137,11 +137,7 @@ export default function DashboardTab({ showAnalytics = false }: DashboardTabProp
 
   // Handle upload result - NEW 2-STEP FLOW
   function handleUploadResult({ tables, upload_id, extraction_id, file_name, file, plan_types, extracted_carrier, extracted_date, gcs_url, gcs_key, document_metadata, ai_intelligence }: any) {
-    console.log('🔍 handleUploadResult received ai_intelligence:', {
-      has_ai_intelligence: !!ai_intelligence,
-      field_mapping_count: ai_intelligence?.field_mapping?.mappings?.length || 0,
-      plan_types_count: ai_intelligence?.plan_type_detection?.detected_plan_types?.length || 0,
-    });
+    
     
     // Set uploaded data with AI intelligence
     setUploaded({ 
@@ -281,13 +277,7 @@ export default function DashboardTab({ showAnalytics = false }: DashboardTabProp
 
   // Render UnifiedTableEditor - NEW 2-STEP FLOW
   if (showUnifiedEditor && uploaded) {
-    console.log('🔍 DashboardTab - Rendering UnifiedTableEditor with:', {
-      tables: uploaded.tables?.length,
-      ai_intelligence: uploaded.ai_intelligence,
-      gcs_url: uploaded.gcs_url,
-      extracted_carrier: uploaded.extracted_carrier,
-      company: company?.name || 'Not set'
-    });
+
     
     return (
       <div className="fixed inset-0 bg-white dark:bg-gray-900 z-50">

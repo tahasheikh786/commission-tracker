@@ -153,6 +153,12 @@ export default function CompareModal({ statement, onClose }: Props) {
                         minHeight: '500px'
                       }}
                       title="PDF Preview"
+                      // 🔥 CHROME 2024 CRITICAL ATTRIBUTES - Optimized for blob URLs:
+                      sandbox="allow-same-origin allow-scripts allow-modals allow-forms allow-popups allow-presentation"
+                      referrerPolicy="no-referrer-when-downgrade"
+                      allow="fullscreen"
+                      loading="eager"
+                      name="pdf-preview-frame"
                     />
                   </div>
                   <div className="text-xs text-slate-500 dark:text-slate-400 mt-2 text-center">
