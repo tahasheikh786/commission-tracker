@@ -6,7 +6,29 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 
-const WS_BASE_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000';
+/**
+ * Get WebSocket base URL from API URL
+ * Converts http://example.com or https://example.com to ws://example.com or wss://example.com
+ */
+function getWebSocketBaseUrl(): string {
+  if (typeof window === 'undefined') {
+    return 'ws://localhost:8000';
+  }
+
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+  
+  if (apiUrl) {
+    // Extract the domain from the API URL and convert protocol
+    const url = apiUrl.replace(/^https?:\/\//, '');
+    const protocol = apiUrl.startsWith('https') ? 'wss:' : 'ws:';
+    return `${protocol}//${url}`;
+  }
+  
+  // Fallback for development
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const host = window.location.hostname;
+  return `${protocol}//${host}:8000`;
+}
 
 export interface ProgressState {
   currentStep: number;
@@ -105,13 +127,18 @@ export function useProgressWebSocket({
       const token = localStorage.getItem('token');
       const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       
+      // Get WebSocket base URL dynamically
+      const wsBaseUrl = getWebSocketBaseUrl();
+      
       // Build WebSocket URL with optional auth params
-      let wsUrl = `${WS_BASE_URL}/api/ws/progress/${uploadId}?session_id=${sessionId}`;
+      let wsUrl = `${wsBaseUrl}/api/ws/progress/${uploadId}?session_id=${sessionId}`;
       if (token) {
         wsUrl += `&token=${token}`;
       }
       
       console.log('🔌 Connecting to WebSocket:', wsUrl.replace(/token=[^&]+/, 'token=***'));
+      console.log('🔌 WebSocket Base URL:', wsBaseUrl);
+      console.log('🔌 API URL:', process.env.NEXT_PUBLIC_API_URL);
 
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
