@@ -8,6 +8,8 @@ from typing import List
 from uuid import UUID
 from pydantic import BaseModel
 from app.services.gcs_utils import generate_gcs_signed_url, gcs_service
+from app.dependencies.auth_dependencies import get_current_user_hybrid
+from app.db.models import User
 import httpx
 import logging
 
@@ -49,11 +51,23 @@ async def get_statements_for_company(db, company_id):
 
 
 @router.delete("/companies/{company_id}/statements/{statement_id}")
-async def delete_statement(statement_id: str, db: AsyncSession = Depends(get_db)):
+async def delete_statement(
+    statement_id: str, 
+    current_user: User = Depends(get_current_user_hybrid),
+    db: AsyncSession = Depends(get_db)
+):
     try:
         statement = await crud.get_statement_by_id(db, statement_id)
         if not statement:
             raise HTTPException(status_code=404, detail="Statement not found")
+        
+        # Check user authorization: admin can delete any, regular users can only delete their own
+        if current_user.role != "admin" and str(statement.user_id) != str(current_user.id):
+            raise HTTPException(
+                status_code=403, 
+                detail="You can only delete your own statements"
+            )
+        
         await crud.delete_statement(db, statement_id)
         return {"message": "Statement deleted successfully"}
     except HTTPException:
@@ -70,6 +84,7 @@ async def delete_statement(statement_id: str, db: AsyncSession = Depends(get_db)
 async def delete_multiple_statements(
     company_id: UUID,
     request: DeleteStatementsRequest,
+    current_user: User = Depends(get_current_user_hybrid),
     db: AsyncSession = Depends(get_db)
 ):
     statement_ids = request.statement_ids
@@ -83,6 +98,12 @@ async def delete_multiple_statements(
                 if not statement:
                     errors.append(f"Statement with ID {statement_id} not found")
                     continue
+                
+                # Check user authorization: admin can delete any, regular users can only delete their own
+                if current_user.role != "admin" and str(statement.user_id) != str(current_user.id):
+                    errors.append(f"Unauthorized to delete statement {statement_id}")
+                    continue
+                
                 await crud.delete_statement(db, str(statement_id))
                 deleted_count += 1
             except Exception as e:

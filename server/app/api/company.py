@@ -1,7 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, or_
 from app.db import crud, schemas
 from app.config import get_db
+from app.dependencies.auth_dependencies import get_current_user_hybrid
+from app.db.models import User, StatementUpload
 from typing import List
 from pydantic import BaseModel
 
@@ -32,15 +35,48 @@ async def create_company(company: schemas.CompanyCreate, db: AsyncSession = Depe
     return await crud.create_company(db, company)
 
 @router.delete("/companies/{company_id}")
-async def delete_company(company_id: str, db: AsyncSession = Depends(get_db)):
+async def delete_company(
+    company_id: str, 
+    current_user: User = Depends(get_current_user_hybrid),
+    db: AsyncSession = Depends(get_db)
+):
     company = await crud.get_company_by_id(db, company_id)
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
+    
+    # Check if user has permission to delete this company/carrier
+    # Non-admin users can only delete companies where ALL statements belong to them
+    if current_user.role != "admin":
+        # Get all statements for this carrier
+        result = await db.execute(
+            select(StatementUpload).where(
+                or_(
+                    StatementUpload.carrier_id == company_id,
+                    StatementUpload.company_id == company_id
+                )
+            )
+        )
+        all_statements = result.scalars().all()
+        
+        # Check if ANY statement belongs to another user
+        if all_statements:
+            other_user_statements = [s for s in all_statements if str(s.user_id) != str(current_user.id)]
+            if other_user_statements:
+                raise HTTPException(
+                    status_code=403, 
+                    detail="You cannot delete a carrier that contains data from other users"
+                )
+        # If no statements exist, user can delete the empty carrier
+    
     await crud.delete_company(db, company_id)
     return {"message": "Company deleted successfully"}
 
 @router.delete("/companies/")
-async def delete_multiple_companies(request: CompanyIds, db: AsyncSession = Depends(get_db)):
+async def delete_multiple_companies(
+    request: CompanyIds, 
+    current_user: User = Depends(get_current_user_hybrid),
+    db: AsyncSession = Depends(get_db)
+):
     company_ids = request.company_ids
     deleted_count = 0
     errors = []
@@ -48,6 +84,34 @@ async def delete_multiple_companies(request: CompanyIds, db: AsyncSession = Depe
     try:
         for company_id in company_ids:
             try:
+                # Check if company exists
+                company = await crud.get_company_by_id(db, company_id)
+                if not company:
+                    errors.append(f"Company with ID {company_id} not found")
+                    continue
+                
+                # Check if user has permission to delete this company/carrier
+                # Non-admin users can only delete companies where ALL statements belong to them
+                if current_user.role != "admin":
+                    # Get all statements for this carrier
+                    result = await db.execute(
+                        select(StatementUpload).where(
+                            or_(
+                                StatementUpload.carrier_id == company_id,
+                                StatementUpload.company_id == company_id
+                            )
+                        )
+                    )
+                    all_statements = result.scalars().all()
+                    
+                    # Check if ANY statement belongs to another user
+                    if all_statements:
+                        other_user_statements = [s for s in all_statements if str(s.user_id) != str(current_user.id)]
+                        if other_user_statements:
+                            errors.append(f"Cannot delete carrier {company_id} - contains data from other users")
+                            continue
+                    # If no statements exist, user can delete the empty carrier
+                
                 await crud.delete_company(db, company_id)
                 deleted_count += 1
             except Exception as e:

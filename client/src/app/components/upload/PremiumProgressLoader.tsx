@@ -40,22 +40,15 @@ export const UPLOAD_STEPS: UploadStep[] = [
     estimatedDuration: 7000
   },
   {
-    id: 'ai_mapping',
-    order: 4,
-    title: 'AI Field Mapping',
-    description: 'Intelligently mapping database fields...',
-    estimatedDuration: 3000
-  },
-  {
     id: 'plan_detection',
-    order: 5,
+    order: 4,
     title: 'Detecting Plan Type',
     description: 'Identifying insurance plan category...',
     estimatedDuration: 2000
   },
   {
     id: 'finalizing',
-    order: 6,
+    order: 5,
     title: 'Finalizing',
     description: 'Preparing your data for review...',
     estimatedDuration: 1000

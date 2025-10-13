@@ -1153,11 +1153,21 @@ async def bulk_process_commissions(db: AsyncSession, statement_upload: Statement
     # ✅ OPTIMIZED: Extract all commission data in memory (no DB calls)
     commission_records = []
     
-    for table in statement_upload.final_data:
+    for table_index, table in enumerate(statement_upload.final_data):
         if not isinstance(table, dict) or 'rows' not in table:
             continue
+        
+        # CRITICAL FIX: Get summary rows to exclude from commission calculations
+        summary_rows_set = set(table.get('summaryRows', []))
+        if summary_rows_set:
+            print(f"🔍 Table {table_index}: Excluding {len(summary_rows_set)} summary rows from commission calculations")
             
-        for row in table['rows']:
+        for row_index, row in enumerate(table['rows']):
+            # CRITICAL FIX: Skip summary rows - they contain totals, not individual commissions
+            if row_index in summary_rows_set:
+                print(f"⏭️ Skipping summary row {row_index} in table {table_index}")
+                continue
+                
             if isinstance(row, dict):
                 client_name = row.get(client_name_field, '').strip()
                 # Clean company name to remove state codes and numbers

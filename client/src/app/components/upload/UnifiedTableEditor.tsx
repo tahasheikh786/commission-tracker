@@ -11,10 +11,11 @@
 import React, { useState, useMemo } from 'react';
 import axios from 'axios';
 import toast from 'react-hot-toast';
-import { FieldMapping, PlanTypeDetection } from '@/app/services/aiIntelligentMappingService';
+import { FieldMapping, PlanTypeDetection, getEnhancedExtractionAnalysis } from '@/app/services/aiIntelligentMappingService';
 import ActionBar, { MappingStats, ViewMode } from './ActionBar';
-import AIIntelligentMappingDisplay from '../AIIntelligentMappingDisplay';
-import { CollapsibleDocumentPreview, ExtractedDataTable } from '../review-extracted-data';
+import EnhancedAIMapper from '../review-extracted-data/EnhancedAIMapper';
+import { ExtractedDataTable } from '../review-extracted-data';
+import DynamicPDFViewer from './DynamicPDFViewer';
 import '../review-extracted-data/styles.css';
 import PremiumProgressLoader, { UploadStep } from './PremiumProgressLoader';
 import { ArrowRight, Map, FileText, Table2 } from 'lucide-react';
@@ -67,6 +68,7 @@ interface UnifiedTableEditorProps {
   databaseFields: Array<{ id: string; display_name: string; description?: string }>;
   onDataUpdate: (data: any) => void;
   onSubmit: (finalData: any) => Promise<void>;
+  selectedStatementDate?: any;
 }
 
 export default function UnifiedTableEditor({
@@ -74,7 +76,8 @@ export default function UnifiedTableEditor({
   uploadData,
   databaseFields,
   onDataUpdate,
-  onSubmit
+  onSubmit,
+  selectedStatementDate
 }: UnifiedTableEditorProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('table_review');
   const [userMappings, setUserMappings] = useState<Record<string, string>>({});
@@ -98,13 +101,15 @@ export default function UnifiedTableEditor({
   const [isExtractingWithGPT, setIsExtractingWithGPT] = useState(false);
   const [currentTableIdx, setCurrentTableIdx] = useState(0);
   const [showSummaryRows, setShowSummaryRows] = useState(true);
+  const [isLoadingAIMapping, setIsLoadingAIMapping] = useState(false);
+  const [aiIntelligence, setAiIntelligence] = useState(extractedData.ai_intelligence);
 
-  // Get AI mappings from extracted data
-  const aiMappings = extractedData.ai_intelligence?.field_mapping?.mappings || [];
+  // Get AI mappings from state (updated after "Continue to Field Mapping" is clicked)
+  const aiMappings = aiIntelligence?.field_mapping?.mappings || [];
 
   // Auto-accept high-confidence learned format mappings
   React.useEffect(() => {
-    const fieldMapping = extractedData.ai_intelligence?.field_mapping;
+    const fieldMapping = aiIntelligence?.field_mapping;
     
     // Only auto-accept if:
     // 1. AI field mapping is enabled
@@ -155,7 +160,7 @@ export default function UnifiedTableEditor({
         });
       }
     }
-  }, [extractedData.ai_intelligence, aiMappings, tables]);
+  }, [aiIntelligence, aiMappings, tables]);
 
   // Define approval process steps
   const APPROVAL_STEPS: UploadStep[] = [
@@ -242,6 +247,106 @@ export default function UnifiedTableEditor({
     // Small delay for exit animation
     await new Promise(resolve => setTimeout(resolve, 150));
     
+    // ===== CRITICAL: TRIGGER AI FIELD MAPPING WHEN TRANSITIONING TO FIELD_MAPPING MODE =====
+    if (newMode === 'field_mapping') {
+      try {
+        setIsLoadingAIMapping(true);
+        toast.loading('Generating AI field mappings for edited table...', { id: 'ai-mapping' });
+        
+        // Get the edited table data from current table
+        const currentTable = tables[currentTableIdx];
+        const headers = currentTable?.header || currentTable?.headers || [];
+        const rows = currentTable?.rows || [];
+        
+        // Prepare data for AI field mapping API
+        const carrier_id = extractedData?.carrier_id || extractedData?.company_id;
+        const extracted_carrier = extractedData?.carrierName || extractedData?.extracted_carrier;
+        const statement_date = extractedData?.statementDate || extractedData?.extracted_date;
+        
+        console.log('🤖 Triggering AI field mapping with edited table data:', {
+          headers_count: headers.length,
+          rows_count: rows.length,
+          carrier_id,
+          extracted_carrier
+        });
+        
+        // Call AI field mapping API with edited table data
+        const aiAnalysis = await getEnhancedExtractionAnalysis(
+          headers,
+          rows.slice(0, 5), // First 5 rows as sample
+          {
+            carrier_name: extracted_carrier,
+            statement_date: statement_date,
+            document_type: 'commission_statement'
+          },
+          carrier_id,
+          extracted_carrier
+        );
+        
+        // Update AI intelligence state with new field mappings
+        // KEEP plan type detection from extraction, only update field mapping
+        const newAiIntelligence = {
+          enabled: true,
+          field_mapping: {
+            ai_enabled: aiAnalysis.field_mapping?.success || false,
+            mappings: aiAnalysis.field_mapping?.mappings || [],
+            unmapped_fields: aiAnalysis.field_mapping?.unmapped_fields || [],
+            confidence: aiAnalysis.field_mapping?.confidence || 0.0,
+            statistics: {},
+            learned_format_used: aiAnalysis.field_mapping?.learned_format_used || false
+          },
+          // PRESERVE plan type detection from extraction (don't overwrite)
+          plan_type_detection: extractedData.ai_intelligence?.plan_type_detection || {
+            ai_enabled: aiAnalysis.plan_type_detection?.success || false,
+            detected_plan_types: aiAnalysis.plan_type_detection?.detected_plan_types || [],
+            confidence: aiAnalysis.plan_type_detection?.confidence || 0.0,
+            multi_plan_document: aiAnalysis.plan_type_detection?.multi_plan_document || false,
+            statistics: {}
+          },
+          overall_confidence: aiAnalysis.overall_confidence || 0.0
+        };
+        
+        setAiIntelligence(newAiIntelligence);
+        
+        // Update extractedData in parent component
+        onDataUpdate({
+          ...extractedData,
+          ai_intelligence: newAiIntelligence
+        });
+        
+        toast.success(`AI generated ${aiAnalysis.field_mapping?.mappings?.length || 0} field mappings!`, { 
+          id: 'ai-mapping',
+          duration: 3000
+        });
+        
+        console.log('✅ AI field mapping completed:', {
+          mappings_count: aiAnalysis.field_mapping?.mappings?.length || 0,
+          confidence: aiAnalysis.field_mapping?.confidence,
+          plan_types_count: aiAnalysis.plan_type_detection?.detected_plan_types?.length || 0
+        });
+        
+      } catch (error: any) {
+        console.error('❌ AI field mapping failed:', error);
+        toast.error('Failed to generate AI field mappings. You can still manually map fields.', { 
+          id: 'ai-mapping',
+          duration: 5000
+        });
+        
+        // Continue with empty AI intelligence
+        setAiIntelligence({
+          enabled: false,
+          field_mapping: { ai_enabled: false, mappings: [], unmapped_fields: [], confidence: 0.0 },
+          plan_type_detection: { ai_enabled: false, detected_plan_types: [], confidence: 0.0, multi_plan_document: false },
+          overall_confidence: 0.0
+        });
+      } finally {
+        setIsLoadingAIMapping(false);
+      }
+      
+      // Reset preview collapse state
+      setIsPreviewCollapsed(false);
+    }
+    
     setViewMode(newMode);
     
     // Small delay for enter animation
@@ -271,15 +376,42 @@ export default function UnifiedTableEditor({
         throw new Error('Company ID or Carrier ID is required. Please check the extraction response.');
       }
 
-      // Parse statement date
-      const statementDateStr = extractedData?.statementDate || extractedData?.extracted_date || '';
-      const dateParts = statementDateStr.split('/');
-      const statementDateObj = dateParts.length === 3 ? {
-        month: parseInt(dateParts[0]),
-        day: parseInt(dateParts[1]),
-        year: parseInt(dateParts[2]),
-        date: statementDateStr
-      } : null;
+      // Use the provided selectedStatementDate or parse from extractedData
+      console.log('🔍 Statement Date Debug - selectedStatementDate prop:', selectedStatementDate);
+      console.log('🔍 Statement Date Debug - extractedData.statementDate:', extractedData?.statementDate);
+      console.log('🔍 Statement Date Debug - extractedData.extracted_date:', extractedData?.extracted_date);
+      
+      let statementDateObj = selectedStatementDate;
+      
+      // If not provided as prop, try to parse from extractedData
+      if (!statementDateObj) {
+        console.log('⚠️ No selectedStatementDate prop provided, parsing from extractedData...');
+        const statementDateStr = extractedData?.statementDate || extractedData?.extracted_date || '';
+        const dateParts = statementDateStr.split('/');
+        statementDateObj = dateParts.length === 3 ? {
+          month: parseInt(dateParts[0]),
+          day: parseInt(dateParts[1]),
+          year: parseInt(dateParts[2]),
+          date: statementDateStr
+        } : null;
+      }
+      
+      // Ensure the statement date object has the correct structure
+      if (statementDateObj && statementDateObj.date) {
+        const dateStr = statementDateObj.date;
+        const dateParts = dateStr.split('/');
+        if (dateParts.length === 3) {
+          statementDateObj = {
+            month: parseInt(dateParts[0]),
+            day: parseInt(dateParts[1]),
+            year: parseInt(dateParts[2]),
+            date: dateStr,
+            ...statementDateObj // Keep any other properties like confidence, source
+          };
+        }
+      }
+      
+      console.log('✅ Final statementDateObj to be sent:', statementDateObj);
 
       // Merge AI mappings with user mappings (including accepted mappings)
       const finalMappings = { ...userMappings };
@@ -297,25 +429,67 @@ export default function UnifiedTableEditor({
       setApprovalStep(0);
       setApprovalProgress(20);
       
+      // CRITICAL FIX: Create a snapshot of current tables to ensure deleted rows are excluded
+      console.log('🔍 DEBUG: Current tables state before snapshot:', {
+        tableCount: tables.length,
+        currentTableIdx: currentTableIdx,
+        rowCounts: tables.map(t => t.rows?.length || 0),
+        currentTableRowCount: tables[currentTableIdx]?.rows?.length || 0
+      });
+      
+      // CRITICAL: Use current tables state, NOT extractedData.tables!
+      // extractedData.tables contains the ORIGINAL unedited data
+      const currentTablesSnapshot = tables.map(table => ({
+        name: table.name || 'Unnamed Table',
+        header: table.header || table.headers || [],
+        rows: table.rows || [], // This will NOT include deleted rows
+        summaryRows: Array.from(table.summaryRows || []), // Convert Set to Array
+        extractor: table.extractor || 'manual',
+        metadata: table.metadata || {}
+      }));
+      
+      // Verification: Ensure we're not accidentally using original data
+      if (extractedData.tables && extractedData.tables[0]?.rows?.length !== currentTablesSnapshot[0]?.rows?.length) {
+        console.warn('⚠️ Row count mismatch detected!', {
+          originalRows: extractedData.tables[0]?.rows?.length || 0,
+          editedRows: currentTablesSnapshot[0]?.rows?.length || 0,
+          difference: (extractedData.tables[0]?.rows?.length || 0) - (currentTablesSnapshot[0]?.rows?.length || 0)
+        });
+      }
+      
+      console.log('🔍 DEBUG: Saving tables snapshot:', {
+        tableCount: currentTablesSnapshot.length,
+        rowCounts: currentTablesSnapshot.map(t => t.rows.length),
+        totalRows: currentTablesSnapshot.reduce((sum, t) => sum + t.rows.length, 0),
+        firstTableRowCount: currentTablesSnapshot[0]?.rows?.length || 0
+      });
+      
+      // Log the exact payload being sent to backend
+      const saveTablesPayload = {
+        upload_id: upload_id,
+        tables: currentTablesSnapshot,
+        company_id: carrier_id || company_id,
+        selected_statement_date: statementDateObj,
+        extracted_carrier: extractedData?.carrierName || extractedData?.extracted_carrier,
+        extracted_date: extractedData?.extracted_date
+      };
+      
+      console.log('📤 Sending save-tables request:', {
+        upload_id,
+        tableCount: saveTablesPayload.tables.length,
+        firstTableRows: saveTablesPayload.tables[0]?.rows?.length || 0,
+        firstTableHeaders: saveTablesPayload.tables[0]?.header?.length || 0,
+        // Log first 3 rows for verification
+        firstThreeRows: saveTablesPayload.tables[0]?.rows?.slice(0, 3) || []
+      });
+      
       const saveTablesResponse = await axios.post(
         `${process.env.NEXT_PUBLIC_API_URL}/api/table-editor/save-tables/`,
-        {
-          upload_id: upload_id,
-          tables: tables.map(table => ({
-            name: table.name || 'Unnamed Table',
-            header: table.header || table.headers || [],
-            rows: table.rows || [],
-            summaryRows: Array.from(table.summaryRows || []), // Convert Set to Array
-            extractor: table.extractor || 'manual',
-            metadata: table.metadata || {}
-          })),
-          company_id: carrier_id || company_id, // Use carrier_id as primary
-          selected_statement_date: statementDateObj,
-          extracted_carrier: extractedData?.carrierName || extractedData?.extracted_carrier,
-          extracted_date: extractedData?.extracted_date
-        },
+        saveTablesPayload,
         { withCredentials: true }
       );
+      
+      console.log('✅ Save-tables response:', saveTablesResponse.data);
 
       // ✅ CRITICAL: Get updated carrier_id from response
       const updatedCarrierId = saveTablesResponse.data?.carrier_id || carrier_id || company_id;
@@ -327,16 +501,12 @@ export default function UnifiedTableEditor({
       setApprovalStep(1);
       
       try {
+        // CRITICAL FIX: Use the same snapshot to ensure format learning uses edited data
         await axios.post(
           `${process.env.NEXT_PUBLIC_API_URL}/api/table-editor/learn-format-patterns`,
           {
             upload_id: upload_id,
-            tables: tables.map(table => ({
-              name: table.name || 'Unnamed Table',
-              header: table.header || table.headers || [],
-              rows: table.rows || [],
-              summaryRows: Array.from(table.summaryRows || [])
-            })),
+            tables: currentTablesSnapshot,
             company_id: updatedCarrierId, // Use updated carrier_id from save response
             selected_statement_date: statementDateObj,
             extracted_carrier: updatedCarrierName,
@@ -360,15 +530,15 @@ export default function UnifiedTableEditor({
         source_field: extractedField
       }));
 
-      // Get plan types from AI intelligence
-      const planTypes = extractedData?.ai_intelligence?.plan_type_detection?.detected_plan_types?.map(
+      // Get plan types from AI intelligence state
+      const planTypes = aiIntelligence?.plan_type_detection?.detected_plan_types?.map(
         (pt: any) => pt.plan_type
       ) || [];
 
-      // Get table data for format learning
-      const firstTable = tables[0] || {};
+      // CRITICAL FIX: Use the snapshot for consistency
+      const firstTable = currentTablesSnapshot[0] || {};
       const tableData = firstTable.rows || [];
-      const headers = firstTable.header || firstTable.headers || [];
+      const headers = firstTable.header || [];
 
       // Build the payload matching backend MappingConfig schema
       const mappingPayload = {
@@ -395,11 +565,11 @@ export default function UnifiedTableEditor({
       // STEP 4: Process Commission Data (Final Approval)
       setApprovalStep(3);
       
-      // Prepare final data for approval
-      // Transform rows from arrays to dictionaries for backend processing
-      const finalData = tables.map(table => {
-        const tableHeaders = table.header || table.headers || [];
-        const tableRows = table.rows || [];
+      // CRITICAL FIX: Use the SAME snapshot from Step 1 to ensure consistency
+      // This guarantees deleted rows are NOT included in commission calculations
+      const finalData = currentTablesSnapshot.map(table => {
+        const tableHeaders = table.header;
+        const tableRows = table.rows;
         
         // Convert each row from array to dictionary with header names as keys
         const transformedRows = tableRows.map((row: any[]) => {
@@ -411,12 +581,18 @@ export default function UnifiedTableEditor({
         });
         
         return {
-          name: table.name || 'Unnamed Table',
+          name: table.name,
           header: tableHeaders,
-          rows: transformedRows  // Now an array of dictionaries
+          rows: transformedRows,  // Now an array of dictionaries, WITHOUT deleted rows
+          summaryRows: table.summaryRows  // CRITICAL: Include summary rows for backend filtering
         };
       });
       
+      console.log('🔍 DEBUG: Final data for approval:', {
+        tableCount: finalData.length,
+        rowCounts: finalData.map(t => t.rows.length),
+        totalRows: finalData.reduce((sum, t) => sum + t.rows.length, 0)
+      });
 
       // planTypes already defined above in Step 3
 
@@ -475,6 +651,13 @@ export default function UnifiedTableEditor({
         ? table.summaryRows 
         : new Set(Array.isArray(table.summaryRows) ? table.summaryRows : [])
     }));
+    
+    console.log('📝 Tables updated:', {
+      tableCount: normalizedTables.length,
+      rowCounts: normalizedTables.map(t => t.rows?.length || 0),
+      currentTableRows: normalizedTables[currentTableIdx]?.rows?.length || 0
+    });
+    
     setTables(normalizedTables);
     onDataUpdate({ ...extractedData, tables: normalizedTables });
   };
@@ -670,6 +853,25 @@ export default function UnifiedTableEditor({
     }
   };
 
+  // Handle table switching in field mapping mode
+  const handleTableSwitch = async (newIndex: number) => {
+    if (newIndex === currentTableIdx || newIndex < 0 || newIndex >= tables.length) {
+      return;
+    }
+
+    // Update the current table index
+    setCurrentTableIdx(newIndex);
+    
+    // Clear accepted mappings when switching tables as they're table-specific
+    setAcceptedMappings([]);
+    setUserMappings({});
+    
+    toast.success(`Switched to Table ${newIndex + 1}. Please review and accept field mappings for this table.`);
+    
+    // Note: If backend AI re-mapping is needed, add API call here
+    // For now, we just switch the visible table and user can manually map fields
+  };
+
   return (
     <>
       {/* Premium Progress Loader - Shows during submission */}
@@ -719,7 +921,7 @@ export default function UnifiedTableEditor({
             </div>
 
             {/* Plan Type Detection - Compact */}
-            {viewMode === 'field_mapping' && extractedData.ai_intelligence?.plan_type_detection && (
+            {viewMode === 'field_mapping' && aiIntelligence?.plan_type_detection && (
               <div className="ml-4 px-4 py-2 bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-200 rounded-lg">
                 <div className="flex items-center space-x-2">
                   <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -728,15 +930,15 @@ export default function UnifiedTableEditor({
                   <div>
                     <span className="text-xs text-purple-600 font-semibold block">Plan Type</span>
                     <span className="text-sm font-bold text-gray-900">
-                      {extractedData.ai_intelligence.plan_type_detection.detected_plan_types[0]?.plan_type || 'Unknown'}
+                      {aiIntelligence.plan_type_detection.detected_plan_types[0]?.plan_type || 'Unknown'}
                     </span>
                   </div>
                   <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ml-2 ${
-                    extractedData.ai_intelligence.plan_type_detection.confidence >= 0.8 ? 'bg-green-100 text-green-800' :
-                    extractedData.ai_intelligence.plan_type_detection.confidence >= 0.6 ? 'bg-yellow-100 text-yellow-800' :
+                    aiIntelligence.plan_type_detection.confidence >= 0.8 ? 'bg-green-100 text-green-800' :
+                    aiIntelligence.plan_type_detection.confidence >= 0.6 ? 'bg-yellow-100 text-yellow-800' :
                     'bg-red-100 text-red-800'
                   }`}>
-                    {Math.round(extractedData.ai_intelligence.plan_type_detection.confidence * 100)}%
+                    {Math.round(aiIntelligence.plan_type_detection.confidence * 100)}%
                   </span>
                 </div>
               </div>
@@ -760,7 +962,7 @@ export default function UnifiedTableEditor({
             <div className="px-4 py-2.5 bg-gradient-to-br from-green-50 to-green-100 border-2 border-green-300 rounded-lg shadow-md hover:shadow-lg transition-shadow">
               <span className="text-xs font-medium text-green-600 block uppercase tracking-wide mb-0.5">Plan Type</span>
               <span className="text-base font-bold text-green-900">
-                {extractedData?.ai_intelligence?.plan_type_detection?.detected_plan_types?.[0]?.plan_type || 'Not detected'}
+                {aiIntelligence?.plan_type_detection?.detected_plan_types?.[0]?.plan_type || 'Not detected'}
               </span>
             </div>
             <div className="px-4 py-2.5 bg-gradient-to-br from-orange-50 to-orange-100 border-2 border-orange-300 rounded-lg shadow-md hover:shadow-lg transition-shadow">
@@ -786,8 +988,8 @@ export default function UnifiedTableEditor({
         
         {/* Left Panel - Document/Data Preview */}
         {viewMode === 'table_review' && (
-          <CollapsibleDocumentPreview
-            uploaded={uploadData || extractedData}
+          <DynamicPDFViewer
+            fileUrl={extractedData?.gcs_url || extractedData?.file_name || ''}
             isCollapsed={isPreviewCollapsed}
             onToggleCollapse={() => setIsPreviewCollapsed(!isPreviewCollapsed)}
           />
@@ -807,20 +1009,27 @@ export default function UnifiedTableEditor({
               }`}>
                 {/* Extracted Table Preview */}
                 <div className="bg-gray-50 rounded-lg p-3">
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">Extracted Table Preview</h4>
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">
+                    Extracted Table Preview
+                    {tables.length > 1 && (
+                      <span className="ml-2 text-xs text-gray-500">
+                        (Table {currentTableIdx + 1} of {tables.length})
+                      </span>
+                    )}
+                  </h4>
                   <div className="text-xs text-gray-600">
-                    {tables?.[0]?.headers?.length || tables?.[0]?.header?.length || 0} columns × {tables?.[0]?.rows?.length || 0} rows
+                    {tables?.[currentTableIdx]?.headers?.length || tables?.[currentTableIdx]?.header?.length || 0} columns × {tables?.[currentTableIdx]?.rows?.length || 0} rows
                   </div>
                 </div>
                 
                 {/* Compact Table Display */}
-                {tables?.[0] && (
+                {tables?.[currentTableIdx] && (
                   <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
                     <div className="overflow-x-auto max-h-64">
                       <table className="min-w-full text-xs">
                         <thead className="bg-gray-50 sticky top-0">
                           <tr>
-                            {(tables[0].headers || tables[0].header || []).map((header: string, idx: number) => (
+                            {(tables[currentTableIdx].headers || tables[currentTableIdx].header || []).map((header: string, idx: number) => (
                               <th key={idx} className="px-3 py-2 text-left font-medium text-gray-700 border-b">
                                 {header}
                               </th>
@@ -828,7 +1037,7 @@ export default function UnifiedTableEditor({
                           </tr>
                         </thead>
                         <tbody>
-                          {(tables[0].rows || []).slice(0, 4).map((row: string[], rowIdx: number) => (
+                          {(tables[currentTableIdx].rows || []).slice(0, 4).map((row: string[], rowIdx: number) => (
                             <tr key={rowIdx} className="hover:bg-gray-50">
                               {row.map((cell: string, cellIdx: number) => (
                                 <td key={cellIdx} className="px-3 py-2 border-b border-gray-100 text-gray-600">
@@ -840,25 +1049,41 @@ export default function UnifiedTableEditor({
                         </tbody>
                       </table>
                     </div>
-                    {(tables[0].rows?.length || 0) > 4 && (
+                    {(tables[currentTableIdx].rows?.length || 0) > 4 && (
                       <div className="p-2 bg-gray-50 text-xs text-gray-500 text-center border-t">
-                        Showing 4 of {tables[0].rows?.length} rows
+                        Showing 4 of {tables[currentTableIdx].rows?.length} rows
                       </div>
                     )}
                   </div>
                 )}
 
-                {/* Field Mapping Suggestions - Will pass handlers */}
-                {extractedData.ai_intelligence && (
-                  <AIIntelligentMappingDisplay
-                    aiIntelligence={extractedData.ai_intelligence}
-                    tableHeaders={tables?.[0]?.header || tables?.[0]?.headers || []}
+                {/* Enhanced AI Mapper with Table Selection */}
+                {isLoadingAIMapping ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="text-center">
+                      <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                      <h3 className="text-lg font-semibold text-gray-900 mb-2">Generating AI Field Mappings</h3>
+                      <p className="text-sm text-gray-600">Analyzing your edited table data...</p>
+                    </div>
+                  </div>
+                ) : aiIntelligence?.enabled ? (
+                  <EnhancedAIMapper
+                    tables={tables}
+                    currentTableIndex={currentTableIdx}
+                    aiIntelligence={aiIntelligence}
+                    uploadId={uploadData?.upload_id || uploadData?.id || extractedData?.upload_id}
+                    onTableSwitch={handleTableSwitch}
+                    tableHeaders={tables?.[currentTableIdx]?.header || tables?.[currentTableIdx]?.headers || []}
                     acceptedFields={acceptedMappings.map(m => m.field)}
                     onAcceptMapping={handleAcceptMapping}
                     onAcceptAllMappings={handleAcceptAllMappings}
                     onCustomMapping={handleCustomMapping}
                     onReviewMappings={() => console.log('Review mappings')}
                   />
+                ) : (
+                  <div className="text-center py-8">
+                    <p className="text-sm text-gray-600">No AI field mappings available. You can manually map fields.</p>
+                  </div>
                 )}
               </div>
             )}
@@ -926,13 +1151,81 @@ export default function UnifiedTableEditor({
                 </div>
               )}
             </div>
+
+            {/* Table Navigation Controls - Show when multiple tables exist in table review mode */}
+            {viewMode === 'table_review' && tables && tables.length > 1 && (
+              <div className="mt-4 pt-4 border-t border-gray-200">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <button
+                      onClick={() => setCurrentTableIdx(Math.max(0, currentTableIdx - 1))}
+                      disabled={currentTableIdx === 0}
+                      className="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                    >
+                      ← Previous
+                    </button>
+                    
+                    <div className="flex items-center space-x-2">
+                      <span className="text-sm text-gray-600">Table</span>
+                      <select
+                        value={currentTableIdx}
+                        onChange={(e) => setCurrentTableIdx(Number(e.target.value))}
+                        className="px-3 py-1.5 border border-gray-300 rounded-md text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                      >
+                        {tables.map((table, idx) => (
+                          <option key={idx} value={idx}>
+                            {idx + 1} - {table.name || `Table ${idx + 1}`}
+                          </option>
+                        ))}
+                      </select>
+                      <span className="text-sm text-gray-600">of {tables.length}</span>
+                    </div>
+                    
+                    <button
+                      onClick={() => setCurrentTableIdx(Math.min(tables.length - 1, currentTableIdx + 1))}
+                      disabled={currentTableIdx === tables.length - 1}
+                      className="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                    >
+                      Next →
+                    </button>
+
+                    {/* Delete Current Table Button */}
+                    <button
+                      onClick={() => {
+                        if (window.confirm(`Are you sure you want to delete "${tables[currentTableIdx]?.name || `Table ${currentTableIdx + 1}`}"?\n\nThis action cannot be undone.`)) {
+                          const newTables = tables.filter((_, idx) => idx !== currentTableIdx);
+                          handleTablesChange(newTables);
+                          // Adjust currentTableIdx if needed
+                          if (currentTableIdx >= newTables.length) {
+                            setCurrentTableIdx(Math.max(0, newTables.length - 1));
+                          }
+                          toast.success('Table deleted successfully');
+                        }
+                      }}
+                      className="px-3 py-1.5 text-sm bg-white border border-red-300 text-red-600 rounded-md hover:bg-red-50 hover:border-red-400 transition-colors font-medium flex items-center gap-1.5"
+                      title="Delete this table"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                      Delete Table
+                    </button>
+                  </div>
+
+                  {/* Current table info */}
+                  <div className="text-xs text-gray-500">
+                    {tables[currentTableIdx]?.rows?.length || 0} rows × {(tables[currentTableIdx]?.header || tables[currentTableIdx]?.headers || []).length} columns
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Right Panel Content */}
           <div className="flex-1 overflow-hidden">
             {viewMode === 'table_review' ? (
               // Show new ExtractedDataTable in review mode
-              <div className={`h-full transition-opacity duration-500 ${
+              <div className={`h-full overflow-auto transition-opacity duration-500 ${
                 isTransitioning ? 'opacity-0' : 'opacity-100'
               }`}>
                 {tables && tables.length > 0 && tables[currentTableIdx] && (

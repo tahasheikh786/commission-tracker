@@ -8,7 +8,9 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from collections import defaultdict
 import time
 import os
-from app.api import company, mapping, review, statements, database_fields, plan_types, table_editor, improve_extraction, pending, dashboard, format_learning, new_extract, summary_rows, date_extraction, excel_extract, user_management, admin, otp_auth, auth, websocket, ai_intelligent_mapping, pdf_proxy
+import signal
+import logging
+from app.api import company, mapping, review, statements, database_fields, plan_types, table_editor, improve_extraction, pending, dashboard, format_learning, new_extract, summary_rows, date_extraction, excel_extract, user_management, admin, otp_auth, auth, websocket, ai_intelligent_mapping, ai_table_mapping, pdf_proxy
 from app.utils.auth_utils import cleanup_expired_sessions
 from app.db.database import get_db
 from app.security_config import (
@@ -20,12 +22,122 @@ from app.security_config import (
 )
 import asyncio
 
+# Initialize logging
+logger = logging.getLogger(__name__)
+
 app = FastAPI()
+
+# Graceful shutdown handler for long-running processes
+async def graceful_shutdown_handler(signum, frame=None):
+    """Handle graceful shutdown during long-running processes"""
+    logger.info(f"Received signal {signum}, initiating graceful shutdown...")
+    
+    try:
+        # Import connection manager
+        from app.services.websocket_service import connection_manager
+        
+        # Notify active WebSocket connections
+        for upload_id in list(connection_manager.active_connections.keys()):
+            try:
+                await connection_manager.send_error(
+                    upload_id, 
+                    "Server is restarting, your upload will resume automatically",
+                    "SERVER_RESTART"
+                )
+            except Exception as e:
+                logger.error(f"Error notifying upload {upload_id}: {e}")
+        
+        # Allow time for connections to receive the message
+        await asyncio.sleep(2)
+        logger.info("Graceful shutdown notifications sent")
+    except Exception as e:
+        logger.error(f"Error during graceful shutdown: {e}")
+
+# Register shutdown handlers
+def setup_signal_handlers():
+    """Setup signal handlers for graceful shutdown"""
+    try:
+        loop = asyncio.get_event_loop()
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            loop.add_signal_handler(
+                sig,
+                lambda s=sig: asyncio.create_task(graceful_shutdown_handler(s))
+            )
+        logger.info("Signal handlers registered for graceful shutdown")
+    except Exception as e:
+        logger.warning(f"Could not register signal handlers: {e}")
+
+# Setup on startup
+@app.on_event("startup")
+async def startup_event():
+    """Run startup tasks"""
+    setup_signal_handlers()
+    logger.info("Application startup complete")
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint for Docker and monitoring"""
-    return {"status": "healthy", "message": "Commission tracker backend is running"}
+    """
+    Health check endpoint for Docker and monitoring.
+    Always returns quickly to prevent timeouts during long operations.
+    """
+    return {
+        "status": "healthy", 
+        "message": "Commission tracker backend is running",
+        "timestamp": time.time()
+    }
+
+@app.get("/health/detailed")
+async def health_check_detailed():
+    """
+    Detailed health check with resource monitoring for Pro plan.
+    """
+    try:
+        import psutil
+        
+        # Get system resources
+        memory = psutil.virtual_memory()
+        cpu_percent = psutil.cpu_percent(interval=0.1)
+        
+        # Get WebSocket connection info
+        from app.services.websocket_service import connection_manager
+        ws_connections = connection_manager.get_connection_count()
+        
+        return {
+            "status": "healthy",
+            "timestamp": time.time(),
+            "resources": {
+                "memory": {
+                    "total_gb": round(memory.total / 1024**3, 2),
+                    "used_gb": round(memory.used / 1024**3, 2),
+                    "available_gb": round(memory.available / 1024**3, 2),
+                    "percent": memory.percent
+                },
+                "cpu": {
+                    "percent": cpu_percent
+                }
+            },
+            "connections": {
+                "websocket": ws_connections
+            },
+            "warnings": [
+                "High memory usage" if memory.percent > 90 else None,
+                "High CPU usage" if cpu_percent > 90 else None
+            ]
+        }
+    except ImportError:
+        # psutil not available - return basic health check
+        return {
+            "status": "healthy",
+            "timestamp": time.time(),
+            "message": "Detailed monitoring not available (psutil not installed)"
+        }
+    except Exception as e:
+        logger.error(f"Error in detailed health check: {e}")
+        return {
+            "status": "healthy",
+            "timestamp": time.time(),
+            "error": str(e)
+        }
 
 @app.get("/security/status")
 async def security_status():
@@ -147,6 +259,7 @@ app.include_router(summary_rows.router)
 app.include_router(date_extraction.router)
 app.include_router(excel_extract.router)
 app.include_router(ai_intelligent_mapping.router)
+app.include_router(ai_table_mapping.router)
 app.include_router(websocket.router, tags=["WebSocket"])
 app.include_router(pdf_proxy.router, tags=["PDF"])  # No prefix needed - Next.js rewrites strip /api
 

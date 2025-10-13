@@ -172,7 +172,9 @@ const TableRow = memo(function TableRow({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Checkbox Cell */}
-        <td className="px-4 py-3 w-10 border-b border-gray-200">
+        <td className={`px-4 py-3 w-10 border-b border-gray-200 sticky left-0 z-10 ${
+          isSelected ? 'bg-blue-50' : isSummary ? 'bg-orange-50' : 'bg-white'
+        }`}>
           <TableRowSelector
             isSelected={isSelected}
             onToggle={handleToggle}
@@ -182,7 +184,7 @@ const TableRow = memo(function TableRow({
 
         {/* Data Cells */}
         {row.map((cell, colIndex) => (
-          <td key={colIndex} className="px-3 py-3 text-xs text-gray-900 border-b border-gray-100 max-w-xs">
+          <td key={colIndex} className="px-3 py-3 text-xs text-gray-900 border-b border-gray-100 min-w-[150px]">
             <EditableCell
               value={cell}
               isEditing={

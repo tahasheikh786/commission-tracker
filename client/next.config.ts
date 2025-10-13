@@ -1,6 +1,48 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Externalize PDF.js for server-side rendering (Next.js 15+)
+  serverExternalPackages: ['pdfjs-dist'],
+  
+  // Configure webpack for React PDF
+  webpack: (config, { isServer }) => {
+    // Disable canvas for server-side (not needed)
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      canvas: false,
+    };
+    
+    // Externalize canvas for all environments (PDF.js doesn't need it in browser)
+    config.externals = config.externals || [];
+    config.externals.push('canvas');
+    
+    // ✅ CRITICAL FIX: Configure file-loader for PDF.js worker files
+    // This ensures worker files are properly bundled and served
+    if (!isServer) {
+      config.module = config.module || {};
+      config.module.rules = config.module.rules || [];
+      
+      config.module.rules.push({
+        test: /pdf\.worker\.(min\.)?js$/,
+        type: 'asset/resource',
+        generator: {
+          filename: 'static/worker/[hash][ext][query]'
+        }
+      });
+      
+      // Handle .mjs files from pdfjs-dist
+      config.module.rules.push({
+        test: /pdf\.worker\.(min\.)?mjs$/,
+        type: 'asset/resource',
+        generator: {
+          filename: 'static/worker/[hash][ext][query]'
+        }
+      });
+    }
+    
+    return config;
+  },
+  
   async rewrites() {
     return [
       {

@@ -10,12 +10,267 @@ import io
 import logging
 import fitz  # PyMuPDF
 from pdfplumber.pdf import PDF
+import re
+from dateutil import parser as date_parser
 
 logger = logging.getLogger(__name__)
 
 # Configuration constants for table stitching
 HEADER_SIMILARITY_THRESHOLD = 0.8
 PATTERN_MATCH_THRESHOLD = 0.6
+
+
+def normalize_statement_date(date_string: str) -> str:
+    """
+    Extract and normalize the primary date from various date formats.
+    Handles date ranges by extracting only the start date.
+    
+    Examples:
+        - "2025-03-15 thr 2025-04-14" -> "2025-03-15"
+        - "March 15, 2025 through April 14, 2025" -> "2025-03-15"
+        - "2025-03-15 to 2025-04-14" -> "2025-03-15"
+        - "2025-03-15" -> "2025-03-15"
+        - "03/15/2025 - 04/14/2025" -> "2025-03-15"
+    
+    Args:
+        date_string: Date string that may be a single date or date range
+        
+    Returns:
+        Normalized date in ISO format (YYYY-MM-DD), or original string if parsing fails
+    """
+    if not date_string or not isinstance(date_string, str):
+        return date_string
+    
+    try:
+        # Clean up the input string
+        date_string = date_string.strip()
+        
+        # Common date range separators
+        range_separators = [
+            r'\s+through\s+',
+            r'\s+thru\s+',
+            r'\s+thr\s+',
+            r'\s+to\s+',
+            r'\s+-\s+',
+            r'\s+–\s+',  # en dash
+            r'\s+—\s+',  # em dash
+            r'\s+until\s+',
+            r'\s+till\s+',
+        ]
+        
+        # Try to split on date range separators
+        start_date_str = date_string
+        for separator in range_separators:
+            parts = re.split(separator, date_string, maxsplit=1, flags=re.IGNORECASE)
+            if len(parts) == 2:
+                # Found a range, use the first part (start date)
+                start_date_str = parts[0].strip()
+                logger.debug(f"Detected date range, extracting start date: '{start_date_str}' from '{date_string}'")
+                break
+        
+        # Parse the date using dateutil parser (handles many formats automatically)
+        try:
+            parsed_date = date_parser.parse(start_date_str, fuzzy=True)
+            # Return in ISO format (YYYY-MM-DD)
+            normalized = parsed_date.strftime('%Y-%m-%d')
+            
+            if normalized != date_string:
+                logger.info(f"Date normalized: '{date_string}' -> '{normalized}'")
+            
+            return normalized
+            
+        except (ValueError, TypeError, date_parser.ParserError) as parse_error:
+            # If dateutil fails, try manual parsing for specific formats
+            logger.warning(f"dateutil parser failed for '{start_date_str}', trying manual parsing: {parse_error}")
+            
+            # Try MM/DD/YYYY format
+            mm_dd_yyyy_match = re.match(r'(\d{1,2})[/-](\d{1,2})[/-](\d{4})', start_date_str)
+            if mm_dd_yyyy_match:
+                month, day, year = mm_dd_yyyy_match.groups()
+                parsed_date = datetime(int(year), int(month), int(day))
+                return parsed_date.strftime('%Y-%m-%d')
+            
+            # Try YYYY-MM-DD format (already normalized)
+            yyyy_mm_dd_match = re.match(r'(\d{4})-(\d{1,2})-(\d{1,2})', start_date_str)
+            if yyyy_mm_dd_match:
+                return start_date_str  # Already in correct format
+            
+            # If all parsing fails, return original string
+            logger.error(f"Could not parse date: '{date_string}'")
+            return date_string
+            
+    except Exception as e:
+        logger.error(f"Error normalizing date '{date_string}': {e}")
+        return date_string
+
+
+def normalize_multi_line_headers(headers: List[str], rows: List[List[str]] = None) -> List[str]:
+    """
+    Normalize multi-line column headers where parent columns span multiple sub-columns.
+    
+    Example transformation:
+        Input: ["Clients", "", "Ind. Insurance", "Active HRA Employees", "", "", "Commissions", "", ""]
+        Output: ["Clients", "Broker", "Ind. Insurance", "Active HRA Employees Lives", 
+                 "Active HRA Employees PEPM", "Active HRA Employees Subtotal", 
+                 "Commissions IND", "Commissions HRA", "Commissions Total"]
+    
+    Args:
+        headers: List of header strings (may contain empty strings for sub-columns)
+        rows: Optional sample rows to help infer sub-column names
+        
+    Returns:
+        List of normalized header strings with hierarchical names
+    """
+    if not headers:
+        return headers
+    
+    try:
+        normalized = []
+        last_parent = None
+        parent_column_index = -1
+        sub_column_count = 0
+        
+        # Common sub-column names for inference
+        common_sub_columns = [
+            ['Lives', 'PEPM', 'Subtotal'],
+            ['Count', 'Amount', 'Total'],
+            ['IND', 'HRA', 'Total'],
+            ['Quantity', 'Rate', 'Amount'],
+            ['Name', 'Value', 'Total'],
+            ['Start', 'End', 'Duration'],
+            ['Min', 'Max', 'Average'],
+        ]
+        
+        for i, header in enumerate(headers):
+            header_stripped = header.strip() if header else ""
+            
+            if header_stripped:
+                # This is a parent column or standalone column
+                # Check if next columns are empty (indicating this is a parent)
+                empty_count = 0
+                for j in range(i + 1, len(headers)):
+                    if not headers[j].strip():
+                        empty_count += 1
+                    else:
+                        break
+                
+                if empty_count > 0:
+                    # This is a parent column with sub-columns
+                    last_parent = header_stripped
+                    parent_column_index = i
+                    sub_column_count = 0
+                    normalized.append(header_stripped)  # Keep parent name for first column
+                else:
+                    # Standalone column
+                    last_parent = None
+                    normalized.append(header_stripped)
+            else:
+                # Empty header - this is a sub-column
+                if last_parent:
+                    sub_column_count += 1
+                    
+                    # Try to infer sub-column name from data if rows provided
+                    inferred_name = None
+                    if rows and len(rows) > 0:
+                        # Look at the first few rows to infer the sub-column name
+                        inferred_name = _infer_sub_column_name(rows, i, sub_column_count)
+                    
+                    # Use inferred name or generate a generic one
+                    if inferred_name:
+                        sub_column_name = f"{last_parent} {inferred_name}"
+                    else:
+                        # Try to match common sub-column patterns
+                        matched_pattern = _match_sub_column_pattern(sub_column_count, empty_count + 1)
+                        if matched_pattern:
+                            sub_column_name = f"{last_parent} {matched_pattern}"
+                        else:
+                            # Fallback to generic naming
+                            sub_column_name = f"{last_parent} {sub_column_count}"
+                    
+                    normalized.append(sub_column_name)
+                else:
+                    # Empty header without a parent - generate a generic name
+                    normalized.append(f"Column {i + 1}")
+        
+        logger.info(f"Header normalization: {len(headers)} headers normalized")
+        logger.debug(f"Original headers: {headers}")
+        logger.debug(f"Normalized headers: {normalized}")
+        
+        return normalized
+        
+    except Exception as e:
+        logger.error(f"Error normalizing multi-line headers: {e}")
+        # Return original headers if normalization fails
+        return headers
+
+
+def _infer_sub_column_name(rows: List[List[str]], column_index: int, sub_column_number: int) -> Optional[str]:
+    """Infer sub-column name from data patterns."""
+    try:
+        # Look at first 5 rows for patterns
+        sample_size = min(5, len(rows))
+        column_values = []
+        
+        for i in range(sample_size):
+            if column_index < len(rows[i]):
+                value = str(rows[i][column_index]).strip()
+                if value:
+                    column_values.append(value.lower())
+        
+        if not column_values:
+            return None
+        
+        # Check for common patterns
+        if any('live' in v or 'count' in v or 'member' in v for v in column_values):
+            return "Lives"
+        elif any('pepm' in v or 'per member' in v for v in column_values):
+            return "PEPM"
+        elif any('subtotal' in v or 'sub total' in v for v in column_values):
+            return "Subtotal"
+        elif any('ind' in v or 'individual' in v for v in column_values):
+            return "IND"
+        elif any('hra' in v for v in column_values):
+            return "HRA"
+        elif any('total' in v for v in column_values):
+            return "Total"
+        elif any('amount' in v for v in column_values):
+            return "Amount"
+        elif any('rate' in v for v in column_values):
+            return "Rate"
+        
+        return None
+        
+    except Exception as e:
+        logger.warning(f"Error inferring sub-column name: {e}")
+        return None
+
+
+def _match_sub_column_pattern(position: int, total_sub_columns: int) -> Optional[str]:
+    """Match common sub-column naming patterns based on position."""
+    # Common 3-column patterns
+    if total_sub_columns == 3:
+        patterns_3col = [
+            ['Lives', 'PEPM', 'Subtotal'],
+            ['Count', 'Amount', 'Total'],
+            ['IND', 'HRA', 'Total'],
+            ['Quantity', 'Rate', 'Amount'],
+        ]
+        for pattern in patterns_3col:
+            if position <= len(pattern):
+                return pattern[position - 1]
+    
+    # Common 2-column patterns
+    elif total_sub_columns == 2:
+        patterns_2col = [
+            ['Count', 'Amount'],
+            ['Quantity', 'Total'],
+            ['Value', 'Total'],
+        ]
+        for pattern in patterns_2col:
+            if position <= len(pattern):
+                return pattern[position - 1]
+    
+    return None
 
 
 def detect_pdf_type(pdf_path: str) -> str:

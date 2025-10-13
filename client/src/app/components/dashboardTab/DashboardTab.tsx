@@ -304,8 +304,9 @@ export default function DashboardTab({ showAnalytics = false }: DashboardTabProp
             display_name: f.label,
             description: f.label
           }))}
+          selectedStatementDate={selectedStatementDate}
           onDataUpdate={(data) => {
-            setUploaded({ ...uploaded, tables: data.tables });
+            setUploaded((prev: any) => ({ ...prev, tables: data.tables }));
           }}
           onSubmit={async (finalData) => {
             try {

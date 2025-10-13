@@ -9,6 +9,8 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PYTHONHASHSEED=random \
+    MALLOC_ARENA_MAX=2 \
     # Model cache directories
     EASYOCR_MODULE_PATH=/tmp/model_cache/easyocr \
     DOCLING_CACHE_DIR=/tmp/model_cache/docling \
@@ -47,6 +49,8 @@ RUN apt-get update && apt-get install -y \
     libhdf5-hl-310 \
     python3-dev \
     curl \
+    htop \
+    procps \
     # Tesseract OCR dependencies
     tesseract-ocr \
     tesseract-ocr-eng \
@@ -94,8 +98,8 @@ RUN chmod +x start.sh
 # Expose port 8000
 EXPOSE 8000
 
-# Health check to ensure the application is running
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+# Health check optimized for Pro plan with long-running operations
+HEALTHCHECK --interval=60s --timeout=30s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
 # Command to run the startup script which checks credentials and starts the app

@@ -40,7 +40,7 @@ export interface ProgressState {
 }
 
 export interface ProgressMessage {
-  type: 'STEP_STARTED' | 'STEP_PROGRESS' | 'STEP_COMPLETED' | 'EXTRACTION_COMPLETE' | 'ERROR';
+  type: 'STEP_STARTED' | 'STEP_PROGRESS' | 'STEP_COMPLETED' | 'EXTRACTION_COMPLETE' | 'ERROR' | 'ping' | 'pong' | 'connection_established';
   stepIndex?: number;
   stepId?: string;
   message?: string;
@@ -48,6 +48,10 @@ export interface ProgressMessage {
   estimatedTime?: string;
   results?: any;
   error?: string;
+  timestamp?: string | number;
+  upload_id?: string;
+  session_id?: string;
+  connection_count?: number;
 }
 
 interface UseProgressWebSocketOptions {
@@ -163,8 +167,31 @@ export function useProgressWebSocket({
       ws.onmessage = (event) => {
         try {
           const data: ProgressMessage = JSON.parse(event.data);
+          
+          // Handle server ping/pong
+          if (data.type === 'ping') {
+            // Respond to server ping with pong
+            try {
+              ws.send(JSON.stringify({ type: 'pong', timestamp: Date.now() }));
+              console.log('🏓 Responded to server ping with pong');
+            } catch (error) {
+              console.error('Failed to send pong:', error);
+            }
+            return;
+          }
+          
+          if (data.type === 'pong') {
+            // Server responded to our ping
+            console.log('🏓 Received pong from server');
+            return;
+          }
+          
+          if (data.type === 'connection_established') {
+            console.log('✅ WebSocket connection confirmed by server');
+            return;
+          }
+          
           console.log('📨 WebSocket message:', data);
-
           handleProgressMessage(data);
         } catch (error) {
           console.error('Failed to parse WebSocket message:', error);

@@ -17,6 +17,7 @@ from app.services.gpt4o_vision_service import GPT4oVisionService
 from app.services.extractor_google_docai import GoogleDocAIExtractor
 from app.services.mistral.service import MistralDocumentAIService
 from app.services.excel_extraction_service import ExcelExtractionService
+from app.services.extraction_utils import normalize_statement_date, normalize_multi_line_headers
 
 logger = logging.getLogger(__name__)
 
@@ -304,6 +305,17 @@ class EnhancedExtractionService:
             }
         )
 
+        # CRITICAL: Normalize headers for smart extraction
+        from app.services.extraction_utils import normalize_multi_line_headers
+        for table in processed_data:
+            raw_headers = table.get('headers', []) or table.get('header', [])
+            rows = table.get('rows', [])
+            if raw_headers:
+                normalized_headers = normalize_multi_line_headers(raw_headers, rows)
+                table['headers'] = normalized_headers
+                table['header'] = normalized_headers
+                logger.info(f"Smart: Normalized headers: {raw_headers} -> {normalized_headers}")
+        
         # Final completion including UUID
         result = {
             'success': True,
@@ -365,6 +377,20 @@ class EnhancedExtractionService:
         
         # Stage 3: Post processing
         await progress_tracker.start_stage("post_processing", "Processing AI results")
+        await progress_tracker.update_progress("post_processing", 50, "Normalizing headers")
+        
+        # CRITICAL: Normalize headers for GPT4o extractions
+        if result.get('success') and result.get('tables'):
+            from app.services.extraction_utils import normalize_multi_line_headers
+            for table in result.get('tables', []):
+                raw_headers = table.get('headers', []) or table.get('header', [])
+                rows = table.get('rows', [])
+                if raw_headers:
+                    normalized_headers = normalize_multi_line_headers(raw_headers, rows)
+                    table['headers'] = normalized_headers
+                    table['header'] = normalized_headers
+                    logger.info(f"GPT4o: Normalized headers: {raw_headers} -> {normalized_headers}")
+        
         await progress_tracker.update_progress("post_processing", 100, "Results processed")
         
         # Send completion including UUID
@@ -410,6 +436,20 @@ class EnhancedExtractionService:
         
         # Stage 3: Post processing
         await progress_tracker.start_stage("post_processing", "Processing DocAI results")
+        await progress_tracker.update_progress("post_processing", 50, "Normalizing headers")
+        
+        # CRITICAL: Normalize headers for DocAI extractions
+        if result.get('success') and result.get('tables'):
+            from app.services.extraction_utils import normalize_multi_line_headers
+            for table in result.get('tables', []):
+                raw_headers = table.get('headers', []) or table.get('header', [])
+                rows = table.get('rows', [])
+                if raw_headers:
+                    normalized_headers = normalize_multi_line_headers(raw_headers, rows)
+                    table['headers'] = normalized_headers
+                    table['header'] = normalized_headers
+                    logger.info(f"DocAI: Normalized headers: {raw_headers} -> {normalized_headers}")
+        
         await progress_tracker.update_progress("post_processing", 100, "Results processed")
         
         # Send completion including UUID
@@ -506,11 +546,22 @@ class EnhancedExtractionService:
         
         # Apply table merging for identical headers
         if result.get('success') and result.get('tables'):
-            from app.services.extraction_utils import stitch_multipage_tables
+            from app.services.extraction_utils import stitch_multipage_tables, normalize_multi_line_headers
             original_tables = result.get('tables', [])
             merged_tables = stitch_multipage_tables(original_tables)
+            
+            # CRITICAL: Normalize headers AFTER table stitching
+            for table in merged_tables:
+                raw_headers = table.get('headers', []) or table.get('header', [])
+                rows = table.get('rows', [])
+                if raw_headers:
+                    normalized_headers = normalize_multi_line_headers(raw_headers, rows)
+                    table['headers'] = normalized_headers
+                    table['header'] = normalized_headers  # Keep both for compatibility
+                    logger.info(f"Normalized headers: {raw_headers} -> {normalized_headers}")
+            
             result['tables'] = merged_tables
-            logger.info(f"Mistral: Merged {len(original_tables)} tables into {len(merged_tables)} tables")
+            logger.info(f"Mistral: Merged {len(original_tables)} tables into {len(merged_tables)} tables with header normalization")
         
         await progress_tracker.update_progress("table_detection", 90, "Processing extracted data")
         await asyncio.sleep(0.1)
@@ -531,7 +582,10 @@ class EnhancedExtractionService:
             document_metadata['carrier_source'] = 'gpt4o_vision'
         
         if gpt_extraction_success and date_info:
-            document_metadata['statement_date'] = date_info.get('document_date')
+            # Apply date normalization to extract start date from ranges
+            raw_date = date_info.get('document_date')
+            normalized_date = normalize_statement_date(raw_date) if raw_date else None
+            document_metadata['statement_date'] = normalized_date
             document_metadata['date_confidence'] = date_info.get('date_confidence', 0.9)
             document_metadata['date_source'] = 'gpt4o_vision'
         
@@ -813,12 +867,16 @@ If you cannot find the information with high confidence, use null for the value 
                     'evidence': 'Extracted with regex fallback'
                 }
             
+            # Apply date normalization before returning
+            raw_date = metadata.get('statement_date')
+            normalized_date = normalize_statement_date(raw_date) if raw_date else None
+            
             # Return results
             result = {
                 'success': True,
                 'carrier_name': metadata.get('carrier_name'),
                 'carrier_confidence': metadata.get('carrier_confidence', 0.8),
-                'statement_date': metadata.get('statement_date'),
+                'statement_date': normalized_date,
                 'date_confidence': metadata.get('date_confidence', 0.8),
                 'evidence': metadata.get('evidence', ''),
                 'extraction_method': 'gpt4o_vision_first_page'

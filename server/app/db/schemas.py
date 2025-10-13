@@ -153,6 +153,7 @@ class StatementUploadUpdate(BaseModel):
     rejection_reason: Optional[str] = None
     plan_types: Optional[List[str]] = None
     selected_statement_date: Optional[Dict[str, Any]] = None
+    ai_intelligence: Optional[Dict[str, Any]] = None  # AI intelligence data (table selection, field mapping, plan detection)
     session_id: Optional[str] = None
     auto_save_enabled: Optional[bool] = None
 

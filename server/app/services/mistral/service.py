@@ -28,6 +28,11 @@ try:
     ML_AVAILABLE = True
 except ImportError:
     ML_AVAILABLE = False
+
+# Import normalization utilities
+from app.services.extraction_utils import normalize_multi_line_headers
+
+if not ML_AVAILABLE:
     logging.warning("ML libraries not available. Summary detection will use simplified approach.")
 
 try:
@@ -1305,9 +1310,14 @@ to handle both digital and scanned content with equal excellence.
             formatted_tables = []
             
             for table in parsed_data.tables:
+                # Apply header normalization to handle multi-line headers
+                raw_headers = table.headers
+                rows = table.rows
+                normalized_headers = normalize_multi_line_headers(raw_headers, rows)
+                
                 formatted_table = {
-                    "headers": table.headers,
-                    "rows": table.rows,
+                    "headers": normalized_headers,
+                    "rows": rows,
                     "extractor": "enhanced_mistral_document_ai_fixed",
                     "table_type": table.table_type,
                     "company_name": table.company_name,
@@ -1317,6 +1327,7 @@ to handle both digital and scanned content with equal excellence.
                         "extraction_method": "enhanced_mistral_document_ai_fixed",
                         "timestamp": datetime.now().isoformat(),
                         "confidence": table.quality_metrics.confidence_score,
+                        "headers_normalized": raw_headers != normalized_headers,
                         "quality_metrics": {
                             "extraction_completeness": table.quality_metrics.extraction_completeness,
                             "structure_accuracy": table.quality_metrics.structure_accuracy,
@@ -1472,16 +1483,22 @@ to handle both digital and scanned content with equal excellence.
             formatted_tables = []
             
             for i, table in enumerate(tables):
+                # Apply header normalization to handle multi-line headers
+                raw_headers = table.get("headers", [])
+                rows = table.get("rows", [])
+                normalized_headers = normalize_multi_line_headers(raw_headers, rows)
+                
                 formatted_table = {
-                    "headers": table.get("headers", []),
-                    "rows": table.get("rows", []),
+                    "headers": normalized_headers,
+                    "rows": rows,
                     "extractor": "enhanced_mistral_fallback",
                     "table_type": table.get("table_type", "commission_table"),
                     "metadata": {
                         "extraction_method": "enhanced_mistral_fallback",
                         "timestamp": datetime.now().isoformat(),
                         "confidence": 0.7,
-                        "fallback_reason": error_reason
+                        "fallback_reason": error_reason,
+                        "headers_normalized": raw_headers != normalized_headers
                     }
                 }
                 formatted_tables.append(formatted_table)

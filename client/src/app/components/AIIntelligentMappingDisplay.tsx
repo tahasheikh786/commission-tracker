@@ -29,6 +29,7 @@ interface AIIntelligentMappingDisplayProps {
       confidence: number;
       statistics?: Record<string, any>;
       learned_format_used?: boolean;
+      selected_table_index?: number;
     };
     plan_type_detection: {
       ai_enabled: boolean;
@@ -36,6 +37,13 @@ interface AIIntelligentMappingDisplayProps {
       confidence: number;
       multi_plan_document?: boolean;
       statistics?: Record<string, any>;
+    };
+    table_selection?: {
+      enabled: boolean;
+      selected_table_index: number;
+      confidence: number;
+      total_tables?: number;
+      user_selected?: boolean;
     };
     overall_confidence: number;
   };
@@ -66,7 +74,12 @@ export default function AIIntelligentMappingDisplay({
     return null;
   }
 
-  const { field_mapping, plan_type_detection, overall_confidence } = aiIntelligence;
+  const { field_mapping, plan_type_detection, table_selection, overall_confidence } = aiIntelligence;
+  
+  // Get the selected table index for display
+  const selectedTableIndex = table_selection?.selected_table_index ?? field_mapping.selected_table_index ?? 0;
+  const totalTables = table_selection?.total_tables ?? 1;
+  const hasMultipleTables = totalTables > 1;
 
   const toggleMappingExpand = (field: string) => {
     const newExpanded = new Set(expandedMappings);
@@ -128,12 +141,22 @@ export default function AIIntelligentMappingDisplay({
                 <div>
                   <h4 className="text-md font-semibold text-gray-900 dark:text-white">
                     Field Mapping Suggestions
+                    {hasMultipleTables && (
+                      <span className="ml-2 text-xs text-gray-500 dark:text-gray-400 font-normal">
+                        (from Table {selectedTableIndex + 1} of {totalTables})
+                      </span>
+                    )}
                   </h4>
                   <p className="text-xs text-gray-600 dark:text-gray-400">
                     {field_mapping.mappings.length} fields mapped with {formatConfidence(field_mapping.confidence)} confidence
                     {field_mapping.learned_format_used && (
                       <span className="ml-2 text-blue-600 dark:text-blue-400 font-medium">
                         ✓ Using learned format
+                      </span>
+                    )}
+                    {table_selection?.user_selected && (
+                      <span className="ml-2 text-purple-600 dark:text-purple-400 font-medium">
+                        ✓ User selected table
                       </span>
                     )}
                   </p>

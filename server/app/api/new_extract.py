@@ -378,13 +378,8 @@ async def extract_tables_smart(
         extracted_carrier = document_metadata.get('carrier_name')
         extracted_date = document_metadata.get('statement_date')
         
-        # Initialize AI intelligence data
-        ai_field_mapping_data = None
+        # Initialize AI plan type data
         ai_plan_type_data = None
-        
-        # Emit WebSocket step: AI Mapping
-        if upload_id:
-            await connection_manager.emit_upload_step(upload_id, 'ai_mapping', 60)
         
         # Look up learned formats if carrier was detected
         format_learning_data = extraction_result.get('format_learning', {})
@@ -444,13 +439,81 @@ async def extract_tables_smart(
                         # Update company_id for all subsequent operations
                         company_id = str(carrier.id)
                     
-                    # Get first table for format matching
-                    first_table = extraction_result['tables'][0]
-                    headers = first_table.get('header', []) or first_table.get('headers', [])
+                    # ===== INTELLIGENT TABLE SELECTION =====
+                    # Use AI to select the best table for field mapping when multiple tables exist
+                    selected_table_index = 0
+                    table_selection_data = None
+                    
+                    if len(extraction_result['tables']) > 1:
+                        logger.info(f"🔍 Multiple tables detected ({len(extraction_result['tables'])}), analyzing for field mapping suitability")
+                        
+                        try:
+                            from app.services.table_suitability_service import TableSuitabilityService
+                            table_suitability_service = TableSuitabilityService()
+                            
+                            # Analyze all tables for mapping suitability
+                            table_analysis = await table_suitability_service.analyze_tables_for_mapping(
+                                tables=extraction_result['tables'],
+                                document_context={
+                                    'carrier_name': carrier.name,
+                                    'statement_date': extracted_date,
+                                    'document_type': 'commission_statement'
+                                }
+                            )
+                            
+                            if table_analysis.get('success'):
+                                selected_table_index = table_analysis.get('recommended_table_index', 0)
+                                table_selection_data = {
+                                    "enabled": True,
+                                    "selected_table_index": selected_table_index,
+                                    "confidence": table_analysis.get('confidence', 0.0),
+                                    "requires_user_confirmation": table_analysis.get('requires_user_confirmation', False),
+                                    "table_analysis": table_analysis.get('table_analysis', []),
+                                    "analysis_metadata": table_analysis.get('analysis_metadata', {}),
+                                    "total_tables": len(extraction_result['tables'])
+                                }
+                                logger.info(f"✅ Table Selection: Selected table {selected_table_index} with {table_analysis.get('confidence', 0):.2f} confidence")
+                            else:
+                                logger.warning(f"⚠️ Table suitability analysis failed: {table_analysis.get('error', 'Unknown error')}")
+                                # Fallback to first table
+                                selected_table_index = 0
+                                table_selection_data = {
+                                    "enabled": False,
+                                    "selected_table_index": 0,
+                                    "error": table_analysis.get('error', 'Analysis failed'),
+                                    "fallback_used": True
+                                }
+                                
+                        except Exception as table_selection_error:
+                            logger.error(f"❌ Table selection error: {table_selection_error}")
+                            # Fallback to first table
+                            selected_table_index = 0
+                            table_selection_data = {
+                                "enabled": False,
+                                "selected_table_index": 0,
+                                "error": str(table_selection_error),
+                                "fallback_used": True
+                            }
+                    else:
+                        # Single table - use it directly
+                        logger.info("📊 Single table detected, using it for field mapping")
+                        table_selection_data = {
+                            "enabled": False,
+                            "selected_table_index": 0,
+                            "confidence": 1.0,
+                            "single_table": True,
+                            "total_tables": 1
+                        }
+                    
+                    # Get the selected table for format matching and AI mapping
+                    selected_table = extraction_result['tables'][selected_table_index]
+                    headers = selected_table.get('header', []) or selected_table.get('headers', [])
+                    
+                    logger.info(f"🎯 Using table {selected_table_index} for field mapping with {len(headers)} headers")
                     
                     # Generate table structure
                     table_structure = {
-                        "row_count": len(first_table.get('rows', [])),
+                        "row_count": len(selected_table.get('rows', [])),
                         "column_count": len(headers),
                         "has_financial_data": any(keyword in ' '.join(headers).lower() for keyword in [
                             'premium', 'commission', 'billed', 'group', 'client', 'invoice',
@@ -478,83 +541,58 @@ async def extract_tables_smart(
                     else:
                         logger.info(f"🎯 Format Learning: No matching format found (score: {match_score})")
                         
-                    # ===== AI INTELLIGENT FIELD MAPPING =====
-                    # Get AI-powered field mapping suggestions
+                    # ===== AI PLAN TYPE DETECTION (DURING EXTRACTION) =====
+                    # Plan type detection happens here, but field mapping happens after table editing
                     try:
-                        from app.services.ai_field_mapping_service import AIFieldMappingService
                         from app.services.ai_plan_type_detection_service import AIPlanTypeDetectionService
                         
-                        ai_mapping_service = AIFieldMappingService()
                         ai_plan_service = AIPlanTypeDetectionService()
                         
-                        if ai_mapping_service.is_available() and first_table:
-                            logger.info("🤖 AI Intelligence: Generating smart field mappings and plan type detection")
+                        if ai_plan_service.is_available() and selected_table:
+                            logger.info("🔍 AI Plan Type Detection: Detecting plan types during extraction")
                             
-                            # Get AI field mapping suggestions
-                            ai_field_mapping_result = await ai_mapping_service.get_intelligent_field_mappings(
+                            # Get AI plan type detection
+                            ai_plan_result = await ai_plan_service.detect_plan_types(
                                 db=db,
-                                extracted_headers=headers,
-                                table_sample_data=first_table.get('rows', [])[:5],  # First 5 rows
-                                carrier_id=carrier.id,
                                 document_context={
                                     'carrier_name': carrier.name,
                                     'statement_date': extracted_date,
                                     'document_type': 'commission_statement'
-                                }
+                                },
+                                table_headers=headers,
+                                table_sample_data=selected_table.get('rows', [])[:5],
+                                extracted_carrier=carrier.name
                             )
                             
-                            if ai_field_mapping_result.get('success'):
-                                ai_field_mapping_data = {
+                            if ai_plan_result.get('success'):
+                                ai_plan_type_data = {
                                     "ai_enabled": True,
-                                    "mappings": ai_field_mapping_result.get('mappings', []),
-                                    "unmapped_fields": ai_field_mapping_result.get('unmapped_fields', []),
-                                    "confidence": ai_field_mapping_result.get('overall_confidence', 0.0),
-                                    "statistics": ai_field_mapping_result.get('mapping_statistics', {}),
-                                    "learned_format_used": ai_field_mapping_result.get('learned_format_used', False)
+                                    "detected_plan_types": ai_plan_result.get('detected_plan_types', []),
+                                    "confidence": ai_plan_result.get('overall_confidence', 0.0),
+                                    "multi_plan_document": ai_plan_result.get('multi_plan_document', False),
+                                    "statistics": ai_plan_result.get('detection_statistics', {})
                                 }
-                                logger.info(f"✅ AI Field Mapping: {len(ai_field_mapping_result.get('mappings', []))} mappings with {ai_field_mapping_result.get('overall_confidence', 0):.2f} confidence")
-                            
-                            # Get AI plan type detection
-                            if ai_plan_service.is_available():
-                                ai_plan_result = await ai_plan_service.detect_plan_types(
-                                    db=db,
-                                    document_context={
-                                        'carrier_name': carrier.name,
-                                        'statement_date': extracted_date,
-                                        'document_type': 'commission_statement'
-                                    },
-                                    table_headers=headers,
-                                    table_sample_data=first_table.get('rows', [])[:5],
-                                    extracted_carrier=carrier.name
-                                )
-                                
-                                if ai_plan_result.get('success'):
-                                    ai_plan_type_data = {
-                                        "ai_enabled": True,
-                                        "detected_plan_types": ai_plan_result.get('detected_plan_types', []),
-                                        "confidence": ai_plan_result.get('overall_confidence', 0.0),
-                                        "multi_plan_document": ai_plan_result.get('multi_plan_document', False),
-                                        "statistics": ai_plan_result.get('detection_statistics', {})
-                                    }
-                                    
-                                    # Emit WebSocket step: Plan Detection Complete
-                                    if upload_id:
-                                        await connection_manager.emit_upload_step(upload_id, 'plan_detection', 80)
-                                    logger.info(f"✅ AI Plan Detection: {len(ai_plan_result.get('detected_plan_types', []))} plan types with {ai_plan_result.get('overall_confidence', 0):.2f} confidence")
+                                logger.info(f"✅ AI Plan Detection: {len(ai_plan_result.get('detected_plan_types', []))} plan types with {ai_plan_result.get('overall_confidence', 0):.2f} confidence")
+                            else:
+                                ai_plan_type_data = None
+                        else:
+                            ai_plan_type_data = None
                         
                     except Exception as ai_error:
-                        logger.warning(f"AI intelligence generation failed (non-critical): {str(ai_error)}")
-                        # AI is optional, don't fail the extraction
-                        pass
+                        logger.warning(f"AI plan type detection failed (non-critical): {str(ai_error)}")
+                        ai_plan_type_data = None
+                    
+                    # Field mapping will be triggered after table review and editing
+                    logger.info("⏭️  AI field mapping will be triggered after table review and editing")
                     
             except Exception as e:
                 logger.warning(f"Format learning lookup failed: {str(e)}")
         
         # Emit WebSocket step: Finalizing
         if upload_id:
-            await connection_manager.emit_upload_step(upload_id, 'finalizing', 95)
+            await connection_manager.emit_upload_step(upload_id, 'finalizing', 90)
         
-        # Prepare client response with AI intelligence
+        # Prepare client response WITH plan type detection (field mapping happens after editing)
         client_response = {
             "success": True,
             "upload_id": str(upload_id_uuid),
@@ -573,21 +611,18 @@ async def extract_tables_smart(
             "extracted_date": extracted_date,
             "document_metadata": document_metadata,
             
-            # ===== AI INTELLIGENCE DATA =====
+            # ===== AI INTELLIGENCE - PLAN TYPE DETECTED, FIELD MAPPING AFTER EDITING =====
+            # Plan type detection happens during extraction
+            # Field mapping will be triggered when user clicks "Continue to Field Mapping"
             "ai_intelligence": {
-                "enabled": ai_field_mapping_data is not None or ai_plan_type_data is not None,
-                "field_mapping": ai_field_mapping_data or {"ai_enabled": False},
+                "enabled": ai_plan_type_data is not None,
+                "field_mapping": {"ai_enabled": False},  # Will be generated after table editing
                 "plan_type_detection": ai_plan_type_data or {"ai_enabled": False},
-                "overall_confidence": (
-                    (ai_field_mapping_data.get('confidence', 0.0) + ai_plan_type_data.get('confidence', 0.0)) / 2
-                    if ai_field_mapping_data and ai_plan_type_data
-                    else ai_field_mapping_data.get('confidence', 0.0) if ai_field_mapping_data
-                    else ai_plan_type_data.get('confidence', 0.0) if ai_plan_type_data
-                    else 0.0
-                )
+                "table_selection": table_selection_data or {"enabled": False},
+                "overall_confidence": ai_plan_type_data.get('confidence', 0.0) if ai_plan_type_data else 0.0
             },
             
-            "message": f"Successfully extracted {len(extraction_result.get('tables', []))} tables using {extraction_method} method with AI intelligence"
+            "message": f"Successfully extracted {len(extraction_result.get('tables', []))} tables using {extraction_method} method. AI field mapping will be performed after table review."
         }
         
         # Record user contribution

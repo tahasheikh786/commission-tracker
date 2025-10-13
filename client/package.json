@@ -28,12 +28,14 @@
     "lucide-react": "^0.525.0",
     "next": "15.3.4",
     "pdf-parse": "^1.1.1",
+    "pdfjs-dist": "4.4.168",
     "postcss": "^8.5.6",
     "react": "^19.0.0",
     "react-chartjs-2": "^5.3.0",
     "react-dom": "^19.0.0",
     "react-dropzone": "^14.3.8",
     "react-hot-toast": "^2.5.2",
+    "react-pdf": "^10.2.0",
     "react-select": "^5.10.1",
     "recharts": "^3.1.2",
     "tailwind-merge": "^3.3.1",
@@ -44,6 +46,7 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3",
     "@types/formidable": "^3.4.5",
+    "file-loader": "^6.2.0",
     "@types/js-cookie": "^3.0.6",
     "@types/node": "^20",
     "@types/react": "^19",
@@ -52,5 +55,8 @@
     "eslint": "^9",
     "eslint-config-next": "15.3.4",
     "typescript": "^5"
+  },
+  "overrides": {
+    "pdfjs-dist": "4.4.168"
   }
 }

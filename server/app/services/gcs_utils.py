@@ -221,14 +221,14 @@ class GCSService:
     
     def generate_signed_url(self, gcs_key: str, expiration_hours: int = 1) -> Optional[str]:
         """
-        Generate a signed URL for a file in GCS.
+        Generate a signed URL for a file in GCS with proper headers for PDF inline viewing.
         
         Args:
             gcs_key: GCS object key (path in bucket)
             expiration_hours: Hours until the URL expires
             
         Returns:
-            str: Signed URL, or None if generation failed
+            str: Signed URL with proper response headers, or None if generation failed
         """
         if not self.is_available():
             logger.error("GCS not available or not properly configured")
@@ -243,11 +243,20 @@ class GCSService:
                 logger.error(f"File not found in GCS: {gcs_key}")
                 return None
             
-            # Generate signed URL
-            expiration = datetime.utcnow() + timedelta(hours=expiration_hours)
-            url = blob.generate_signed_url(expiration=expiration)
+            # Determine content type based on file extension
+            content_type = 'application/pdf' if gcs_key.lower().endswith('.pdf') else 'application/octet-stream'
             
-            logger.info(f"✅ Generated signed URL for GCS file: {gcs_key}")
+            # Generate signed URL with proper response headers for PDF inline viewing
+            expiration = datetime.utcnow() + timedelta(hours=expiration_hours)
+            url = blob.generate_signed_url(
+                version="v4",
+                expiration=expiration,
+                method="GET",
+                response_type=content_type,
+                response_disposition='inline'  # Critical for inline viewing instead of download
+            )
+            
+            logger.info(f"✅ Generated signed URL for GCS file with inline headers: {gcs_key}")
             return url
             
         except NotFound:

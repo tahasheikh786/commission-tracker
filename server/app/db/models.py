@@ -100,6 +100,7 @@ class StatementUpload(Base):
     rejection_reason = Column(Text)
     plan_types = Column(JSON)  # Store list of plan types (Medical, Dental, etc)
     selected_statement_date = Column(JSON)  # Store selected statement date from TableEditor
+    ai_intelligence = Column(JSON)  # Store AI intelligence data (table selection, field mapping, plan detection)
     
     # Timestamps
     last_updated = Column(DateTime, server_default=text('now()'), onupdate=text('now()'), nullable=False)

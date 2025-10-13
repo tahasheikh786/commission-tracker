@@ -170,15 +170,11 @@ export default function CarrierTab() {
   const handleDelete = (ids: string[]) => {
     if (!selected) return;
     setDeletingStatements(true);
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/companies/${selected.id}/statements/`, {
-      method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ statement_ids: ids }),
+    axios.delete(`${process.env.NEXT_PUBLIC_API_URL}/api/companies/${selected.id}/statements/`, {
+      data: { statement_ids: ids },
+      withCredentials: true  // CRITICAL FIX: Ensure cookies are sent with DELETE request
     })
-      .then(res => {
-        if (!res.ok) throw new Error('Failed to delete statements');
+      .then(() => {
         setStatements(statements.filter(statement => !ids.includes(statement.id)));
         toast.success('Statements deleted successfully!');
         // Trigger global dashboard refresh after successful deletion
@@ -186,7 +182,8 @@ export default function CarrierTab() {
       })
       .catch((error) => {
         console.error('Delete statements error:', error);
-        toast.error('Error deleting statements.');
+        const errorMessage = error.response?.data?.detail || 'Error deleting statements.';
+        toast.error(errorMessage);
       })
       .finally(() => {
         setDeletingStatements(false);
@@ -195,25 +192,20 @@ export default function CarrierTab() {
 
   const handleCarrierDelete = (ids: string[]) => {
     setDeletingCarriers(true);
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/companies/`, {
-      method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ company_ids: ids }),
+    axios.delete(`${process.env.NEXT_PUBLIC_API_URL}/api/companies/`, {
+      data: { company_ids: ids },
+      withCredentials: true  // CRITICAL FIX: Ensure cookies are sent with DELETE request
     })
-      .then(async res => {
-        if (!res.ok) {
-          const errorData = await res.json();
-          throw new Error(errorData.detail || 'Failed to delete carriers');
-        }
-        const result = await res.json();
+      .then((response) => {
         setCarriers(carriers.filter(carrier => !ids.includes(carrier.id)));
-        toast.success(result.message || 'Carriers deleted successfully!');
+        toast.success(response.data.message || 'Carriers deleted successfully!');
+        // Trigger global dashboard refresh after successful deletion
+        triggerDashboardRefresh();
       })
       .catch((error) => {
         console.error('Delete error:', error);
-        toast.error(error.message || 'Error deleting carriers.');
+        const errorMessage = error.response?.data?.detail || 'Error deleting carriers.';
+        toast.error(errorMessage);
       })
       .finally(() => {
         setDeletingCarriers(false);

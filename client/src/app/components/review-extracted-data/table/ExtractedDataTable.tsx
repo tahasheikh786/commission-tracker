@@ -149,12 +149,12 @@ export default function ExtractedDataTable({
       </div>
 
       {/* Table */}
-      <div className="flex-1 overflow-auto">
-        <table className="w-full min-w-full">
+      <div className="flex-1 overflow-x-auto overflow-y-auto">
+        <table className="w-max min-w-full">
           <thead className="sticky top-0 z-10 bg-slate-50">
             <tr>
               {/* Select All Checkbox */}
-              <th className="px-4 py-3 text-left w-12 border-b border-gray-200">
+              <th className="px-4 py-3 text-left w-12 border-b border-gray-200 sticky left-0 bg-slate-50 z-20">
                 <TableRowSelector
                   isSelected={selection.isAllSelected}
                   isIndeterminate={selection.isIndeterminate}
@@ -167,7 +167,7 @@ export default function ExtractedDataTable({
               {headers.map((header, colIdx) => (
                 <th
                   key={colIdx}
-                  className="px-3 py-3 text-left text-xs font-medium text-gray-900 border-b border-gray-200 whitespace-nowrap relative group"
+                  className="px-3 py-3 text-left text-xs font-medium text-gray-900 border-b border-gray-200 whitespace-nowrap relative group min-w-[150px]"
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span className="truncate">{header}</span>
