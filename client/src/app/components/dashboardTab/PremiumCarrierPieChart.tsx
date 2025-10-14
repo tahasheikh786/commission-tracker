@@ -282,7 +282,18 @@ export default function PremiumCarrierPieChart({ data, loading, year }: PremiumC
                     }}
                   />
                 )}
-                <Pie ref={chartRef} data={chartData} options={chartOptions} />
+                <Pie ref={chartRef} data={chartData} options={{
+                      ...chartOptions,
+                      layout: {
+                        padding: {
+                          top: 10,
+                          bottom: 10,
+                          left: 10,
+                          right: 10,
+                        }
+                      },
+                      maintainAspectRatio: false,
+                    }}/>
               </div>
             </div>
           </div>

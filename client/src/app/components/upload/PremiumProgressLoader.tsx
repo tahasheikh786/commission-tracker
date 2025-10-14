@@ -40,15 +40,22 @@ export const UPLOAD_STEPS: UploadStep[] = [
     estimatedDuration: 7000
   },
   {
-    id: 'plan_detection',
+    id: 'ai_mapping',
     order: 4,
+    title: 'AI Field Mapping',
+    description: 'Intelligently mapping database fields...',
+    estimatedDuration: 3000
+  },
+  {
+    id: 'plan_detection',
+    order: 5,
     title: 'Detecting Plan Type',
     description: 'Identifying insurance plan category...',
     estimatedDuration: 2000
   },
   {
     id: 'finalizing',
-    order: 5,
+    order: 6,
     title: 'Finalizing',
     description: 'Preparing your data for review...',
     estimatedDuration: 1000
@@ -83,12 +90,12 @@ export default function PremiumProgressLoader({
   if (!isVisible) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/10 backdrop-blur-sm flex items-center justify-center z-50 animate-fadeIn">
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4 animate-slideIn">
+    <div className="fixed inset-0 bg-black/10 backdrop-blur-sm flex items-center justify-center z-50 animate-fadeIn p-4">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4 animate-slideIn overflow-visible">
         
         {/* Main Progress Circle */}
-        <div className="flex flex-col items-center mb-8">
-          <div className="relative w-24 h-24 mb-4">
+        <div className="flex flex-col items-center mb-8 p-4">
+          <div className="relative w-24 h-24 mb-4 overflow-visible">
             <CircularProgress value={animatedProgress} />
             <div className="absolute inset-0 flex items-center justify-center">
               <span className="text-lg font-semibold text-gray-800 dark:text-white">
@@ -133,7 +140,7 @@ function CircularProgress({ value }: { value: number }) {
   const strokeDashoffset = circumference - (value / 100) * circumference;
 
   return (
-    <svg className="w-full h-full transform -rotate-90">
+    <svg className="w-full h-full transform -rotate-90 overflow-visible" viewBox="0 0 100 100">
       {/* Background circle */}
       <circle
         cx="48"

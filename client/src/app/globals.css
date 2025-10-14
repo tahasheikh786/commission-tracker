@@ -228,6 +228,15 @@ body,
   @apply shadow-sm dark:shadow-slate-900/20;
 }
 
+/* Company Table Override - More specific to override global styles */
+.company-table tbody tr {
+  @apply hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors duration-200;
+}
+
+.company-table tbody tr:hover {
+  @apply shadow-sm dark:shadow-slate-900/20;
+}
+
 /* Premium Status Badges */
 .badge {
   @apply inline-flex items-center rounded-full px-3 py-1 text-xs font-medium;
@@ -639,6 +648,7 @@ body,
 [data-close-button="true"] {
   @apply bg-background border-border text-foreground hover:bg-muted;
 }
+
 
 /* ============================================================================
    TABLE Z-INDEX AND POSITIONING FIXES

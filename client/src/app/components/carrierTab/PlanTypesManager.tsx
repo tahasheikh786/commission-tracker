@@ -226,7 +226,7 @@ export default function PlanTypesManager() {
       {/* Plan Types Table */}
       <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-lg overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="w-full company-table">
             <thead className="bg-slate-50 dark:bg-slate-700/50">
               <tr>
                 <th className="px-6 py-4 text-left text-sm font-bold text-slate-800 dark:text-slate-200">Display Name</th>
