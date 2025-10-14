@@ -1,133 +1,71 @@
 """
-PDF Proxy API - ENHANCED VERSION WITH CSP AND HEADER FIXES
-Based on research from 150+ production implementations
-Fixes: Chrome 80+ CSP violations, Content-Disposition issues, X-Frame-Options conflicts, blob URL rendering
+Minimal PDF Proxy for CORS-compliant PDF viewing
+Proxies GCS signed URLs through backend to avoid CORS issues
 """
 
 from fastapi import APIRouter, HTTPException, Query, Request
-from fastapi.responses import StreamingResponse, Response
-import io
+from fastapi.responses import Response
+import httpx
 import logging
-from app.services.gcs_utils import gcs_service
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 @router.get("/pdf-proxy")
-async def proxy_pdf(request: Request, gcs_key: str = Query(..., description="GCS key for the PDF file")):
+async def proxy_pdf(url: str = Query(..., description="GCS signed URL to proxy")):
     """
-    Enhanced PDF proxy with all 2024 Chrome compatibility fixes.
-    Addresses: CSP violations, Content-Disposition, X-Frame-Options, Chrome blob issues.
+    Simple proxy that fetches PDF from GCS signed URL and returns it with CORS headers.
+    This avoids browser CORS restrictions when loading PDFs directly from GCS.
     """
     try:
-        # Validate GCS key
-        if not gcs_key or not gcs_key.strip():
-            raise HTTPException(status_code=400, detail="Missing or invalid gcs_key parameter")
+        if not url or not url.strip():
+            raise HTTPException(status_code=400, detail="Missing or invalid url parameter")
         
-        logger.info(f"🔄 Fetching PDF from GCS: {gcs_key}")
+        # Validate it's a GCS URL
+        if "storage.googleapis.com" not in url:
+            raise HTTPException(status_code=400, detail="Invalid URL: must be a Google Cloud Storage URL")
         
-        # Check if GCS service is available
-        if not gcs_service.is_available():
-            logger.error("❌ GCS service is not available")
-            raise HTTPException(status_code=503, detail="Storage service unavailable")
+        logger.info(f"🔄 Proxying PDF from: {url[:100]}...")
         
-        # Check if file exists first
-        if not gcs_service.file_exists(gcs_key):
-            logger.error(f"❌ PDF not found in GCS: {gcs_key}")
-            raise HTTPException(status_code=404, detail="PDF file not found")
-        
-        # Get file metadata for validation
-        metadata = gcs_service.get_file_metadata(gcs_key)
-        if not metadata:
-            raise HTTPException(status_code=404, detail="Could not retrieve file metadata")
-        
-        # Validate it's a PDF file
-        content_type = metadata.get('content_type', '')
-        if not content_type.startswith('application/pdf'):
-            logger.error(f"❌ File is not a PDF: {content_type}")
-            raise HTTPException(status_code=400, detail=f"File is not a PDF (type: {content_type})")
-        
-        # Download file to memory
-        try:
-            # Get blob directly to memory
-            blob = gcs_service.bucket.blob(gcs_key)
-            pdf_bytes = blob.download_as_bytes()
+        # Fetch PDF from GCS signed URL
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+            response = await client.get(url)
             
-            if not pdf_bytes:
-                raise HTTPException(status_code=404, detail="Empty PDF file")
+            if response.status_code != 200:
+                logger.error(f"❌ Failed to fetch PDF: HTTP {response.status_code}")
+                raise HTTPException(
+                    status_code=response.status_code,
+                    detail=f"Failed to fetch PDF from storage: {response.status_code}"
+                )
             
-            logger.info(f"✅ PDF downloaded successfully: {len(pdf_bytes)} bytes")
-            
-            # Get origin for CSP
-            origin = request.headers.get("origin", "*")
-            
-            # CRITICAL: Headers that fix all known Chrome 2024 issues
-            response_headers = {
-                # Fix CSP violations - allow blob URLs and frames (Chrome 80+ requirement)
-                "Content-Security-Policy": f"frame-src 'self' blob: data: {origin}; default-src 'self' blob: data: {origin}; object-src 'self' blob: data:;",
-                
-                # Essential CORS headers with credentials support
-                "Access-Control-Allow-Origin": origin if origin != "*" else "*",
-                "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
-                "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With, Origin, Accept, Sec-Fetch-Dest, Sec-Fetch-Mode, Sec-Fetch-Site",
-                "Access-Control-Allow-Credentials": "true",
-                
-                # CRITICAL: Force inline display (fixes download issue)
-                "Content-Disposition": "inline; filename=\"document.pdf\"",
-                
-                # PDF-specific headers
-                "Content-Type": "application/pdf",
-                "Content-Length": str(len(pdf_bytes)),
-                
-                # DO NOT set X-Frame-Options - it conflicts with iframe embedding
-                # Commented out: "X-Frame-Options": "SAMEORIGIN",
-                
-                # Cache headers for performance
-                "Cache-Control": "public, max-age=3600, immutable",
-                "ETag": metadata.get('etag', ''),
-                
-                # Security headers (but iframe-friendly)
-                "X-Content-Type-Options": "nosniff",
-                "Referrer-Policy": "strict-origin-when-cross-origin",
-                
-                # CRITICAL: Chrome-specific PDF display headers
-                "Accept-Ranges": "bytes",
-                "Vary": "Accept-Encoding, Origin",
-                
-                # 🔥 CHROME 2024 ENHANCED HEADERS:
-                "Cross-Origin-Embedder-Policy": "unsafe-none",
-                "Cross-Origin-Opener-Policy": "same-origin-allow-popups",
-            }
-            
-            # Return PDF with all compatibility headers
-            return StreamingResponse(
-                io.BytesIO(pdf_bytes),
+            # Return PDF with CORS headers
+            return Response(
+                content=response.content,
                 media_type="application/pdf",
-                headers=response_headers
+                headers={
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+                    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+                    "Content-Disposition": "inline; filename=\"document.pdf\"",
+                    "Cache-Control": "public, max-age=3600",
+                }
             )
-            
-        except Exception as download_error:
-            logger.error(f"❌ Failed to download PDF from GCS: {download_error}")
-            raise HTTPException(status_code=500, detail="Failed to download PDF from storage")
             
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Unexpected error in PDF proxy: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        logger.error(f"❌ PDF proxy error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to proxy PDF: {str(e)}")
 
 @router.options("/pdf-proxy")
-async def pdf_proxy_options(request: Request):
-    """Enhanced CORS preflight handler with Chrome 2024 headers"""
-    origin = request.headers.get("origin", "*")
-    
+async def pdf_proxy_options():
+    """CORS preflight handler"""
     return Response(
         headers={
-            "Access-Control-Allow-Origin": origin if origin != "*" else "*",
+            "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With, Origin, Accept, Sec-Fetch-Dest, Sec-Fetch-Mode, Sec-Fetch-Site",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization",
             "Access-Control-Max-Age": "86400",
-            "Access-Control-Allow-Credentials": "true",
         }
     )
 

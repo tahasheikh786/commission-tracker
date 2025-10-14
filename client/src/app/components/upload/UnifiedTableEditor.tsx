@@ -15,7 +15,7 @@ import { FieldMapping, PlanTypeDetection, getEnhancedExtractionAnalysis } from '
 import ActionBar, { MappingStats, ViewMode } from './ActionBar';
 import EnhancedAIMapper from '../review-extracted-data/EnhancedAIMapper';
 import { ExtractedDataTable } from '../review-extracted-data';
-import DynamicPDFViewer from './DynamicPDFViewer';
+import PDFViewer from './PDFViewer';
 import '../review-extracted-data/styles.css';
 import PremiumProgressLoader, { UploadStep } from './PremiumProgressLoader';
 import { ArrowRight, Map, FileText, Table2 } from 'lucide-react';
@@ -103,6 +103,18 @@ export default function UnifiedTableEditor({
   const [showSummaryRows, setShowSummaryRows] = useState(true);
   const [isLoadingAIMapping, setIsLoadingAIMapping] = useState(false);
   const [aiIntelligence, setAiIntelligence] = useState(extractedData.ai_intelligence);
+  
+  // ===== EDITABLE METADATA STATE =====
+  const [editedCarrierName, setEditedCarrierName] = useState(
+    extractedData?.carrierName || extractedData?.extracted_carrier || ''
+  );
+  const [editedPlanType, setEditedPlanType] = useState(
+    extractedData?.ai_intelligence?.plan_type_detection?.detected_plan_types?.[0]?.plan_type || ''
+  );
+  const [editedStatementDate, setEditedStatementDate] = useState(
+    extractedData?.statementDate || extractedData?.extracted_date || ''
+  );
+  const [isEditingMetadata, setIsEditingMetadata] = useState(false);
 
   // Get AI mappings from state (updated after "Continue to Field Mapping" is clicked)
   const aiMappings = aiIntelligence?.field_mapping?.mappings || [];
@@ -258,10 +270,10 @@ export default function UnifiedTableEditor({
         const headers = currentTable?.header || currentTable?.headers || [];
         const rows = currentTable?.rows || [];
         
-        // Prepare data for AI field mapping API
+        // Prepare data for AI field mapping API (use edited values if available)
         const carrier_id = extractedData?.carrier_id || extractedData?.company_id;
-        const extracted_carrier = extractedData?.carrierName || extractedData?.extracted_carrier;
-        const statement_date = extractedData?.statementDate || extractedData?.extracted_date;
+        const extracted_carrier = editedCarrierName || extractedData?.carrierName || extractedData?.extracted_carrier;
+        const statement_date = editedStatementDate || extractedData?.statementDate || extractedData?.extracted_date;
         
         console.log('🤖 Triggering AI field mapping with edited table data:', {
           headers_count: headers.length,
@@ -327,10 +339,25 @@ export default function UnifiedTableEditor({
         
       } catch (error: any) {
         console.error('❌ AI field mapping failed:', error);
-        toast.error('Failed to generate AI field mappings. You can still manually map fields.', { 
-          id: 'ai-mapping',
-          duration: 5000
-        });
+        
+        // Check if it's an authentication error
+        if (error.message?.includes('401') || error.message?.toLowerCase().includes('unauthorized')) {
+          toast.error('⚠️ Session expired. Please refresh the page and try again.', { 
+            id: 'ai-mapping',
+            duration: 7000
+          });
+          // Give user time to see the message before potentially redirecting
+          setTimeout(() => {
+            if (window.location.pathname !== '/auth') {
+              window.location.href = '/auth';
+            }
+          }, 3000);
+        } else {
+          toast.error('Failed to generate AI field mappings. You can still manually map fields.', { 
+            id: 'ai-mapping',
+            duration: 5000
+          });
+        }
         
         // Continue with empty AI intelligence
         setAiIntelligence({
@@ -464,14 +491,14 @@ export default function UnifiedTableEditor({
         firstTableRowCount: currentTablesSnapshot[0]?.rows?.length || 0
       });
       
-      // Log the exact payload being sent to backend
+      // Log the exact payload being sent to backend (use edited values)
       const saveTablesPayload = {
         upload_id: upload_id,
         tables: currentTablesSnapshot,
         company_id: carrier_id || company_id,
         selected_statement_date: statementDateObj,
-        extracted_carrier: extractedData?.carrierName || extractedData?.extracted_carrier,
-        extracted_date: extractedData?.extracted_date
+        extracted_carrier: editedCarrierName || extractedData?.carrierName || extractedData?.extracted_carrier,
+        extracted_date: editedStatementDate || extractedData?.extracted_date
       };
       
       console.log('📤 Sending save-tables request:', {
@@ -491,9 +518,9 @@ export default function UnifiedTableEditor({
       
       console.log('✅ Save-tables response:', saveTablesResponse.data);
 
-      // ✅ CRITICAL: Get updated carrier_id from response
+      // ✅ CRITICAL: Get updated carrier_id from response (use edited value)
       const updatedCarrierId = saveTablesResponse.data?.carrier_id || carrier_id || company_id;
-      const updatedCarrierName = saveTablesResponse.data?.carrier_name || extractedData?.carrierName || extractedData?.extracted_carrier;
+      const updatedCarrierName = saveTablesResponse.data?.carrier_name || editedCarrierName || extractedData?.carrierName || extractedData?.extracted_carrier;
       
       setApprovalProgress(40);
 
@@ -509,8 +536,8 @@ export default function UnifiedTableEditor({
             tables: currentTablesSnapshot,
             company_id: updatedCarrierId, // Use updated carrier_id from save response
             selected_statement_date: statementDateObj,
-            extracted_carrier: updatedCarrierName,
-            extracted_date: extractedData?.extracted_date
+            extracted_carrier: updatedCarrierName, // Already uses edited value
+            extracted_date: editedStatementDate || extractedData?.extracted_date
           },
           { withCredentials: true }
         );
@@ -530,10 +557,12 @@ export default function UnifiedTableEditor({
         source_field: extractedField
       }));
 
-      // Get plan types from AI intelligence state
-      const planTypes = aiIntelligence?.plan_type_detection?.detected_plan_types?.map(
-        (pt: any) => pt.plan_type
-      ) || [];
+      // Get plan types from AI intelligence state (use edited value if available)
+      const planTypes = editedPlanType 
+        ? [editedPlanType] 
+        : (aiIntelligence?.plan_type_detection?.detected_plan_types?.map(
+            (pt: any) => pt.plan_type
+          ) || []);
 
       // CRITICAL FIX: Use the snapshot for consistency
       const firstTable = currentTablesSnapshot[0] || {};
@@ -835,6 +864,14 @@ export default function UnifiedTableEditor({
           statementDate: newDocumentMetadata.statement_date || extractedData.statementDate,
         };
         
+        // Update edited metadata state with new values
+        if (newDocumentMetadata.carrier_name) {
+          setEditedCarrierName(newDocumentMetadata.carrier_name);
+        }
+        if (newDocumentMetadata.statement_date) {
+          setEditedStatementDate(newDocumentMetadata.statement_date);
+        }
+        
         onDataUpdate(updatedExtractedData);
         
         toast.success(`GPT extraction completed! Extracted ${newTables.length} table(s) with metadata`);
@@ -945,32 +982,91 @@ export default function UnifiedTableEditor({
             )}
           </div>
           
-          {/* Metadata Display - Highlighted Professional Cards */}
+          {/* Metadata Display - Editable Professional Cards */}
           <div className="flex items-center space-x-3">
+            {/* Carrier Name - Editable */}
             <div className="px-4 py-2.5 bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-300 rounded-lg shadow-md hover:shadow-lg transition-shadow">
               <span className="text-xs font-medium text-blue-600 block uppercase tracking-wide mb-0.5">Carrier</span>
-              <span className="text-base font-bold text-blue-900">
-                {extractedData?.carrierName || extractedData?.extracted_carrier || 'Unknown'}
-              </span>
+              {isEditingMetadata ? (
+                <input
+                  type="text"
+                  value={editedCarrierName}
+                  onChange={(e) => setEditedCarrierName(e.target.value)}
+                  className="text-base font-bold text-blue-900 bg-white border border-blue-400 rounded px-2 py-1 w-48"
+                  placeholder="Enter carrier name"
+                />
+              ) : (
+                <span className="text-base font-bold text-blue-900">
+                  {editedCarrierName || 'Unknown'}
+                </span>
+              )}
             </div>
+            
+            {/* Broker - Display Only */}
             <div className="px-4 py-2.5 bg-gradient-to-br from-purple-50 to-purple-100 border-2 border-purple-300 rounded-lg shadow-md hover:shadow-lg transition-shadow">
               <span className="text-xs font-medium text-purple-600 block uppercase tracking-wide mb-0.5">Broker</span>
               <span className="text-base font-bold text-purple-900">
                 {extractedData?.document_metadata?.broker_company || 'Not detected'}
               </span>
             </div>
+            
+            {/* Plan Type - Editable */}
             <div className="px-4 py-2.5 bg-gradient-to-br from-green-50 to-green-100 border-2 border-green-300 rounded-lg shadow-md hover:shadow-lg transition-shadow">
               <span className="text-xs font-medium text-green-600 block uppercase tracking-wide mb-0.5">Plan Type</span>
-              <span className="text-base font-bold text-green-900">
-                {aiIntelligence?.plan_type_detection?.detected_plan_types?.[0]?.plan_type || 'Not detected'}
-              </span>
+              {isEditingMetadata ? (
+                <input
+                  type="text"
+                  value={editedPlanType}
+                  onChange={(e) => setEditedPlanType(e.target.value)}
+                  className="text-base font-bold text-green-900 bg-white border border-green-400 rounded px-2 py-1 w-48"
+                  placeholder="Enter plan type"
+                />
+              ) : (
+                <span className="text-base font-bold text-green-900">
+                  {editedPlanType || 'Not detected'}
+                </span>
+              )}
             </div>
+            
+            {/* Statement Date - Editable */}
             <div className="px-4 py-2.5 bg-gradient-to-br from-orange-50 to-orange-100 border-2 border-orange-300 rounded-lg shadow-md hover:shadow-lg transition-shadow">
               <span className="text-xs font-medium text-orange-600 block uppercase tracking-wide mb-0.5">Statement Date</span>
-              <span className="text-base font-bold text-orange-900">
-                {extractedData?.statementDate || extractedData?.extracted_date || 'Not detected'}
-              </span>
+              {isEditingMetadata ? (
+                <input
+                  type="text"
+                  value={editedStatementDate}
+                  onChange={(e) => setEditedStatementDate(e.target.value)}
+                  className="text-base font-bold text-orange-900 bg-white border border-orange-400 rounded px-2 py-1 w-48"
+                  placeholder="MM/DD/YYYY"
+                />
+              ) : (
+                <span className="text-base font-bold text-orange-900">
+                  {editedStatementDate || 'Not detected'}
+                </span>
+              )}
             </div>
+            
+            {/* Edit/Save Button */}
+            <button
+              onClick={() => {
+                if (isEditingMetadata) {
+                  // Save changes
+                  toast.success('Metadata updated! These values will be used throughout the workflow and saved in format learning.', {
+                    duration: 4000
+                  });
+                }
+                setIsEditingMetadata(!isEditingMetadata);
+              }}
+              className={`px-4 py-2.5 rounded-lg shadow-md hover:shadow-lg transition-all font-semibold text-sm ${
+                isEditingMetadata 
+                  ? 'bg-gradient-to-br from-green-500 to-green-600 text-white border-2 border-green-700' 
+                  : 'bg-gradient-to-br from-gray-100 to-gray-200 text-gray-700 border-2 border-gray-300'
+              }`}
+              title={isEditingMetadata ? 'Save changes' : 'Edit carrier, plan type, or date'}
+            >
+              {isEditingMetadata ? '✓ Save' : '✏️ Edit'}
+            </button>
+            
             {viewMode === 'field_mapping' && (
               <div className="px-4 py-2.5 bg-gradient-to-br from-emerald-50 to-emerald-100 border-2 border-emerald-300 rounded-lg shadow-md">
                 <span className="text-xs font-medium text-emerald-600 block uppercase tracking-wide mb-0.5">Accepted</span>
@@ -984,11 +1080,11 @@ export default function UnifiedTableEditor({
       </div>
 
       {/* Main Content Area - Premium 2-Column Layout */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden min-w-0">
         
         {/* Left Panel - Document/Data Preview */}
         {viewMode === 'table_review' && (
-          <DynamicPDFViewer
+          <PDFViewer
             fileUrl={extractedData?.gcs_url || extractedData?.file_name || ''}
             isCollapsed={isPreviewCollapsed}
             onToggleCollapse={() => setIsPreviewCollapsed(!isPreviewCollapsed)}
@@ -1092,7 +1188,7 @@ export default function UnifiedTableEditor({
         )}
 
         {/* Right Panel - Table Data/Field Mapping */}
-        <div className={`${isPreviewCollapsed ? 'w-full' : viewMode === 'table_review' ? 'flex-1' : 'w-[65%]'} bg-gray-50 flex flex-col transition-all duration-700 ease-in-out ${
+        <div className={`${isPreviewCollapsed ? 'w-full' : viewMode === 'table_review' ? 'w-[70%]' : 'w-[65%]'} bg-gray-50 flex flex-col transition-all duration-700 ease-in-out flex-shrink-0 min-w-0 ${
           isTransitioning ? 'opacity-50' : 'opacity-100'
         }`}>
           
@@ -1222,10 +1318,10 @@ export default function UnifiedTableEditor({
           </div>
 
           {/* Right Panel Content */}
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 w-full min-w-0">
             {viewMode === 'table_review' ? (
               // Show new ExtractedDataTable in review mode
-              <div className={`h-full overflow-auto transition-opacity duration-500 ${
+              <div className={`h-full w-full transition-opacity duration-500 ${
                 isTransitioning ? 'opacity-0' : 'opacity-100'
               }`}>
                 {tables && tables.length > 0 && tables[currentTableIdx] && (

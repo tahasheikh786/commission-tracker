@@ -95,9 +95,10 @@ async def save_tables(request: SaveTablesRequest, db: AsyncSession = Depends(get
         logger.info(f"🎯 Table Editor API: Saved edited tables to database")
         
         # Handle carrier creation and linking if carrier name is provided
+        # CRITICAL: This handles user-corrected carrier names
         carrier_id = None
         if request.extracted_carrier:
-            logger.info(f"🎯 Table Editor API: Processing carrier: {request.extracted_carrier}")
+            logger.info(f"🎯 Table Editor API: Processing carrier (potentially corrected by user): {request.extracted_carrier}")
             
             # Check if carrier already exists (use with_db_retry for consistency)
             existing_carrier = await with_db_retry(db, crud.get_company_by_name, name=request.extracted_carrier)
@@ -105,11 +106,11 @@ async def save_tables(request: SaveTablesRequest, db: AsyncSession = Depends(get
                 carrier_id = existing_carrier.id
                 logger.info(f"🎯 Table Editor API: Using existing carrier: {existing_carrier.id} ({existing_carrier.name})")
             else:
-                # Create new carrier
+                # Create new carrier with corrected name
                 carrier_data = schemas.CompanyCreate(name=request.extracted_carrier)
                 new_carrier = await with_db_retry(db, crud.create_company, company=carrier_data)
                 carrier_id = new_carrier.id
-                logger.info(f"🎯 Table Editor API: Created new carrier: {carrier_id} ({new_carrier.name})")
+                logger.info(f"🎯 Table Editor API: Created new carrier with corrected name: {carrier_id} ({new_carrier.name})")
         
         # Update the original upload with the edited tables, selected statement date, and carrier info
         logger.info(f"🎯 Table Editor API: Updating upload with tables, statement date, and carrier")
@@ -400,7 +401,9 @@ async def learn_format_patterns(
     request: SaveTablesRequest,
     db: AsyncSession = Depends(get_db)
 ):
-    """Learn format patterns from user edits and corrections."""
+    """Learn format patterns from user edits and corrections.
+    CRITICAL: This endpoint receives corrected carrier names from user edits.
+    """
     try:
         if not request.tables or len(request.tables) == 0:
             return JSONResponse(
@@ -408,10 +411,10 @@ async def learn_format_patterns(
                 content={"success": False, "error": "No tables provided for learning"}
             )
         
-        # Get carrier_id from extracted carrier name
+        # Get carrier_id from extracted carrier name (which may have been corrected by user)
         carrier_id = None
         if request.extracted_carrier:
-            logger.info(f"🎯 Format Learning: Processing carrier: {request.extracted_carrier}")
+            logger.info(f"🎯 Format Learning: Processing carrier (may be user-corrected): {request.extracted_carrier}")
             existing_carrier = await with_db_retry(db, crud.get_company_by_name, name=request.extracted_carrier)
             if existing_carrier:
                 carrier_id = existing_carrier.id
@@ -420,7 +423,7 @@ async def learn_format_patterns(
                 carrier_data = schemas.CompanyCreate(name=request.extracted_carrier)
                 new_carrier = await with_db_retry(db, crud.create_company, company=carrier_data)
                 carrier_id = new_carrier.id
-                logger.info(f"🎯 Format Learning: Created new carrier: {carrier_id}")
+                logger.info(f"🎯 Format Learning: Created new carrier with corrected name: {carrier_id}")
         
         if not carrier_id:
             logger.warning(f"🎯 Format Learning: No carrier_id available, using user's company_id")

@@ -129,9 +129,9 @@ export default function ExtractedDataTable({
   }, [operations]);
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full w-full">
       {/* Table Controls */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-gray-50">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-gray-50 flex-shrink-0">
         <div className="flex items-center gap-2">
           <h3 className="text-sm font-semibold text-gray-700">
             Table Data ({visibleRows.length} rows)
@@ -148,9 +148,9 @@ export default function ExtractedDataTable({
         )}
       </div>
 
-      {/* Table */}
-      <div className="flex-1 overflow-x-auto overflow-y-auto">
-        <table className="w-max min-w-full">
+      {/* Table - Fixed container width with internal scroll */}
+      <div className="flex-1 overflow-x-auto overflow-y-auto w-full min-w-0">
+        <table className="w-max min-w-full border-collapse">
           <thead className="sticky top-0 z-10 bg-slate-50">
             <tr>
               {/* Select All Checkbox */}

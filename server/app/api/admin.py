@@ -57,13 +57,12 @@ async def delete_user_related_data(db: AsyncSession, user_id: UUID, operation_na
         )
         print(f"🎯 {operation_name}: Deleted file_duplicates for {len(upload_ids)} uploads")
 
-    # 5. Delete extractions (references statement_uploads)
-    if upload_ids:
-        await db.execute(
-            text("DELETE FROM extractions WHERE upload_id = ANY(:upload_ids)"),
-            {"upload_ids": upload_ids}
-        )
-        print(f"🎯 {operation_name}: Deleted extractions for {len(upload_ids)} uploads")
+    # 5. Delete extractions (references users, not uploads)
+    await db.execute(
+        text("DELETE FROM extractions WHERE user_id = :user_id"),
+        {"user_id": str(user_id)}
+    )
+    print(f"🎯 {operation_name}: Deleted extractions for user {user_id}")
 
     # 6. Delete statement uploads
     await db.execute(

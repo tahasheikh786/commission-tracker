@@ -10,7 +10,6 @@ from pydantic import BaseModel
 from app.services.gcs_utils import generate_gcs_signed_url, gcs_service
 from app.dependencies.auth_dependencies import get_current_user_hybrid
 from app.db.models import User
-import httpx
 import logging
 
 router = APIRouter(prefix="/api")
@@ -152,65 +151,6 @@ async def get_pdf_preview_url(gcs_key: str):
         "expires_in_hours": 1
     }
 
-@router.get("/pdf-proxy/")
-async def proxy_pdf(gcs_key: str):
-    """
-    Proxy endpoint that fetches PDF from GCS and streams it to the frontend.
-    This avoids CORS issues by proxying the PDF through the backend.
-    """
-    if not gcs_key:
-        raise HTTPException(status_code=400, detail="gcs_key parameter is required")
-    
-    try:
-        # Check if file exists in GCS
-        if not gcs_service.file_exists(gcs_key):
-            raise HTTPException(status_code=404, detail=f"PDF file not found in storage: {gcs_key}")
-        
-        # Generate signed URL
-        signed_url = generate_gcs_signed_url(gcs_key, expiration_hours=1)
-        
-        if not signed_url:
-            raise HTTPException(status_code=500, detail="Could not generate signed URL")
-        
-        logger.info(f"Proxying PDF from GCS: {gcs_key}")
-        
-        # Fetch PDF from GCS using httpx
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(signed_url)
-            
-            if response.status_code != 200:
-                logger.error(f"Failed to fetch PDF from GCS: {response.status_code}")
-                raise HTTPException(
-                    status_code=response.status_code,
-                    detail=f"Failed to fetch PDF from storage: {response.status_code}"
-                )
-            
-            # Stream the PDF content back to the frontend
-            # Build headers conditionally based on environment
-            headers = {
-                "Content-Disposition": f'inline; filename="{gcs_key.split("/")[-1]}"',
-                "Access-Control-Allow-Origin": "*",  # Allow CORS
-                "Cache-Control": "public, max-age=3600",  # Cache for 1 hour
-            }
-            
-            # Only set X-Frame-Options in production for security
-            # In development, omit it to allow iframe embedding between localhost:3000 and localhost:8000
-            import os
-            environment = os.getenv("ENVIRONMENT", "development")
-            if environment == "production":
-                headers["X-Frame-Options"] = "SAMEORIGIN"
-            
-            return StreamingResponse(
-                iter([response.content]),
-                media_type="application/pdf",
-                headers=headers
-            )
-            
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error proxying PDF: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error fetching PDF: {str(e)}")
 
 @router.get("/statements/{statement_id}/formatted-tables")
 async def get_formatted_tables(statement_id: str, db: AsyncSession = Depends(get_db)):
