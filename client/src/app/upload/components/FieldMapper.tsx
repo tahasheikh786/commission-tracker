@@ -555,7 +555,7 @@ export default function FieldMapper({
                     strategy={verticalListSortingStrategy}
                   >
                     <div className="overflow-x-auto max-h-96 overflow-y-auto">
-                      <table className="w-full">
+                      <table className="w-full company-table">
                         <thead className="bg-slate-50 sticky top-0">
                           <tr>
                             <th className="w-12 p-0"></th>
@@ -653,7 +653,7 @@ export default function FieldMapper({
                 <p className="text-gray-600 text-sm mt-1">Preview of the extracted data that will be mapped</p>
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full">
+                <table className="w-full company-table">
                   <thead className="bg-gray-50">
                     <tr>
                       {columns.map((col, index) => (

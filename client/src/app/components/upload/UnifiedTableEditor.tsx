@@ -1122,7 +1122,7 @@ export default function UnifiedTableEditor({
                 {tables?.[currentTableIdx] && (
                   <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
                     <div className="overflow-x-auto max-h-64">
-                      <table className="min-w-full text-xs">
+                      <table className="min-w-full text-xs company-table">
                         <thead className="bg-gray-50 sticky top-0">
                           <tr>
                             {(tables[currentTableIdx].headers || tables[currentTableIdx].header || []).map((header: string, idx: number) => (
@@ -1375,7 +1375,7 @@ export default function UnifiedTableEditor({
                   <div className="flex-1 overflow-auto p-4">
                     <div className="bg-white rounded-xl border-2 border-green-200 overflow-hidden shadow-sm">
                       <div className="overflow-auto max-h-full">
-                        <table className="min-w-full">
+                        <table className="min-w-full company-table">
                           <thead className="bg-gradient-to-r from-green-50 to-emerald-50 sticky top-0 z-10">
                             <tr className="border-b-2 border-green-200">
                               <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Extracted Field</th>

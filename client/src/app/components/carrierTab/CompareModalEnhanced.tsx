@@ -299,7 +299,7 @@ export default function CompareModalEnhanced({ statement, onClose }: CompareModa
 
                         {/* Table */}
                         <div className="overflow-hidden shadow-sm bg-white dark:bg-slate-800">
-                          <table className="min-w-full divide-y divide-gray-300 dark:divide-slate-600">
+                          <table className="min-w-full divide-y divide-gray-300 dark:divide-slate-600 company-table">
                             <thead className="bg-gray-50 dark:bg-slate-700 sticky top-0 z-20">
                               <tr className="border-b-2 border-gray-300 dark:border-slate-600">
                                 {currentTable?.header?.map((header, index) => (
