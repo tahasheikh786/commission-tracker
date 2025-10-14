@@ -919,61 +919,61 @@ export default function UnifiedTableEditor({
         isVisible={isSubmitting}
       />
 
-      <div className="h-screen bg-gray-50 flex flex-col overflow-hidden">
+      <div className="h-screen bg-gray-50 dark:bg-slate-900 flex flex-col overflow-hidden">
         
         {/* Premium Header */}
-      <div className="bg-white shadow-sm border-b border-gray-200 px-6 py-4 flex-shrink-0 z-10">
+      <div className="bg-white dark:bg-slate-800 shadow-sm border-b border-gray-200 dark:border-slate-700 px-6 py-4 flex-shrink-0 z-10">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-3">
               {viewMode === 'table_review' ? (
                 <>
-                  <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <FileText className="w-5 h-5 text-blue-600" />
+                  <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                  <FileText className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                   </div>
                   <div>
-                    <h1 className="text-lg font-semibold text-gray-900">Review Extracted Data</h1>
-                    <p className="text-xs text-gray-500">Verify and edit table contents</p>
+                    <h1 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Review Extracted Data</h1>
+                    <p className="text-xs text-gray-500 dark:text-slate-400">Verify and edit table contents</p>
                   </div>
                 </>
               ) : (
                 <>
-                  <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                  <Map className="w-5 h-5 text-green-600" />
+                  <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+                  <Map className="w-5 h-5 text-green-600 dark:text-green-400" />
                   </div>
                   <div>
-                    <h1 className="text-lg font-semibold text-gray-900">AI Field Mapping</h1>
-                    <p className="text-xs text-gray-500">Review intelligent field suggestions</p>
+                    <h1 className="text-lg font-semibold text-gray-900 dark:text-slate-100">AI Field Mapping</h1>
+                    <p className="text-xs text-gray-500 dark:text-slate-400">Review intelligent field suggestions</p>
                   </div>
                 </>
               )}
             </div>
             
             {/* Progress Indicator */}
-            <div className="flex items-center space-x-2 ml-4 px-3 py-1.5 bg-gray-100 rounded-full">
+            <div className="flex items-center space-x-2 ml-4 px-3 py-1.5 bg-gray-100 dark:bg-slate-700 rounded-full">
               <div className={`w-2 h-2 rounded-full ${viewMode === 'table_review' ? 'bg-blue-600 animate-pulse' : 'bg-green-600'}`} />
-              <span className="text-sm font-medium text-gray-700">
+              <span className="text-sm font-medium text-gray-700 dark:text-slate-300">
                 Step {viewMode === 'table_review' ? '1' : '2'} of 2
               </span>
             </div>
 
             {/* Plan Type Detection - Compact */}
             {viewMode === 'field_mapping' && aiIntelligence?.plan_type_detection && (
-              <div className="ml-4 px-4 py-2 bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-200 rounded-lg">
+              <div className="ml-4 px-2 py-1">
                 <div className="flex items-center space-x-2">
-                  <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
                   </svg>
                   <div>
-                    <span className="text-xs text-purple-600 font-semibold block">Plan Type</span>
-                    <span className="text-sm font-bold text-gray-900">
+                    <span className="text-xs text-purple-600 dark:text-purple-400 font-semibold block">Plan Type</span>
+                    <span className="text-sm font-bold text-gray-900 dark:text-slate-100">
                       {aiIntelligence.plan_type_detection.detected_plan_types[0]?.plan_type || 'Unknown'}
                     </span>
                   </div>
                   <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ml-2 ${
-                    aiIntelligence.plan_type_detection.confidence >= 0.8 ? 'bg-green-100 text-green-800' :
-                    aiIntelligence.plan_type_detection.confidence >= 0.6 ? 'bg-yellow-100 text-yellow-800' :
-                    'bg-red-100 text-red-800'
+                    aiIntelligence.plan_type_detection.confidence >= 0.8 ? 'bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400' :
+                    aiIntelligence.plan_type_detection.confidence >= 0.6 ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300' :
+                    'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300'
                   }`}>
                     {Math.round(aiIntelligence.plan_type_detection.confidence * 100)}%
                   </span>
@@ -985,62 +985,62 @@ export default function UnifiedTableEditor({
           {/* Metadata Display - Editable Professional Cards */}
           <div className="flex items-center space-x-3">
             {/* Carrier Name - Editable */}
-            <div className="px-4 py-2.5 bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-300 rounded-lg shadow-md hover:shadow-lg transition-shadow">
-              <span className="text-xs font-medium text-blue-600 block uppercase tracking-wide mb-0.5">Carrier</span>
+            <div className="px-2 py-1">
+              <span className="text-xs font-medium text-blue-600 dark:text-blue-400 block uppercase tracking-wide mb-0.5">Carrier</span>
               {isEditingMetadata ? (
                 <input
                   type="text"
                   value={editedCarrierName}
                   onChange={(e) => setEditedCarrierName(e.target.value)}
-                  className="text-base font-bold text-blue-900 bg-white border border-blue-400 rounded px-2 py-1 w-48"
+                  className="text-base font-bold text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-gray-300 dark:border-gray-600 rounded w-48 px-2 py-1"
                   placeholder="Enter carrier name"
                 />
               ) : (
-                <span className="text-base font-bold text-blue-900">
+                <span className="text-base font-bold text-blue-900 dark:text-blue-100 px-2 py-1 inline-block w-48">
                   {editedCarrierName || 'Unknown'}
                 </span>
               )}
             </div>
             
             {/* Broker - Display Only */}
-            <div className="px-4 py-2.5 bg-gradient-to-br from-purple-50 to-purple-100 border-2 border-purple-300 rounded-lg shadow-md hover:shadow-lg transition-shadow">
-              <span className="text-xs font-medium text-purple-600 block uppercase tracking-wide mb-0.5">Broker</span>
-              <span className="text-base font-bold text-purple-900">
+            <div className="px-2 py-1">
+              <span className="text-xs font-medium text-purple-600 dark:text-purple-400 block uppercase tracking-wide mb-0.5">Broker</span>
+              <span className="text-base font-bold text-purple-900 dark:text-purple-100">
                 {extractedData?.document_metadata?.broker_company || 'Not detected'}
               </span>
             </div>
             
             {/* Plan Type - Editable */}
-            <div className="px-4 py-2.5 bg-gradient-to-br from-green-50 to-green-100 border-2 border-green-300 rounded-lg shadow-md hover:shadow-lg transition-shadow">
-              <span className="text-xs font-medium text-green-600 block uppercase tracking-wide mb-0.5">Plan Type</span>
+            <div className="px-2 py-1">
+              <span className="text-xs font-medium text-green-600 dark:text-green-400 block uppercase tracking-wide mb-0.5">Plan Type</span>
               {isEditingMetadata ? (
                 <input
                   type="text"
                   value={editedPlanType}
                   onChange={(e) => setEditedPlanType(e.target.value)}
-                  className="text-base font-bold text-green-900 bg-white border border-green-400 rounded px-2 py-1 w-48"
+                  className="text-base font-bold text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-gray-300 dark:border-gray-600 rounded w-48 px-2 py-1"
                   placeholder="Enter plan type"
                 />
               ) : (
-                <span className="text-base font-bold text-green-900">
+                <span className="text-base font-bold text-green-900 dark:text-green-100 px-2 py-1 inline-block w-48">
                   {editedPlanType || 'Not detected'}
                 </span>
               )}
             </div>
             
             {/* Statement Date - Editable */}
-            <div className="px-4 py-2.5 bg-gradient-to-br from-orange-50 to-orange-100 border-2 border-orange-300 rounded-lg shadow-md hover:shadow-lg transition-shadow">
-              <span className="text-xs font-medium text-orange-600 block uppercase tracking-wide mb-0.5">Statement Date</span>
+            <div className="px-2 py-1">
+              <span className="text-xs font-medium text-orange-600 dark:text-orange-400 block uppercase tracking-wide mb-0.5">Statement Date</span>
               {isEditingMetadata ? (
                 <input
                   type="text"
                   value={editedStatementDate}
                   onChange={(e) => setEditedStatementDate(e.target.value)}
-                  className="text-base font-bold text-orange-900 bg-white border border-orange-400 rounded px-2 py-1 w-48"
+                  className="text-base font-bold text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-gray-300 dark:border-gray-600 rounded w-48 px-2 py-1"
                   placeholder="MM/DD/YYYY"
                 />
               ) : (
-                <span className="text-base font-bold text-orange-900">
+                <span className="text-base font-bold text-orange-900 dark:text-orange-100 px-2 py-1 inline-block w-48">
                   {editedStatementDate || 'Not detected'}
                 </span>
               )}
@@ -1059,8 +1059,8 @@ export default function UnifiedTableEditor({
               }}
               className={`px-4 py-2.5 rounded-lg shadow-md hover:shadow-lg transition-all font-semibold text-sm ${
                 isEditingMetadata 
-                  ? 'bg-gradient-to-br from-green-500 to-green-600 text-white border-2 border-green-700' 
-                  : 'bg-gradient-to-br from-gray-100 to-gray-200 text-gray-700 border-2 border-gray-300'
+                  ? 'bg-green-500 dark:bg-green-600 text-white border border-green-600 dark:border-green-700' 
+                  : 'bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-300 border border-gray-300 dark:border-slate-600'
               }`}
               title={isEditingMetadata ? 'Save changes' : 'Edit carrier, plan type, or date'}
             >
@@ -1068,9 +1068,9 @@ export default function UnifiedTableEditor({
             </button>
             
             {viewMode === 'field_mapping' && (
-              <div className="px-4 py-2.5 bg-gradient-to-br from-emerald-50 to-emerald-100 border-2 border-emerald-300 rounded-lg shadow-md">
-                <span className="text-xs font-medium text-emerald-600 block uppercase tracking-wide mb-0.5">Accepted</span>
-                <span className="text-base font-bold text-emerald-900">
+              <div className="px-2 py-1">
+                <span className="text-xs font-medium text-green-600 dark:text-green-400 block uppercase tracking-wide mb-0.5">Accepted</span>
+                <span className="text-base font-bold text-green-900 dark:text-green-100">
                   {acceptedMappings.length} fields
                 </span>
               </div>
@@ -1092,7 +1092,7 @@ export default function UnifiedTableEditor({
         )}
 
         {viewMode === 'field_mapping' && !isPreviewCollapsed && (
-        <div className={`bg-white border-r-2 border-gray-200 flex flex-col transition-all duration-700 ease-in-out w-[35%] ${
+        <div className={`bg-white dark:bg-slate-800 border-r-2 border-gray-200 dark:border-slate-700 flex flex-col transition-all duration-700 ease-in-out w-[35%] ${
           isTransitioning ? 'opacity-50' : 'opacity-100'
         }`}>
 
@@ -1104,29 +1104,29 @@ export default function UnifiedTableEditor({
                 isTransitioning ? 'opacity-0' : 'opacity-100'
               }`}>
                 {/* Extracted Table Preview */}
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">
+                <div className="bg-gray-50 dark:bg-slate-800 rounded-lg p-3 border border-gray-200 dark:border-slate-700">
+                  <h4 className="text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
                     Extracted Table Preview
                     {tables.length > 1 && (
-                      <span className="ml-2 text-xs text-gray-500">
+                      <span className="ml-2 text-xs text-gray-500 dark:text-slate-400">
                         (Table {currentTableIdx + 1} of {tables.length})
                       </span>
                     )}
                   </h4>
-                  <div className="text-xs text-gray-600">
+                  <div className="text-xs text-gray-600 dark:text-slate-400">
                     {tables?.[currentTableIdx]?.headers?.length || tables?.[currentTableIdx]?.header?.length || 0} columns × {tables?.[currentTableIdx]?.rows?.length || 0} rows
                   </div>
                 </div>
                 
                 {/* Compact Table Display */}
                 {tables?.[currentTableIdx] && (
-                  <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                  <div className="bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 overflow-hidden shadow-sm">
                     <div className="overflow-x-auto max-h-64">
                       <table className="min-w-full text-xs company-table">
-                        <thead className="bg-gray-50 sticky top-0">
+                        <thead className="bg-gray-50 dark:bg-slate-700 sticky top-0">
                           <tr>
                             {(tables[currentTableIdx].headers || tables[currentTableIdx].header || []).map((header: string, idx: number) => (
-                              <th key={idx} className="px-3 py-2 text-left font-medium text-gray-700 border-b">
+                              <th key={idx} className="px-3 py-2 text-left font-medium text-gray-700 dark:text-slate-300 border-b border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-700">
                                 {header}
                               </th>
                             ))}
@@ -1134,9 +1134,9 @@ export default function UnifiedTableEditor({
                         </thead>
                         <tbody>
                           {(tables[currentTableIdx].rows || []).slice(0, 4).map((row: string[], rowIdx: number) => (
-                            <tr key={rowIdx} className="hover:bg-gray-50">
+                            <tr key={rowIdx} className="hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors">
                               {row.map((cell: string, cellIdx: number) => (
-                                <td key={cellIdx} className="px-3 py-2 border-b border-gray-100 text-gray-600">
+                                <td key={cellIdx} className="px-3 py-2 border-b border-gray-100 dark:border-slate-600 text-gray-600 dark:text-slate-300">
                                   {cell}
                                 </td>
                               ))}
@@ -1146,7 +1146,7 @@ export default function UnifiedTableEditor({
                       </table>
                     </div>
                     {(tables[currentTableIdx].rows?.length || 0) > 4 && (
-                      <div className="p-2 bg-gray-50 text-xs text-gray-500 text-center border-t">
+                      <div className="p-2 bg-gray-50 dark:bg-slate-700 text-xs text-gray-500 dark:text-slate-400 text-center border-t border-gray-200 dark:border-slate-600">
                         Showing 4 of {tables[currentTableIdx].rows?.length} rows
                       </div>
                     )}
@@ -1157,9 +1157,9 @@ export default function UnifiedTableEditor({
                 {isLoadingAIMapping ? (
                   <div className="flex items-center justify-center py-12">
                     <div className="text-center">
-                      <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                      <h3 className="text-lg font-semibold text-gray-900 mb-2">Generating AI Field Mappings</h3>
-                      <p className="text-sm text-gray-600">Analyzing your edited table data...</p>
+                      <div className="w-16 h-16 border-4 border-blue-600 dark:border-blue-400 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100 mb-2">Generating AI Field Mappings</h3>
+                      <p className="text-sm text-gray-600 dark:text-slate-400">Analyzing your edited table data...</p>
                     </div>
                   </div>
                 ) : aiIntelligence?.enabled ? (
@@ -1178,7 +1178,7 @@ export default function UnifiedTableEditor({
                   />
                 ) : (
                   <div className="text-center py-8">
-                    <p className="text-sm text-gray-600">No AI field mappings available. You can manually map fields.</p>
+                    <p className="text-sm text-gray-600 dark:text-slate-400">No AI field mappings available. You can manually map fields.</p>
                   </div>
                 )}
               </div>
@@ -1188,34 +1188,34 @@ export default function UnifiedTableEditor({
         )}
 
         {/* Right Panel - Table Data/Field Mapping */}
-        <div className={`${isPreviewCollapsed ? 'w-full' : viewMode === 'table_review' ? 'w-[70%]' : 'w-[65%]'} bg-gray-50 flex flex-col transition-all duration-700 ease-in-out flex-shrink-0 min-w-0 ${
+        <div className={`${isPreviewCollapsed ? 'flex-1' : viewMode === 'table_review' ? 'w-[70%]' : 'w-[65%]'} bg-gray-50 dark:bg-slate-900 flex flex-col transition-all duration-700 ease-in-out flex-shrink-0 min-w-0 ${
           isTransitioning ? 'opacity-50' : 'opacity-100'
         }`}>
           
           {/* Right Panel Header */}
-          <div className="px-6 py-4 border-b-2 border-gray-200 bg-white flex-shrink-0">
+          <div className="px-6 py-2 border-b-2 border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex-shrink-0">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 {viewMode === 'table_review' ? (
                   <>
-                    <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-                      <Table2 className="w-4 h-4 text-green-600" />
+                    <div className="w-8 h-8 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+                      <Table2 className="w-4 h-4 text-green-600 dark:text-green-400" />
                     </div>
                     <div>
-                      <h3 className="font-semibold text-gray-900">Extracted Table Data</h3>
-                      <p className="text-xs text-gray-500">Review and edit extracted values</p>
+                      <h3 className="font-semibold text-gray-900 dark:text-slate-100">Extracted Table Data</h3>
+                      <p className="text-xs text-gray-500 dark:text-slate-400">Review and edit extracted values</p>
                     </div>
                   </>
                 ) : (
                   <>
-                    <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-                      <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="w-8 h-8 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+                      <svg className="w-4 h-4 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
                       </svg>
                     </div>
                     <div>
-                      <h3 className="font-semibold text-gray-900">Accepted Field Mappings</h3>
-                      <p className="text-xs text-gray-500">Fields you&apos;ve confirmed for database import</p>
+                      <h3 className="font-semibold text-gray-900 dark:text-slate-100">Accepted Field Mappings</h3>
+                      <p className="text-xs text-gray-500 dark:text-slate-400">Fields you&apos;ve confirmed for database import</p>
                     </div>
                   </>
                 )}
@@ -1353,18 +1353,18 @@ export default function UnifiedTableEditor({
                   // Empty State
                   <div className="flex-1 flex items-center justify-center p-8">
                     <div className="text-center max-w-md">
-                      <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <svg className="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <div className="w-20 h-20 bg-gray-100 dark:bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <svg className="w-10 h-10 text-gray-400 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
                         </svg>
                       </div>
-                      <h3 className="text-lg font-semibold text-gray-900 mb-2">No Fields Accepted Yet</h3>
-                      <p className="text-sm text-gray-600 mb-4">
-                        Click the <span className="inline-flex items-center mx-1 px-1.5 py-0.5 bg-green-100 text-green-700 rounded text-xs font-medium">✓ Accept</span> button on field mappings in the left panel to add them here
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100 mb-2">No Fields Accepted Yet</h3>
+                      <p className="text-sm text-gray-600 dark:text-slate-400 mb-4">
+                        Click the <span className="inline-flex items-center mx-1 px-1.5 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded text-xs font-medium">✓ Accept</span> button on field mappings in the left panel to add them here
                       </p>
-                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-left">
-                        <p className="text-xs text-blue-800 font-medium mb-1">💡 Tip</p>
-                        <p className="text-xs text-blue-700">
+                      <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-lg p-3 text-left">
+                        <p className="text-xs text-blue-800 dark:text-blue-300 font-medium mb-1">💡 Tip</p>
+                        <p className="text-xs text-blue-700 dark:text-blue-300">
                           You can also click &quot;Accept All High Confidence&quot; to quickly accept all mappings with 85%+ confidence
                         </p>
                       </div>
@@ -1373,26 +1373,26 @@ export default function UnifiedTableEditor({
                 ) : (
                   // Accepted Mappings Table
                   <div className="flex-1 overflow-auto p-4">
-                    <div className="bg-white rounded-xl border-2 border-green-200 overflow-hidden shadow-sm">
+                    <div className="bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 overflow-hidden shadow-sm">
                       <div className="overflow-auto max-h-full">
-                        <table className="min-w-full company-table">
-                          <thead className="bg-gradient-to-r from-green-50 to-emerald-50 sticky top-0 z-10">
-                            <tr className="border-b-2 border-green-200">
-                              <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Extracted Field</th>
-                              <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Maps To</th>
-                              <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Confidence</th>
-                              <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Sample Data</th>
-                              <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 w-20">Action</th>
+                        <table className="min-w-full text-sm company-table">
+                          <thead className="bg-gray-50 dark:bg-slate-700 sticky top-0">
+                            <tr>
+                              <th className="px-3 py-2 text-left font-medium text-gray-700 dark:text-slate-300 border-b border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-700">Extracted Field</th>
+                              <th className="px-3 py-2 text-left font-medium text-gray-700 dark:text-slate-300 border-b border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-700">Maps To</th>
+                              <th className="px-3 py-2 text-left font-medium text-gray-700 dark:text-slate-300 border-b border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-700">Confidence</th>
+                              <th className="px-3 py-2 text-left font-medium text-gray-700 dark:text-slate-300 border-b border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-700">Sample Data</th>
+                              <th className="px-3 py-2 text-left font-medium text-gray-700 dark:text-slate-300 border-b border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-700 w-20">Action</th>
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-gray-100">
+                          <tbody>
                             {acceptedMappings.map((mapping, idx) => (
                               <tr 
                                 key={mapping.field}
-                                className={`transition-all duration-500 ${
+                                className={`transition-colors ${
                                   newlyAddedField === mapping.field 
-                                    ? 'bg-green-100 animate-pulse' 
-                                    : 'bg-white hover:bg-green-50'
+                                    ? 'bg-blue-50 dark:bg-blue-900/20 animate-pulse' 
+                                    : 'hover:bg-gray-50 dark:hover:bg-slate-700'
                                 }`}
                                 style={{
                                   animation: newlyAddedField === mapping.field 
@@ -1400,34 +1400,34 @@ export default function UnifiedTableEditor({
                                     : undefined
                                 }}
                               >
-                                <td className="px-4 py-3">
+                                <td className="px-3 py-2 border-b border-gray-100 dark:border-slate-600">
                                   <div className="flex items-center space-x-2">
-                                    <svg className="w-4 h-4 text-green-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <svg className="w-4 h-4 text-green-600 dark:text-green-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                                     </svg>
-                                    <span className="font-mono text-sm font-medium text-blue-600">{mapping.field}</span>
+                                    <span className="font-mono text-sm text-gray-900 dark:text-slate-100">{mapping.field}</span>
                                   </div>
                                 </td>
-                                <td className="px-4 py-3 text-sm text-gray-900 font-medium">{mapping.mapsTo}</td>
-                                <td className="px-4 py-3">
-                                  <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
-                                    mapping.confidence >= 0.8 ? 'bg-green-100 text-green-800' :
-                                    mapping.confidence >= 0.6 ? 'bg-yellow-100 text-yellow-800' :
-                                    'bg-red-100 text-red-800'
+                                <td className="px-3 py-2 border-b border-gray-100 dark:border-slate-600 text-gray-600 dark:text-slate-300">{mapping.mapsTo}</td>
+                                <td className="px-3 py-2 border-b border-gray-100 dark:border-slate-600">
+                                  <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
+                                    mapping.confidence >= 0.8 ? 'bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400' :
+                                    mapping.confidence >= 0.6 ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300' :
+                                    'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300'
                                   }`}>
                                     {Math.round(mapping.confidence * 100)}%
                                   </span>
                                 </td>
-                                <td className="px-4 py-3 text-sm text-gray-600 font-mono max-w-xs truncate" title={mapping.sample}>
-                                  {mapping.sample || <span className="text-gray-400">N/A</span>}
+                                <td className="px-3 py-2 border-b border-gray-100 dark:border-slate-600 text-gray-600 dark:text-slate-300 font-mono max-w-xs truncate" title={mapping.sample}>
+                                  {mapping.sample || <span className="text-gray-400 dark:text-slate-500">N/A</span>}
                                 </td>
-                                <td className="px-4 py-3">
+                                <td className="px-3 py-2 border-b border-gray-100 dark:border-slate-600">
                                   <button
                                     onClick={() => {
                                       handleRemoveMapping(mapping.field);
                                       toast.success(`Removed: ${mapping.field}`);
                                     }}
-                                    className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-all hover:scale-110 active:scale-95"
+                                    className="p-1.5 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 rounded transition-colors"
                                     title="Remove mapping"
                                     type="button"
                                   >
@@ -1441,15 +1441,13 @@ export default function UnifiedTableEditor({
                           </tbody>
                         </table>
                       </div>
-                      <div className="bg-gradient-to-r from-green-50 to-emerald-50 px-4 py-3 border-t-2 border-green-200">
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-gray-700 font-medium">
-                            <span className="text-green-600 font-bold">{acceptedMappings.length}</span> field{acceptedMappings.length !== 1 ? 's' : ''} accepted
-                          </span>
-                          <span className="text-gray-600 text-xs">
-                            {aiMappings.length - acceptedMappings.length} remaining
-                          </span>
-                        </div>
+                      <div className="p-2 bg-gray-50 dark:bg-slate-700 text-xs text-gray-500 dark:text-slate-400 text-center border-t border-gray-200 dark:border-slate-600">
+                        <span className="text-gray-600 dark:text-slate-300 font-medium">
+                          {acceptedMappings.length} field{acceptedMappings.length !== 1 ? 's' : ''} accepted
+                        </span>
+                        <span className="ml-2 text-gray-500 dark:text-slate-400">
+                          • {aiMappings.length - acceptedMappings.length} remaining
+                        </span>
                       </div>
                     </div>
                   </div>

@@ -212,6 +212,15 @@ body,
   @apply w-full border-collapse;
 }
 
+/* Selected rows border - Blue color */
+.company-table.company-table tbody tr.selected {
+  @apply border-l-4 border-l-blue-500;
+}
+
+.dark .company-table.company-table tbody tr.selected {
+  @apply border-l-4 border-l-blue-400;
+}
+
 .table th {
   @apply bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium p-3 text-left border-b border-slate-200 dark:border-slate-700;
 }
@@ -235,6 +244,109 @@ body,
 
 .company-table tbody tr:hover {
   @apply shadow-sm dark:shadow-slate-900/20;
+}
+
+/* Selected rows - Higher specificity to override library styles */
+.company-table.company-table tbody tr.selected {
+  @apply bg-slate-50/50 dark:bg-slate-800/30 shadow-sm dark:shadow-slate-900/20;
+}
+
+.company-table.company-table tbody tr.selected td {
+  @apply bg-slate-50/50 dark:bg-slate-800/30;
+}
+
+.company-table.company-table tbody tr.selected:hover {
+  @apply bg-slate-100 dark:bg-slate-700/40 shadow-md dark:shadow-slate-900/30;
+}
+
+.company-table.company-table tbody tr.selected:hover td {
+  @apply bg-slate-100 dark:bg-slate-700/40;
+}
+
+/* Ensure selected rows maintain their background even on hover */
+.company-table.company-table tbody tr.selected,
+.company-table.company-table tbody tr.selected:hover {
+  @apply bg-slate-50/50 dark:bg-slate-800/30;
+}
+
+.company-table.company-table tbody tr.selected td,
+.company-table.company-table tbody tr.selected:hover td {
+  @apply bg-slate-50/50 dark:bg-slate-800/30;
+}
+
+/* Summary rows - Higher specificity */
+.company-table.company-table tbody tr.summary-row {
+  @apply bg-orange-50 dark:bg-orange-900/30;
+}
+
+.company-table.company-table tbody tr.summary-row td {
+  @apply bg-orange-50 dark:bg-orange-900/30;
+}
+
+/* Additional specificity for sticky cells */
+.company-table.company-table tbody tr.selected td.sticky {
+  @apply bg-slate-50/50 dark:bg-slate-800/30;
+}
+
+.company-table.company-table tbody tr.selected:hover td.sticky {
+  @apply bg-slate-50/50 dark:bg-slate-800/30;
+}
+
+.company-table.company-table tbody tr.summary-row td.sticky {
+  @apply bg-orange-50 dark:bg-orange-900/30;
+}
+
+.company-table.company-table tbody tr.summary-row:hover td.sticky {
+  @apply bg-orange-50 dark:bg-orange-900/30;
+}
+
+/* Table row dark mode enhancements */
+.company-table.company-table tbody tr {
+  @apply border-b border-slate-100 dark:border-slate-700;
+}
+
+.company-table.company-table tbody tr td {
+  @apply border-b border-slate-100 dark:border-slate-700;
+}
+
+/* Ensure vertical borders are visible */
+.company-table.company-table th,
+.company-table.company-table td {
+  @apply border-r border-gray-200 dark:border-slate-700;
+}
+
+.company-table.company-table th:last-child,
+.company-table.company-table td:last-child {
+  @apply border-r-0;
+}
+
+/* Force vertical borders with higher specificity */
+.company-table.company-table thead th,
+.company-table.company-table tbody td {
+  @apply border-r border-gray-200 dark:border-slate-700;
+}
+
+.company-table.company-table thead th:last-child,
+.company-table.company-table tbody td:last-child {
+  @apply border-r-0;
+}
+
+/* Enhanced hover states for table rows - but not for selected rows */
+.company-table.company-table tbody tr:not(.selected):hover {
+  @apply bg-slate-50/50 dark:bg-slate-800/30;
+}
+
+.company-table.company-table tbody tr:not(.selected):hover td {
+  @apply bg-slate-50/50 dark:bg-slate-800/30;
+}
+
+/* Selected rows should maintain their color on hover */
+.company-table.company-table tbody tr.selected:hover {
+  @apply bg-slate-100 dark:bg-slate-700/40;
+}
+
+.company-table.company-table tbody tr.selected:hover td {
+  @apply bg-slate-100 dark:bg-slate-700/40;
 }
 
 /* Premium Status Badges */

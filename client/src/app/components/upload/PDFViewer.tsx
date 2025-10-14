@@ -51,10 +51,10 @@ export default function PDFViewer({ fileUrl, isCollapsed, onToggleCollapse }: PD
   // Don't render PDF until client-side
   if (!isClient) {
     return (
-      <div className="w-[30%] h-full bg-gray-50 border-r border-gray-200 flex items-center justify-center flex-shrink-0">
+      <div className="w-[30%] h-full bg-gray-50 dark:bg-slate-900 border-r border-gray-200 dark:border-slate-700 flex items-center justify-center flex-shrink-0">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
-          <p className="text-gray-600">Initializing PDF viewer...</p>
+          <p className="text-gray-600 dark:text-slate-400">Initializing PDF viewer...</p>
         </div>
       </div>
     )
@@ -62,10 +62,10 @@ export default function PDFViewer({ fileUrl, isCollapsed, onToggleCollapse }: PD
 
   if (isCollapsed) {
     return (
-      <div className="w-12 h-full flex items-center justify-center bg-gray-100 border-r border-gray-200">
+      <div className="w-12 h-full flex items-center justify-center bg-gray-100 dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700">
         <button
           onClick={onToggleCollapse}
-          className="transform rotate-90 bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700 transition-colors"
+          className="transform rotate-90 bg-blue-600 dark:bg-blue-700 text-white px-3 py-1 rounded text-sm hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors"
           aria-label="Show PDF Preview"
         >
           Show PDF
@@ -75,16 +75,16 @@ export default function PDFViewer({ fileUrl, isCollapsed, onToggleCollapse }: PD
   }
 
   return (
-    <div className="w-[30%] h-full bg-gray-50 border-r border-gray-200 flex flex-col flex-shrink-0">
+    <div className="w-[30%] h-full bg-gray-50 dark:bg-slate-900 border-r border-gray-200 dark:border-slate-700 flex flex-col flex-shrink-0">
       {/* Header with controls */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-white shadow-sm">
-        <h3 className="text-lg font-semibold text-gray-800">Document Preview</h3>
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm">
+        <h3 className="text-lg font-semibold text-gray-800 dark:text-slate-100">Document Preview</h3>
         
         <div className="flex items-center space-x-2">
           {fileUrl && (
             <button
               onClick={() => window.open(fileUrl, '_blank')}
-              className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 transition-colors"
+              className="px-3 py-1 bg-blue-600 dark:bg-blue-700 text-white rounded text-sm hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors"
               title="Open in New Tab"
             >
               Open
@@ -93,7 +93,7 @@ export default function PDFViewer({ fileUrl, isCollapsed, onToggleCollapse }: PD
           
           <button
             onClick={onToggleCollapse}
-            className="px-3 py-1 bg-gray-200 rounded text-sm hover:bg-gray-300 transition-colors"
+            className="px-3 py-1 bg-gray-200 dark:bg-slate-700 text-gray-700 dark:text-slate-300 rounded text-sm hover:bg-gray-300 dark:hover:bg-slate-600 transition-colors"
             title="Hide PDF Preview"
           >
             Hide
