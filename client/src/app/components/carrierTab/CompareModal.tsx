@@ -1,7 +1,21 @@
 import Modal from "../Modal";
 import ExtractedTable from "../../upload/components/ExtractedTable";
-import { useState, useEffect } from "react";
-import { Download, ZoomIn, ZoomOut, ExternalLink } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { Download, ExternalLink } from "lucide-react";
+import dynamic from 'next/dynamic';
+
+// Dynamically import PDFViewer to avoid SSR issues
+const PDFViewer = dynamic(() => import('../upload/PDFViewer'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center h-full">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+        <p className="text-gray-600">Loading PDF viewer...</p>
+      </div>
+    </div>
+  )
+});
 
 type Props = {
   statement: any;
@@ -11,8 +25,9 @@ type Props = {
 export default function CompareModal({ statement, onClose }: Props) {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [zoom, setZoom] = useState(1);
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
+  // Generate GCS signed URL
   useEffect(() => {
     const fetchPdfUrl = async () => {
       if (!statement?.gcs_key && !statement?.file_name) {
@@ -21,24 +36,13 @@ export default function CompareModal({ statement, onClose }: Props) {
       }
 
       try {
-        // Step 1: Get signed URL from backend
         const gcsKey = statement.gcs_key || statement.file_name;
         const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, '');
         const response = await fetch(`${baseUrl}/api/pdf-preview/?gcs_key=${encodeURIComponent(gcsKey)}`);
         
         if (response.ok) {
           const data = await response.json();
-          const signedUrl = data.url;
-
-          // Step 2: Fetch the PDF as a blob to avoid CORS issues with iframe
-          const pdfResponse = await fetch(signedUrl);
-          if (pdfResponse.ok) {
-            const pdfBlob = await pdfResponse.blob();
-            
-            // Step 3: Create a local object URL from the blob
-            const objectUrl = URL.createObjectURL(pdfBlob);
-            setPdfUrl(objectUrl);
-          }
+          setPdfUrl(data.url); // Use the signed GCS URL directly
         }
         setLoading(false);
       } catch (err) {
@@ -48,25 +52,11 @@ export default function CompareModal({ statement, onClose }: Props) {
     };
 
     fetchPdfUrl();
-
-    // Cleanup: revoke object URL when component unmounts
-    return () => {
-      if (pdfUrl && pdfUrl.startsWith('blob:')) {
-        URL.revokeObjectURL(pdfUrl);
-      }
-    };
   }, [statement]);
 
-  const handleZoomIn = () => setZoom(z => Math.min(z + 0.2, 2));
-  const handleZoomOut = () => setZoom(z => Math.max(z - 0.2, 0.5));
   const handleDownload = () => {
     if (pdfUrl) {
-      const a = document.createElement('a');
-      a.href = pdfUrl;
-      a.download = statement.file_name || 'statement.pdf';
-      a.target = '_blank';
-      a.rel = 'noopener noreferrer';
-      a.click();
+      window.open(pdfUrl, '_blank');
     }
   };
 
@@ -88,20 +78,6 @@ export default function CompareModal({ statement, onClose }: Props) {
           </div>
           <nav aria-label="PDF toolbar" className="flex gap-1">
             <button
-              onClick={handleZoomOut}
-              aria-label="Zoom out"
-              className="p-3 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200 text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
-            >
-              <ZoomOut size={20} />
-            </button>
-            <button
-              onClick={handleZoomIn}
-              aria-label="Zoom in"
-              className="p-3 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200 text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
-            >
-              <ZoomIn size={20} />
-            </button>
-            <button
               onClick={handleDownload}
               aria-label="Download PDF"
               className="p-3 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200 text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
@@ -121,56 +97,28 @@ export default function CompareModal({ statement, onClose }: Props) {
         </header>
         {/* Card Layout */}
         <div className="flex-1 flex flex-col lg:flex-row gap-6 w-full h-full max-h-full min-h-0 min-w-0 bg-slate-50 dark:bg-slate-900 p-6 rounded-b-2xl">
-          {/* PDF Card */}
-          <section className="flex-1 min-w-0 min-h-0 flex flex-col rounded-xl shadow-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 overflow-hidden relative">
-            <div className="sticky top-0 z-10 bg-white dark:bg-slate-800 px-6 py-4 border-b border-slate-200 dark:border-slate-700">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
-                  <svg className="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                </div>
-                <h3 className="font-semibold text-slate-800 dark:text-slate-200">Original PDF</h3>
-              </div>
-            </div>
-            <div className="flex-1 min-h-0 min-w-0 flex flex-col items-center justify-center p-4">
-              {loading ? (
+          {/* PDF Card - Using Modern PDF Viewer */}
+          <section className="flex-1 min-w-0 min-h-0 flex flex-col rounded-xl shadow-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 overflow-hidden">
+            {loading ? (
+              <div className="flex items-center justify-center h-full">
                 <div className="flex flex-col items-center justify-center">
                   <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-4"></div>
                   <p className="text-sm text-slate-600 dark:text-slate-400">Loading PDF...</p>
                 </div>
-              ) : pdfUrl ? (
-                <div className="w-full h-full flex flex-col">
-                  <div className="flex-1 bg-gray-100 rounded-lg overflow-hidden">
-                    <iframe
-                      src={pdfUrl}
-                      width="100%"
-                      height="100%"
-                      className="w-full h-full border-0"
-                      style={{ 
-                        transform: `scale(${zoom})`, 
-                        transformOrigin: 'top left',
-                        minHeight: '500px'
-                      }}
-                      title="PDF Preview"
-                      // 🔥 CHROME 2024 CRITICAL ATTRIBUTES - Optimized for blob URLs:
-                      sandbox="allow-same-origin allow-scripts allow-modals allow-forms allow-popups allow-presentation"
-                      referrerPolicy="no-referrer-when-downgrade"
-                      allow="fullscreen"
-                      loading="eager"
-                      name="pdf-preview-frame"
-                    />
-                  </div>
-                  <div className="text-xs text-slate-500 dark:text-slate-400 mt-2 text-center">
-                    <a href={pdfUrl} className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 underline" target="_blank" rel="noopener noreferrer">
-                      Open PDF in a new tab
-                    </a>
-                  </div>
-                </div>
-              ) : (
+              </div>
+            ) : pdfUrl ? (
+              <div className="h-full w-full">
+                <PDFViewer
+                  fileUrl={pdfUrl}
+                  isCollapsed={isCollapsed}
+                  onToggleCollapse={() => setIsCollapsed(!isCollapsed)}
+                />
+              </div>
+            ) : (
+              <div className="flex items-center justify-center h-full">
                 <div className="text-slate-400 dark:text-slate-500 text-sm">No PDF file found.</div>
-              )}
-            </div>
+              </div>
+            )}
           </section>
           {/* Extracted Table Card */}
           <section className="flex-1 min-w-0 min-h-0 flex flex-col rounded-xl shadow-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 overflow-hidden">

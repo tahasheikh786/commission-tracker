@@ -378,8 +378,9 @@ async def extract_tables_smart(
         extracted_carrier = document_metadata.get('carrier_name')
         extracted_date = document_metadata.get('statement_date')
         
-        # Initialize AI plan type data
+        # Initialize AI data and variables (CRITICAL: Initialize outside carrier block to avoid scope errors)
         ai_plan_type_data = None
+        table_selection_data = None  # FIX: Initialize here to avoid UnboundLocalError
         
         # Look up learned formats if carrier was detected
         format_learning_data = extraction_result.get('format_learning', {})
@@ -416,12 +417,6 @@ async def extract_tables_smart(
                         logger.warning(f"🚨 CARRIER MISMATCH DETECTED: File uploaded to {company_id} but extracted as {carrier.name} ({carrier.id})")
                         logger.info(f"🔄 Reassigning file to correct carrier: {carrier.name}")
                         
-                        # Update the upload record with the correct carrier
-                        carrier_update_data = schemas.StatementUploadUpdate(
-                            company_id=carrier.id
-                        )
-                        await with_db_retry(db, crud.update_statement_upload, upload_id=upload_id_uuid, update_data=carrier_update_data)
-                        
                         # Also update the GCS key to move file to correct carrier folder
                         old_gcs_key = gcs_key
                         new_gcs_key = f"statements/{carrier.id}/{file.filename}"
@@ -433,8 +428,20 @@ async def extract_tables_smart(
                             gcs_key = new_gcs_key
                             gcs_url = generate_gcs_signed_url(gcs_key) or get_gcs_file_url(gcs_key)
                             logger.info(f"✅ File moved to correct carrier folder in GCS: {new_gcs_key}")
+                            
+                            # CRITICAL: Update the upload record with new carrier AND new file location
+                            carrier_update_data = schemas.StatementUploadUpdate(
+                                company_id=carrier.id,
+                                file_name=new_gcs_key  # Update with new GCS path
+                            )
+                            await with_db_retry(db, crud.update_statement_upload, upload_id=upload_id_uuid, update_data=carrier_update_data)
                         else:
                             logger.warning(f"⚠️ Failed to move file in GCS, keeping original location")
+                            # Still update carrier_id even if file move failed
+                            carrier_update_data = schemas.StatementUploadUpdate(
+                                company_id=carrier.id
+                            )
+                            await with_db_retry(db, crud.update_statement_upload, upload_id=upload_id_uuid, update_data=carrier_update_data)
                         
                         # Update company_id for all subsequent operations
                         company_id = str(carrier.id)
@@ -442,7 +449,6 @@ async def extract_tables_smart(
                     # ===== INTELLIGENT TABLE SELECTION =====
                     # Use AI to select the best table for field mapping when multiple tables exist
                     selected_table_index = 0
-                    table_selection_data = None
                     
                     if len(extraction_result['tables']) > 1:
                         logger.info(f"🔍 Multiple tables detected ({len(extraction_result['tables'])}), analyzing for field mapping suitability")
@@ -538,6 +544,23 @@ async def extract_tables_smart(
                             "suggested_mapping": learned_format.get("field_mapping", {}),
                             "table_editor_settings": learned_format.get("table_editor_settings")
                         }
+                        
+                        # CRITICAL: Use corrected carrier name if available from format learning
+                        table_editor_settings = learned_format.get('table_editor_settings', {})
+                        if table_editor_settings.get('corrected_carrier_name'):
+                            corrected_carrier = table_editor_settings.get('corrected_carrier_name')
+                            logger.info(f"🎯 Format Learning: Applying corrected carrier name from learned format: {corrected_carrier}")
+                            # Update extracted carrier with the corrected one
+                            extracted_carrier = corrected_carrier
+                            document_metadata['carrier_name'] = corrected_carrier
+                            document_metadata['carrier_source'] = 'format_learning'
+                        
+                        if table_editor_settings.get('corrected_statement_date'):
+                            corrected_date = table_editor_settings.get('corrected_statement_date')
+                            logger.info(f"🎯 Format Learning: Applying corrected statement date from learned format: {corrected_date}")
+                            extracted_date = corrected_date
+                            document_metadata['statement_date'] = corrected_date
+                            document_metadata['date_source'] = 'format_learning'
                     else:
                         logger.info(f"🎯 Format Learning: No matching format found (score: {match_score})")
                         
@@ -598,6 +621,8 @@ async def extract_tables_smart(
             "upload_id": str(upload_id_uuid),
             "tables": extraction_result.get('tables', []),
             "file_name": file.filename,
+            "gcs_url": gcs_url,  # CRITICAL: Include GCS URL for PDF preview
+            "gcs_key": gcs_key,  # Include GCS key for reference
             "company_id": company_id,
             "carrier_id": carrier_id_for_response,  # Add carrier_id
             "extraction_method": extraction_method,

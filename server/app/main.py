@@ -27,12 +27,19 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
-# Graceful shutdown handler for long-running processes
-async def graceful_shutdown_handler(signum, frame=None):
-    """Handle graceful shutdown during long-running processes"""
-    logger.info(f"Received signal {signum}, initiating graceful shutdown...")
+# Track background tasks for graceful shutdown
+background_tasks = set()
+shutdown_event = asyncio.Event()
+
+@app.on_event("shutdown")
+async def shutdown_event_handler():
+    """FastAPI shutdown event - cleanup on server stop"""
+    logger.info("FastAPI shutdown event triggered")
     
     try:
+        # Set shutdown event to stop background tasks
+        shutdown_event.set()
+        
         # Import connection manager
         from app.services.websocket_service import connection_manager
         
@@ -41,38 +48,25 @@ async def graceful_shutdown_handler(signum, frame=None):
             try:
                 await connection_manager.send_error(
                     upload_id, 
-                    "Server is restarting, your upload will resume automatically",
-                    "SERVER_RESTART"
+                    "Server is shutting down",
+                    "SERVER_SHUTDOWN"
                 )
             except Exception as e:
                 logger.error(f"Error notifying upload {upload_id}: {e}")
         
-        # Allow time for connections to receive the message
-        await asyncio.sleep(2)
-        logger.info("Graceful shutdown notifications sent")
+        # Cancel all background tasks
+        for task in background_tasks:
+            if not task.done():
+                task.cancel()
+        
+        # Wait for tasks to complete cancellation (with timeout)
+        if background_tasks:
+            await asyncio.wait(background_tasks, timeout=2.0)
+        
+        logger.info("Graceful shutdown complete")
+        
     except Exception as e:
         logger.error(f"Error during graceful shutdown: {e}")
-
-# Register shutdown handlers
-def setup_signal_handlers():
-    """Setup signal handlers for graceful shutdown"""
-    try:
-        loop = asyncio.get_event_loop()
-        for sig in (signal.SIGTERM, signal.SIGINT):
-            loop.add_signal_handler(
-                sig,
-                lambda s=sig: asyncio.create_task(graceful_shutdown_handler(s))
-            )
-        logger.info("Signal handlers registered for graceful shutdown")
-    except Exception as e:
-        logger.warning(f"Could not register signal handlers: {e}")
-
-# Setup on startup
-@app.on_event("startup")
-async def startup_event():
-    """Run startup tasks"""
-    setup_signal_handlers()
-    logger.info("Application startup complete")
 
 @app.get("/health")
 async def health_check():
@@ -261,28 +255,42 @@ app.include_router(excel_extract.router)
 app.include_router(ai_intelligent_mapping.router)
 app.include_router(ai_table_mapping.router)
 app.include_router(websocket.router, tags=["WebSocket"])
-app.include_router(pdf_proxy.router, tags=["PDF"])  # No prefix needed - Next.js rewrites strip /api
+app.include_router(pdf_proxy.router, tags=["PDF"], prefix="/api")
 
 # Background task for session cleanup
 async def cleanup_sessions_periodically():
     """Clean up expired and inactive sessions every hour"""
-    while True:
-        try:
-            async for db in get_db():
-                cleaned_count = await cleanup_expired_sessions(db)
-                if cleaned_count > 0:
-                    print(f"Cleaned up {cleaned_count} expired/inactive sessions")
-                break
-        except Exception as e:
-            print(f"Error during session cleanup: {e}")
-        
-        # Wait 1 hour before next cleanup
-        await asyncio.sleep(3600)
+    try:
+        while not shutdown_event.is_set():
+            try:
+                async for db in get_db():
+                    cleaned_count = await cleanup_expired_sessions(db)
+                    if cleaned_count > 0:
+                        logger.info(f"Cleaned up {cleaned_count} expired/inactive sessions")
+                    break
+            except Exception as e:
+                logger.error(f"Error during session cleanup: {e}")
+            
+            # Wait 1 hour before next cleanup (or until shutdown)
+            try:
+                await asyncio.wait_for(shutdown_event.wait(), timeout=3600)
+                break  # Shutdown signal received
+            except asyncio.TimeoutError:
+                continue  # Timeout after 1 hour, run cleanup again
+    except asyncio.CancelledError:
+        logger.info("Session cleanup task cancelled")
+        raise
 
-# Start background task
+# Setup on startup
 @app.on_event("startup")
 async def startup_event():
-    asyncio.create_task(cleanup_sessions_periodically())
+    """Run startup tasks"""
+    # Start background cleanup task and track it
+    task = asyncio.create_task(cleanup_sessions_periodically())
+    background_tasks.add(task)
+    task.add_done_callback(background_tasks.discard)
+    
+    logger.info("Application startup complete")
 
 if __name__ == "__main__":
     import uvicorn

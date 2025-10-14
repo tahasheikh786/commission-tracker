@@ -351,11 +351,14 @@ class FormatLearningService:
             field_mapping = self._convert_numpy_types(field_mapping)
             
             # Enhanced table editor settings with carrier and date info
+            # CRITICAL: This stores the CORRECTED carrier name so format learning remembers it
             enhanced_table_editor_settings = table_editor_settings or {}
             if carrier_name:
                 enhanced_table_editor_settings['carrier_name'] = carrier_name
+                enhanced_table_editor_settings['corrected_carrier_name'] = carrier_name  # Explicitly mark as corrected
             if statement_date:
                 enhanced_table_editor_settings['statement_date'] = statement_date
+                enhanced_table_editor_settings['corrected_statement_date'] = statement_date  # Explicitly mark as corrected
             
             # Create format learning record
             format_learning = schemas.CarrierFormatLearningCreate(

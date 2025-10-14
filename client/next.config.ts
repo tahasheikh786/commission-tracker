@@ -22,6 +22,7 @@ const nextConfig: NextConfig = {
       config.module = config.module || {};
       config.module.rules = config.module.rules || [];
       
+      // Handle PDF.js worker files (.js)
       config.module.rules.push({
         test: /pdf\.worker\.(min\.)?js$/,
         type: 'asset/resource',
@@ -30,9 +31,18 @@ const nextConfig: NextConfig = {
         }
       });
       
-      // Handle .mjs files from pdfjs-dist
+      // Handle PDF.js worker files (.mjs)
       config.module.rules.push({
         test: /pdf\.worker\.(min\.)?mjs$/,
+        type: 'asset/resource',
+        generator: {
+          filename: 'static/worker/[hash][ext][query]'
+        }
+      });
+
+      // Handle PDF.js legacy worker files
+      config.module.rules.push({
+        test: /pdf\.worker\.entry\.js$/,
         type: 'asset/resource',
         generator: {
           filename: 'static/worker/[hash][ext][query]'
@@ -52,7 +62,7 @@ const nextConfig: NextConfig = {
     ];
   },
   
-  // CRITICAL: CSP headers for Chrome 2024 iframe PDF compatibility + WebSocket support
+  // CRITICAL: Enhanced CSP headers for Next.js 15 + React 19 + PDF.js compatibility
   async headers() {
     return [
       {
@@ -60,18 +70,19 @@ const nextConfig: NextConfig = {
         headers: [
           {
             key: 'Content-Security-Policy',
-            // Enhanced CSP for Chrome PDF plugin support (plugin-types removed - deprecated)
+            // Enhanced CSP for Chrome PDF plugin support + unpkg.com CDN worker
             value: [
               "default-src 'self' blob: data: http: https: ws: wss:",
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: data:",
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: data: https://unpkg.com",
               "style-src 'self' 'unsafe-inline' blob: data:",
               "frame-src 'self' blob: data: http: https:",
               "object-src 'self' blob: data:",        // CRITICAL FOR PDF
               "media-src 'self' blob: data:",         // CRITICAL FOR PDF
-              "worker-src 'self' blob:",
+              "worker-src 'self' blob: data: https://unpkg.com",
               "child-src 'self' blob: data:",
-              "connect-src 'self' http: https: ws: wss:",
-              "img-src 'self' blob: data: https:"     // Added for PDF rendering
+              "connect-src 'self' http: https: ws: wss: https://unpkg.com",
+              "img-src 'self' blob: data: https:",
+              "font-src 'self' data: https:"
             ].join("; ")
           },
           {
@@ -86,6 +97,12 @@ const nextConfig: NextConfig = {
         ],
       },
     ];
+  },
+
+  // ✅ CRITICAL: React 19 compatibility settings for Next.js 15
+  experimental: {
+    reactCompiler: false, // Disable React Compiler until PDF.js is fully compatible
+    ppr: false, // Disable Partial Prerendering for PDF components
   },
 };
 

@@ -229,8 +229,11 @@ export async function getEnhancedExtractionAnalysis(
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'Enhanced AI analysis failed');
+      if (response.status === 401) {
+        throw new Error('401: Authentication required. Please log in again.');
+      }
+      const error = await response.json().catch(() => ({ detail: 'Enhanced AI analysis failed' }));
+      throw new Error(error.detail || `Enhanced AI analysis failed (${response.status})`);
     }
 
     const data = await response.json();
