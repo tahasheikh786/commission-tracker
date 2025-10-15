@@ -1,6 +1,20 @@
 'use client'
 import React, { useState, useEffect, useCallback } from 'react';
 import { X, Database, Table, Download, Eye, FileText, ZoomIn, ZoomOut, ExternalLink } from 'lucide-react';
+import dynamic from 'next/dynamic';
+
+// Dynamically import PDFViewer to avoid SSR issues
+const PDFViewer = dynamic(() => import('../upload/PDFViewer'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center h-full">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+        <p className="text-gray-600">Loading PDF viewer...</p>
+      </div>
+    </div>
+  )
+});
 
 interface TableData {
   header: string[];
@@ -23,7 +37,7 @@ interface CompareModalEnhancedProps {
 export default function CompareModalEnhanced({ statement, onClose }: CompareModalEnhancedProps) {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [zoom, setZoom] = useState(1);
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const [tables, setTables] = useState<TableData[]>([]);
   const [currentTableIndex, setCurrentTableIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -32,43 +46,44 @@ export default function CompareModalEnhanced({ statement, onClose }: CompareModa
   useEffect(() => {
     const fetchPdfUrl = async () => {
       if (!statement?.gcs_key && !statement?.file_name) {
+        console.error('❌ No gcs_key or file_name in statement:', statement);
         setLoading(false);
-        setError('No file information available');
         return;
       }
 
       try {
         const gcsKey = statement.gcs_key || statement.file_name;
-        const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, '');
+        console.log('🔍 Fetching PDF with gcs_key:', gcsKey);
+        console.log('📄 Statement object:', statement);
         
-        console.log('🔍 Fetching PDF for GCS key:', gcsKey);
-        console.log('🔍 Using base URL:', baseUrl);
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        const url = `${apiUrl}/api/pdf-preview/?gcs_key=${encodeURIComponent(gcsKey)}`;
+        console.log('🔗 PDF preview URL:', url);
         
-        // Use the enhanced test endpoint for better debugging
-        const response = await fetch(`${baseUrl}/api/test-pdf-preview/?gcs_key=${encodeURIComponent(gcsKey)}`);
+        const response = await fetch(url, {
+          credentials: 'include' // Include cookies for authentication
+        });
         
         if (response.ok) {
           const data = await response.json();
-          console.log('📄 PDF Preview Response:', data);
-          
-          if (data.success && data.url) {
-            setPdfUrl(data.url);
-            setError(null);
-            console.log('✅ PDF URL generated successfully');
-          } else {
-            setError(data.error || 'Failed to generate PDF URL');
-            console.error('❌ PDF Preview failed:', data);
-          }
+          console.log('✅ PDF URL fetched successfully');
+          setPdfUrl(data.url); // Use the signed GCS URL directly
         } else {
-          const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-          setError(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
-          console.error('❌ HTTP Error:', response.status, errorData);
+          const errorData = await response.json().catch(() => ({}));
+          console.error('❌ Failed to fetch PDF:', {
+            status: response.status,
+            statusText: response.statusText,
+            error: errorData,
+            gcs_key: gcsKey
+          });
+          // Show user-friendly message if file not found
+          if (response.status === 404) {
+            console.warn('⚠️ PDF file not found in storage. This may be an old statement where the file was deleted.');
+          }
         }
+        setLoading(false);
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Network error';
-        setError(`Failed to fetch PDF: ${errorMessage}`);
-        console.error('❌ Error fetching PDF URL:', err);
-      } finally {
+        console.error('❌ Error fetching PDF:', err);
         setLoading(false);
       }
     };
@@ -109,15 +124,7 @@ export default function CompareModalEnhanced({ statement, onClose }: CompareModa
     URL.revokeObjectURL(url);
   };
 
-  const handleZoomIn = () => {
-    setZoom(prev => Math.min(prev + 0.1, 2));
-  };
-
-  const handleZoomOut = () => {
-    setZoom(prev => Math.max(prev - 0.1, 0.5));
-  };
-
-  const handleFullPage = () => {
+  const handleDownload = () => {
     if (pdfUrl) {
       window.open(pdfUrl, '_blank');
     }
@@ -151,88 +158,44 @@ export default function CompareModalEnhanced({ statement, onClose }: CompareModa
         {/* Content */}
         <div className="flex-1 flex flex-col lg:flex-row w-full min-h-0 bg-slate-50 dark:bg-slate-900">
           {/* PDF Card */}
-          <div className="w-1/3 flex flex-col bg-white dark:bg-slate-800 shadow-lg overflow-hidden border-r border-slate-200 dark:border-slate-700">
-            <div className="flex items-center justify-between p-3 border-b border-slate-200 dark:border-slate-700">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-red-100 dark:bg-red-900/30 rounded-lg flex items-center justify-center">
-                  <svg className="w-4 h-4 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                  </svg>
+          <div className={`${isCollapsed ? 'w-0 hidden' : 'w-full lg:w-[30%]'} min-w-0 min-h-0 flex flex-col shadow-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 overflow-hidden flex-shrink-0 transition-all duration-300`}>
+            {loading ? (
+              <div className="flex items-center justify-center h-full">
+                <div className="flex flex-col items-center justify-center">
+                  <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-4"></div>
+                  <p className="text-sm text-slate-600 dark:text-slate-400">Loading PDF...</p>
                 </div>
-                <h3 className="font-semibold text-slate-800 dark:text-slate-200">PDF Document</h3>
               </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handleZoomOut}
-                  className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200 text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
-                  aria-label="Zoom out"
-                >
-                  <ZoomOut size={16} />
-                </button>
-                <span className="text-sm font-medium text-slate-600 dark:text-slate-400 min-w-[3rem] text-center">
-                  {Math.round(zoom * 100)}%
-                </span>
-                <button
-                  onClick={handleZoomIn}
-                  className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200 text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
-                  aria-label="Zoom in"
-                >
-                  <ZoomIn size={16} />
-                </button>
-                <button
-                  onClick={handleFullPage}
-                  className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200 text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
-                  aria-label="Open PDF in new tab"
-                >
-                  <ExternalLink size={16} />
-                </button>
+            ) : pdfUrl ? (
+              <div className="h-full w-full">
+                <PDFViewer
+                  fileUrl={pdfUrl}
+                  isCollapsed={isCollapsed}
+                  onToggleCollapse={() => setIsCollapsed(!isCollapsed)}
+                />
               </div>
-            </div>
-            <div className="flex-1 overflow-auto p-3">
-              {loading ? (
-                <div className="flex items-center justify-center h-full">
-                  <div className="w-8 h-8 border-2 border-slate-200 dark:border-slate-600 border-t-emerald-500 rounded-full animate-spin"></div>
-                  <span className="ml-3 text-slate-600 dark:text-slate-400 font-medium">Loading PDF...</span>
-                </div>
-              ) : pdfUrl ? (
-                <div className="w-full h-full flex items-center justify-center">
-                  <iframe
-                    src={pdfUrl}
-                    className="w-full h-full border-0 rounded-lg shadow-lg"
-                    style={{ transform: `scale(${zoom})`, transformOrigin: 'top left' }}
-                    title="PDF Preview"
-                  />
-                </div>
-              ) : error ? (
-                <div className="text-center py-16 px-4">
-                  <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-xl flex items-center justify-center mx-auto mb-4">
-                    <FileText className="text-red-600 dark:text-red-400" size={32} />
+            ) : (
+              <div className="flex items-center justify-center h-full p-8">
+                <div className="text-center max-w-md">
+                  <div className="w-16 h-16 bg-amber-100 dark:bg-amber-900/30 rounded-xl flex items-center justify-center mx-auto mb-4">
+                    <svg className="w-8 h-8 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
                   </div>
-                  <h3 className="text-lg font-semibold text-red-700 dark:text-red-300 mb-2">PDF Preview Error</h3>
-                  <p className="text-red-600 dark:text-red-400 text-sm mb-4">{error}</p>
-                  <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-3 text-left">
-                    <p className="text-xs text-red-600 dark:text-red-400 font-mono">
-                      GCS Key: {statement?.gcs_key || statement?.file_name || 'N/A'}
-                    </p>
-                    <p className="text-xs text-red-600 dark:text-red-400 mt-1">
-                      Check browser console for detailed debugging information
-                    </p>
-                  </div>
+                  <h3 className="text-lg font-semibold text-slate-700 dark:text-slate-300 mb-2">PDF Not Available</h3>
+                  <p className="text-slate-500 dark:text-slate-400 text-sm">
+                    The original PDF file for this statement is not available. This may be an older statement where the file storage was cleaned up.
+                  </p>
+                  <p className="text-slate-600 dark:text-slate-400 text-xs mt-3">
+                    The extracted data is still available in the table on the right.
+                  </p>
                 </div>
-              ) : (
-                <div className="text-center py-16">
-                  <div className="w-16 h-16 bg-slate-100 dark:bg-slate-700 rounded-xl flex items-center justify-center mx-auto mb-4">
-                    <FileText className="text-slate-400 dark:text-slate-500" size={32} />
-                  </div>
-                  <h3 className="text-lg font-semibold text-slate-700 dark:text-slate-300 mb-2">PDF not available</h3>
-                  <p className="text-slate-500 dark:text-slate-400 text-sm">Unable to load PDF preview</p>
-                </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
 
           {/* Table Card */}
-          <div className="w-2/3 flex flex-col bg-white dark:bg-slate-800 shadow-lg overflow-hidden border-l border-slate-200 dark:border-slate-700">
+          <div className={`${isCollapsed ? 'w-full' : 'w-full lg:w-[70%]'} min-w-0 min-h-0 flex flex-col shadow-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 overflow-hidden flex-shrink-0 transition-all duration-300`}>
             <div className="flex items-center justify-between p-3 border-b border-slate-200 dark:border-slate-700">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
@@ -272,11 +235,18 @@ export default function CompareModalEnhanced({ statement, onClose }: CompareModa
               </div>
               <div className="flex items-center gap-2">
                 <button
+                  onClick={handleDownload}
+                  className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200 text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
+                  aria-label="Download PDF"
+                >
+                  <Download size={16} />
+                </button>
+                <button
                   onClick={() => downloadCSV(currentTable)}
                   className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200 text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
                   aria-label="Download CSV"
                 >
-                  <Download size={16} />
+                  <FileText size={16} />
                 </button>
               </div>
             </div>
