@@ -51,7 +51,7 @@ export default function PDFViewer({ fileUrl, isCollapsed, onToggleCollapse }: PD
   // Don't render PDF until client-side
   if (!isClient) {
     return (
-      <div className="w-[30%] h-full bg-gray-50 dark:bg-slate-900 border-r border-gray-200 dark:border-slate-700 flex items-center justify-center flex-shrink-0">
+      <div className="w-full h-full bg-gray-50 dark:bg-slate-900 border-r border-gray-200 dark:border-slate-700 flex items-center justify-center flex-shrink-0">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
           <p className="text-gray-600 dark:text-slate-400">Initializing PDF viewer...</p>
@@ -75,7 +75,7 @@ export default function PDFViewer({ fileUrl, isCollapsed, onToggleCollapse }: PD
   }
 
   return (
-    <div className="w-[30%] h-full bg-gray-50 dark:bg-slate-900 border-r border-gray-200 dark:border-slate-700 flex flex-col flex-shrink-0">
+    <div className="w-full h-full bg-gray-50 dark:bg-slate-900 border-r border-gray-200 dark:border-slate-700 flex flex-col flex-shrink-0">
       {/* Header with controls */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm">
         <h3 className="text-lg font-semibold text-gray-800 dark:text-slate-100">Document Preview</h3>
@@ -102,7 +102,7 @@ export default function PDFViewer({ fileUrl, isCollapsed, onToggleCollapse }: PD
       </div>
 
       {/* PDF Content */}
-      <div className="flex-1 overflow-hidden bg-gray-100">
+      <div className="flex-1 overflow-hidden bg-gray-100 w-full h-full">
         {!fileUrl ? (
           <div className="flex items-center justify-center h-full">
             <div className="text-center text-gray-500">
@@ -116,7 +116,7 @@ export default function PDFViewer({ fileUrl, isCollapsed, onToggleCollapse }: PD
           </div>
         ) : (
           <Worker workerUrl={`https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js`}>
-            <div className="h-full">
+            <div className="h-full w-full">
               <Viewer
                 fileUrl={proxiedUrl}
                 plugins={[defaultLayoutPluginInstance]}

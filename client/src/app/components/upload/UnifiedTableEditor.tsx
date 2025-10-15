@@ -12,13 +12,14 @@ import React, { useState, useMemo } from 'react';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 import { FieldMapping, PlanTypeDetection, getEnhancedExtractionAnalysis } from '@/app/services/aiIntelligentMappingService';
+import { useTheme } from '@/context/ThemeContext';
 import ActionBar, { MappingStats, ViewMode } from './ActionBar';
 import EnhancedAIMapper from '../review-extracted-data/EnhancedAIMapper';
 import { ExtractedDataTable } from '../review-extracted-data';
 import PDFViewer from './PDFViewer';
 import '../review-extracted-data/styles.css';
 import PremiumProgressLoader, { UploadStep } from './PremiumProgressLoader';
-import { ArrowRight, Map, FileText, Table2 } from 'lucide-react';
+import { ArrowRight, Map, FileText, Table2, Moon, Sun } from 'lucide-react';
 
 export interface ExtractedData {
   tables: any[];
@@ -79,6 +80,7 @@ export default function UnifiedTableEditor({
   onSubmit,
   selectedStatementDate
 }: UnifiedTableEditorProps) {
+  const { theme, setTheme, actualTheme } = useTheme();
   const [viewMode, setViewMode] = useState<ViewMode>('table_review');
   const [userMappings, setUserMappings] = useState<Record<string, string>>({});
   const [acceptedMappings, setAcceptedMappings] = useState<Array<{field: string, mapsTo: string, confidence: number, sample: string}>>([]);
@@ -1075,6 +1077,15 @@ export default function UnifiedTableEditor({
                 </span>
               </div>
             )}
+            
+            {/* Theme Toggle Button */}
+            <button
+              onClick={() => setTheme(actualTheme === 'dark' ? 'light' : 'dark')}
+              className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+              aria-label={`Switch to ${actualTheme === 'dark' ? 'light' : 'dark'} mode`}
+            >
+              {actualTheme === 'dark' ? <Sun className="w-5 h-5 text-slate-500 dark:text-slate-400" /> : <Moon className="w-5 h-5 text-slate-500 dark:text-slate-400" />}
+            </button>
           </div>
         </div>
       </div>
@@ -1094,7 +1105,7 @@ export default function UnifiedTableEditor({
         )}
 
         {viewMode === 'field_mapping' && !isPreviewCollapsed && (
-        <div className={`bg-white dark:bg-slate-800 border-r-2 border-gray-200 dark:border-slate-700 flex flex-col transition-all duration-700 ease-in-out w-[35%] ${
+        <div className={`bg-white dark:bg-slate-800 border-r-2 border-gray-200 dark:border-slate-700 flex flex-col transition-all duration-700 ease-in-out w-[30%] ${
           isTransitioning ? 'opacity-50' : 'opacity-100'
         }`}>
 
@@ -1190,7 +1201,7 @@ export default function UnifiedTableEditor({
         )}
 
         {/* Right Panel - Table Data/Field Mapping */}
-        <div className={`${isPreviewCollapsed ? 'flex-1' : viewMode === 'table_review' ? 'w-[70%]' : 'w-[65%]'} bg-gray-50 dark:bg-slate-900 flex flex-col transition-all duration-700 ease-in-out flex-shrink-0 min-w-0 ${
+        <div className={`${isPreviewCollapsed ? 'flex-1' : viewMode === 'table_review' ? 'w-[70%]' : 'w-[70%]'} bg-gray-50 dark:bg-slate-900 flex flex-col transition-all duration-700 ease-in-out flex-shrink-0 min-w-0 ${
           isTransitioning ? 'opacity-50' : 'opacity-100'
         }`}>
           
@@ -1252,23 +1263,23 @@ export default function UnifiedTableEditor({
 
             {/* Table Navigation Controls - Show when multiple tables exist in table review mode */}
             {viewMode === 'table_review' && tables && tables.length > 1 && (
-              <div className="mt-4 pt-4 border-t border-gray-200">
+              <div className="mt-4 pt-4 border-t border-gray-200 dark:border-slate-700">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
                     <button
                       onClick={() => setCurrentTableIdx(Math.max(0, currentTableIdx - 1))}
                       disabled={currentTableIdx === 0}
-                      className="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                      className="px-3 py-1.5 text-sm bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded-md hover:bg-gray-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium text-gray-700 dark:text-slate-300"
                     >
                       ← Previous
                     </button>
                     
                     <div className="flex items-center space-x-2">
-                      <span className="text-sm text-gray-600">Table</span>
+                      <span className="text-sm text-gray-600 dark:text-slate-400">Table</span>
                       <select
                         value={currentTableIdx}
                         onChange={(e) => setCurrentTableIdx(Number(e.target.value))}
-                        className="px-3 py-1.5 border border-gray-300 rounded-md text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                        className="px-3 py-1.5 border border-gray-300 dark:border-slate-600 rounded-md text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100"
                       >
                         {tables.map((table, idx) => (
                           <option key={idx} value={idx}>
@@ -1276,13 +1287,13 @@ export default function UnifiedTableEditor({
                           </option>
                         ))}
                       </select>
-                      <span className="text-sm text-gray-600">of {tables.length}</span>
+                      <span className="text-sm text-gray-600 dark:text-slate-400">of {tables.length}</span>
                     </div>
                     
                     <button
                       onClick={() => setCurrentTableIdx(Math.min(tables.length - 1, currentTableIdx + 1))}
                       disabled={currentTableIdx === tables.length - 1}
-                      className="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                      className="px-3 py-1.5 text-sm bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded-md hover:bg-gray-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium text-gray-700 dark:text-slate-300"
                     >
                       Next →
                     </button>
@@ -1300,7 +1311,7 @@ export default function UnifiedTableEditor({
                           toast.success('Table deleted successfully');
                         }
                       }}
-                      className="px-3 py-1.5 text-sm bg-white border border-red-300 text-red-600 rounded-md hover:bg-red-50 hover:border-red-400 transition-colors font-medium flex items-center gap-1.5"
+                      className="px-3 py-1.5 text-sm bg-white dark:bg-slate-800 border border-red-300 dark:border-red-600 text-red-600 dark:text-red-400 rounded-md hover:bg-red-50 dark:hover:bg-red-900/30 hover:border-red-400 dark:hover:border-red-500 transition-colors font-medium flex items-center gap-1.5"
                       title="Delete this table"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1311,7 +1322,7 @@ export default function UnifiedTableEditor({
                   </div>
 
                   {/* Current table info */}
-                  <div className="text-xs text-gray-500">
+                  <div className="text-xs text-gray-500 dark:text-slate-400">
                     {tables[currentTableIdx]?.rows?.length || 0} rows × {(tables[currentTableIdx]?.header || tables[currentTableIdx]?.headers || []).length} columns
                   </div>
                 </div>
