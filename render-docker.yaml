@@ -18,6 +18,12 @@ services:
         value: pdf-tables-extractor-465009
       - key: GOOGLE_DOCAI_PROCESSOR_ID
         value: "521303e404fb7809"
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: MISTRAL_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
       # New extraction service environment variables
       - key: HF_HOME
         value: "/tmp/model_cache/transformers"

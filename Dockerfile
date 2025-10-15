@@ -21,6 +21,8 @@ ENV PYTHONUNBUFFERED=1 \
     OPENAI_API_BASE="https://api.openai.com/v1" \
     # Mistral AI configuration (REQUIRED for Mistral extraction)
     MISTRAL_API_KEY="" \
+    # Anthropic/Claude AI configuration (PRIMARY - Superior accuracy)
+    ANTHROPIC_API_KEY="" \
     # Database configuration
     RENDER_DB_KEY="" \
     SUPABASE_DB_KEY="" \
