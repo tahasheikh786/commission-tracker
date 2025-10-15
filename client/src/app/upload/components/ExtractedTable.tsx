@@ -59,7 +59,11 @@ export default function ExtractedTables({ tables: backendTables, onTablesChange,
     // Backend now handles all table merging, so we just need to process the data
     return backendTables.map(table => ({
       ...table,
-      rows: Array.isArray(table.rows) ? [...table.rows] : [],
+      rows: Array.isArray(table.rows) 
+        ? [...table.rows] 
+        : (typeof table.rows === 'object' && table.rows !== null)
+          ? Object.values(table.rows) as string[][] // Convert object with numeric keys to array
+          : [],
       name: table.name || ''
     }));
   })
@@ -78,9 +82,13 @@ export default function ExtractedTables({ tables: backendTables, onTablesChange,
   // Update local tables when backendTables change
   useEffect(() => {
     // Backend now handles all table merging, so we just need to process the data
-    const processedTables = backendTables.map(table => ({
+    const processedTables: { rows: string[][]; name: string; header: string[]; }[] = backendTables.map(table => ({
       ...table,
-      rows: Array.isArray(table.rows) ? [...table.rows] : [],
+      rows: Array.isArray(table.rows) 
+        ? [...table.rows] 
+        : (typeof table.rows === 'object' && table.rows !== null)
+          ? Object.values(table.rows) as string[][] // Convert object with numeric keys to array
+          : [],
       name: table.name || ''
     }));
     setTables(processedTables);

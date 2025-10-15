@@ -51,7 +51,7 @@ export default function PDFViewer({ fileUrl, isCollapsed, onToggleCollapse }: PD
   // Don't render PDF until client-side
   if (!isClient) {
     return (
-      <div className="w-[30%] h-full bg-gray-50 border-r border-gray-200 flex items-center justify-center flex-shrink-0">
+      <div className="w-full h-full bg-gray-50 border-r border-gray-200 flex items-center justify-center flex-shrink-0">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
           <p className="text-gray-600">Initializing PDF viewer...</p>
@@ -75,7 +75,7 @@ export default function PDFViewer({ fileUrl, isCollapsed, onToggleCollapse }: PD
   }
 
   return (
-    <div className="w-[30%] h-full bg-gray-50 border-r border-gray-200 flex flex-col flex-shrink-0">
+    <div className="w-full h-full bg-gray-50 border-r border-gray-200 flex flex-col flex-shrink-0">
       {/* Header with controls */}
       <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-white shadow-sm">
         <h3 className="text-lg font-semibold text-gray-800">Document Preview</h3>

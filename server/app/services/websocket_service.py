@@ -1,5 +1,6 @@
 """
 WebSocket service for real-time progress tracking during document extraction.
+Enhanced with timeout management and keepalive functionality for large file processing.
 """
 
 import asyncio
@@ -9,21 +10,45 @@ from typing import Dict, Set, Any, Optional
 from fastapi import WebSocket, WebSocketDisconnect
 from datetime import datetime
 import uuid
+import sys
+import os
+
+# Add parent directory to path to import config
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+from config.timeouts import timeout_settings
 
 logger = logging.getLogger(__name__)
 
 class ConnectionManager:
-    """Manages WebSocket connections for real-time progress updates."""
+    """
+    Manages WebSocket connections for real-time progress updates.
+    Enhanced with timeout management and keepalive for large file processing.
+    """
     
     def __init__(self):
         # Active connections: {upload_id: {session_id: websocket}}
         self.active_connections: Dict[str, Dict[str, WebSocket]] = {}
         # Connection metadata: {session_id: {upload_id, user_id, connected_at}}
         self.connection_metadata: Dict[str, Dict[str, Any]] = {}
+        
+        # Configure longer timeouts for large file processing
+        self.websocket_timeout = timeout_settings.websocket_connection
+        self.keepalive_timeout = timeout_settings.websocket_keepalive
+        self.ping_interval = timeout_settings.websocket_ping_interval
+        
+        # Track keepalive tasks
+        self.keepalive_tasks: Dict[str, asyncio.Task] = {}
     
     async def connect(self, websocket: WebSocket, upload_id: str, session_id: str, user_id: str = None):
-        """Accept a WebSocket connection and register it."""
+        """
+        Accept a WebSocket connection and register it.
+        Enhanced with timeout configuration and keepalive task for long-running processes.
+        """
         await websocket.accept()
+        
+        # Configure WebSocket timeouts if supported
+        if hasattr(websocket, 'timeout'):
+            websocket.timeout = self.websocket_timeout
         
         if upload_id not in self.active_connections:
             self.active_connections[upload_id] = {}
@@ -32,21 +57,75 @@ class ConnectionManager:
         self.connection_metadata[session_id] = {
             'upload_id': upload_id,
             'user_id': user_id,
-            'connected_at': datetime.utcnow().isoformat()
+            'connected_at': datetime.utcnow().isoformat(),
+            'last_heartbeat': datetime.utcnow().isoformat()
         }
         
-        logger.info(f"WebSocket connected: upload_id={upload_id}, session_id={session_id}")
+        logger.info(f"WebSocket connected: upload_id={upload_id}, session_id={session_id}, timeout={self.websocket_timeout}s")
+        
+        # Start keepalive task for long-running processes
+        keepalive_key = f"{upload_id}:{session_id}"
+        self.keepalive_tasks[keepalive_key] = asyncio.create_task(
+            self._keepalive_task(websocket, upload_id, session_id)
+        )
         
         # Send initial connection confirmation
         await self.send_personal_message({
             'type': 'connection_established',
             'upload_id': upload_id,
             'session_id': session_id,
+            'timeout_config': {
+                'websocket_timeout': self.websocket_timeout,
+                'keepalive_interval': self.ping_interval
+            },
             'timestamp': datetime.utcnow().isoformat()
         }, upload_id, session_id)
     
+    async def _keepalive_task(self, websocket: WebSocket, upload_id: str, session_id: str):
+        """Send periodic ping messages to keep connection alive during long-running processes."""
+        keepalive_key = f"{upload_id}:{session_id}"
+        try:
+            while websocket.client_state.name == 'CONNECTED':
+                await asyncio.sleep(self.ping_interval)
+                
+                # Check if connection still exists
+                if upload_id not in self.active_connections or session_id not in self.active_connections[upload_id]:
+                    break
+                
+                # Send keepalive ping
+                try:
+                    await self.send_personal_message({
+                        'type': 'ping',
+                        'timestamp': datetime.utcnow().isoformat(),
+                        'keepalive': True
+                    }, upload_id, session_id)
+                    
+                    # Update last heartbeat
+                    if session_id in self.connection_metadata:
+                        self.connection_metadata[session_id]['last_heartbeat'] = datetime.utcnow().isoformat()
+                    
+                    logger.debug(f"Keepalive ping sent: upload_id={upload_id}, session_id={session_id}")
+                except Exception as e:
+                    logger.warning(f"Keepalive ping failed: {e}")
+                    break
+                    
+        except asyncio.CancelledError:
+            logger.debug(f"Keepalive task cancelled: upload_id={upload_id}, session_id={session_id}")
+        except Exception as e:
+            logger.error(f"Keepalive task error: {e}")
+        finally:
+            # Clean up task reference
+            if keepalive_key in self.keepalive_tasks:
+                del self.keepalive_tasks[keepalive_key]
+    
     def disconnect(self, upload_id: str, session_id: str):
-        """Remove a WebSocket connection."""
+        """Remove a WebSocket connection and cleanup keepalive task."""
+        # Cancel keepalive task
+        keepalive_key = f"{upload_id}:{session_id}"
+        if keepalive_key in self.keepalive_tasks:
+            self.keepalive_tasks[keepalive_key].cancel()
+            del self.keepalive_tasks[keepalive_key]
+        
         if upload_id in self.active_connections and session_id in self.active_connections[upload_id]:
             del self.active_connections[upload_id][session_id]
             
@@ -399,7 +478,10 @@ class ConnectionManager:
 connection_manager = ConnectionManager()
 
 class ProgressTracker:
-    """Tracks and broadcasts progress updates during document processing."""
+    """
+    Tracks and broadcasts progress updates during document processing.
+    Enhanced with timeout awareness and monitoring for large file processing.
+    """
     
     def __init__(self, upload_id: str, connection_manager: ConnectionManager):
         self.upload_id = upload_id
@@ -407,6 +489,8 @@ class ProgressTracker:
         self.current_stage = None
         self.start_time = datetime.utcnow()
         self.stage_start_time = None
+        self.last_update = datetime.utcnow()
+        self.timeout_threshold = timeout_settings.total_extraction  # 30 minutes
     
     async def start_stage(self, stage: str, message: str = None):
         """Start a new processing stage."""
@@ -422,6 +506,19 @@ class ProgressTracker:
         
         logger.info(f"Started stage {stage} for upload {self.upload_id}")
     
+    async def check_timeout(self) -> bool:
+        """Check if processing has exceeded timeout threshold."""
+        elapsed = (datetime.utcnow() - self.start_time).total_seconds()
+        if elapsed > self.timeout_threshold:
+            await self.send_error(
+                f"Processing timeout exceeded ({elapsed:.0f}s > {self.timeout_threshold}s). "
+                f"The document may be too large or complex for processing.",
+                "PROCESSING_TIMEOUT"
+            )
+            logger.error(f"Processing timeout for upload {self.upload_id}: {elapsed:.0f}s > {self.timeout_threshold}s")
+            return True
+        return False
+    
     async def update_progress(self, stage: str, progress_percentage: float, message: str = None):
         """Update progress for the current stage."""
         await self.connection_manager.send_stage_update(
@@ -431,7 +528,24 @@ class ProgressTracker:
             message
         )
         
+        self.last_update = datetime.utcnow()
         logger.debug(f"Progress update for {stage}: {progress_percentage}%")
+    
+    async def update_progress_with_timeout_check(self, stage: str, progress: float, message: str = None) -> bool:
+        """
+        Update progress and check for timeout.
+        Returns False if timeout exceeded, True otherwise.
+        """
+        # Check timeout before updating
+        if await self.check_timeout():
+            return False
+        
+        # Update progress
+        await self.connection_manager.send_stage_update(
+            self.upload_id, stage, progress, message
+        )
+        self.last_update = datetime.utcnow()
+        return True
     
     async def complete_stage(self, stage: str, message: str = None):
         """Mark a stage as completed."""

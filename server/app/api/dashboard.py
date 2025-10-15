@@ -123,6 +123,7 @@ async def get_all_statements(
             formatted_statements.append({
                 "id": str(statement.id),
                 "file_name": statement.file_name,
+                "gcs_key": statement.file_name,  # file_name IS the gcs_key
                 "company_name": company_name,
                 "status": statement.status,
                 "uploaded_at": statement.uploaded_at.isoformat() if statement.uploaded_at else None,
@@ -181,6 +182,7 @@ async def get_statements_by_status(
             formatted_statements.append({
                 "id": str(statement.id),
                 "file_name": statement.file_name,
+                "gcs_key": statement.file_name,  # file_name IS the gcs_key
                 "company_name": company_name,
                 "status": statement.status,
                 "uploaded_at": statement.uploaded_at.isoformat() if statement.uploaded_at else None,
@@ -297,6 +299,7 @@ async def get_statements_by_carrier(carrier_id: UUID, db: AsyncSession = Depends
             formatted_statements.append({
                 "id": str(statement.id),
                 "file_name": statement.file_name,
+                "gcs_key": statement.file_name,  # file_name IS the gcs_key
                 "company_name": carrier_name,
                 "status": statement.status,
                 "uploaded_at": statement.uploaded_at.isoformat() if statement.uploaded_at else None,
@@ -366,6 +369,7 @@ async def get_statements_by_carrier_and_status(
             formatted_statements.append({
                 "id": str(statement.id),
                 "file_name": statement.file_name,
+                "gcs_key": statement.file_name,  # file_name IS the gcs_key
                 "company_name": carrier_name,
                 "status": statement.status,
                 "uploaded_at": statement.uploaded_at.isoformat() if statement.uploaded_at else None,
@@ -461,11 +465,13 @@ async def get_user_specific_company_statements(
             formatted_statements.append({
                 "id": str(statement.id),
                 "file_name": statement.file_name,
+                "gcs_key": statement.file_name,  # file_name IS the gcs_key
                 "uploaded_at": statement.uploaded_at.isoformat() if statement.uploaded_at else None,
                 "status": statement.status,
                 "rejection_reason": statement.rejection_reason,
                 "selected_statement_date": statement.selected_statement_date,
                 "final_data": statement.final_data,
+                "edited_tables": statement.edited_tables,  # Include edited tables for preview
                 "field_config": statement.field_config,
                 "raw_data": statement.raw_data
             })

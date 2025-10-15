@@ -185,6 +185,7 @@ class StatementReview(BaseModel):
     status: str  # "Approved" | "Rejected" | "Pending"
     current_step: str  # Current step in the process
     final_data: Optional[List[Dict[str, Any]]] = None
+    edited_tables: Optional[List[Dict[str, Any]]] = None  # Include edited tables for preview
     field_config: Optional[Any] = None  # Can be list or dict to handle both old and new formats
     rejection_reason: Optional[str] = None
     plan_types: Optional[List[str]] = None

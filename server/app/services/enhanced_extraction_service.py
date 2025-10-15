@@ -1,15 +1,19 @@
 """
 Enhanced extraction service with real-time progress tracking via WebSocket.
+Enhanced with comprehensive timeout management for large file processing.
 """
 
 import asyncio
 import json
 import logging
 import time
+import sys
+import os
 from typing import Dict, List, Any, Optional, Union
 from pathlib import Path
 from datetime import datetime
 import uuid
+from fastapi import HTTPException
 
 from app.services.websocket_service import create_progress_tracker
 from app.services.new_extraction_service import NewExtractionService
@@ -19,23 +23,68 @@ from app.services.mistral.service import MistralDocumentAIService
 from app.services.excel_extraction_service import ExcelExtractionService
 from app.services.extraction_utils import normalize_statement_date, normalize_multi_line_headers
 
+# Import timeout configuration
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+from config.timeouts import timeout_settings
+
 logger = logging.getLogger(__name__)
 
 class EnhancedExtractionService:
     """
-    Enhanced extraction service with real-time progress tracking.
-    Integrates multiple extraction methods with WebSocket progress updates.
+    Enhanced extraction service with real-time progress tracking and comprehensive timeout management.
+    
+    PRIMARY EXTRACTION: Mistral Document AI (intelligent QnA-based extraction)
+    AI OPERATIONS: GPT-4 for field mapping, carrier detection, company metadata, plan type detection
+    
+    Integrates multiple extraction methods with WebSocket progress updates and timeout handling for large files.
     """
     
     def __init__(self):
-        """Initialize the enhanced extraction service."""
-        self.new_extraction_service = NewExtractionService()
-        self.gpt4o_service = GPT4oVisionService()
-        self.docai_extractor = GoogleDocAIExtractor()
+        """Initialize the enhanced extraction service with timeout configuration."""
+        # PRIMARY: Mistral Document AI
         self.mistral_service = MistralDocumentAIService()
+        
+        # AI OPERATIONS: GPT-4 service
+        self.gpt4o_service = GPT4oVisionService()
+        
+        # FALLBACK: Alternative extraction methods
+        self.new_extraction_service = NewExtractionService()
+        self.docai_extractor = GoogleDocAIExtractor()
+        
+        # EXCEL: Specialized Excel extraction
         self.excel_service = ExcelExtractionService()
         
-        logger.info("Enhanced Extraction Service initialized with progress tracking")
+        # Configure timeouts for different processing phases
+        self.phase_timeouts = {
+            'metadata_extraction': timeout_settings.metadata_extraction,  # 5 minutes
+            'document_processing': timeout_settings.document_processing,  # 10 minutes
+            'table_extraction': timeout_settings.table_extraction,  # 20 minutes
+            'post_processing': timeout_settings.post_processing,  # 5 minutes
+            'total_process': timeout_settings.total_extraction  # 30 minutes total
+        }
+        
+        logger.info(f"✅ Enhanced Extraction Service initialized")
+        logger.info(f"📋 PRIMARY: Mistral Document AI (extraction) + GPT-4 (AI operations)")
+        logger.info(f"⏱️  Timeout management: {self.phase_timeouts}")
+    
+    async def _validate_extraction_services(self, extraction_method: str) -> Dict[str, Any]:
+        """Validate that extraction services are actually functional before starting."""
+        if extraction_method == "mistral":
+            if not self.mistral_service.is_available():
+                return {
+                    "healthy": False, 
+                    "service": "mistral",
+                    "error": "Mistral service not properly initialized. Check MISTRAL_API_KEY and SDK compatibility."
+                }
+        elif extraction_method == "gpt4o":
+            if not self.gpt4o_service.is_available():
+                return {
+                    "healthy": False,
+                    "service": "gpt4o", 
+                    "error": "GPT-4 Vision service not available"
+                }
+        
+        return {"healthy": True, "service": extraction_method}
     
     async def extract_tables_with_progress(
         self,
@@ -63,6 +112,22 @@ class EnhancedExtractionService:
         progress_tracker = create_progress_tracker(upload_id)
         
         try:
+            # ✅ CRITICAL: Validate services BEFORE starting progress tracking
+            service_health = await self._validate_extraction_services(extraction_method)
+            if not service_health['healthy']:
+                error_msg = f"❌ {service_health['service'].upper()} service not available: {service_health['error']}"
+                logger.error(error_msg)
+                await progress_tracker.send_error(error_msg, "SERVICE_UNAVAILABLE")
+                return {
+                    "success": False, 
+                    "error": service_health['error'],
+                    "error_type": "SERVICE_UNAVAILABLE",
+                    "tables": [],
+                    "extraction_method": extraction_method
+                }
+            
+            logger.info(f"✅ {service_health['service'].upper()} service validated successfully")
+            
             # Determine extraction method based on file type and method preference
             if file_type.lower() in ['xlsx', 'xls', 'xlsm', 'xlsb']:
                 return await self._extract_excel_with_progress(
@@ -76,12 +141,8 @@ class EnhancedExtractionService:
                 return await self._extract_with_docai_progress(
                     file_path, company_id, progress_tracker, upload_id_uuid
                 )
-            elif extraction_method == "mistral":
+            else:  # smart, mistral, or default - USE MISTRAL AS PRIMARY
                 return await self._extract_with_mistral_progress(
-                    file_path, company_id, progress_tracker, upload_id_uuid
-                )
-            else:  # smart or default
-                return await self._extract_with_smart_progress(
                     file_path, company_id, progress_tracker, upload_id_uuid
                 )
                 
@@ -472,74 +533,116 @@ class EnhancedExtractionService:
         progress_tracker,
         upload_id_uuid: str = None
     ) -> Dict[str, Any]:
-        """Extract with Mistral and progress tracking."""
+        """
+        Extract with Mistral and comprehensive progress tracking with timeout management.
+        Enhanced with phase-specific timeouts to prevent cascading failures on large files.
+        """
+        try:
+            # Overall process timeout
+            async with asyncio.timeout(self.phase_timeouts['total_process']):
+                return await self._extract_with_phase_timeouts(
+                    file_path, company_id, progress_tracker, upload_id_uuid
+                )
+        except asyncio.TimeoutError:
+            error_msg = f"Extraction timeout after {self.phase_timeouts['total_process']} seconds. The document may be too large or complex."
+            logger.error(f"Extraction timeout for upload {upload_id_uuid}: {error_msg}")
+            await progress_tracker.send_error(error_msg, "EXTRACTION_TIMEOUT")
+            raise HTTPException(
+                status_code=408,
+                detail=error_msg
+            )
+    
+    async def _extract_with_phase_timeouts(
+        self,
+        file_path: str,
+        company_id: str,
+        progress_tracker,
+        upload_id_uuid: str = None
+    ) -> Dict[str, Any]:
+        """Process extraction with individual phase timeouts."""
+        
         await progress_tracker.start_stage("document_processing", "Preparing for Mistral Document AI")
         
-        # Stage 1: Document processing
+        # Stage 1: Document processing with timeout
         await progress_tracker.update_progress("document_processing", 50, "Initializing Mistral AI")
         await asyncio.sleep(0.1)
         
         await progress_tracker.complete_stage("document_processing", "Mistral AI initialized")
         
-        # NEW: Extract carrier name and statement date using GPT from first page
+        # Phase 1: Metadata Extraction with timeout
         carrier_info = None
         date_info = None
         gpt_extraction_success = False
         
         try:
-            # Stage: GPT Metadata Extraction
-            await progress_tracker.connection_manager.send_stage_update(
-                progress_tracker.upload_id,
-                'metadata_extraction',
-                15,
-                "Extracting carrier name and statement date with GPT-4..."
-            )
-            
-            logger.info(f"Starting GPT metadata extraction for upload {progress_tracker.upload_id}")
-            
-            # Extract metadata using GPT from first page
-            gpt_metadata = await self._extract_metadata_with_gpt(file_path)
-            
-            if gpt_metadata.get('success'):
-                carrier_info = {
-                    'carrier_name': gpt_metadata.get('carrier_name'),
-                    'carrier_confidence': gpt_metadata.get('carrier_confidence', 0.9)
-                }
-                date_info = {
-                    'document_date': gpt_metadata.get('statement_date'),
-                    'date_confidence': gpt_metadata.get('date_confidence', 0.9)
-                }
-                gpt_extraction_success = True
-                
-                logger.info(f"GPT extracted: carrier={carrier_info.get('carrier_name')}, date={date_info.get('document_date')}")
-                
-                # Send carrier detected message with actual GPT results
-                await progress_tracker.connection_manager.send_commission_specific_message(
+            async with asyncio.timeout(self.phase_timeouts['metadata_extraction']):
+                # Stage: GPT Metadata Extraction
+                await progress_tracker.connection_manager.send_stage_update(
                     progress_tracker.upload_id,
-                    'carrier_detected',
-                    {
-                        'carrier_name': carrier_info.get('carrier_name', 'Unknown'), 
-                        'current_stage': 'metadata_extraction', 
-                        'progress': 25
-                    }
+                    'metadata_extraction',
+                    15,
+                    "Extracting carrier name and statement date with GPT-4..."
                 )
-            else:
-                logger.warning(f"GPT metadata extraction returned no success: {gpt_metadata.get('error')}")
                 
+                logger.info(f"Starting GPT metadata extraction with {self.phase_timeouts['metadata_extraction']}s timeout")
+                
+                # Extract metadata using GPT from first page
+                gpt_metadata = await self._extract_metadata_with_gpt(file_path)
+                
+                if gpt_metadata.get('success'):
+                    carrier_info = {
+                        'carrier_name': gpt_metadata.get('carrier_name'),
+                        'carrier_confidence': gpt_metadata.get('carrier_confidence', 0.9)
+                    }
+                    date_info = {
+                        'document_date': gpt_metadata.get('statement_date'),
+                        'date_confidence': gpt_metadata.get('date_confidence', 0.9)
+                    }
+                    gpt_extraction_success = True
+                    
+                    logger.info(f"GPT extracted: carrier={carrier_info.get('carrier_name')}, date={date_info.get('document_date')}")
+                    
+                    # Send carrier detected message with actual GPT results
+                    await progress_tracker.connection_manager.send_commission_specific_message(
+                        progress_tracker.upload_id,
+                        'carrier_detected',
+                        {
+                            'carrier_name': carrier_info.get('carrier_name', 'Unknown'), 
+                            'current_stage': 'metadata_extraction', 
+                            'progress': 25
+                        }
+                    )
+                else:
+                    logger.warning(f"GPT metadata extraction returned no success: {gpt_metadata.get('error')}")
+                    
+        except asyncio.TimeoutError:
+            logger.warning("Metadata extraction timeout, continuing without metadata")
+            gpt_metadata = {'success': False, 'error': 'Timeout'}
         except Exception as e:
             logger.warning(f"GPT metadata extraction failed: {e}")
             # Continue with extraction even if GPT fails
         
-        # Stage 2: Mistral processing
+        # Phase 2: Mistral Table Extraction with timeout
         await progress_tracker.start_stage("table_detection", "Processing with Mistral Document AI")
         await progress_tracker.update_progress("table_detection", 25, "Analyzing document with QnA")
         
-        # Perform actual extraction using intelligent method
+        # Perform actual extraction using intelligent method with timeout
         try:
-            result = await self.mistral_service.extract_commission_data_intelligently(file_path)
+            async with asyncio.timeout(self.phase_timeouts['table_extraction']):
+                logger.info(f"Starting Mistral extraction with {self.phase_timeouts['table_extraction']}s timeout")
+                result = await self.mistral_service.extract_commission_data_intelligently(file_path)
+        except asyncio.TimeoutError:
+            error_msg = f"Table extraction timeout after {self.phase_timeouts['table_extraction']} seconds"
+            logger.error(error_msg)
+            await progress_tracker.send_error(error_msg, "TABLE_EXTRACTION_TIMEOUT")
+            raise HTTPException(status_code=408, detail=error_msg)
         except Exception as e:
             logger.warning(f"Intelligent extraction failed, falling back to legacy method: {e}")
-            result = self.mistral_service.extract_commission_data(file_path)
+            try:
+                result = self.mistral_service.extract_commission_data(file_path)
+            except Exception as fallback_error:
+                logger.error(f"Fallback extraction also failed: {fallback_error}")
+                raise
         
         await progress_tracker.update_progress("table_detection", 60, "Extracting tables using Mistral QnA")
         await asyncio.sleep(0.3)

@@ -31,22 +31,44 @@ export default function CompareModal({ statement, onClose }: Props) {
   useEffect(() => {
     const fetchPdfUrl = async () => {
       if (!statement?.gcs_key && !statement?.file_name) {
+        console.error('❌ No gcs_key or file_name in statement:', statement);
         setLoading(false);
         return;
       }
 
       try {
         const gcsKey = statement.gcs_key || statement.file_name;
-        const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, '');
-        const response = await fetch(`${baseUrl}/api/pdf-preview/?gcs_key=${encodeURIComponent(gcsKey)}`);
+        console.log('🔍 Fetching PDF with gcs_key:', gcsKey);
+        console.log('📄 Statement object:', statement);
+        
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        const url = `${apiUrl}/api/pdf-preview/?gcs_key=${encodeURIComponent(gcsKey)}`;
+        console.log('🔗 PDF preview URL:', url);
+        
+        const response = await fetch(url, {
+          credentials: 'include' // Include cookies for authentication
+        });
         
         if (response.ok) {
           const data = await response.json();
+          console.log('✅ PDF URL fetched successfully');
           setPdfUrl(data.url); // Use the signed GCS URL directly
+        } else {
+          const errorData = await response.json().catch(() => ({}));
+          console.error('❌ Failed to fetch PDF:', {
+            status: response.status,
+            statusText: response.statusText,
+            error: errorData,
+            gcs_key: gcsKey
+          });
+          // Show user-friendly message if file not found
+          if (response.status === 404) {
+            console.warn('⚠️ PDF file not found in storage. This may be an old statement where the file was deleted.');
+          }
         }
         setLoading(false);
       } catch (err) {
-        console.error('Error fetching PDF:', err);
+        console.error('❌ Error fetching PDF:', err);
         setLoading(false);
       }
     };
@@ -95,10 +117,10 @@ export default function CompareModal({ statement, onClose }: Props) {
             </a>
           </nav>
         </header>
-        {/* Card Layout */}
+        {/* Card Layout - 30/70 Split matching UnifiedTableEditor */}
         <div className="flex-1 flex flex-col lg:flex-row gap-6 w-full h-full max-h-full min-h-0 min-w-0 bg-slate-50 dark:bg-slate-900 p-6 rounded-b-2xl">
-          {/* PDF Card - Using Modern PDF Viewer */}
-          <section className="flex-1 min-w-0 min-h-0 flex flex-col rounded-xl shadow-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 overflow-hidden">
+          {/* PDF Card - 30% width */}
+          <section className={`${isCollapsed ? 'w-0 hidden' : 'w-full lg:w-[30%]'} min-w-0 min-h-0 flex flex-col rounded-xl shadow-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 overflow-hidden flex-shrink-0 transition-all duration-300`}>
             {loading ? (
               <div className="flex items-center justify-center h-full">
                 <div className="flex flex-col items-center justify-center">
@@ -115,13 +137,26 @@ export default function CompareModal({ statement, onClose }: Props) {
                 />
               </div>
             ) : (
-              <div className="flex items-center justify-center h-full">
-                <div className="text-slate-400 dark:text-slate-500 text-sm">No PDF file found.</div>
+              <div className="flex items-center justify-center h-full p-8">
+                <div className="text-center max-w-md">
+                  <div className="w-16 h-16 bg-amber-100 dark:bg-amber-900/30 rounded-xl flex items-center justify-center mx-auto mb-4">
+                    <svg className="w-8 h-8 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-semibold text-slate-700 dark:text-slate-300 mb-2">PDF Not Available</h3>
+                  <p className="text-slate-500 dark:text-slate-400 text-sm">
+                    The original PDF file for this statement is not available. This may be an older statement where the file storage was cleaned up.
+                  </p>
+                  <p className="text-slate-600 dark:text-slate-400 text-xs mt-3">
+                    The extracted data is still available in the table on the right.
+                  </p>
+                </div>
               </div>
             )}
           </section>
-          {/* Extracted Table Card */}
-          <section className="flex-1 min-w-0 min-h-0 flex flex-col rounded-xl shadow-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 overflow-hidden">
+          {/* Extracted Table Card - 70% width */}
+          <section className={`${isCollapsed ? 'w-full' : 'w-full lg:w-[70%]'} min-w-0 min-h-0 flex flex-col rounded-xl shadow-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 overflow-hidden flex-shrink-0 transition-all duration-300`}>
             <div className="sticky top-0 z-10 bg-white dark:bg-slate-800 px-6 py-4 border-b border-slate-200 dark:border-slate-700">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">

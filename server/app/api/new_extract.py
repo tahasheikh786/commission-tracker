@@ -258,11 +258,30 @@ async def extract_tables_smart(
             os.remove(file_path)
             raise HTTPException(status_code=404, detail="Company not found")
 
-        # Upload to GCS
-        gcs_key = f"statements/{company_id}/{file.filename}"
+        # Upload to GCS using upload_id for consistent path (not company_id which changes with carrier detection)
+        gcs_key = f"statements/{upload_id_uuid}/{file.filename}"
+        logger.info(f"📤 Uploading file to GCS: {gcs_key}")
+        
+        # Verify GCS is available before uploading
+        from app.services.gcs_utils import gcs_service
+        if not gcs_service.is_available():
+            logger.error("❌ GCS service is not available. Check GOOGLE_APPLICATION_CREDENTIALS.")
+            raise HTTPException(
+                status_code=503, 
+                detail="Cloud storage service is not available. Please contact support."
+            )
+        
         uploaded = upload_file_to_gcs(file_path, gcs_key)
         if not uploaded:
+            logger.error(f"❌ Failed to upload file to GCS: {gcs_key}")
             raise HTTPException(status_code=500, detail="Failed to upload file to GCS.")
+        
+        # Verify file was actually uploaded
+        if not gcs_service.file_exists(gcs_key):
+            logger.error(f"❌ File upload verification failed - file not found in GCS: {gcs_key}")
+            raise HTTPException(status_code=500, detail="File upload verification failed.")
+        
+        logger.info(f"✅ Successfully uploaded and verified file in GCS: {gcs_key}")
         
         # Generate signed URL for PDF preview
         gcs_url = generate_gcs_signed_url(gcs_key)

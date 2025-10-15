@@ -19,9 +19,33 @@ ENV PYTHONUNBUFFERED=1 \
     # OpenAI configuration
     OPENAI_API_KEY="" \
     OPENAI_API_BASE="https://api.openai.com/v1" \
+    # Mistral AI configuration (REQUIRED for Mistral extraction)
+    MISTRAL_API_KEY="" \
     # Database configuration
     RENDER_DB_KEY="" \
-    SUPABASE_DB_KEY=""
+    SUPABASE_DB_KEY="" \
+    # Timeout configuration for large file processing (in seconds)
+    # WebSocket timeouts
+    WEBSOCKET_TIMEOUT=1800 \
+    WEBSOCKET_PING_INTERVAL=30 \
+    WEBSOCKET_KEEPALIVE=300 \
+    # API timeouts
+    MISTRAL_TIMEOUT=1800 \
+    GPT_TIMEOUT=300 \
+    # Process timeouts
+    EXTRACTION_TIMEOUT=1800 \
+    DOCUMENT_PROCESSING_TIMEOUT=600 \
+    TABLE_EXTRACTION_TIMEOUT=1200 \
+    METADATA_EXTRACTION_TIMEOUT=300 \
+    POST_PROCESSING_TIMEOUT=300 \
+    # Server timeouts
+    UVICORN_TIMEOUT_KEEP_ALIVE=1800 \
+    UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN=60 \
+    # Document size-based timeouts
+    SMALL_DOC_TIMEOUT=300 \
+    MEDIUM_DOC_TIMEOUT=600 \
+    LARGE_DOC_TIMEOUT=1200 \
+    MAX_TIMEOUT=1800
 
 # Install system dependencies required for OpenCV, EasyOCR, Tesseract, and other packages
 RUN apt-get update && apt-get install -y \

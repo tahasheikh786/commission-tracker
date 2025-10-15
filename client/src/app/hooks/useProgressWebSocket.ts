@@ -78,8 +78,14 @@ export function useProgressWebSocket({
 
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttemptsRef = useRef(0);
   const maxReconnectAttempts = 5;
+  
+  // Enhanced timeout configuration for large file processing
+  const CONNECTION_TIMEOUT = 60000; // 60 seconds to establish connection
+  const HEARTBEAT_INTERVAL = 30000; // 30 seconds heartbeat
   
   // Store callbacks in refs to avoid recreating connect/disconnect on every render
   const onExtractionCompleteRef = useRef(onExtractionComplete);
@@ -92,9 +98,20 @@ export function useProgressWebSocket({
   }, [onExtractionComplete, onError]);
 
   const disconnect = useCallback(() => {
+    // Clear all timers
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = null;
+    }
+    
+    if (heartbeatIntervalRef.current) {
+      clearInterval(heartbeatIntervalRef.current);
+      heartbeatIntervalRef.current = null;
+    }
+    
+    if (connectionTimeoutRef.current) {
+      clearTimeout(connectionTimeoutRef.current);
+      connectionTimeoutRef.current = null;
     }
 
     if (wsRef.current) {
@@ -146,9 +163,32 @@ export function useProgressWebSocket({
 
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
+      
+      // Set connection timeout - close if not connected within timeout period
+      connectionTimeoutRef.current = setTimeout(() => {
+        if (ws.readyState === WebSocket.CONNECTING) {
+          console.error('❌ WebSocket connection timeout after 60 seconds');
+          ws.close();
+          setProgress(prev => ({
+            ...prev,
+            error: 'Connection timeout - please check your network',
+            isConnected: false
+          }));
+          if (onErrorRef.current) {
+            onErrorRef.current('WebSocket connection timeout');
+          }
+        }
+      }, CONNECTION_TIMEOUT);
 
       ws.onopen = () => {
         console.log('✅ WebSocket connected successfully for uploadId:', uploadId);
+        
+        // Clear connection timeout
+        if (connectionTimeoutRef.current) {
+          clearTimeout(connectionTimeoutRef.current);
+          connectionTimeoutRef.current = null;
+        }
+        
         setProgress(prev => ({
           ...prev,
           isConnected: true,
@@ -156,12 +196,34 @@ export function useProgressWebSocket({
         }));
         reconnectAttemptsRef.current = 0;
         
-        // Send a ping to confirm connection
+        // Send initial ping to confirm connection
         try {
           ws.send(JSON.stringify({ type: 'ping', timestamp: Date.now() }));
         } catch (error) {
           console.error('Failed to send ping:', error);
         }
+        
+        // Start heartbeat interval to maintain connection during long-running processes
+        heartbeatIntervalRef.current = setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) {
+            try {
+              ws.send(JSON.stringify({ type: 'heartbeat', timestamp: Date.now() }));
+              console.log('💓 Heartbeat sent to maintain connection');
+            } catch (error) {
+              console.error('Failed to send heartbeat:', error);
+              if (heartbeatIntervalRef.current) {
+                clearInterval(heartbeatIntervalRef.current);
+                heartbeatIntervalRef.current = null;
+              }
+            }
+          } else {
+            console.warn('⚠️ WebSocket not open, clearing heartbeat interval');
+            if (heartbeatIntervalRef.current) {
+              clearInterval(heartbeatIntervalRef.current);
+              heartbeatIntervalRef.current = null;
+            }
+          }
+        }, HEARTBEAT_INTERVAL);
       };
 
       ws.onmessage = (event) => {
@@ -202,6 +264,13 @@ export function useProgressWebSocket({
         console.error('❌ WebSocket error for uploadId:', uploadId, error);
         console.error('WebSocket readyState:', ws.readyState);
         console.error('WebSocket URL was:', wsUrl.replace(/token=[^&]+/, 'token=***'));
+        
+        // Clear connection timeout on error
+        if (connectionTimeoutRef.current) {
+          clearTimeout(connectionTimeoutRef.current);
+          connectionTimeoutRef.current = null;
+        }
+        
         setProgress(prev => ({
           ...prev,
           error: 'Connection error occurred',
@@ -210,6 +279,16 @@ export function useProgressWebSocket({
         if (onErrorRef.current) {
           onErrorRef.current('WebSocket connection error');
         }
+        
+        // Implement exponential backoff retry
+        if (reconnectAttemptsRef.current < maxReconnectAttempts) {
+          const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 30000);
+          console.log(`🔄 Scheduling reconnect in ${delay}ms (attempt ${reconnectAttemptsRef.current + 1}/${maxReconnectAttempts})`);
+          reconnectTimeoutRef.current = setTimeout(() => {
+            reconnectAttemptsRef.current++;
+            connect();
+          }, delay);
+        }
       };
 
       ws.onclose = (event) => {
@@ -217,14 +296,26 @@ export function useProgressWebSocket({
         console.log('Close code:', event.code, 'Reason:', event.reason || 'No reason provided');
         console.log('Was clean:', event.wasClean);
         
+        // Clear heartbeat interval
+        if (heartbeatIntervalRef.current) {
+          clearInterval(heartbeatIntervalRef.current);
+          heartbeatIntervalRef.current = null;
+        }
+        
+        // Clear connection timeout
+        if (connectionTimeoutRef.current) {
+          clearTimeout(connectionTimeoutRef.current);
+          connectionTimeoutRef.current = null;
+        }
+        
         setProgress(prev => ({
           ...prev,
           isConnected: false
         }));
 
-        // Attempt to reconnect if not a normal closure
+        // Attempt to reconnect if not a normal closure with exponential backoff
         if (event.code !== 1000 && event.code !== 1008 && reconnectAttemptsRef.current < maxReconnectAttempts) {
-          const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 10000);
+          const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 30000);
           console.log(`🔄 Reconnecting in ${delay}ms (attempt ${reconnectAttemptsRef.current + 1}/${maxReconnectAttempts})...`);
           
           reconnectTimeoutRef.current = setTimeout(() => {

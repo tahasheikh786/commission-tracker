@@ -40,6 +40,11 @@ async def shutdown_event_handler():
         # Set shutdown event to stop background tasks
         shutdown_event.set()
         
+        # Stop process monitoring
+        from app.services.process_monitor import process_monitor
+        await process_monitor.stop_monitoring()
+        logger.info("Process monitoring stopped")
+        
         # Import connection manager
         from app.services.websocket_service import connection_manager
         
@@ -83,7 +88,8 @@ async def health_check():
 @app.get("/health/detailed")
 async def health_check_detailed():
     """
-    Detailed health check with resource monitoring for Pro plan.
+    Detailed health check with resource monitoring and process tracking.
+    Enhanced with long-running process monitoring for large file processing.
     """
     try:
         import psutil
@@ -96,8 +102,13 @@ async def health_check_detailed():
         from app.services.websocket_service import connection_manager
         ws_connections = connection_manager.get_connection_count()
         
+        # Get process monitor status
+        from app.services.process_monitor import process_monitor
+        process_status = process_monitor.get_health_status()
+        
         return {
             "status": "healthy",
+            "process_monitoring": process_status,
             "timestamp": time.time(),
             "resources": {
                 "memory": {
@@ -284,14 +295,41 @@ async def cleanup_sessions_periodically():
 # Setup on startup
 @app.on_event("startup")
 async def startup_event():
-    """Run startup tasks"""
+    """Run startup tasks with process monitoring for large file processing"""
     # Start background cleanup task and track it
     task = asyncio.create_task(cleanup_sessions_periodically())
     background_tasks.add(task)
     task.add_done_callback(background_tasks.discard)
     
-    logger.info("Application startup complete")
+    # Start process monitoring for long-running document extractions
+    from app.services.process_monitor import process_monitor
+    await process_monitor.start_monitoring()
+    logger.info("Process monitoring started for large file processing")
+    
+    logger.info("Application startup complete with enhanced monitoring")
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    import sys
+    import os
+    
+    # Import timeout configuration
+    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
+    from config.timeouts import timeout_settings
+    
+    # Configure Uvicorn for large file processing with enhanced timeout settings
+    uvicorn_config = {
+        "app": app,
+        "host": "0.0.0.0",
+        "port": 8000,
+        "timeout_keep_alive": timeout_settings.uvicorn_keepalive,  # 30 minutes keep-alive
+        "timeout_graceful_shutdown": timeout_settings.uvicorn_graceful_shutdown,  # 60 seconds graceful shutdown
+        "limit_concurrency": 100,  # Adjust based on your needs
+        "limit_max_requests": 1000,  # Prevent memory leaks from long-running processes
+        "workers": 1,  # Single worker for debugging, increase for production
+        "log_level": "info"
+    }
+    
+    logger.info(f"Starting Uvicorn with timeout configuration: keep_alive={uvicorn_config['timeout_keep_alive']}s, graceful_shutdown={uvicorn_config['timeout_graceful_shutdown']}s")
+    
+    uvicorn.run(**uvicorn_config)

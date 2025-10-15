@@ -1084,11 +1084,13 @@ export default function UnifiedTableEditor({
         
         {/* Left Panel - Document/Data Preview */}
         {viewMode === 'table_review' && (
-          <PDFViewer
-            fileUrl={extractedData?.gcs_url || extractedData?.file_name || ''}
-            isCollapsed={isPreviewCollapsed}
-            onToggleCollapse={() => setIsPreviewCollapsed(!isPreviewCollapsed)}
-          />
+          <div className={`${isPreviewCollapsed ? 'w-0' : 'w-[30%]'} flex-shrink-0 transition-all duration-300`}>
+            <PDFViewer
+              fileUrl={extractedData?.gcs_url || extractedData?.file_name || ''}
+              isCollapsed={isPreviewCollapsed}
+              onToggleCollapse={() => setIsPreviewCollapsed(!isPreviewCollapsed)}
+            />
+          </div>
         )}
 
         {viewMode === 'field_mapping' && !isPreviewCollapsed && (
@@ -1318,7 +1320,7 @@ export default function UnifiedTableEditor({
           </div>
 
           {/* Right Panel Content */}
-          <div className="flex-1 w-full min-w-0">
+          <div className="flex-1 w-full min-w-0 overflow-hidden">
             {viewMode === 'table_review' ? (
               // Show new ExtractedDataTable in review mode
               <div className={`h-full w-full transition-opacity duration-500 ${

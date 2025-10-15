@@ -7,23 +7,70 @@ type Props = {
 };
 
 export default function StatementPreviewModal({ statement, onClose }: Props) {
-  
+    console.log('📊 StatementPreviewModal - Statement data:', {
+        has_final_data: !!statement?.final_data,
+        final_data_length: statement?.final_data?.length,
+        has_edited_tables: !!statement?.edited_tables,
+        edited_tables_length: statement?.edited_tables?.length,
+        has_raw_data: !!statement?.raw_data,
+        raw_data_length: statement?.raw_data?.length,
+        statement
+    });
 
     // Transform final_data to the format expected by DashboardTable
     const transformTables = (finalData: any[]) => {
         if (!finalData || !Array.isArray(finalData)) {
-            console.log('No final_data or not an array');
+            console.log('❌ No final_data or not an array:', finalData);
             return [];
         }
 
+        console.log('🔍 Processing', finalData.length, 'tables');
+
         return finalData.map((table, index) => {
+            console.log(`🔍 Table ${index} structure:`, {
+                is_array: Array.isArray(table),
+                has_header: table?.header,
+                has_rows: table?.rows,
+                type: typeof table,
+                keys: table && typeof table === 'object' ? Object.keys(table) : []
+            });
+
             // Check if table has the expected structure
             if (table && typeof table === 'object') {
                 // If it has header and rows, use as-is (without name to avoid "Unnamed Table" heading)
                 if (table.header && table.rows) {
+                    // Convert header to array if needed
+                    const headerArray = Array.isArray(table.header) 
+                        ? table.header 
+                        : Object.values(table.header);
+                    
+                    // Convert rows to array if needed
+                    let rowsArray;
+                    if (Array.isArray(table.rows)) {
+                        rowsArray = table.rows;
+                    } else if (typeof table.rows === 'object') {
+                        // If rows is an object with numeric keys, convert to array
+                        rowsArray = Object.values(table.rows);
+                    } else {
+                        rowsArray = [];
+                    }
+                    
+                    // Ensure each row is an array
+                    const processedRows = rowsArray.map((row: any) => {
+                        if (Array.isArray(row)) {
+                            return row;
+                        } else if (typeof row === 'object' && row !== null) {
+                            // If row is an object, convert to array based on headers
+                            return headerArray.map((header: any) => String(row[header] || ''));
+                        } else {
+                            return [];
+                        }
+                    });
+                    
+                    console.log(`✅ Table ${index} has header and rows format, ${processedRows.length} rows with ${headerArray.length} columns`);
                     return {
-                        header: table.header,
-                        rows: table.rows
+                        header: headerArray,
+                        rows: processedRows
                         // Don't include name to avoid table heading
                     };
                 }
@@ -32,7 +79,8 @@ export default function StatementPreviewModal({ statement, onClose }: Props) {
                 if (Array.isArray(table) && table.length > 0 && typeof table[0] === 'object') {
                     const firstRow = table[0];
                     const headers = Object.keys(firstRow);
-                    const rows = table.map(row => headers.map(header => row[header] || ''));
+                    const rows = table.map(row => headers.map(header => String(row[header] || '')));
+                    console.log(`✅ Table ${index} converted from array of objects, ${rows.length} rows with ${headers.length} columns`);
                     
                     return {
                         header: headers,
@@ -42,13 +90,16 @@ export default function StatementPreviewModal({ statement, onClose }: Props) {
                 }
             }
             
-            console.log('Unexpected table format:', table);
+            console.log(`❌ Table ${index} has unexpected format:`, table);
             return null;
         }).filter((table): table is { header: string[]; rows: string[][] } => table !== null);
     };
 
-    const transformedTables = transformTables(statement.final_data);
-    console.log('Transformed tables:', transformedTables);
+    // Try final_data first, then fall back to edited_tables or raw_data
+    const dataToDisplay = statement.final_data || statement.edited_tables || statement.raw_data;
+    const transformedTables = transformTables(dataToDisplay);
+    console.log('📋 Transformed tables:', transformedTables, 'from data source:', 
+        statement.final_data ? 'final_data' : statement.edited_tables ? 'edited_tables' : 'raw_data');
 
     return (
         <Modal onClose={onClose}>
