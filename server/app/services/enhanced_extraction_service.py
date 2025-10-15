@@ -15,11 +15,16 @@ from datetime import datetime
 import uuid
 from fastapi import HTTPException
 
+# CRITICAL: Load environment variables FIRST, before importing any services
+from dotenv import load_dotenv
+load_dotenv()
+
 from app.services.websocket_service import create_progress_tracker
 from app.services.new_extraction_service import NewExtractionService
 from app.services.gpt4o_vision_service import GPT4oVisionService
 from app.services.extractor_google_docai import GoogleDocAIExtractor
 from app.services.mistral.service import MistralDocumentAIService
+from app.services.claude.service import ClaudeDocumentAIService
 from app.services.excel_extraction_service import ExcelExtractionService
 from app.services.extraction_utils import normalize_statement_date, normalize_multi_line_headers
 
@@ -33,7 +38,8 @@ class EnhancedExtractionService:
     """
     Enhanced extraction service with real-time progress tracking and comprehensive timeout management.
     
-    PRIMARY EXTRACTION: Mistral Document AI (intelligent QnA-based extraction)
+    PRIMARY EXTRACTION: Claude Document AI (superior vision-based extraction) 🆕
+    FALLBACK: Mistral Document AI (intelligent QnA-based extraction)
     AI OPERATIONS: GPT-4 for field mapping, carrier detection, company metadata, plan type detection
     
     Integrates multiple extraction methods with WebSocket progress updates and timeout handling for large files.
@@ -41,7 +47,10 @@ class EnhancedExtractionService:
     
     def __init__(self):
         """Initialize the enhanced extraction service with timeout configuration."""
-        # PRIMARY: Mistral Document AI
+        # PRIMARY: Claude Document AI (NEW - Superior accuracy)
+        self.claude_service = ClaudeDocumentAIService()
+        
+        # FALLBACK: Mistral Document AI (Keep as fallback)
         self.mistral_service = MistralDocumentAIService()
         
         # AI OPERATIONS: GPT-4 service
@@ -64,12 +73,30 @@ class EnhancedExtractionService:
         }
         
         logger.info(f"✅ Enhanced Extraction Service initialized")
-        logger.info(f"📋 PRIMARY: Mistral Document AI (extraction) + GPT-4 (AI operations)")
+        logger.info(f"🆕 PRIMARY: Claude Document AI (extraction) + GPT-4 (AI operations)")
+        logger.info(f"📋 FALLBACK: Mistral Document AI")
         logger.info(f"⏱️  Timeout management: {self.phase_timeouts}")
     
     async def _validate_extraction_services(self, extraction_method: str) -> Dict[str, Any]:
         """Validate that extraction services are actually functional before starting."""
-        if extraction_method == "mistral":
+        # For "smart" or default, validate Claude (our new primary)
+        if extraction_method in ["claude", "smart"]:
+            if not self.claude_service.is_available():
+                logger.warning("⚠️  Claude service not available - falling back to Mistral")
+                logger.warning(f"Claude client status: {self.claude_service.client}")
+                logger.warning(f"ANTHROPIC_AVAILABLE: {hasattr(self.claude_service, 'client') and self.claude_service.client is not None}")
+                # If Claude not available, check Mistral as fallback
+                if not self.mistral_service.is_available():
+                    return {
+                        "healthy": False, 
+                        "service": "claude",
+                        "error": "Claude service not available and Mistral fallback also unavailable."
+                    }
+                logger.info("✅ Using Mistral as fallback (Claude unavailable)")
+                return {"healthy": True, "service": "mistral", "fallback_mode": True}
+            logger.info("✅ Using Claude as primary extraction service")
+            return {"healthy": True, "service": "claude"}
+        elif extraction_method == "mistral":
             if not self.mistral_service.is_available():
                 return {
                     "healthy": False, 
@@ -133,6 +160,11 @@ class EnhancedExtractionService:
                 return await self._extract_excel_with_progress(
                     file_path, company_id, progress_tracker, upload_id_uuid
                 )
+            elif extraction_method == "mistral":
+                # Explicit Mistral request
+                return await self._extract_with_mistral_progress(
+                    file_path, company_id, progress_tracker, upload_id_uuid
+                )
             elif extraction_method == "gpt4o":
                 return await self._extract_with_gpt4o_progress(
                     file_path, company_id, progress_tracker, upload_id_uuid
@@ -141,8 +173,9 @@ class EnhancedExtractionService:
                 return await self._extract_with_docai_progress(
                     file_path, company_id, progress_tracker, upload_id_uuid
                 )
-            else:  # smart, mistral, or default - USE MISTRAL AS PRIMARY
-                return await self._extract_with_mistral_progress(
+            else:  # claude, smart, or default - USE CLAUDE AS PRIMARY 🆕
+                logger.info(f"Routing to Claude extraction (method: {extraction_method})")
+                return await self._extract_with_claude_progress(
                     file_path, company_id, progress_tracker, upload_id_uuid
                 )
                 
@@ -717,6 +750,98 @@ class EnhancedExtractionService:
         })
         
         return result
+
+    async def _extract_with_claude_progress(
+        self,
+        file_path: str,
+        company_id: str,
+        progress_tracker,
+        upload_id_uuid: str = None
+    ) -> Dict[str, Any]:
+        """
+        Extract with Claude AI and comprehensive progress tracking.
+        Enhanced with Claude's superior vision capabilities for table extraction.
+        """
+        try:
+            await progress_tracker.start_stage("document_processing", "Preparing for Claude AI")
+            
+            # Stage 1: Document processing
+            await progress_tracker.update_progress("document_processing", 30, "Validating document for Claude")
+            await asyncio.sleep(0.1)
+            
+            await progress_tracker.complete_stage("document_processing", "Claude AI ready")
+            
+            # Stage 2: Claude AI Extraction
+            await progress_tracker.start_stage("table_detection", "Processing with Claude AI")
+            await progress_tracker.update_progress("table_detection", 20, "Analyzing document with Claude vision")
+            
+            # Perform actual extraction using Claude
+            logger.info(f"Starting Claude extraction for {file_path}")
+            result = await self.claude_service.extract_commission_data(
+                file_path,
+                progress_tracker
+            )
+            
+            await progress_tracker.update_progress("table_detection", 80, "Processing Claude results")
+            await asyncio.sleep(0.2)
+            
+            # Apply table merging if needed (for consistency with other extractors)
+            if result.get('success') and result.get('tables'):
+                from app.services.extraction_utils import stitch_multipage_tables, normalize_multi_line_headers
+                original_tables = result.get('tables', [])
+                merged_tables = stitch_multipage_tables(original_tables)
+                
+                # Headers are already normalized by Claude service, but ensure consistency
+                for table in merged_tables:
+                    raw_headers = table.get('headers', []) or table.get('header', [])
+                    rows = table.get('rows', [])
+                    if raw_headers:
+                        normalized_headers = normalize_multi_line_headers(raw_headers, rows)
+                        table['headers'] = normalized_headers
+                        table['header'] = normalized_headers
+                        logger.info(f"Claude: Verified normalized headers")
+                
+                result['tables'] = merged_tables
+                logger.info(f"Claude: Processed {len(original_tables)} tables into {len(merged_tables)} tables")
+            
+            await progress_tracker.complete_stage("table_detection", "Claude extraction completed")
+            
+            # Stage 3: Validation
+            await progress_tracker.start_stage("validation", "Validating Claude results")
+            await progress_tracker.update_progress("validation", 100, "Validation completed")
+            
+            # Send completion with all fields from result including UUID
+            await progress_tracker.send_completion({
+                'upload_id': upload_id_uuid,
+                'extraction_id': upload_id_uuid,
+                'tables': result.get('tables', []),
+                'extraction_method': 'claude',
+                'file_type': 'pdf',
+                'quality_summary': result.get('quality_summary', {}),
+                'metadata': result.get('metadata', {}),
+                'document_metadata': result.get('document_metadata', {}),
+                'extracted_carrier': result.get('extracted_carrier'),
+                'extracted_date': result.get('extracted_date'),
+                'extraction_quality': result.get('extraction_quality', {})
+            })
+            
+            return result
+        
+        except Exception as e:
+            logger.error(f"Claude extraction failed: {e}")
+            
+            # Fallback to Mistral if Claude fails
+            logger.warning("Falling back to Mistral extraction after Claude failure")
+            try:
+                return await self._extract_with_mistral_progress(
+                    file_path,
+                    company_id,
+                    progress_tracker,
+                    upload_id_uuid
+                )
+            except Exception as fallback_error:
+                logger.error(f"Fallback to Mistral also failed: {fallback_error}")
+                raise
 
     # Helper methods (consolidated from duplicates)
     def _detect_file_type(self, file_path: str) -> str:

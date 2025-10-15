@@ -170,9 +170,13 @@ const TableRow = memo(function TableRow({
         `}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Checkbox Cell */}
-        <td className={`px-1 py-1 w-10 border-b border-gray-200 dark:border-slate-700 border-r border-gray-200 dark:border-slate-700 sticky left-0 z-10 hover:bg-slate-50 dark:hover:bg-slate-800 ${
-          isSelected ? 'bg-slate-50/50 dark:bg-slate-800/30 hover:bg-slate-100 dark:hover:bg-slate-700/40' : isSummary ? 'bg-orange-50 dark:bg-orange-900/30' : 'bg-white dark:bg-slate-800'
+        {/* Checkbox Cell - Fixed position on left */}
+        <td className={`px-1 py-1 w-10 border-b border-gray-200 dark:border-slate-700 border-r border-gray-200 dark:border-slate-700 sticky left-0 z-20 shadow-[2px_0_4px_rgba(0,0,0,0.05)] dark:shadow-[2px_0_4px_rgba(0,0,0,0.2)] ${
+          isSelected 
+            ? 'bg-slate-50/50 dark:bg-slate-800/30 hover:bg-slate-100 dark:hover:bg-slate-700/40' 
+            : isSummary 
+              ? 'bg-orange-50 dark:bg-orange-900/30' 
+              : 'bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800'
         }`}>
           <TableRowSelector
             isSelected={isSelected}
@@ -198,9 +202,13 @@ const TableRow = memo(function TableRow({
           </td>
         ))}
 
-        {/* Actions Cell */}
-        <td className={`px-1 py-1 w-12 relative border-b border-gray-100 dark:border-slate-700 border-r border-gray-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 ${
-          isSelected ? 'bg-slate-50/50 dark:bg-slate-800/30 hover:bg-slate-100 dark:hover:bg-slate-700/40' : ''
+        {/* Actions Cell - Fixed position on right */}
+        <td className={`px-1 py-1 w-12 relative border-b border-gray-100 dark:border-slate-700 border-r border-gray-100 dark:border-slate-700 sticky right-0 z-20 shadow-[-2px_0_4px_rgba(0,0,0,0.05)] dark:shadow-[-2px_0_4px_rgba(0,0,0,0.2)] ${
+          isSelected 
+            ? 'bg-slate-50/50 dark:bg-slate-800/30 hover:bg-slate-100 dark:hover:bg-slate-700/40' 
+            : isSummary 
+              ? 'bg-orange-50 dark:bg-orange-900/30'
+              : 'bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800'
         }`}>
           <div className="flex items-center justify-center">
             <button

@@ -95,7 +95,8 @@ export default function PendingFilesPage() {
   const handleDeleteFile = async (fileId: string) => {
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/pending/delete/${fileId}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        credentials: 'include'  // Include authentication cookies
       })
       
       if (!response.ok) {

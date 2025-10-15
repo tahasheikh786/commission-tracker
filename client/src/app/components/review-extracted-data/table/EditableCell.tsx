@@ -5,7 +5,7 @@
 
 'use client';
 
-import React, { memo, useCallback, useRef, useEffect } from 'react';
+import React, { memo, useCallback, useRef, useEffect, useMemo } from 'react';
 
 interface EditableCellProps {
   value: string;
@@ -26,6 +26,14 @@ const EditableCell = memo(function EditableCell({
 }: EditableCellProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const [editValue, setEditValue] = React.useState(value);
+  
+  // Compute display value with professional em dash for empty cells
+  const displayValue = useMemo(() => {
+    if (!value || value.toString().trim() === '' || value === 'Empty') {
+      return '—'; // Em dash for professional appearance
+    }
+    return value;
+  }, [value]);
 
   // Focus input when editing starts and adjust height
   useEffect(() => {
@@ -99,9 +107,11 @@ const EditableCell = memo(function EditableCell({
     <div
       onClick={onStartEdit}
       className={`cursor-pointer transition-colors min-h-[24px] flex items-center ${className}`}
-      title={value}
+      title={value || 'Empty cell'}
     >
-      {value || <span className="text-gray-400 dark:text-slate-500 italic">Empty</span>}
+      <span className={displayValue === '—' ? 'text-gray-400 dark:text-slate-500' : ''}>
+        {displayValue}
+      </span>
     </div>
   );
 });

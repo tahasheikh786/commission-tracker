@@ -65,7 +65,7 @@ export default function CarrierTab() {
   };
   
   const canSelectFiles = viewAllData ? safePermissions.is_admin === true : true;
-  const canDeleteFiles = viewAllData ? safePermissions.is_admin === true : (safePermissions.can_edit === true || safePermissions.is_admin === true);
+  const canDeleteFiles = viewAllData ? safePermissions.is_admin === true : true;
 
 
   // Fetch user-specific companies

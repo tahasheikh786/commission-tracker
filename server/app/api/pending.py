@@ -261,12 +261,29 @@ async def update_upload(
 @router.delete("/delete/{upload_id}")
 async def delete_pending_upload(
     upload_id: UUID,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Delete a pending upload.
+    Delete a pending upload - users can only delete their own pending uploads.
     """
     try:
+        # First, get the upload to check ownership
+        upload = await crud.get_statement_upload_by_id(db, upload_id)
+        
+        if not upload:
+            raise HTTPException(
+                status_code=404,
+                detail="Pending upload not found"
+            )
+        
+        # Check user authorization: admin can delete any, regular users can only delete their own
+        if current_user.role != "admin" and str(upload.user_id) != str(current_user.id):
+            raise HTTPException(
+                status_code=403,
+                detail="You can only delete your own pending uploads"
+            )
+        
         success = await crud.delete_pending_upload(db, upload_id)
         
         if not success:

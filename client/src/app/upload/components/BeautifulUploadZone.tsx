@@ -189,7 +189,7 @@ export default function BeautifulUploadZone({
       const formData = new FormData();
       formData.append('file', file);
       formData.append('company_id', companyId);
-      formData.append('extraction_method', 'mistral');
+      formData.append('extraction_method', 'smart');  // Use 'smart' to default to Claude AI
       formData.append('upload_id', newUploadId);
       
       if (selectedStatementDate) {

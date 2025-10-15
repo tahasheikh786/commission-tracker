@@ -77,3 +77,11 @@ REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379")
 
 # Domain Whitelisting is handled by the existing AllowedDomain database table
 # No environment variable needed - use the admin dashboard to manage domains
+
+# Claude Document AI Configuration (Primary Extraction Method)
+CLAUDE_API_KEY = os.environ.get("CLAUDE_API_KEY")
+CLAUDE_MODEL_PRIMARY = os.environ.get("CLAUDE_MODEL_PRIMARY", "claude-sonnet-4-20250514")
+CLAUDE_MODEL_FALLBACK = os.environ.get("CLAUDE_MODEL_FALLBACK", "claude-sonnet-4-20250514")  # Use same as primary
+CLAUDE_MAX_FILE_SIZE = int(os.environ.get("CLAUDE_MAX_FILE_SIZE", "33554432"))  # 32MB in bytes
+CLAUDE_MAX_PAGES = int(os.environ.get("CLAUDE_MAX_PAGES", "100"))
+CLAUDE_TIMEOUT_SECONDS = int(os.environ.get("CLAUDE_TIMEOUT_SECONDS", "300"))  # 5 minutes
