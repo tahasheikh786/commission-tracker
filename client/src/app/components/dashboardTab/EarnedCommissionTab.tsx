@@ -907,12 +907,12 @@ export default function EarnedCommissionTab() {
                   onChange={(e) => setSelectedYear(e.target.value ? parseInt(e.target.value) : null)}
                   className="w-full px-4 py-2 text-sm bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-lg border border-slate-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200"
                 >
-                  <option value="">All Years</option>
+                  <option value="" className="bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100">All Years</option>
                   {yearsLoading ? (
-                    <option value="" disabled>Loading years...</option>
+                    <option value="" disabled className="bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100">Loading years...</option>
                   ) : (
                     availableYears.map((year) => (
-                      <option key={year} value={year}>{year}</option>
+                      <option key={year} value={year} className="bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100">{year}</option>
                     ))
                   )}
                 </select>

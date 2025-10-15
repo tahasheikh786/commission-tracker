@@ -5,10 +5,10 @@ import { motion } from 'framer-motion';
 import { CheckCircle, Clock } from 'lucide-react';
 
 const benefits = [
-  "Save 10+ hours per week",
-  "Reduce errors by 95%",
-  "Increase revenue visibility",
-  "Automate manual processes"
+  "Save 15+ Hours Weekly — Eliminate manual reconciliation forever",
+  "Reduce Errors by 95% — AI ensures accuracy across all carriers",
+  "Boost Team Productivity — Deliver instant, data-driven insights to clients",
+  "Scale Without Limits — Onboard new carriers in minutes, not weeks"
 ];
 
 export default function BenefitsSection() {
@@ -54,7 +54,7 @@ export default function BenefitsSection() {
                   </div>
                   <span className="text-sm sm:text-base lg:text-lg xl:text-lg font-semibold text-slate-800 dark:text-slate-200">Time Saved</span>
                 </div>
-                <div className="text-2xl sm:text-3xl lg:text-4xl xl:text-5xl font-bold text-slate-800 dark:text-slate-200 mb-1 sm:mb-2">10+ hours</div>
+                <div className="text-2xl sm:text-3xl lg:text-4xl xl:text-5xl font-bold text-slate-800 dark:text-slate-200 mb-1 sm:mb-2">15+ hours</div>
                 <div className="text-slate-600 dark:text-slate-400 text-xs sm:text-sm lg:text-base xl:text-base">per week on average</div>
                 <div className="mt-3 sm:mt-4 bg-slate-100 dark:bg-slate-700 rounded-lg p-2 sm:p-3">
                   <div className="text-xs sm:text-sm lg:text-base xl:text-base text-slate-600 dark:text-slate-400 mb-1">Efficiency Gain</div>

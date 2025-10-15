@@ -53,7 +53,7 @@ const useCases = [
       "Advanced reporting",
       "API integrations"
     ],
-    stats: { value: "500+", label: "Users Supported" }
+    stats: { value: "50+", label: "Users Supported" }
   }
 ];
 

@@ -21,7 +21,7 @@ export default function Hero({ onGetStarted }: HeroProps) {
   const stats = [
     { value: '95%', label: 'Accuracy Rate' },
     { value: '10x', label: 'Faster Processing' },
-    { value: '500+', label: 'Happy Customers' },
+    { value: '50+', label: 'Happy Customers' },
     { value: '24/7', label: 'Support' }
   ];
 
@@ -50,7 +50,7 @@ export default function Hero({ onGetStarted }: HeroProps) {
               className="inline-flex items-center gap-2 px-4 py-2 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full text-sm font-medium"
             >
               <Star className="w-4 h-4 fill-current" />
-              <span>Trusted by 500+ Companies</span>
+              <span>Trusted by 50+ Companies</span>
             </motion.div>
 
             {/* Headline */}
