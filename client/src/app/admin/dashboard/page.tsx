@@ -458,7 +458,7 @@ export default function AdminDashboard() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full company-table">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50">
                   <th className="text-left py-4 px-4 font-bold text-slate-800">User</th>
@@ -648,7 +648,7 @@ export default function AdminDashboard() {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full">
+                <table className="w-full company-table">
                   <thead>
                     <tr className="border-b border-slate-200 bg-slate-50">
                       <th className="text-left py-4 px-4 font-bold text-slate-800">Domain</th>

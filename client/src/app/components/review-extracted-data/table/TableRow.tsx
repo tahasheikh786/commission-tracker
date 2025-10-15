@@ -163,17 +163,16 @@ const TableRow = memo(function TableRow({
       <tr
         ref={rowRef}
         className={`
-          relative table-row-hover
-          ${isSelected ? 'selected bg-blue-50 border-l-4 border-l-blue-500' : ''}
-          ${isSummary ? 'summary-row bg-orange-50 border-l-4 border-l-orange-500' : ''}
+          relative table-row-hover hover:bg-slate-50 dark:hover:bg-slate-800
+          ${isSelected ? 'selected bg-slate-50/50 dark:bg-slate-800/30 border-l-4 border-l-blue-500 dark:border-l-blue-400 hover:bg-slate-100 dark:hover:bg-slate-700/40' : ''}
+          ${isSummary ? 'summary-row bg-orange-50 dark:bg-orange-900/30 border-l-4 border-l-orange-500' : ''}
           ${showActions ? 'table-row-actions-active z-10' : ''}
-          ${!isSelected && !isSummary ? 'hover:bg-gray-50' : ''}
         `}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Checkbox Cell */}
-        <td className={`px-4 py-3 w-10 border-b border-gray-200 sticky left-0 z-10 ${
-          isSelected ? 'bg-blue-50' : isSummary ? 'bg-orange-50' : 'bg-white'
+        <td className={`px-1 py-1 w-10 border-b border-gray-200 dark:border-slate-700 border-r border-gray-200 dark:border-slate-700 sticky left-0 z-10 hover:bg-slate-50 dark:hover:bg-slate-800 ${
+          isSelected ? 'bg-slate-50/50 dark:bg-slate-800/30 hover:bg-slate-100 dark:hover:bg-slate-700/40' : isSummary ? 'bg-orange-50 dark:bg-orange-900/30' : 'bg-white dark:bg-slate-800'
         }`}>
           <TableRowSelector
             isSelected={isSelected}
@@ -184,7 +183,9 @@ const TableRow = memo(function TableRow({
 
         {/* Data Cells */}
         {row.map((cell, colIndex) => (
-          <td key={colIndex} className="px-3 py-3 text-xs text-gray-900 border-b border-gray-100 min-w-[150px]">
+          <td key={colIndex} className={`px-1 py-1 text-xs text-gray-900 dark:text-slate-100 border-b border-gray-100 dark:border-slate-700 border-r border-gray-100 dark:border-slate-700 min-w-[150px] hover:bg-slate-50 dark:hover:bg-slate-800 ${
+            isSelected ? 'bg-slate-50/50 dark:bg-slate-800/30 hover:bg-slate-100 dark:hover:bg-slate-700/40' : ''
+          }`}>
             <EditableCell
               value={cell}
               isEditing={
@@ -198,7 +199,9 @@ const TableRow = memo(function TableRow({
         ))}
 
         {/* Actions Cell */}
-        <td className="px-3 py-3 w-12 relative border-b border-gray-100">
+        <td className={`px-1 py-1 w-12 relative border-b border-gray-100 dark:border-slate-700 border-r border-gray-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 ${
+          isSelected ? 'bg-slate-50/50 dark:bg-slate-800/30 hover:bg-slate-100 dark:hover:bg-slate-700/40' : ''
+        }`}>
           <div className="flex items-center justify-center">
             <button
               ref={actionsButtonRef}
@@ -207,8 +210,10 @@ const TableRow = memo(function TableRow({
                 p-1.5 rounded transition-all duration-150 ease-out
                 relative z-10
                 ${showActions
-                  ? 'text-blue-600 bg-blue-50 shadow-sm'
-                  : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+                  ? 'text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-700/50 shadow-sm'
+                  : isSelected 
+                    ? 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/50'
+                    : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
                 }
               `}
               title="Row actions"
@@ -226,7 +231,7 @@ const TableRow = memo(function TableRow({
         createPortal(
           <div
             ref={actionsMenuRef}
-            className="fixed bg-white rounded-lg shadow-xl border border-gray-200 py-2 min-w-[180px] animate-fadeIn"
+            className="fixed bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 py-2 min-w-[180px] animate-fadeIn"
             style={{
               top: `${dropdownPosition.top}px`,
               left: `${dropdownPosition.left}px`,
@@ -235,14 +240,14 @@ const TableRow = memo(function TableRow({
             onClick={(e) => e.stopPropagation()}
           >
             {/* Menu Header */}
-            <div className="px-3 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-100">
+            <div className="px-3 py-1 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-100 dark:border-slate-700">
               Row Actions
             </div>
 
             {/* Menu Items */}
             <button
               onClick={handleAction(() => onAddRowAbove(rowIndex))}
-              className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+              className="w-full flex items-center gap-3 px-3 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
             >
               <Plus className="w-4 h-4" />
               Add Row Above
@@ -250,31 +255,31 @@ const TableRow = memo(function TableRow({
 
             <button
               onClick={handleAction(() => onAddRowBelow(rowIndex))}
-              className="w-full flex items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+              className="w-full flex items-center gap-3 px-3 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
             >
               <Plus className="w-4 h-4" />
               Add Row Below
             </button>
 
-            <hr className="my-1 border-gray-100" />
+            <hr className="my-1 border-slate-100 dark:border-slate-700" />
 
             <button
               onClick={handleAction(() => onToggleSummary(rowIndex))}
               className={`w-full flex items-center gap-3 px-3 py-2 text-sm transition-colors ${
                 isSummary
-                  ? 'text-orange-600 hover:bg-orange-50'
-                  : 'text-blue-600 hover:bg-blue-50'
+                  ? 'text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/30'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50'
               }`}
             >
               <Tag className="w-4 h-4" />
               {isSummary ? 'Unmark Summary' : 'Mark as Summary'}
             </button>
 
-            <hr className="my-1 border-gray-100" />
+            <hr className="my-1 border-slate-100 dark:border-slate-700" />
 
             <button
               onClick={handleAction(() => onDeleteRow(rowIndex))}
-              className="w-full flex items-center gap-3 px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+              className="w-full flex items-center gap-3 px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors"
             >
               <Trash2 className="w-4 h-4" />
               Delete Row

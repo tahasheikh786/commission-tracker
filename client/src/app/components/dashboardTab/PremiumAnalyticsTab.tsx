@@ -115,15 +115,15 @@ function ChartFilter({
 }) {
   return (
     <div className="flex items-center space-x-2">
-      {Icon && <Icon className="w-4 h-4 text-slate-500" />}
+      {Icon && <Icon className="w-4 h-4 text-slate-500 dark:text-slate-400" />}
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="text-xs border-none bg-transparent text-slate-600 hover:text-slate-900 focus:outline-none focus:text-slate-900 font-medium cursor-pointer pr-6"
+        className="text-xs border-none bg-transparent text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100 focus:outline-none focus:text-slate-900 dark:focus:text-slate-100 font-medium cursor-pointer pr-6"
       >
-        <option value="">{placeholder}</option>
+        <option value="" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100">{placeholder}</option>
         {options.map(option => (
-          <option key={option.value} value={option.value}>
+          <option key={option.value} value={option.value} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100">
             {option.label}
           </option>
         ))}
@@ -746,7 +746,7 @@ export default function PremiumAnalyticsTab({ onNavigate }: { onNavigate?: (tab:
   }, [currentStats, dashboardStats, currentYearData, carriers]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/30 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
+    <div className="min-h-screen">
       
       {/* Full Width Content - 90% of screen width */}
       <div className="w-full px-4 md:px-6 lg:px-8 py-6 md:py-8" style={{ maxWidth: '90vw', margin: '0 auto' }}>
@@ -760,7 +760,7 @@ export default function PremiumAnalyticsTab({ onNavigate }: { onNavigate?: (tab:
               className="px-4 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium text-slate-700 dark:text-white hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
             >
               {availableYears.map((year: number) => (
-                <option key={year} value={year}>{year}</option>
+                <option key={year} value={year} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100">{year}</option>
               ))}
             </select>
           )}

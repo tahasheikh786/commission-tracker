@@ -351,9 +351,9 @@ export function getConfidenceColor(confidence: number): string {
  * Helper function to get confidence badge color
  */
 export function getConfidenceBadgeColor(confidence: number): string {
-  if (confidence >= 0.8) return 'bg-green-100 text-green-800';
-  if (confidence >= 0.5) return 'bg-yellow-100 text-yellow-800';
-  return 'bg-red-100 text-red-800';
+  if (confidence >= 0.8) return 'bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400';
+  if (confidence >= 0.5) return 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300';
+  return 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300';
 }
 
 /**

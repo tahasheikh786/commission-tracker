@@ -30,6 +30,14 @@ import {
 export default function LandingPage() {
   const router = useRouter();
   const { theme, setTheme, actualTheme } = useTheme();
+  
+  // Custom setTheme for landing with specific storage key
+  const setLandingTheme = (newTheme: 'light' | 'dark' | 'system') => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('commission-tracker-theme-landing', newTheme);
+    }
+    setTheme(newTheme);
+  };
   const { mounted, isDark } = useThemeHydration();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isHeaderVisible, setIsHeaderVisible] = useState(true);
@@ -39,6 +47,16 @@ export default function LandingPage() {
     // Navigate to unified auth page
     router.push('/auth');
   };
+
+  // Force light mode for landing page only if no preference is saved
+  useEffect(() => {
+    if (mounted) {
+      const savedTheme = localStorage.getItem('commission-tracker-theme-landing');
+      if (!savedTheme && theme !== 'light') {
+        setLandingTheme('light');
+      }
+    }
+  }, [mounted, theme]);
 
   // Handle scroll behavior for header visibility
   useEffect(() => {
@@ -76,18 +94,31 @@ export default function LandingPage() {
         initial={{ y: 0 }}
         animate={{ y: isHeaderVisible ? 0 : -100 }}
         transition={{ duration: 0.3, ease: "easeInOut" }}
-        className="fixed top-0 left-0 right-0 z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-700"
+        className="fixed top-0 left-0 right-0 z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md"
       >
         <div className="w-full max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 xl:px-12">
           <div className="flex justify-between items-center h-16">
             {/* Logo */}
             <div className="flex items-center space-x-2 sm:space-x-3">
-              <div className="w-6 h-6 sm:w-8 sm:h-8 bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 rounded-lg flex items-center justify-center">
-                <Database className="w-3 h-3 sm:w-5 sm:h-5 text-white" />
+            <div className="w-6 h-6 sm:w-8 sm:h-8 bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 rounded-lg flex items-center justify-center">
+                <img 
+                  src="/images/icon.svg" 
+                  alt="Commission Tracker Icon" 
+                  className="w-5 h-5 object-contain sm:w-5 sm:h-5 text-white"
+                />
               </div>
-              <span className="text-lg sm:text-xl 2xl:text-xl font-bold bg-gradient-to-r from-slate-800 via-slate-700 to-slate-600 dark:from-slate-100 dark:via-slate-200 dark:to-slate-300 bg-clip-text text-transparent">
-                Commission Tracker
-              </span>
+              <div className="h-8 sm:h-10 lg:h-12 flex items-center">
+                <img 
+                  src="/images/logo.svg" 
+                  alt="Commission Tracker" 
+                  className="h-full object-contain dark:hidden"
+                />
+                <img 
+                  src="/images/logo-dark.svg" 
+                  alt="Commission Tracker" 
+                  className="h-full object-contain hidden dark:block"
+                />
+              </div>
             </div>
 
             {/* Desktop Navigation */}
@@ -190,9 +221,19 @@ export default function LandingPage() {
           <div className="text-center">
             <div className="flex items-center justify-center space-x-3 mb-4">
               <div className="w-6 h-6 sm:w-8 sm:h-8 bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 rounded-lg flex items-center justify-center">
-                <Database className="w-3 h-3 sm:w-5 sm:h-5 text-white" />
+                <img 
+                  src="/images/icon.svg" 
+                  alt="Commission Tracker Icon" 
+                  className="w-5 h-5 object-contain sm:w-5 sm:h-5 text-white"
+                />
               </div>
-              <span className="text-lg sm:text-xl 2xl:text-xl font-bold">Commission Tracker</span>
+              <div className="h-8 sm:h-10 lg:h-12 flex items-center">
+                <img 
+                  src="/images/logo-dark.svg" 
+                  alt="Commission Tracker" 
+                  className="h-full object-contain"
+                />
+              </div>
             </div>
           </div>
           
@@ -212,7 +253,7 @@ export default function LandingPage() {
           <div className="border-t border-slate-800 mt-6 sm:mt-8 pt-6 sm:pt-8 flex flex-col sm:flex-row justify-between items-center gap-4">
             <p className="text-slate-400 text-sm sm:text-base text-center sm:text-left">&copy; 2025 Commission Tracker. All rights reserved.</p>
             <button
-              onClick={() => setTheme(actualTheme === 'dark' ? 'light' : 'dark')}
+              onClick={() => setLandingTheme(actualTheme === 'dark' ? 'light' : 'dark')}
               className="flex items-center gap-2 px-3 py-2 sm:px-4 sm:py-2 rounded-lg bg-slate-800 hover:bg-slate-700 transition-colors text-slate-300 hover:text-white cursor-pointer text-sm sm:text-base"
               aria-label={`Switch to ${actualTheme === 'dark' ? 'light' : 'dark'} mode`}
             >

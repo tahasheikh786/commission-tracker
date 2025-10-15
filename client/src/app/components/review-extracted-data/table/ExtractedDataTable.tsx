@@ -129,11 +129,11 @@ export default function ExtractedDataTable({
   }, [operations]);
 
   return (
-    <div className="flex flex-col h-full w-full">
+    <div className="flex flex-col h-full w-full bg-gray-50 dark:bg-slate-900">
       {/* Table Controls */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-gray-50 flex-shrink-0">
+      <div className="flex items-center justify-between px-6 py-4 border-b-2 border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex-shrink-0">
         <div className="flex items-center gap-2">
-          <h3 className="text-sm font-semibold text-gray-700">
+          <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">
             Table Data ({visibleRows.length} rows)
           </h3>
         </div>
@@ -149,12 +149,12 @@ export default function ExtractedDataTable({
       </div>
 
       {/* Table - Fixed container width with internal scroll */}
-      <div className="flex-1 overflow-x-auto overflow-y-auto w-full min-w-0">
-        <table className="w-max min-w-full border-collapse">
-          <thead className="sticky top-0 z-10 bg-slate-50">
+      <div className="flex-1 overflow-x-auto overflow-y-auto w-full min-w-0 bg-white dark:bg-slate-800">
+        <table className="w-max min-w-full border-collapse company-table">
+          <thead className="sticky top-0 z-10 bg-gray-50 dark:bg-slate-700">
             <tr>
               {/* Select All Checkbox */}
-              <th className="px-4 py-3 text-left w-12 border-b border-gray-200 sticky left-0 bg-slate-50 z-20">
+              <th className="px-4 py-3 text-left w-12 border-b border-gray-200 dark:border-slate-700 border-r border-gray-200 dark:border-slate-700 sticky left-0 bg-gray-50 dark:bg-slate-700 z-20">
                 <TableRowSelector
                   isSelected={selection.isAllSelected}
                   isIndeterminate={selection.isIndeterminate}
@@ -167,13 +167,13 @@ export default function ExtractedDataTable({
               {headers.map((header, colIdx) => (
                 <th
                   key={colIdx}
-                  className="px-3 py-3 text-left text-xs font-medium text-gray-900 border-b border-gray-200 whitespace-nowrap relative group min-w-[150px]"
+                  className="px-3 py-3 text-left text-xs font-medium text-gray-700 dark:text-slate-300 border-b border-gray-200 dark:border-slate-700 border-r border-gray-200 dark:border-slate-700 whitespace-nowrap relative group min-w-[150px]"
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span className="truncate">{header}</span>
                     <button
                       onClick={() => setShowColumnActions(showColumnActions === colIdx ? null : colIdx)}
-                      className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors flex-shrink-0"
+                      className="p-1 text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded transition-colors flex-shrink-0"
                       title="Column actions"
                     >
                       <MoreHorizontal size={12} />
@@ -196,7 +196,7 @@ export default function ExtractedDataTable({
               ))}
 
               {/* Actions Column */}
-              <th className="px-3 py-3 text-left text-xs font-medium text-gray-900 border-b border-gray-200 w-12">
+              <th className="px-3 py-3 text-left text-xs font-medium text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700 border-r border-slate-200 dark:border-slate-700 w-12">
                 Actions
               </th>
             </tr>
@@ -207,7 +207,7 @@ export default function ExtractedDataTable({
               <tr>
                 <td
                   colSpan={headers.length + 2}
-                  className="px-4 py-8 text-center text-gray-500"
+                  className="px-4 py-8 text-center text-gray-500 dark:text-slate-400"
                 >
                   No rows available
                 </td>
@@ -283,13 +283,13 @@ function ColumnActionMenu({
 
       {/* Menu - Position left for first columns to avoid hiding under preview */}
       <div
-        className={`absolute top-full mt-2 bg-white border border-gray-300 rounded-lg shadow-2xl z-[101] min-w-[200px] max-h-[300px] overflow-y-auto ${
+        className={`absolute top-full mt-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg shadow-2xl z-[101] min-w-[200px] max-h-[300px] overflow-y-auto ${
           isFirstColumn ? 'left-0' : 'right-0'
         }`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="p-2 border-b border-gray-100">
-          <div className="text-xs font-medium text-gray-700">Column Actions</div>
+        <div className="p-2 border-b border-slate-100 dark:border-slate-700">
+          <div className="text-xs font-medium text-slate-700 dark:text-slate-300">Column Actions</div>
         </div>
 
         {isRenaming ? (
@@ -307,7 +307,7 @@ function ColumnActionMenu({
                   setIsRenaming(false);
                 }
               }}
-              className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+              className="w-full px-2 py-1 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded text-sm focus:ring-2 focus:ring-slate-500 focus:border-slate-500"
               placeholder="New column name"
               autoFocus
             />
@@ -319,13 +319,13 @@ function ColumnActionMenu({
                     setIsRenaming(false);
                   }
                 }}
-                className="px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
+                className="px-2 py-1 bg-slate-600 dark:bg-slate-700 text-white rounded text-xs hover:bg-slate-700 dark:hover:bg-slate-600"
               >
                 Save
               </button>
               <button
                 onClick={() => setIsRenaming(false)}
-                className="px-2 py-1 bg-gray-300 text-gray-700 rounded text-xs hover:bg-gray-400"
+                className="px-2 py-1 bg-slate-300 dark:bg-slate-600 text-slate-700 dark:text-slate-300 rounded text-xs hover:bg-slate-400 dark:hover:bg-slate-500"
               >
                 Cancel
               </button>
@@ -335,7 +335,7 @@ function ColumnActionMenu({
           <div className="p-2 space-y-1">
             <button
               onClick={() => setIsRenaming(true)}
-              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded"
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded"
             >
               <Pencil className="w-4 h-4" />
               Rename Column
@@ -343,17 +343,17 @@ function ColumnActionMenu({
 
             <button
               onClick={() => onAddAfter(colIndex)}
-              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded"
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded"
             >
               <Plus className="w-4 h-4" />
               Add Column After
             </button>
 
-            <div className="border-t border-gray-100 my-1" />
+            <div className="border-t border-slate-100 dark:border-slate-700 my-1" />
 
             <button
               onClick={() => onDelete(colIndex)}
-              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded"
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded transition-colors"
             >
               <Trash2 className="w-4 h-4" />
               Delete Column

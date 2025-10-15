@@ -310,7 +310,7 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
 
       {/* Enhanced Table */}
       <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden w-full">
-        <table className="w-full border-collapse">
+        <table className="w-full border-collapse company-table">
           <thead className="bg-slate-50 dark:bg-slate-700/50">
             <tr>
               <th className="px-6 py-4 w-12">

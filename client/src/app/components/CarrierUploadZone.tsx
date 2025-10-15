@@ -334,22 +334,7 @@ export default function CarrierUploadZone({
         <input {...getInputProps()} />
         
         <AnimatePresence mode="wait">
-          {isDragActive ? (
-            <motion.div
-              key="drag-active"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="space-y-4"
-            >
-              <div className="w-20 h-20 mx-auto bg-blue-500 rounded-full flex items-center justify-center">
-                <Upload className="w-10 h-10 text-white animate-bounce" />
-              </div>
-              <p className="text-2xl font-semibold text-blue-600 dark:text-blue-400">
-                Drop your commission files here!
-              </p>
-            </motion.div>
-          ) : (
+          {(
             <motion.div
               key="default"
               initial={{ opacity: 0, scale: 0.95 }}

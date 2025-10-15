@@ -146,7 +146,11 @@ function HomePageContent() {
           <div className="flex items-center justify-center">
             <div className="relative">
               <div className="w-10 h-10 bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
-                <Database className="text-white" size={20} />
+                <img 
+                  src="/images/icon.svg" 
+                  alt="Commission Tracker Icon" 
+                  className="w-7 h-7 object-contain"
+                />
               </div>
               <div className="absolute -top-1 -right-1 w-3 h-3 bg-gradient-to-r from-emerald-400 to-teal-400 rounded-full border-2 border-white shadow-sm"></div>
             </div>
@@ -156,7 +160,7 @@ function HomePageContent() {
               <h1 className="font-bold text-lg bg-gradient-to-r from-slate-800 via-slate-700 to-slate-600 dark:from-slate-100 dark:via-slate-200 dark:to-slate-300 bg-clip-text text-transparent whitespace-nowrap">
                 Commission Tracker
               </h1>
-              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium whitespace-nowrap">Professional SaaS</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium whitespace-nowrap">Pinecrest Professional SaaS</p>
             </div>
           </div>
         </div>
@@ -361,7 +365,11 @@ export default function HomePage() {
           <div className="text-center">
             <div className="relative">
               <div className="w-16 h-16 bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg animate-pulse">
-                <Database className="text-white" size={32} />
+                <img 
+                  src="/images/icon.svg" 
+                  alt="Commission Tracker Icon" 
+                  className="w-14 h-14 object-contain"
+                />
               </div>
               <div className="absolute -top-2 -right-2 w-6 h-6 bg-gradient-to-r from-emerald-400 to-teal-400 rounded-full animate-ping"></div>
             </div>

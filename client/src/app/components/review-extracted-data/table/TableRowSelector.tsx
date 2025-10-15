@@ -39,7 +39,7 @@ const TableRowSelector = memo(function TableRowSelector({
             input.indeterminate = isIndeterminate;
           }
         }}
-        className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 focus:ring-2 cursor-pointer"
+        className="w-4 h-4 text-blue-600 dark:text-blue-400 rounded border-gray-300 dark:border-slate-600 focus:ring-blue-500 focus:ring-2 cursor-pointer accent-blue-600"
         aria-label={ariaLabel}
       />
     </label>

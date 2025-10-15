@@ -298,7 +298,7 @@ export default function DashboardTable({
        
       </div>
       <div className="flex-1 overflow-auto">
-        <table className="min-w-full">
+        <table className="min-w-full company-table">
         <thead className="bg-gradient-to-r from-slate-50 to-blue-50 sticky top-0">
           {/* Render table name row only above the corresponding table's header */}
           {pagedRowsWithHeaders.map((item, i) => {

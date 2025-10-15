@@ -24,14 +24,23 @@ const EditableCell = memo(function EditableCell({
   onCancel,
   className = ''
 }: EditableCellProps) {
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const [editValue, setEditValue] = React.useState(value);
 
-  // Focus input when editing starts
+  // Focus input when editing starts and adjust height
   useEffect(() => {
     if (isEditing && inputRef.current) {
-      inputRef.current.focus();
-      inputRef.current.select();
+      const textarea = inputRef.current;
+      textarea.focus();
+      textarea.select();
+      // Adjust height to content, but keep minimum height
+      textarea.style.height = 'auto';
+      const newHeight = textarea.scrollHeight;
+      if (newHeight > 24) {
+        textarea.style.height = newHeight + 'px';
+      } else {
+        textarea.style.height = '24px';
+      }
     }
   }, [isEditing]);
 
@@ -46,24 +55,42 @@ const EditableCell = memo(function EditableCell({
     onSave(editValue);
   }, [editValue, onSave]);
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
       handleSave();
     } else if (e.key === 'Escape') {
       onCancel();
     }
   }, [handleSave, onCancel]);
 
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setEditValue(e.target.value);
+    // Auto-resize based on content
+    const textarea = e.target;
+    textarea.style.height = 'auto';
+    // Only expand if content actually needs more space
+    const newHeight = textarea.scrollHeight;
+    if (newHeight > 24) { // Only expand if content is taller than min-height
+      textarea.style.height = newHeight + 'px';
+    } else {
+      textarea.style.height = '24px'; // Keep at minimum height for single line
+    }
+  }, []);
+
   if (isEditing) {
     return (
-      <input
+      <textarea
         ref={inputRef}
-        type="text"
         value={editValue}
-        onChange={(e) => setEditValue(e.target.value)}
+        onChange={handleChange}
         onBlur={handleSave}
         onKeyDown={handleKeyDown}
-        className={`w-full px-2 py-1 border-2 border-blue-400 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${className}`}
+        className={`w-full focus:outline-none bg-white dark:bg-slate-800 resize-none overflow-hidden text-gray-900 dark:text-slate-300 min-h-[24px] ${className}`}
+        style={{
+          resize: 'none'
+        }}
+        rows={1}
       />
     );
   }
@@ -71,10 +98,10 @@ const EditableCell = memo(function EditableCell({
   return (
     <div
       onClick={onStartEdit}
-      className={`cursor-pointer hover:bg-blue-50 rounded px-2 py-1 transition-colors truncate ${className}`}
+      className={`cursor-pointer transition-colors min-h-[24px] flex items-center ${className}`}
       title={value}
     >
-      {value || <span className="text-gray-400 italic">Empty</span>}
+      {value || <span className="text-gray-400 dark:text-slate-500 italic">Empty</span>}
     </div>
   );
 });

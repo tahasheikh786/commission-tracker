@@ -253,7 +253,7 @@ const CarrierFullTableView: React.FC<{
 
       {/* Companies Table */}
       <div className="overflow-x-auto">
-        <table className="w-full">
+        <table className="w-full company-table">
           <thead className="bg-slate-50 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-700">
             <tr>
               <th className="text-left py-3 px-6 font-semibold text-slate-700 dark:text-slate-300">Company Name</th>
@@ -322,7 +322,7 @@ const CarrierFullTableView: React.FC<{
                           Monthly Breakdown for {company.client_name}
                         </h4>
                         <div className="overflow-x-auto">
-                          <table className="w-full text-sm">
+                          <table className="w-full text-sm company-table">
                             <thead>
                               <tr className="border-b border-slate-200 dark:border-slate-600">
                                 {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map(month => (
@@ -907,12 +907,12 @@ export default function EarnedCommissionTab() {
                   onChange={(e) => setSelectedYear(e.target.value ? parseInt(e.target.value) : null)}
                   className="w-full px-4 py-2 text-sm bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-lg border border-slate-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200"
                 >
-                  <option value="">All Years</option>
+                  <option value="" className="bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100">All Years</option>
                   {yearsLoading ? (
-                    <option value="" disabled>Loading years...</option>
+                    <option value="" disabled className="bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100">Loading years...</option>
                   ) : (
                     availableYears.map((year) => (
-                      <option key={year} value={year}>{year}</option>
+                      <option key={year} value={year} className="bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100">{year}</option>
                     ))
                   )}
                 </select>

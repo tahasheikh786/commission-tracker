@@ -206,15 +206,25 @@ export default function UnifiedAuthPage() {
       >
         <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-            <Link href="/landing" className="flex items-center space-x-3 group">
-              <div className="w-9 h-9 bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 rounded-xl flex items-center justify-center transition-all duration-300 group-hover:scale-105 group-hover:shadow-lg">
-                <Database className="w-5 h-5 text-white" />
+            <Link href="/landing" className="flex items-center space-x-2 sm:space-x-3 group">
+              <div className="w-6 h-6 sm:w-8 sm:h-8 bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 rounded-lg flex items-center justify-center transition-all duration-300 group-hover:scale-105 group-hover:shadow-lg">
+                <img 
+                  src="/images/icon.svg" 
+                  alt="Commission Tracker Icon" 
+                  className="w-5 h-5 object-contain sm:w-5 sm:h-5 text-white"
+                />
               </div>
-              <div className="hidden sm:block">
-                <div className="text-lg font-bold bg-gradient-to-r from-slate-800 via-slate-700 to-slate-600 dark:from-slate-100 dark:via-slate-200 dark:to-slate-300 bg-clip-text text-transparent">
-                  Commission Tracker
-                </div>
-                <div className="text-xs text-slate-500 dark:text-slate-400 -mt-0.5">Enterprise SaaS</div>
+              <div className="h-8 sm:h-10 lg:h-12 flex items-center">
+                <img 
+                  src="/images/logo.svg" 
+                  alt="Commission Tracker" 
+                  className="h-full object-contain dark:hidden"
+                />
+                <img 
+                  src="/images/logo-dark.svg" 
+                  alt="Commission Tracker" 
+                  className="h-full object-contain hidden dark:block"
+                />
               </div>
             </Link>
 
@@ -294,7 +304,7 @@ export default function UnifiedAuthPage() {
                   </span>
                 </h1>
                 <p className="text-lg text-blue-100 leading-relaxed max-w-md">
-                  Join 500+ companies processing over $50M in commissions monthly with our AI-powered platform.
+                  Join 50+ companies processing over $50M in commissions monthly with our AI-powered platform.
                 </p>
               </motion.div>
 
@@ -330,7 +340,7 @@ export default function UnifiedAuthPage() {
                     <Users className="w-5 h-5 text-white" />
                   </div>
                   <div>
-                    <div className="font-semibold text-sm">500+ Companies</div>
+                    <div className="font-semibold text-sm">50+ Companies</div>
                     <div className="text-xs text-blue-100">Trusted Worldwide</div>
                   </div>
                 </div>
@@ -596,7 +606,7 @@ export default function UnifiedAuthPage() {
                             Create your account
                           </h2>
                           <p className="text-sm text-slate-600 dark:text-slate-400">
-                            Join 500+ companies using Commission Tracker
+                            Join 50+ companies using Commission Tracker
                           </p>
                         </div>
 
@@ -898,7 +908,7 @@ export default function UnifiedAuthPage() {
                   <Users className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <div className="font-semibold text-sm text-slate-900 dark:text-slate-100">Trusted by 500+</div>
+                  <div className="font-semibold text-sm text-slate-900 dark:text-slate-100">Trusted by 50+</div>
                   <div className="text-xs text-slate-600 dark:text-slate-400">Companies Worldwide</div>
                 </div>
               </div>

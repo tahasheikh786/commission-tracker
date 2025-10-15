@@ -380,7 +380,7 @@ export default function ExtractedTables({ tables: backendTables, onTablesChange,
         </button>
       </div>
       <div className="rounded-xl border border-slate-200 shadow-lg overflow-x-auto bg-white">
-        <table className="min-w-full" role="table" aria-label={`Extracted table ${tab + 1}`}> 
+        <table className="min-w-full company-table" role="table" aria-label={`Extracted table ${tab + 1}`}> 
           <thead className="bg-gradient-to-r from-slate-50 to-blue-50 sticky top-0 z-10">
             <tr>
               <th className="py-4 px-4 border-b border-slate-200 w-8 text-center sticky left-0 bg-gradient-to-r from-slate-50 to-blue-50 z-20">

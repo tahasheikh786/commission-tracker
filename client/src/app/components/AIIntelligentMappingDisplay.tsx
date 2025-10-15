@@ -170,7 +170,7 @@ export default function AIIntelligentMappingDisplay({
                     toast.success(`✅ Accepted ${sortedGroupedMappings.high.length} high confidence mappings!`);
                     console.log('✅ Accepted all high confidence mappings:', sortedGroupedMappings.high.length, 'mappings');
                   }}
-                  className="px-4 py-2 bg-green-600 hover:bg-green-700 active:bg-green-800 text-white text-sm font-medium rounded-md transition-all shadow-sm hover:shadow-md active:scale-95"
+                  className="px-4 py-2 bg-green-500 dark:bg-green-600 hover:bg-green-600 dark:hover:bg-green-700 active:bg-green-700 dark:active:bg-green-800 text-white text-sm font-medium rounded-md transition-all shadow-sm hover:shadow-md active:scale-95"
                   type="button"
                 >
                   <span className="flex items-center space-x-2">
@@ -347,7 +347,7 @@ function MappingCard({
                 </span>
               )}
               {isAccepted && (
-                <span className="text-xs font-semibold px-3 py-1 rounded-full bg-green-200 text-green-900 border border-green-400">
+                <span className="text-xs font-semibold px-3 py-1 rounded-full bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400 border border-green-300 dark:border-green-700">
                   ✓ Accepted
                 </span>
               )}
