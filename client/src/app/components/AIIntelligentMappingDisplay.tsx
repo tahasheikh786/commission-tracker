@@ -351,7 +351,7 @@ function MappingCard({
         : isSkipped
           ? 'border-orange-300 dark:border-orange-600 bg-orange-50 dark:bg-orange-900/10 opacity-70'
           : mapping.requires_review
-            ? 'border-red-300 dark:border-red-700 bg-gradient-to-br from-red-50 to-orange-50 dark:bg-red-900/10 hover:shadow-md'
+            ? 'border-red-300 dark:border-red-600 bg-gradient-to-br from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 hover:shadow-md'
             : 'border-green-200 dark:border-green-700 bg-white dark:bg-gray-800 hover:shadow-md'
     }`}>
       <div className="p-4">
@@ -371,7 +371,7 @@ function MappingCard({
                 {formatConfidence(mapping.confidence)}
               </span>
               {mapping.requires_review && !isAccepted && (
-                <span className="text-xs font-semibold px-3 py-1 rounded-full bg-red-200 text-red-900 border border-red-400">
+                <span className="text-xs font-semibold px-3 py-1 rounded-full bg-red-200 dark:bg-red-800 text-red-900 dark:text-red-100 border border-red-400 dark:border-red-600">
                   ⚠ Review Required
                 </span>
               )}
@@ -450,7 +450,7 @@ function MappingCard({
         {/* Expanded Dropdown Section */}
         {showDropdown && !isAccepted && !isSkipped && onCustomMapping && (
           <div className="mt-4 pt-4 border-t-2 border-blue-100 dark:border-blue-800 animate-in">
-            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
+            <div className="bg-blue-50 dark:bg-blue-900/30 rounded-lg p-4">
               <div className="space-y-3">
                 <div>
                   <label className="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase block mb-2">
@@ -506,7 +506,7 @@ function MappingCard({
                       setShowDropdown(false);
                     }
                   }}
-                  className="w-full px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-all shadow-sm hover:shadow-md"
+                  className="w-full px-4 py-2.5 bg-blue-600 dark:bg-blue-700 hover:bg-blue-700 dark:hover:bg-blue-800 text-white rounded-lg font-medium transition-all shadow-sm hover:shadow-md"
                   type="button"
                 >
                   Apply Mapping
@@ -519,12 +519,12 @@ function MappingCard({
         {/* Expanded Details */}
         {isExpanded && (
           <div className="mt-5 pt-5 border-t-2 border-blue-100 dark:border-blue-800 space-y-4 animate-in">
-            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
+            <div className="bg-blue-50 dark:bg-blue-900/30 rounded-lg p-4">
               <h6 className="text-xs font-bold text-blue-900 dark:text-blue-300 mb-2 uppercase tracking-wide">AI Reasoning:</h6>
               <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{mapping.reasoning}</p>
             </div>
             {mapping.alternatives && mapping.alternatives.length > 0 && (
-              <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4">
+              <div className="bg-gray-50 dark:bg-gray-900/60 rounded-lg p-4">
                 <h6 className="text-xs font-bold text-gray-900 dark:text-gray-300 mb-3 uppercase tracking-wide flex items-center">
                   <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12M8 12h12m-12 5h12" />
