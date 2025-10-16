@@ -48,20 +48,26 @@ interface AIIntelligentMappingDisplayProps {
     overall_confidence: number;
   };
   tableHeaders?: string[];
+  databaseFields?: Array<{ id: string; display_name: string; description?: string }>;
   acceptedFields?: string[];
+  skippedFields?: string[];
   onAcceptMapping?: (mapping: FieldMapping) => void;
   onRejectMapping?: (mapping: FieldMapping) => void;
+  onSkipMapping?: (mapping: FieldMapping) => void;
   onAcceptAllMappings?: () => void;
   onReviewMappings?: () => void;
-  onCustomMapping?: (extractedField: string, selectedHeader: string) => void;
+  onCustomMapping?: (extractedField: string, selectedHeader: string, databaseField?: string) => void;
 }
 
 export default function AIIntelligentMappingDisplay({
   aiIntelligence,
   tableHeaders = [],
+  databaseFields = [],
   acceptedFields = [],
+  skippedFields = [],
   onAcceptMapping,
   onRejectMapping,
+  onSkipMapping,
   onAcceptAllMappings,
   onReviewMappings,
   onCustomMapping
@@ -105,15 +111,19 @@ export default function AIIntelligentMappingDisplay({
     ? groupMappingsByConfidence(field_mapping.mappings)
     : { high: [], medium: [], low: [] };
 
-  // Sort mappings: non-accepted first, accepted last
+  // Sort mappings: non-accepted/non-skipped first, then skipped, then accepted last
   const sortMappingsByAcceptance = (mappings: FieldMapping[]) => {
     return [...mappings].sort((a, b) => {
       const aAccepted = acceptedFields.includes(a.extracted_field);
       const bAccepted = acceptedFields.includes(b.extracted_field);
+      const aSkipped = skippedFields.includes(a.extracted_field);
+      const bSkipped = skippedFields.includes(b.extracted_field);
       
-      // If one is accepted and the other isn't, non-accepted comes first
+      // Priority: pending > skipped > accepted
       if (aAccepted && !bAccepted) return 1;
       if (!aAccepted && bAccepted) return -1;
+      if (aSkipped && !bSkipped && !aAccepted) return 1;
+      if (!aSkipped && bSkipped && !bAccepted) return -1;
       
       // Otherwise maintain original order
       return 0;
@@ -216,7 +226,10 @@ export default function AIIntelligentMappingDisplay({
                       isExpanded={expandedMappings.has(mapping.extracted_field)}
                       onToggleExpand={() => toggleMappingExpand(mapping.extracted_field)}
                       isAccepted={acceptedFields.includes(mapping.extracted_field)}
+                      isSkipped={skippedFields.includes(mapping.extracted_field)}
                       onAccept={onAcceptMapping}
+                      onSkip={onSkipMapping}
+                      databaseFields={databaseFields}
                       tableHeaders={tableHeaders}
                       onCustomMapping={onCustomMapping}
                     />
@@ -240,7 +253,10 @@ export default function AIIntelligentMappingDisplay({
                       isExpanded={expandedMappings.has(mapping.extracted_field)}
                       onToggleExpand={() => toggleMappingExpand(mapping.extracted_field)}
                       isAccepted={acceptedFields.includes(mapping.extracted_field)}
+                      isSkipped={skippedFields.includes(mapping.extracted_field)}
                       onAccept={onAcceptMapping}
+                      onSkip={onSkipMapping}
+                      databaseFields={databaseFields}
                       tableHeaders={tableHeaders}
                       onCustomMapping={onCustomMapping}
                     />
@@ -264,7 +280,10 @@ export default function AIIntelligentMappingDisplay({
                       isExpanded={expandedMappings.has(mapping.extracted_field)}
                       onToggleExpand={() => toggleMappingExpand(mapping.extracted_field)}
                       isAccepted={acceptedFields.includes(mapping.extracted_field)}
+                      isSkipped={skippedFields.includes(mapping.extracted_field)}
                       onAccept={onAcceptMapping}
+                      onSkip={onSkipMapping}
+                      databaseFields={databaseFields}
                       tableHeaders={tableHeaders}
                       onCustomMapping={onCustomMapping}
                     />
@@ -304,7 +323,10 @@ function MappingCard({
   isExpanded,
   onToggleExpand,
   isAccepted = false,
+  isSkipped = false,
   onAccept,
+  onSkip,
+  databaseFields,
   tableHeaders,
   onCustomMapping
 }: {
@@ -312,18 +334,25 @@ function MappingCard({
   isExpanded: boolean;
   onToggleExpand: () => void;
   isAccepted?: boolean;
+  isSkipped?: boolean;
   onAccept?: (mapping: FieldMapping) => void;
+  onSkip?: (mapping: FieldMapping) => void;
+  databaseFields?: Array<{ id: string; display_name: string; description?: string }>;
   tableHeaders?: string[];
-  onCustomMapping?: (extractedField: string, selectedHeader: string) => void;
+  onCustomMapping?: (extractedField: string, selectedHeader: string, databaseField?: string) => void;
 }) {
   const [showDropdown, setShowDropdown] = useState(false);
+  const [selectedDatabaseField, setSelectedDatabaseField] = useState(mapping.mapped_to);
+  const [selectedTableHeader, setSelectedTableHeader] = useState(mapping.extracted_field);
   return (
     <div className={`border-2 rounded-xl overflow-hidden transition-all shadow-sm ${
       isAccepted 
         ? 'border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800/50 opacity-60'
-        : mapping.requires_review
-          ? 'border-red-300 dark:border-red-700 bg-gradient-to-br from-red-50 to-orange-50 dark:bg-red-900/10 hover:shadow-md'
-          : 'border-green-200 dark:border-green-700 bg-white dark:bg-gray-800 hover:shadow-md'
+        : isSkipped
+          ? 'border-orange-300 dark:border-orange-600 bg-orange-50 dark:bg-orange-900/10 opacity-70'
+          : mapping.requires_review
+            ? 'border-red-300 dark:border-red-700 bg-gradient-to-br from-red-50 to-orange-50 dark:bg-red-900/10 hover:shadow-md'
+            : 'border-green-200 dark:border-green-700 bg-white dark:bg-gray-800 hover:shadow-md'
     }`}>
       <div className="p-4">
         <div className="flex items-center justify-between">
@@ -351,9 +380,14 @@ function MappingCard({
                   ✓ Accepted
                 </span>
               )}
+              {isSkipped && !isAccepted && (
+                <span className="text-xs font-semibold px-3 py-1 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 border border-orange-300 dark:border-orange-700">
+                  ⊘ Skipped
+                </span>
+              )}
             </div>
           </div>
-          {!isAccepted && (
+          {!isAccepted && !isSkipped && (
             <div className="flex items-center space-x-1 ml-4">
               {/* Accept Button */}
               {onAccept && (
@@ -390,44 +424,93 @@ function MappingCard({
                   </svg>
                 </button>
               )}
+
+              {/* Skip Button */}
+              {onSkip && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSkip(mapping);
+                    toast.success(`⊘ Skipped: ${mapping.extracted_field}`);
+                    console.log('⊘ Skipped mapping:', mapping.extracted_field);
+                  }}
+                  className="p-2.5 text-orange-600 hover:bg-orange-100 dark:hover:bg-orange-900/30 rounded-lg transition-all hover:scale-110 active:scale-95"
+                  title="Skip this field"
+                  type="button"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                  </svg>
+                </button>
+              )}
             </div>
           )}
         </div>
 
         {/* Expanded Dropdown Section */}
-        {showDropdown && !isAccepted && onCustomMapping && tableHeaders && tableHeaders.length > 0 && (
+        {showDropdown && !isAccepted && !isSkipped && onCustomMapping && (
           <div className="mt-4 pt-4 border-t-2 border-blue-100 dark:border-blue-800 animate-in">
             <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center space-x-2">
-                  <span className="text-sm font-bold text-gray-900 dark:text-white">Field to Map:</span>
-                  <span className="font-mono text-sm font-bold text-blue-600 dark:text-blue-400 bg-white dark:bg-blue-900/30 px-3 py-1 rounded-md">
-                    {mapping.extracted_field}
-                  </span>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase block mb-2">
+                    Database Field:
+                  </label>
+                  {databaseFields && databaseFields.length > 0 ? (
+                    <select
+                      value={selectedDatabaseField}
+                      onChange={(e) => setSelectedDatabaseField(e.target.value)}
+                      className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border-2 border-blue-200 dark:border-blue-700 rounded-lg text-sm font-medium text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                    >
+                      {databaseFields.map((field) => (
+                        <option key={field.id} value={field.display_name}>
+                          {field.display_name}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="text-sm font-bold text-gray-900 dark:text-white bg-white dark:bg-gray-700 px-4 py-2.5 rounded-md border-2 border-gray-200 dark:border-gray-600">
+                      {selectedDatabaseField}
+                    </div>
+                  )}
                 </div>
-              </div>
-              
-              <div className="space-y-2">
-                <label className="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase block mb-2">
-                  Select Database Field:
-                </label>
-                <select
-                  value={mapping.mapped_to}
-                  onChange={(e) => {
+                
+                <div>
+                  <label className="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase block mb-2">
+                    Field to map:
+                  </label>
+                  {tableHeaders && tableHeaders.length > 0 ? (
+                    <select
+                      value={selectedTableHeader}
+                      onChange={(e) => setSelectedTableHeader(e.target.value)}
+                      className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border-2 border-blue-200 dark:border-blue-700 rounded-lg text-sm font-medium text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                    >
+                      {tableHeaders.map((header, idx) => (
+                        <option key={idx} value={header}>
+                          {header}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="text-sm font-bold text-gray-900 dark:text-white bg-white dark:bg-gray-700 px-4 py-2.5 rounded-md border-2 border-gray-200 dark:border-gray-600">
+                      {selectedTableHeader}
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  onClick={() => {
                     if (onCustomMapping) {
-                      onCustomMapping(mapping.extracted_field, e.target.value);
-                      toast.success(`Mapped ${mapping.extracted_field} → ${e.target.value}`);
+                      onCustomMapping(selectedTableHeader, selectedTableHeader, selectedDatabaseField);
+                      toast.success(`✅ Mapped ${selectedTableHeader} → ${selectedDatabaseField}`);
                       setShowDropdown(false);
                     }
                   }}
-                  className="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border-2 border-blue-200 dark:border-blue-700 rounded-lg text-sm font-medium text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                  className="w-full px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-all shadow-sm hover:shadow-md"
+                  type="button"
                 >
-                  {tableHeaders.map((header, idx) => (
-                    <option key={idx} value={header}>
-                      {header}
-                    </option>
-                  ))}
-                </select>
+                  Apply Mapping
+                </button>
               </div>
             </div>
           </div>

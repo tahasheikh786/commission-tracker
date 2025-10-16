@@ -161,6 +161,16 @@ async def update_company_mapping(
             logger.info(f"🎯 Mapping API: Headers: {config.headers}")
             logger.info(f"🎯 Mapping API: Mapping: {config.mapping}")
             
+            # Get carrier name from database to pass to format learning
+            carrier_name = None
+            try:
+                carrier_record = await with_db_retry(db, crud.get_company_by_id, company_id=carrier_id)
+                if carrier_record:
+                    carrier_name = carrier_record.name
+                    logger.info(f"🎯 Mapping API: Retrieved carrier name for format learning: {carrier_name}")
+            except Exception as carrier_error:
+                logger.warning(f"🎯 Mapping API: Could not retrieve carrier name: {carrier_error}")
+            
             await format_learning_service.learn_from_processed_file(
                 db=db,
                 company_id=carrier_id,  # carrier_id - format learning for this carrier
@@ -168,7 +178,9 @@ async def update_company_mapping(
                 headers=config.headers,
                 field_mapping=config.mapping,
                 confidence_score=85,  # Higher confidence for manually mapped data
-                table_editor_settings=None  # Will be learned from table editor save
+                table_editor_settings=None,  # Will be learned from table editor save
+                carrier_name=carrier_name,  # CRITICAL: Pass carrier name for format learning
+                statement_date=config.selected_statement_date.get('date') if config.selected_statement_date else None
             )
             logger.info(f"🎯 Mapping API: Format learning completed successfully for carrier {carrier_id}")
         except Exception as e:

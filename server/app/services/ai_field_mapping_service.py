@@ -91,6 +91,7 @@ class AIFieldMappingService:
                 }
             
             logger.info(f"🤖 AI Mapping: Analyzing {len(extracted_headers)} headers with AI intelligence")
+            logger.info(f"🔍 AI Mapping: carrier_id provided: {carrier_id is not None} (value: {carrier_id if carrier_id else 'None'})")
             
             # Step 1: Get available database fields
             database_fields = await self._get_database_fields(db)
@@ -103,11 +104,66 @@ class AIFieldMappingService:
             # Step 2: Check for learned formats if carrier is known
             learned_mapping = None
             if carrier_id:
+                logger.info(f"🎯 Carrier ID is valid, attempting to retrieve learned mapping for carrier {carrier_id}")
                 learned_mapping = await self._get_learned_mapping(db, carrier_id, extracted_headers)
                 if learned_mapping:
                     logger.info(f"🎯 Found learned mapping for carrier with {learned_mapping.get('match_score', 0):.2f} confidence")
+                else:
+                    logger.info(f"❌ No learned mapping found for carrier {carrier_id}")
+            else:
+                logger.warning(f"⚠️ No carrier_id provided - skipping learned format lookup")
             
-            # Step 3: Use AI to understand fields and suggest mappings
+            # Step 3: If learned mapping exists with high confidence, use it directly
+            if learned_mapping and learned_mapping.get('match_score', 0) >= 0.8:
+                logger.info(f"🎯 Using learned mappings directly with match score {learned_mapping.get('match_score')}") 
+                
+                # Convert learned field_mapping to AI mapping format with high confidence
+                learned_field_mapping = learned_mapping.get('field_mapping', {})
+                direct_mappings = []
+                unmapped = []
+                
+                for header in extracted_headers:
+                    # Check if this header has a learned mapping
+                    mapped_field = learned_field_mapping.get(header)
+                    
+                    if mapped_field:
+                        # Find the database field details
+                        db_field = next((f for f in database_fields if f['display_name'] == mapped_field), None)
+                        if db_field:
+                            direct_mappings.append({
+                                "extracted_field": header,
+                                "mapped_to": mapped_field,
+                                "mapped_to_column": db_field.get('column_name', mapped_field.lower().replace(' ', '_')),
+                                "database_field_id": db_field['id'],
+                                "confidence": 0.95,  # High confidence for learned mappings
+                                "reasoning": f"Learned from previous mapping (match score: {learned_mapping.get('match_score'):.2f})",
+                                "alternatives": [],
+                                "requires_review": False
+                            })
+                        else:
+                            unmapped.append(header)
+                    else:
+                        unmapped.append(header)
+                
+                response = {
+                    "success": True,
+                    "mappings": direct_mappings,
+                    "overall_confidence": 0.95 if direct_mappings else 0.0,
+                    "unmapped_fields": unmapped,
+                    "reasoning": {
+                        "learned_mappings_applied": len(direct_mappings),
+                        "match_score": learned_mapping.get('match_score'),
+                        "usage_count": learned_mapping.get('usage_count', 1)
+                    },
+                    "suggestions_count": len(direct_mappings),
+                    "learned_format_used": True,
+                    "timestamp": datetime.now().isoformat()
+                }
+                
+                logger.info(f"✅ Applied {len(direct_mappings)} learned mappings directly")
+                return response
+            
+            # Step 4: Use AI to understand fields and suggest mappings (when no learned mapping or low confidence)
             ai_mappings = await self._generate_ai_mappings(
                 extracted_headers=extracted_headers,
                 table_sample_data=table_sample_data,
@@ -116,7 +172,7 @@ class AIFieldMappingService:
                 document_context=document_context
             )
             
-            # Step 4: Calculate overall confidence and prepare response
+            # Step 5: Calculate overall confidence and prepare response
             response = {
                 "success": True,
                 "mappings": ai_mappings.get("mappings", []),
@@ -124,7 +180,7 @@ class AIFieldMappingService:
                 "unmapped_fields": ai_mappings.get("unmapped_fields", []),
                 "reasoning": ai_mappings.get("reasoning", {}),
                 "suggestions_count": len(ai_mappings.get("mappings", [])),
-                "learned_format_used": learned_mapping is not None,
+                "learned_format_used": learned_mapping is not None and learned_mapping.get('match_score', 0) < 0.8,
                 "timestamp": datetime.now().isoformat()
             }
             
@@ -170,9 +226,20 @@ class AIFieldMappingService:
     ) -> Optional[Dict[str, Any]]:
         """Get learned field mapping for this carrier if available"""
         try:
-            # Generate signature for current headers
-            from hashlib import md5
-            headers_signature = md5(json.dumps(sorted(headers)).encode()).hexdigest()
+            # CRITICAL FIX: Use the same signature generation logic as format learning service
+            # Import the format learning service to use consistent signature generation
+            from app.services.format_learning_service import FormatLearningService
+            format_learning_service = FormatLearningService()
+            
+            # Generate format signature using the same method as when saving
+            table_structure = {
+                'column_count': len(headers),
+                'has_header_row': True
+            }
+            headers_signature = format_learning_service.generate_format_signature(headers, table_structure)
+            
+            logger.info(f"🔍 Generated format signature for lookup: {headers_signature}")
+            logger.info(f"🔍 Looking up learned format for carrier {carrier_id} with {len(headers)} headers")
             
             # Look for exact or similar format match
             result = await db.execute(
@@ -187,12 +254,17 @@ class AIFieldMappingService:
             format_learning = result.scalar_one_or_none()
             
             if format_learning and format_learning.field_mapping:
+                logger.info(f"✅ Found EXACT match for learned format with signature {headers_signature}")
+                logger.info(f"✅ Learned field mapping has {len(format_learning.field_mapping)} mappings")
                 return {
                     "field_mapping": format_learning.field_mapping,
                     "confidence_score": format_learning.confidence_score / 100.0,
                     "match_score": 1.0,  # Exact match
-                    "usage_count": format_learning.usage_count
+                    "usage_count": format_learning.usage_count,
+                    "table_editor_settings": format_learning.table_editor_settings
                 }
+            
+            logger.info(f"❌ No exact match found, trying fuzzy matching...")
             
             # If no exact match, look for similar formats (fuzzy match)
             result = await db.execute(
@@ -202,6 +274,7 @@ class AIFieldMappingService:
             )
             
             formats = result.scalars().all()
+            logger.info(f"🔍 Found {len(formats)} saved formats for fuzzy matching")
             
             # Find best matching format using header similarity
             best_match = None
@@ -213,46 +286,63 @@ class AIFieldMappingService:
                 
                 # Calculate similarity score
                 similarity = self._calculate_header_similarity(headers, fmt.headers)
-                if similarity > best_score and similarity > 0.6:  # Threshold for similarity
+                logger.info(f"🔍 Format signature {fmt.format_signature}: similarity = {similarity:.2f}")
+                
+                if similarity > best_score and similarity > 0.5:  # Lower threshold to 0.5 for better matching
                     best_score = similarity
                     best_match = {
                         "field_mapping": fmt.field_mapping,
                         "confidence_score": fmt.confidence_score / 100.0,
                         "match_score": similarity,
-                        "usage_count": fmt.usage_count
+                        "usage_count": fmt.usage_count,
+                        "table_editor_settings": fmt.table_editor_settings
                     }
+                    logger.info(f"✅ New best match with similarity {similarity:.2f}")
             
             if best_match:
-                logger.info(f"Found similar format with {best_score:.2f} similarity score")
+                logger.info(f"✅ Found similar format with {best_score:.2f} similarity score")
+            else:
+                logger.info(f"❌ No matching format found")
             
             return best_match
             
         except Exception as e:
             logger.error(f"Failed to get learned mapping: {e}")
+            import traceback
+            traceback.print_exc()
             return None
     
     def _calculate_header_similarity(self, headers1: List[str], headers2: List[str]) -> float:
-        """Calculate similarity between two header lists"""
+        """Calculate similarity between two header lists with improved matching"""
         try:
-            # Normalize headers
-            h1_norm = [h.lower().strip() for h in headers1]
-            h2_norm = [h.lower().strip() for h in headers2]
+            # Use format learning service's header similarity calculation for consistency
+            from app.services.format_learning_service import FormatLearningService
+            format_learning_service = FormatLearningService()
             
-            # Calculate Jaccard similarity
-            set1 = set(h1_norm)
-            set2 = set(h2_norm)
+            similarity = format_learning_service._calculate_header_similarity(headers1, headers2)
             
-            intersection = len(set1.intersection(set2))
-            union = len(set1.union(set2))
-            
-            if union == 0:
-                return 0.0
-            
-            return intersection / union
+            return similarity
             
         except Exception as e:
             logger.error(f"Similarity calculation failed: {e}")
-            return 0.0
+            # Fallback to simple Jaccard similarity
+            try:
+                h1_norm = [h.lower().strip() for h in headers1]
+                h2_norm = [h.lower().strip() for h in headers2]
+                
+                set1 = set(h1_norm)
+                set2 = set(h2_norm)
+                
+                intersection = len(set1.intersection(set2))
+                union = len(set1.union(set2))
+                
+                if union == 0:
+                    return 0.0
+                
+                return intersection / union
+            except Exception as fallback_error:
+                logger.error(f"Fallback similarity calculation also failed: {fallback_error}")
+                return 0.0
     
     async def _generate_ai_mappings(
         self,

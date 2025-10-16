@@ -80,10 +80,11 @@ export default function UnifiedAuthPage() {
     try {
       await requestOTP({ email: loginData.email, purpose: 'login' });
       toast.success('Verification code sent to your email!');
+      // Reset loading state before navigation to prevent stuck loader
+      setIsLoginLoading(false);
       router.push(`/auth/verify-otp?email=${encodeURIComponent(loginData.email)}&purpose=login`);
     } catch (error: any) {
       toast.error(error.message || 'Login failed');
-    } finally {
       setIsLoginLoading(false);
     }
   };
@@ -167,6 +168,9 @@ export default function UnifiedAuthPage() {
       
       toast.success('Verification code sent to your email!');
       
+      // Reset loading state before navigation to prevent stuck loader
+      setIsSignupLoading(false);
+      
       // Redirect to OTP verification
       const params = new URLSearchParams({
         email: signupData.email,
@@ -177,7 +181,6 @@ export default function UnifiedAuthPage() {
       router.push(`/auth/verify-otp?${params.toString()}`);
     } catch (error: any) {
       toast.error(error.message || 'Signup failed');
-    } finally {
       setIsSignupLoading(false);
     }
   };

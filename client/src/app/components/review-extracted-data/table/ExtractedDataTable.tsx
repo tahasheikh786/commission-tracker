@@ -137,15 +137,6 @@ export default function ExtractedDataTable({
             Table Data ({visibleRows.length} rows)
           </h3>
         </div>
-
-        {onToggleSummaryRows && (
-          <SummaryRowManager
-            showSummaryRows={showSummaryRows}
-            onToggleSummaryRows={onToggleSummaryRows}
-            onAutoDetect={handleAutoDetect}
-            summaryRowCount={summaryDetection.summaryRows.size}
-          />
-        )}
       </div>
 
       {/* Table - Fixed container width with internal scroll */}

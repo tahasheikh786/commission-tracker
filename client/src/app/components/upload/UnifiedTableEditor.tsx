@@ -84,6 +84,7 @@ export default function UnifiedTableEditor({
   const [viewMode, setViewMode] = useState<ViewMode>('table_review');
   const [userMappings, setUserMappings] = useState<Record<string, string>>({});
   const [acceptedMappings, setAcceptedMappings] = useState<Array<{field: string, mapsTo: string, confidence: number, sample: string}>>([]);
+  const [skippedFields, setSkippedFields] = useState<Array<{field: string, mapsTo: string, confidence: number, sample: string}>>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   // Normalize tables: ensure summaryRows is a Set
   const [tables, setTables] = useState(() => {
@@ -104,6 +105,8 @@ export default function UnifiedTableEditor({
   const [currentTableIdx, setCurrentTableIdx] = useState(0);
   const [showSummaryRows, setShowSummaryRows] = useState(true);
   const [isLoadingAIMapping, setIsLoadingAIMapping] = useState(false);
+  const [aiMappingStep, setAiMappingStep] = useState(0);
+  const [aiMappingProgress, setAiMappingProgress] = useState(0);
   const [aiIntelligence, setAiIntelligence] = useState(extractedData.ai_intelligence);
   
   // ===== EDITABLE METADATA STATE =====
@@ -215,6 +218,38 @@ export default function UnifiedTableEditor({
     }
   ];
   
+  // Define AI Field Mapping steps
+  const AI_MAPPING_STEPS: UploadStep[] = [
+    {
+      id: 'analyzing_table',
+      order: 1,
+      title: 'Analyzing Table Structure',
+      description: 'Understanding your edited table data...',
+      estimatedDuration: 1000
+    },
+    {
+      id: 'checking_learned_formats',
+      order: 2,
+      title: 'Checking Learned Formats',
+      description: 'Looking for previously saved mappings...',
+      estimatedDuration: 1500
+    },
+    {
+      id: 'generating_mappings',
+      order: 3,
+      title: 'AI Field Mapping',
+      description: 'Generating intelligent field suggestions...',
+      estimatedDuration: 3000
+    },
+    {
+      id: 'finalizing_mappings',
+      order: 4,
+      title: 'Finalizing',
+      description: 'Preparing field mapping suggestions...',
+      estimatedDuration: 500
+    }
+  ];
+  
   
   // Calculate mapping statistics
   const mappingStats: MappingStats = useMemo(() => {
@@ -228,8 +263,12 @@ export default function UnifiedTableEditor({
     const userMappedFieldNames = new Set(
       Object.keys(userMappings).map(k => k.toLowerCase())
     );
+    // Get list of skipped field names (check case-insensitively)
+    const skippedFieldNames = new Set(
+      skippedFields.map(m => m.field.toLowerCase())
+    );
     
-    // Count mappings by status, considering user acceptances
+    // Count mappings by status, considering user acceptances and skipped fields
     let mapped = 0;
     let needsReview = 0;
     let unmapped = 0;
@@ -238,6 +277,12 @@ export default function UnifiedTableEditor({
       const fieldNameLower = mapping.extracted_field.toLowerCase();
       const isAccepted = acceptedFieldNames.has(fieldNameLower) || 
                         userMappedFieldNames.has(fieldNameLower);
+      const isSkipped = skippedFieldNames.has(fieldNameLower);
+      
+      // Skip counting skipped fields in the statistics
+      if (isSkipped) {
+        return;
+      }
       
       if (isAccepted || mapping.confidence >= 0.8) {
         mapped++;
@@ -251,21 +296,38 @@ export default function UnifiedTableEditor({
     
 
     return { mapped, needsReview, unmapped, total };
-  }, [aiMappings, userMappings, acceptedMappings]);
+  }, [aiMappings, userMappings, acceptedMappings, skippedFields]);
 
   const handleModeTransition = async (newMode: ViewMode) => {
     if (isTransitioning) return;
     
-    setIsTransitioning(true);
-    
-    // Small delay for exit animation
-    await new Promise(resolve => setTimeout(resolve, 150));
-    
     // ===== CRITICAL: TRIGGER AI FIELD MAPPING WHEN TRANSITIONING TO FIELD_MAPPING MODE =====
     if (newMode === 'field_mapping') {
       try {
+        // Set loading state FIRST before transitioning
         setIsLoadingAIMapping(true);
+        setAiMappingStep(0);
+        setAiMappingProgress(0);
+        
+        // Then start transition
+        setIsTransitioning(true);
+        
+        // Small delay for exit animation
+        await new Promise(resolve => setTimeout(resolve, 150));
+        
+        // Change view mode
+        setViewMode(newMode);
+        
+        // Small delay to let the UI render
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Now the loader should be visible
         toast.loading('Generating AI field mappings for edited table...', { id: 'ai-mapping' });
+        
+        // STEP 1: Analyzing Table Structure
+        setAiMappingStep(0);
+        setAiMappingProgress(10);
+        await new Promise(resolve => setTimeout(resolve, 500));
         
         // Get the edited table data from current table
         const currentTable = tables[currentTableIdx];
@@ -273,16 +335,36 @@ export default function UnifiedTableEditor({
         const rows = currentTable?.rows || [];
         
         // Prepare data for AI field mapping API (use edited values if available)
-        const carrier_id = extractedData?.carrier_id || extractedData?.company_id;
+        // CRITICAL FIX: Ensure we pass a valid UUID for carrier_id, not "auto-detected"
+        let carrier_id = extractedData?.carrier_id || extractedData?.company_id;
+        
+        // Validate that carrier_id is a valid UUID, not a placeholder string
+        if (carrier_id && (carrier_id === 'auto-detected' || carrier_id === 'undefined' || carrier_id === 'null')) {
+          console.warn('⚠️ Invalid carrier_id detected:', carrier_id, '- setting to undefined');
+          carrier_id = undefined;
+        }
+        
         const extracted_carrier = editedCarrierName || extractedData?.carrierName || extractedData?.extracted_carrier;
         const statement_date = editedStatementDate || extractedData?.statementDate || extractedData?.extracted_date;
         
         console.log('🤖 Triggering AI field mapping with edited table data:', {
           headers_count: headers.length,
           rows_count: rows.length,
-          carrier_id,
-          extracted_carrier
+          carrier_id: carrier_id || 'NOT SET',
+          carrier_id_type: typeof carrier_id,
+          extracted_carrier,
+          extractedData_carrier_id: extractedData?.carrier_id,
+          extractedData_company_id: extractedData?.company_id
         });
+        
+        // STEP 2: Checking Learned Formats
+        setAiMappingStep(1);
+        setAiMappingProgress(30);
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
+        // STEP 3: Generating AI Mappings
+        setAiMappingStep(2);
+        setAiMappingProgress(50);
         
         // Call AI field mapping API with edited table data
         const aiAnalysis = await getEnhancedExtractionAnalysis(
@@ -296,6 +378,10 @@ export default function UnifiedTableEditor({
           carrier_id,
           extracted_carrier
         );
+        
+        // STEP 4: Finalizing
+        setAiMappingStep(3);
+        setAiMappingProgress(90);
         
         // Update AI intelligence state with new field mappings
         // KEEP plan type detection from extraction, only update field mapping
@@ -327,6 +413,8 @@ export default function UnifiedTableEditor({
           ...extractedData,
           ai_intelligence: newAiIntelligence
         });
+        
+        setAiMappingProgress(100);
         
         toast.success(`AI generated ${aiAnalysis.field_mapping?.mappings?.length || 0} field mappings!`, { 
           id: 'ai-mapping',
@@ -370,18 +458,26 @@ export default function UnifiedTableEditor({
         });
       } finally {
         setIsLoadingAIMapping(false);
+        setAiMappingProgress(0);
+        setAiMappingStep(0);
+        setIsTransitioning(false);
       }
       
       // Reset preview collapse state
       setIsPreviewCollapsed(false);
+    } else {
+      // Other mode transitions - just do the visual transition
+      setIsTransitioning(true);
+      
+      // Small delay for exit animation
+      await new Promise(resolve => setTimeout(resolve, 150));
+      
+      setViewMode(newMode);
+      
+      // Complete transition
+      await new Promise(resolve => setTimeout(resolve, 100));
+      setIsTransitioning(false);
     }
-    
-    setViewMode(newMode);
-    
-    // Small delay for enter animation
-    await new Promise(resolve => setTimeout(resolve, 150));
-    
-    setIsTransitioning(false);
   };
 
   const handleFinalSubmission = async () => {
@@ -725,6 +821,50 @@ export default function UnifiedTableEditor({
     handleMappingChange(mapping.extracted_field, mapping.mapped_to);
   };
 
+  const handleSkipMapping = (mapping: FieldMapping) => {
+    const tableHeaders = tables?.[0]?.header || tables?.[0]?.headers || [];
+    const colIndex = tableHeaders.findIndex((h: string) => 
+      h.toLowerCase() === mapping.extracted_field.toLowerCase()
+    );
+    const sampleData = colIndex >= 0 && tables?.[0]?.rows?.[0] 
+      ? tables[0].rows[0][colIndex] 
+      : 'N/A';
+
+    // Check if already skipped
+    if (skippedFields.some(m => m.field === mapping.extracted_field)) {
+      return; // Already skipped
+    }
+
+    const newSkippedMapping = {
+      field: mapping.extracted_field,
+      mapsTo: mapping.mapped_to,
+      confidence: mapping.confidence,
+      sample: sampleData
+    };
+
+    // Add to skipped fields
+    setSkippedFields(prev => [...prev, newSkippedMapping]);
+    
+    // Remove from accepted mappings if it was previously accepted
+    setAcceptedMappings(prev => prev.filter(m => m.field !== mapping.extracted_field));
+    
+    // Remove from user mappings
+    setUserMappings(prev => {
+      const updated = { ...prev };
+      delete updated[mapping.extracted_field];
+      return updated;
+    });
+  };
+
+  // Handle putting back a skipped field
+  const handlePutBackSkippedField = (skippedMapping: {field: string, mapsTo: string, confidence: number, sample: string}) => {
+    // Remove from skipped fields
+    setSkippedFields(prev => prev.filter(m => m.field !== skippedMapping.field));
+    
+    // The field will now appear back in the left panel as a normal field mapping suggestion
+    toast.success(`↩ Put back: ${skippedMapping.field}`);
+  };
+
   // Handle accepting all high confidence mappings
   const handleAcceptAllMappings = () => {
     const highConfidenceMappings = aiMappings.filter(m => m.confidence >= 0.8);
@@ -767,14 +907,18 @@ export default function UnifiedTableEditor({
   };
 
   // Handle custom mapping selection
-  const handleCustomMapping = (extractedField: string, selectedHeader: string) => {
+  const handleCustomMapping = (extractedField: string, selectedHeader: string, databaseField?: string) => {
     const tableHeaders = tables?.[0]?.header || tables?.[0]?.headers || [];
+    // Get sample data from the EXTRACTED field (the column in the table), not the database field
     const colIndex = tableHeaders.findIndex((h: string) => 
-      h.toLowerCase() === selectedHeader.toLowerCase()
+      h.toLowerCase() === extractedField.toLowerCase()
     );
     const sampleData = colIndex >= 0 && tables?.[0]?.rows?.[0] 
       ? tables[0].rows[0][colIndex] 
       : 'N/A';
+
+    // Use the databaseField if provided, otherwise fall back to selectedHeader
+    const targetField = databaseField || selectedHeader;
 
     // Find if already accepted and update it
     const existingIndex = acceptedMappings.findIndex(m => m.field === extractedField);
@@ -782,7 +926,7 @@ export default function UnifiedTableEditor({
       const updated = [...acceptedMappings];
       updated[existingIndex] = {
         ...updated[existingIndex],
-        mapsTo: selectedHeader,
+        mapsTo: targetField,
         sample: sampleData
       };
       setAcceptedMappings(updated);
@@ -790,7 +934,7 @@ export default function UnifiedTableEditor({
       // Add new mapping
       setAcceptedMappings(prev => [...prev, {
         field: extractedField,
-        mapsTo: selectedHeader,
+        mapsTo: targetField,
         confidence: 1.0, // User selected, so 100%
         sample: sampleData
       }]);
@@ -798,7 +942,23 @@ export default function UnifiedTableEditor({
       setTimeout(() => setNewlyAddedField(null), 1000);
     }
 
-    handleMappingChange(extractedField, selectedHeader);
+    // Also update the AI mappings in aiIntelligence state so left panel reflects the change
+    if (aiIntelligence?.field_mapping?.mappings) {
+      const updatedMappings = aiIntelligence.field_mapping.mappings.map(m => 
+        m.extracted_field === extractedField 
+          ? { ...m, mapped_to: targetField, confidence: 1.0 }
+          : m
+      );
+      setAiIntelligence({
+        ...aiIntelligence,
+        field_mapping: {
+          ...aiIntelligence.field_mapping,
+          mappings: updatedMappings
+        }
+      });
+    }
+
+    handleMappingChange(extractedField, targetField);
   };
 
   // Handle removing an accepted mapping
@@ -913,12 +1073,12 @@ export default function UnifiedTableEditor({
 
   return (
     <>
-      {/* Premium Progress Loader - Shows during submission */}
+      {/* Premium Progress Loader - Shows during submission OR AI mapping */}
       <PremiumProgressLoader
-        currentStep={approvalStep}
-        steps={APPROVAL_STEPS}
-        progress={approvalProgress}
-        isVisible={isSubmitting}
+        currentStep={isLoadingAIMapping ? aiMappingStep : approvalStep}
+        steps={isLoadingAIMapping ? AI_MAPPING_STEPS : APPROVAL_STEPS}
+        progress={isLoadingAIMapping ? aiMappingProgress : approvalProgress}
+        isVisible={isSubmitting || isLoadingAIMapping}
       />
 
       <div className="h-screen bg-gray-50 dark:bg-slate-900 flex flex-col overflow-hidden">
@@ -984,65 +1144,80 @@ export default function UnifiedTableEditor({
             )}
           </div>
           
-          {/* Metadata Display - Editable Professional Cards */}
+          {/* Metadata Display - Professional Cards with Borders and Backgrounds */}
           <div className="flex items-center space-x-3">
             {/* Carrier Name - Editable */}
-            <div className="px-2 py-1">
-              <span className="text-xs font-medium text-blue-600 dark:text-blue-400 block uppercase tracking-wide mb-0.5">Carrier</span>
+            <div className="bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-200 dark:border-blue-700 rounded-lg px-3 py-2">
+              <span className="text-xs font-semibold text-blue-600 dark:text-blue-400 block uppercase tracking-wide mb-1">Carrier</span>
               {isEditingMetadata ? (
                 <input
                   type="text"
                   value={editedCarrierName}
                   onChange={(e) => setEditedCarrierName(e.target.value)}
-                  className="text-base font-bold text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-gray-300 dark:border-gray-600 rounded w-48 px-2 py-1"
+                  className="text-sm font-bold text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-blue-300 dark:border-blue-600 rounded px-2 py-1 w-40"
                   placeholder="Enter carrier name"
                 />
               ) : (
-                <span className="text-base font-bold text-blue-900 dark:text-blue-100 px-2 py-1 inline-block w-48">
+                <span className="text-sm font-bold text-blue-900 dark:text-blue-100 block">
                   {editedCarrierName || 'Unknown'}
                 </span>
               )}
             </div>
             
             {/* Broker - Display Only */}
-            <div className="px-2 py-1">
-              <span className="text-xs font-medium text-purple-600 dark:text-purple-400 block uppercase tracking-wide mb-0.5">Broker</span>
-              <span className="text-base font-bold text-purple-900 dark:text-purple-100">
+            <div className="bg-purple-50 dark:bg-purple-900/20 border-2 border-purple-200 dark:border-purple-700 rounded-lg px-3 py-2">
+              <span className="text-xs font-semibold text-purple-600 dark:text-purple-400 block uppercase tracking-wide mb-1">Broker</span>
+              <span className="text-sm font-bold text-purple-900 dark:text-purple-100 block">
                 {extractedData?.document_metadata?.broker_company || 'Not detected'}
               </span>
             </div>
             
             {/* Plan Type - Editable */}
-            <div className="px-2 py-1">
-              <span className="text-xs font-medium text-green-600 dark:text-green-400 block uppercase tracking-wide mb-0.5">Plan Type</span>
+            <div className="bg-green-50 dark:bg-green-900/20 border-2 border-green-200 dark:border-green-700 rounded-lg px-3 py-2">
+              <span className="text-xs font-semibold text-green-600 dark:text-green-400 block uppercase tracking-wide mb-1">Plan Type</span>
               {isEditingMetadata ? (
                 <input
                   type="text"
                   value={editedPlanType}
                   onChange={(e) => setEditedPlanType(e.target.value)}
-                  className="text-base font-bold text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-gray-300 dark:border-gray-600 rounded w-48 px-2 py-1"
+                  className="text-sm font-bold text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-green-300 dark:border-green-600 rounded px-2 py-1 w-40"
                   placeholder="Enter plan type"
                 />
               ) : (
-                <span className="text-base font-bold text-green-900 dark:text-green-100 px-2 py-1 inline-block w-48">
+                <span className="text-sm font-bold text-green-900 dark:text-green-100 block">
                   {editedPlanType || 'Not detected'}
                 </span>
               )}
             </div>
             
-            {/* Statement Date - Editable */}
-            <div className="px-2 py-1">
-              <span className="text-xs font-medium text-orange-600 dark:text-orange-400 block uppercase tracking-wide mb-0.5">Statement Date</span>
+            {/* Statement Date - Editable with Datepicker */}
+            <div className="bg-orange-50 dark:bg-orange-900/20 border-2 border-orange-200 dark:border-orange-700 rounded-lg px-3 py-2">
+              <span className="text-xs font-semibold text-orange-600 dark:text-orange-400 block uppercase tracking-wide mb-1">Statement Date</span>
               {isEditingMetadata ? (
                 <input
-                  type="text"
-                  value={editedStatementDate}
-                  onChange={(e) => setEditedStatementDate(e.target.value)}
-                  className="text-base font-bold text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-gray-300 dark:border-gray-600 rounded w-48 px-2 py-1"
-                  placeholder="MM/DD/YYYY"
+                  type="date"
+                  value={editedStatementDate ? (() => {
+                    // Convert MM/DD/YYYY to YYYY-MM-DD for date input
+                    const parts = editedStatementDate.split('/');
+                    if (parts.length === 3) {
+                      return `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`;
+                    }
+                    return '';
+                  })() : ''}
+                  onChange={(e) => {
+                    // Convert YYYY-MM-DD to MM/DD/YYYY
+                    const dateValue = e.target.value;
+                    if (dateValue) {
+                      const [year, month, day] = dateValue.split('-');
+                      setEditedStatementDate(`${month}/${day}/${year}`);
+                    } else {
+                      setEditedStatementDate('');
+                    }
+                  }}
+                  className="text-sm font-bold text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-orange-300 dark:border-orange-600 rounded px-2 py-1 w-36"
                 />
               ) : (
-                <span className="text-base font-bold text-orange-900 dark:text-orange-100 px-2 py-1 inline-block w-48">
+                <span className="text-sm font-bold text-orange-900 dark:text-orange-100 block">
                   {editedStatementDate || 'Not detected'}
                 </span>
               )}
@@ -1166,13 +1341,14 @@ export default function UnifiedTableEditor({
                   </div>
                 )}
 
-                {/* Enhanced AI Mapper with Table Selection */}
+                {/* Enhanced AI Mapper with Table Selection - ALWAYS VISIBLE WHEN LOADING */}
                 {isLoadingAIMapping ? (
-                  <div className="flex items-center justify-center py-12">
+                  <div className="flex items-center justify-center py-12 opacity-100">
                     <div className="text-center">
-                      <div className="w-16 h-16 border-4 border-blue-600 dark:border-blue-400 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                      <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100 mb-2">Generating AI Field Mappings</h3>
-                      <p className="text-sm text-gray-600 dark:text-slate-400">Analyzing your edited table data...</p>
+                      <div className="w-20 h-20 border-4 border-blue-600 dark:border-blue-400 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                      <h3 className="text-xl font-bold text-gray-900 dark:text-slate-100 mb-3">🤖 AI Field Mapping</h3>
+                      <p className="text-base text-gray-700 dark:text-slate-300 font-medium mb-2">Generating intelligent field mappings...</p>
+                      <p className="text-sm text-gray-600 dark:text-slate-400">Analyzing your edited table data</p>
                     </div>
                   </div>
                 ) : aiIntelligence?.enabled ? (
@@ -1183,8 +1359,11 @@ export default function UnifiedTableEditor({
                     uploadId={uploadData?.upload_id || uploadData?.id || extractedData?.upload_id}
                     onTableSwitch={handleTableSwitch}
                     tableHeaders={tables?.[currentTableIdx]?.header || tables?.[currentTableIdx]?.headers || []}
+                    databaseFields={databaseFields}
                     acceptedFields={acceptedMappings.map(m => m.field)}
+                    skippedFields={skippedFields.map(m => m.field)}
                     onAcceptMapping={handleAcceptMapping}
+                    onSkipMapping={handleSkipMapping}
                     onAcceptAllMappings={handleAcceptAllMappings}
                     onCustomMapping={handleCustomMapping}
                     onReviewMappings={() => console.log('Review mappings')}
@@ -1459,10 +1638,96 @@ export default function UnifiedTableEditor({
                           {acceptedMappings.length} field{acceptedMappings.length !== 1 ? 's' : ''} accepted
                         </span>
                         <span className="ml-2 text-gray-500 dark:text-slate-400">
-                          • {aiMappings.length - acceptedMappings.length} remaining
+                          • {aiMappings.length - acceptedMappings.length - skippedFields.length} remaining
                         </span>
                       </div>
                     </div>
+
+                    {/* Skipped Fields Table */}
+                    {skippedFields.length > 0 && (
+                      <div className="mt-4 bg-white dark:bg-slate-800 rounded-lg border border-orange-200 dark:border-orange-700 overflow-hidden shadow-sm">
+                        <div className="bg-gradient-to-r from-orange-50 to-amber-50 dark:from-orange-900/20 dark:to-amber-900/20 px-4 py-2 border-b border-orange-200 dark:border-orange-700">
+                          <div className="flex items-center space-x-2">
+                            <svg className="w-5 h-5 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                            </svg>
+                            <div>
+                              <h4 className="text-sm font-semibold text-gray-900 dark:text-white">
+                                Skipped Fields
+                              </h4>
+                              <p className="text-xs text-gray-600 dark:text-gray-400">
+                                Fields you chose to skip from mapping
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="overflow-auto max-h-64">
+                          <table className="min-w-full text-sm">
+                            <thead className="bg-gray-50 dark:bg-slate-700 sticky top-0">
+                              <tr>
+                                <th className="px-3 py-2 text-left font-medium text-gray-700 dark:text-slate-300 border-b border-gray-200 dark:border-slate-600">Extracted Field</th>
+                                <th className="px-3 py-2 text-left font-medium text-gray-700 dark:text-slate-300 border-b border-gray-200 dark:border-slate-600">Would Map To</th>
+                                <th className="px-3 py-2 text-left font-medium text-gray-700 dark:text-slate-300 border-b border-gray-200 dark:border-slate-600">Confidence</th>
+                                <th className="px-3 py-2 text-left font-medium text-gray-700 dark:text-slate-300 border-b border-gray-200 dark:border-slate-600">Sample Data</th>
+                                <th className="px-3 py-2 text-left font-medium text-gray-700 dark:text-slate-300 border-b border-gray-200 dark:border-slate-600 w-20">Action</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {skippedFields.map((mapping, idx) => (
+                                <tr 
+                                  key={mapping.field}
+                                  className="hover:bg-orange-50 dark:hover:bg-orange-900/10 transition-colors"
+                                >
+                                  <td className="px-3 py-2 border-b border-gray-100 dark:border-slate-600">
+                                    <div className="flex items-center space-x-2">
+                                      <svg className="w-4 h-4 text-orange-600 dark:text-orange-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                                      </svg>
+                                      <span className="font-mono text-sm text-gray-900 dark:text-slate-100">{mapping.field}</span>
+                                    </div>
+                                  </td>
+                                  <td className="px-3 py-2 border-b border-gray-100 dark:border-slate-600 text-gray-600 dark:text-slate-300">{mapping.mapsTo}</td>
+                                  <td className="px-3 py-2 border-b border-gray-100 dark:border-slate-600">
+                                    <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
+                                      mapping.confidence >= 0.8 ? 'bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400' :
+                                      mapping.confidence >= 0.6 ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300' :
+                                      'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300'
+                                    }`}>
+                                      {Math.round(mapping.confidence * 100)}%
+                                    </span>
+                                  </td>
+                                  <td className="px-3 py-2 border-b border-gray-100 dark:border-slate-600 text-gray-600 dark:text-slate-300 font-mono max-w-xs truncate" title={mapping.sample}>
+                                    {mapping.sample || <span className="text-gray-400 dark:text-slate-500">N/A</span>}
+                                  </td>
+                                  <td className="px-3 py-2 border-b border-gray-100 dark:border-slate-600">
+                                    <button
+                                      onClick={() => {
+                                        handlePutBackSkippedField(mapping);
+                                      }}
+                                      className="p-1.5 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded transition-colors"
+                                      title="Put back this field"
+                                      type="button"
+                                    >
+                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                                      </svg>
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                        <div className="p-2 bg-orange-50 dark:bg-orange-900/20 text-xs text-orange-800 dark:text-orange-400 text-center border-t border-orange-200 dark:border-orange-700">
+                          <span className="font-medium">
+                            {skippedFields.length} field{skippedFields.length !== 1 ? 's' : ''} skipped
+                          </span>
+                          <span className="ml-2">
+                            • Click the <svg className="w-3 h-3 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg> button to put back
+                          </span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -1481,11 +1746,13 @@ export default function UnifiedTableEditor({
         canProceed={
           // Allow submission if:
           // 1. No fields need review, OR
-          // 2. All AI mappings have been explicitly accepted by the user
+          // 2. All non-skipped AI mappings have been explicitly accepted by the user
           mappingStats.needsReview === 0 || 
-          acceptedMappings.length >= aiMappings.length
+          acceptedMappings.length >= (aiMappings.length - skippedFields.length)
         }
         isTransitioning={isTransitioning}
+        carrierName={editedCarrierName}
+        statementDate={editedStatementDate}
       />
     </div>
     </>

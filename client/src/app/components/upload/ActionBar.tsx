@@ -27,6 +27,8 @@ interface ActionBarProps {
   isSubmitting?: boolean;
   canProceed?: boolean;
   isTransitioning?: boolean;
+  carrierName?: string;
+  statementDate?: string;
 }
 
 export default function ActionBar({
@@ -36,7 +38,9 @@ export default function ActionBar({
   onFinalSubmit,
   isSubmitting = false,
   canProceed = true,
-  isTransitioning = false
+  isTransitioning = false,
+  carrierName = '',
+  statementDate = ''
 }: ActionBarProps) {
   const handleSubmit = async () => {
     if (!isSubmitting && canProceed) {
@@ -52,6 +56,23 @@ export default function ActionBar({
 
   const hasReviewRequired = mappingStats && mappingStats.needsReview > 0;
   const canSubmit = !hasReviewRequired && canProceed && !isSubmitting;
+  
+  // Validation for table review mode
+  const isCarrierNameMissing = !carrierName || carrierName.trim() === '' || carrierName === 'Unknown';
+  const isStatementDateMissing = !statementDate || statementDate.trim() === '' || statementDate === 'Not detected';
+  const canContinueToMapping = !isCarrierNameMissing && !isStatementDateMissing;
+  
+  // Generate validation message
+  const getValidationMessage = () => {
+    if (isCarrierNameMissing && isStatementDateMissing) {
+      return 'Please provide both Carrier Name and Statement Date';
+    } else if (isCarrierNameMissing) {
+      return 'Please provide Carrier Name';
+    } else if (isStatementDateMissing) {
+      return 'Please provide Statement Date';
+    }
+    return '';
+  };
 
   return (
     <div className="sticky bottom-0 bg-white dark:bg-slate-800 border-t border-gray-200 dark:border-slate-700 px-6 py-4 shadow-lg">
@@ -91,8 +112,15 @@ export default function ActionBar({
 
         {/* Table Review Mode Stats */}
         {viewMode === 'table_review' && (
-          <div className="text-sm text-gray-600 dark:text-slate-400">
-            Review your extracted data and make any necessary corrections before proceeding to field mapping.
+          <div className="flex flex-col space-y-2">
+            <div className="text-sm text-gray-600 dark:text-slate-400">
+              Review your extracted data and make any necessary corrections before proceeding to field mapping.
+            </div>
+            {!canContinueToMapping && (
+              <div className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 rounded px-3 py-2 inline-block">
+                ⚠️ {getValidationMessage()}. Click the <span className="font-semibold">✏️ Edit</span> button above to add missing information.
+              </div>
+            )}
           </div>
         )}
 
@@ -100,28 +128,41 @@ export default function ActionBar({
         <div className="flex items-center space-x-4">
           
           {viewMode === 'table_review' ? (
-            // Table Review Mode - Single Continue Button
-            <button
-              onClick={() => handleModeChange('field_mapping')}
-              disabled={isTransitioning}
-              className={`px-8 py-3 rounded-lg font-medium transition-colors flex items-center shadow-sm ${
-                isTransitioning
-                  ? 'bg-gray-400 dark:bg-slate-600 text-gray-200 dark:text-slate-400 cursor-not-allowed'
-                  : 'bg-blue-600 dark:bg-blue-700 text-white hover:bg-blue-700 dark:hover:bg-blue-600'
-              }`}
-            >
-              {isTransitioning ? (
-                <>
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                  Transitioning...
-                </>
-              ) : (
-                <>
-                  Continue to Field Mapping
-                  <ArrowRight className="w-5 h-5 ml-2" />
-                </>
+            // Table Review Mode - Single Continue Button with validation
+            <div className="relative group">
+              <button
+                onClick={() => canContinueToMapping && handleModeChange('field_mapping')}
+                disabled={isTransitioning || !canContinueToMapping}
+                className={`px-8 py-3 rounded-lg font-medium transition-colors flex items-center shadow-sm ${
+                  isTransitioning || !canContinueToMapping
+                    ? 'bg-gray-400 dark:bg-slate-600 text-gray-200 dark:text-slate-400 cursor-not-allowed'
+                    : 'bg-blue-600 dark:bg-blue-700 text-white hover:bg-blue-700 dark:hover:bg-blue-600'
+                }`}
+              >
+                {isTransitioning ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                    Transitioning...
+                  </>
+                ) : (
+                  <>
+                    Continue to Field Mapping
+                    <ArrowRight className="w-5 h-5 ml-2" />
+                  </>
+                )}
+              </button>
+              {/* Tooltip on hover when disabled */}
+              {!canContinueToMapping && !isTransitioning && (
+                <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 hidden group-hover:block z-50">
+                  <div className="bg-gray-900 dark:bg-slate-700 text-white text-sm rounded-lg px-4 py-2 whitespace-nowrap shadow-lg">
+                    {getValidationMessage()}
+                    <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1">
+                      <div className="border-8 border-transparent border-t-gray-900 dark:border-t-slate-700"></div>
+                    </div>
+                  </div>
+                </div>
               )}
-            </button>
+            </div>
           ) : (
             // Field Mapping Mode - Back and Submit Buttons
             <div className="flex space-x-3">

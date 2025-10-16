@@ -152,6 +152,83 @@ class ClaudeDocumentAIService:
         """Check if Claude service is available"""
         return ANTHROPIC_AVAILABLE and self.client is not None
     
+    async def extract_metadata_only(
+        self,
+        file_path: str
+    ) -> Dict[str, Any]:
+        """
+        Extract only document metadata (carrier, date, broker) from PDF.
+        Lightweight alternative to full extraction for metadata-only needs.
+        
+        Args:
+            file_path: Path to PDF file
+            
+        Returns:
+            Dictionary with metadata extraction results
+        """
+        try:
+            logger.info(f"🔍 Extracting metadata with Claude from: {file_path}")
+            
+            # Validate file
+            validation = self._validate_file(file_path)
+            if not validation['valid']:
+                return {
+                    'success': False,
+                    'error': validation['error']
+                }
+            
+            pdf_info = validation['pdf_info']
+            
+            # Encode PDF for metadata extraction
+            pdf_base64 = self.pdf_processor.encode_pdf_to_base64(file_path)
+            
+            # Get metadata extraction prompt
+            metadata_prompt = self.prompts.get_metadata_extraction_prompt()
+            
+            # Call Claude API
+            extraction_result = await self._call_claude_api(
+                pdf_base64,
+                metadata_prompt,
+                model=self.primary_model
+            )
+            
+            # Parse response
+            parsed_data = self.response_parser.parse_json_response(extraction_result['content'])
+            
+            if not parsed_data:
+                return {
+                    'success': False,
+                    'error': 'Failed to parse Claude metadata response'
+                }
+            
+            # Normalize statement date
+            statement_date = parsed_data.get('statement_date')
+            if statement_date:
+                normalized_date = normalize_statement_date(statement_date)
+                parsed_data['statement_date'] = normalized_date
+            
+            # Return metadata in standard format
+            return {
+                'success': True,
+                'carrier_name': parsed_data.get('carrier_name'),
+                'carrier_confidence': parsed_data.get('carrier_confidence', 0.9),
+                'statement_date': parsed_data.get('statement_date'),
+                'date_confidence': parsed_data.get('date_confidence', 0.9),
+                'broker_company': parsed_data.get('broker_company'),
+                'broker_confidence': parsed_data.get('broker_confidence', 0.8),
+                'document_type': parsed_data.get('document_type', 'commission_statement'),
+                'total_pages': pdf_info.get('page_count', 0),
+                'extraction_method': 'claude_metadata',
+                'evidence': parsed_data.get('evidence', 'Metadata extracted from document')
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Claude metadata extraction failed: {e}")
+            return {
+                'success': False,
+                'error': f'Metadata extraction failed: {str(e)}'
+            }
+    
     async def extract_commission_data(
         self,
         file_path: str,
@@ -690,9 +767,11 @@ class ClaudeDocumentAIService:
             'file_type': 'pdf',
             'document_metadata': {
                 'carrier_name': doc_metadata.get('carrier_name'),
-                'carrier_confidence': doc_metadata.get('confidence', 0.9),
+                'carrier_confidence': doc_metadata.get('carrier_confidence', doc_metadata.get('confidence', 0.9)),
                 'statement_date': doc_metadata.get('statement_date'),
-                'date_confidence': doc_metadata.get('confidence', 0.9),
+                'date_confidence': doc_metadata.get('date_confidence', doc_metadata.get('confidence', 0.9)),
+                'broker_company': doc_metadata.get('broker_company') or doc_metadata.get('broker_entity'),
+                'broker_confidence': doc_metadata.get('broker_confidence', 0.8),
                 'total_pages': pdf_info.get('page_count', 0),
                 'file_size_mb': pdf_info.get('file_size_mb', 0),
                 'extraction_method': 'claude',

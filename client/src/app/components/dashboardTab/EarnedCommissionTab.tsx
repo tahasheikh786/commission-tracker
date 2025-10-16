@@ -24,10 +24,14 @@ import {
   Eye,
   EyeOff,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  ArrowLeft,
+  ArrowRight
 } from 'lucide-react';
 import EditCommissionModal from './EditCommissionModal';
 import MergeConfirmationModal from './MergeConfirmationModal';
+import CompanyCarrierModal from './CompanyCarrierModal';
+import { CompanyNameNormalizer } from '../../utils/CompanyNameNormalizer';
 import { 
   useEarnedCommissionStats, 
   useGlobalEarnedCommissionStats,
@@ -40,6 +44,14 @@ import {
 } from '../../hooks/useDashboard';
 import { useSubmission } from '@/context/SubmissionContext';
 
+interface CarrierDetail {
+  carrier_name: string;
+  commission_earned: number;
+  invoice_total: number;
+  statement_count: number;
+  statement_year?: number;
+}
+
 interface CommissionData {
   id: string;
   carrier_name?: string;
@@ -47,6 +59,8 @@ interface CommissionData {
   invoice_total: number;
   commission_earned: number;
   statement_count: number;
+  upload_ids?: string[];
+  approved_statement_count?: number;
   statement_date?: string;
   statement_month?: number;
   statement_year?: number;
@@ -66,6 +80,8 @@ interface CommissionData {
   };
   last_updated?: string;
   created_at?: string;
+  carrierDetails?: CarrierDetail[];
+  carrierCount?: number;
 }
 
 interface CarrierGroup {
@@ -369,6 +385,447 @@ const CarrierFullTableView: React.FC<{
   );
 };
 
+// Carriers List Modal Component
+const CarriersListModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  carriers: CarrierGroup[];
+}> = ({ isOpen, onClose, carriers }) => {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(amount);
+  };
+
+  // Filter and sort carriers alphabetically
+  const filteredCarriers = useMemo(() => {
+    const filtered = carriers.filter(carrier =>
+      carrier.carrierName.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+    return filtered.sort((a, b) => a.carrierName.localeCompare(b.carrierName));
+  }, [carriers, searchQuery]);
+
+  // Pagination
+  const totalPages = Math.ceil(filteredCarriers.length / ITEMS_PER_PAGE);
+  const paginatedCarriers = filteredCarriers.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
+  // Reset page when search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-3xl w-full mx-4 max-h-[80vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+        {/* Modal Header */}
+        <div className="p-6 border-b border-slate-200 dark:border-slate-700">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+              <Building2 className="text-purple-600 dark:text-purple-400" size={24} />
+              All Carriers
+            </h2>
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+            >
+              <X size={20} className="text-slate-500 dark:text-slate-400" />
+            </button>
+          </div>
+          
+          {/* Search Bar */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 dark:text-slate-500" size={16} />
+            <input
+              type="text"
+              placeholder="Search carriers..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 text-sm bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-lg border border-slate-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200"
+            />
+          </div>
+        </div>
+
+        {/* Modal Content */}
+        <div className="p-6 overflow-y-auto max-h-[calc(80vh-200px)]">
+          {paginatedCarriers.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-slate-500 dark:text-slate-400">
+              <Building2 className="text-slate-300 dark:text-slate-600 mb-4" size={48} />
+              <p className="text-lg font-medium">No carriers found</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {paginatedCarriers.map((carrier, index) => (
+                <div
+                  key={carrier.carrierName}
+                  className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors border border-slate-200 dark:border-slate-600"
+                >
+                  <div className="flex items-center gap-3 flex-1">
+                    <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                      {carrier.carrierName.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-slate-800 dark:text-slate-200 truncate">{carrier.carrierName}</h3>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        {carrier.companyCount} companies • {carrier.statementCount} statements
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right ml-4">
+                    <p className="font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(carrier.totalCommission)}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Total Commission</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Modal Footer with Pagination */}
+        <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/30">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-slate-600 dark:text-slate-400">
+              Showing {Math.min((currentPage - 1) * ITEMS_PER_PAGE + 1, filteredCarriers.length)} - {Math.min(currentPage * ITEMS_PER_PAGE, filteredCarriers.length)} of {filteredCarriers.length}
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+                className="p-2 rounded-lg border border-slate-200 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <ArrowLeft size={16} className="text-slate-600 dark:text-slate-400" />
+              </button>
+              <span className="text-sm text-slate-600 dark:text-slate-400 px-3">
+                Page {currentPage} of {totalPages || 1}
+              </span>
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages || totalPages === 0}
+                className="p-2 rounded-lg border border-slate-200 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <ArrowRight size={16} className="text-slate-600 dark:text-slate-400" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Companies List Modal Component
+const CompaniesListModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  data: CommissionData[];
+  onCompanyClick?: (company: { client_name: string; carriers: CarrierDetail[] }) => void;
+}> = ({ isOpen, onClose, data, onCompanyClick }) => {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(amount);
+  };
+
+  // Normalize and aggregate companies with carrier tracking
+  const normalizedCompanies = useMemo(() => {
+    // Step 1: Group by exact core name
+    const companiesMap = new Map<string, {
+      normalizedName: string;
+      originalNames: Set<string>;
+      commission_earned: number;
+      invoice_total: number;
+      statement_count: number;
+      carrierDetails: CarrierDetail[];
+      id: string;
+      coreName: string;
+    }>();
+    
+    data.forEach(item => {
+      // CRITICAL: Use core name (without suffix) as the grouping key
+      const coreName = CompanyNameNormalizer.getCoreName(item.client_name).trim();
+      const normalizedName = CompanyNameNormalizer.normalize(item.client_name);
+      const carrierName = item.carrier_name || 'Unknown Carrier';
+      
+      if (!companiesMap.has(coreName)) {
+        companiesMap.set(coreName, {
+          normalizedName,
+          originalNames: new Set([item.client_name]),
+          commission_earned: item.commission_earned,
+          invoice_total: item.invoice_total,
+          statement_count: item.statement_count,
+          carrierDetails: [{
+            carrier_name: carrierName,
+            commission_earned: item.commission_earned,
+            invoice_total: item.invoice_total,
+            statement_count: item.statement_count,
+            statement_year: item.statement_year
+          }],
+          id: item.id,
+          coreName
+        });
+      } else {
+        const existing = companiesMap.get(coreName)!;
+        existing.originalNames.add(item.client_name);
+        existing.commission_earned += item.commission_earned;
+        existing.invoice_total += item.invoice_total;
+        existing.statement_count += item.statement_count;
+        
+        // Update to the longest/most complete normalized name
+        if (normalizedName.length > existing.normalizedName.length) {
+          existing.normalizedName = normalizedName;
+        }
+        
+        // Check if carrier already exists for this company
+        const existingCarrierIndex = existing.carrierDetails.findIndex(
+          c => c.carrier_name === carrierName
+        );
+        
+        if (existingCarrierIndex >= 0) {
+          // Aggregate existing carrier
+          existing.carrierDetails[existingCarrierIndex].commission_earned += item.commission_earned;
+          existing.carrierDetails[existingCarrierIndex].invoice_total += item.invoice_total;
+          existing.carrierDetails[existingCarrierIndex].statement_count += item.statement_count;
+        } else {
+          // Add new carrier
+          existing.carrierDetails.push({
+            carrier_name: carrierName,
+            commission_earned: item.commission_earned,
+            invoice_total: item.invoice_total,
+            statement_count: item.statement_count,
+            statement_year: item.statement_year
+          });
+        }
+      }
+    });
+    
+    // Step 2: OPTIMIZED similarity merging - only compare companies with same prefix
+    // This reduces O(n²) to O(n) by grouping first
+    const companiesArray = Array.from(companiesMap.values());
+    
+    // Group by first 3 characters for efficient comparison
+    const prefixGroups = new Map<string, typeof companiesArray>();
+    companiesArray.forEach(company => {
+      const prefix = company.coreName.substring(0, 3).toLowerCase();
+      if (!prefixGroups.has(prefix)) {
+        prefixGroups.set(prefix, []);
+      }
+      prefixGroups.get(prefix)!.push(company);
+    });
+    
+    // Merge within each prefix group (much smaller groups!)
+    const merged: typeof companiesArray = [];
+    prefixGroups.forEach(group => {
+      const processed = new Set<number>();
+      
+      group.forEach((company, i) => {
+        if (processed.has(i)) return;
+        
+        // Start a new merged company
+        const mergedCompany = { ...company };
+        processed.add(i);
+        
+        // Only compare within this small prefix group
+        group.forEach((otherCompany, j) => {
+          if (j <= i || processed.has(j)) return;
+          
+          const similarity = CompanyNameNormalizer.calculateSimilarity(
+            company.coreName,
+            otherCompany.coreName
+          );
+          
+          // Merge if highly similar (handles "Advanced Carrier Ser" vs "Advanced Carrier Services")
+          if (similarity >= 0.85) {
+            // Merge into group
+            mergedCompany.commission_earned += otherCompany.commission_earned;
+            mergedCompany.invoice_total += otherCompany.invoice_total;
+            mergedCompany.statement_count += otherCompany.statement_count;
+            
+            // Use the longest name
+            if (otherCompany.normalizedName.length > mergedCompany.normalizedName.length) {
+              mergedCompany.normalizedName = otherCompany.normalizedName;
+            }
+            
+            // Merge original names
+            otherCompany.originalNames.forEach(name => mergedCompany.originalNames.add(name));
+            
+            // Merge carriers
+            otherCompany.carrierDetails.forEach(otherCarrier => {
+              const existingCarrierIndex = mergedCompany.carrierDetails.findIndex(
+                c => c.carrier_name === otherCarrier.carrier_name
+              );
+              
+              if (existingCarrierIndex >= 0) {
+                mergedCompany.carrierDetails[existingCarrierIndex].commission_earned += otherCarrier.commission_earned;
+                mergedCompany.carrierDetails[existingCarrierIndex].invoice_total += otherCarrier.invoice_total;
+                mergedCompany.carrierDetails[existingCarrierIndex].statement_count += otherCarrier.statement_count;
+              } else {
+                mergedCompany.carrierDetails.push({ ...otherCarrier });
+              }
+            });
+            
+            processed.add(j);
+          }
+        });
+        
+        merged.push(mergedCompany);
+      });
+    });
+    
+    // Convert to final format and sort
+    return merged
+      .map(company => ({
+        id: company.id,
+        client_name: company.normalizedName,
+        commission_earned: company.commission_earned,
+        invoice_total: company.invoice_total,
+        statement_count: company.statement_count,
+        carrierDetails: company.carrierDetails,
+        carrierCount: company.carrierDetails.length,
+        carrier_name: company.carrierDetails.map(c => c.carrier_name).join(', ')
+      }))
+      .sort((a, b) => a.client_name.localeCompare(b.client_name));
+  }, [data]);
+
+  // Filter companies
+  const filteredCompanies = useMemo(() => {
+    return normalizedCompanies.filter(company =>
+      company.client_name.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [normalizedCompanies, searchQuery]);
+
+  // Pagination
+  const totalPages = Math.ceil(filteredCompanies.length / ITEMS_PER_PAGE);
+  const paginatedCompanies = filteredCompanies.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
+  // Reset page when search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-3xl w-full mx-4 max-h-[80vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+        {/* Modal Header */}
+        <div className="p-6 border-b border-slate-200 dark:border-slate-700">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+              <Users className="text-orange-600 dark:text-orange-400" size={24} />
+              All Companies
+            </h2>
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+            >
+              <X size={20} className="text-slate-500 dark:text-slate-400" />
+            </button>
+          </div>
+          
+          {/* Search Bar */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 dark:text-slate-500" size={16} />
+            <input
+              type="text"
+              placeholder="Search companies..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 text-sm bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-lg border border-slate-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200"
+            />
+          </div>
+        </div>
+
+        {/* Modal Content */}
+        <div className="p-6 overflow-y-auto max-h-[calc(80vh-200px)]">
+          {paginatedCompanies.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-slate-500 dark:text-slate-400">
+              <Users className="text-slate-300 dark:text-slate-600 mb-4" size={48} />
+              <p className="text-lg font-medium">No companies found</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {paginatedCompanies.map((company) => (
+                <div
+                  key={company.id}
+                  className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors border border-slate-200 dark:border-slate-600 cursor-pointer"
+                  onClick={() => {
+                    if (onCompanyClick && company.carrierDetails) {
+                      onCompanyClick({
+                        client_name: company.client_name,
+                        carriers: company.carrierDetails
+                      });
+                    }
+                  }}
+                >
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-slate-800 dark:text-slate-200 truncate">{company.client_name}</h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      {company.carrierCount || 0} carrier{(company.carrierCount || 0) !== 1 ? 's' : ''} • {company.statement_count} statements
+                    </p>
+                  </div>
+                  <div className="text-right ml-4">
+                    <p className="font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(company.commission_earned)}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Invoice: {formatCurrency(company.invoice_total)}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Modal Footer with Pagination */}
+        <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/30">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-slate-600 dark:text-slate-400">
+              Showing {Math.min((currentPage - 1) * ITEMS_PER_PAGE + 1, filteredCompanies.length)} - {Math.min(currentPage * ITEMS_PER_PAGE, filteredCompanies.length)} of {filteredCompanies.length}
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+                className="p-2 rounded-lg border border-slate-200 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <ArrowLeft size={16} className="text-slate-600 dark:text-slate-400" />
+              </button>
+              <span className="text-sm text-slate-600 dark:text-slate-400 px-3">
+                Page {currentPage} of {totalPages || 1}
+              </span>
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages || totalPages === 0}
+                className="p-2 rounded-lg border border-slate-200 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <ArrowRight size={16} className="text-slate-600 dark:text-slate-400" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function EarnedCommissionTab() {
   const { refreshTrigger } = useSubmission();
   const [searchQuery, setSearchQuery] = useState('');
@@ -399,6 +856,14 @@ export default function EarnedCommissionTab() {
   const [selectedCarrierForFullView, setSelectedCarrierForFullView] = useState<string | null>(null);
   const [expandedCompanies, setExpandedCompanies] = useState<Set<string>>(new Set());
   const [carrierCompanySearch, setCarrierCompanySearch] = useState('');
+  
+  // Modal states
+  const [carriersModalOpen, setCarriersModalOpen] = useState(false);
+  const [companiesModalOpen, setCompaniesModalOpen] = useState(false);
+  const [selectedCompanyForCarriers, setSelectedCompanyForCarriers] = useState<{
+    client_name: string;
+    carriers: CarrierDetail[];
+  } | null>(null);
 
   // Fetch data - use different endpoints based on view toggle
   const { stats: userStats, loading: userStatsLoading, refetch: refetchUserStats } = useEarnedCommissionStats(selectedYear || undefined);
@@ -413,6 +878,20 @@ export default function EarnedCommissionTab() {
   const statsLoading = viewAllData ? globalStatsLoading : userStatsLoading;
   const allData = viewAllData ? globalData : userData;
   const allDataLoading = viewAllData ? globalDataLoading : userDataLoading;
+
+  // Calculate normalized companies count using core names
+  const normalizedCompaniesCount = useMemo(() => {
+    if (!allData) return 0;
+    
+    const companiesMap = new Map<string, boolean>();
+    allData.forEach(item => {
+      // Use core name to group companies with/without suffixes
+      const coreName = CompanyNameNormalizer.getCoreName(item.client_name);
+      companiesMap.set(coreName, true);
+    });
+    
+    return companiesMap.size;
+  }, [allData]);
 
   // Refresh all data
   const refreshAllData = useCallback(() => {
@@ -507,13 +986,18 @@ export default function EarnedCommissionTab() {
 
     return Object.entries(groups).map(([carrierName, companies]) => {
       const typedCompanies = companies as CommissionData[];
+      // Count unique companies by client_name (normalized)
+      const uniqueCompanies = new Set(typedCompanies.map(c => c.client_name.toLowerCase().trim()));
+      // Get approved statement count from first record (all records from same carrier have same count)
+      const approvedStatementCount = typedCompanies[0]?.approved_statement_count || 0;
+      
       return {
         carrierName,
         companies: typedCompanies,
         totalCommission: typedCompanies.reduce((sum: number, company: CommissionData) => sum + company.commission_earned, 0),
         totalInvoice: typedCompanies.reduce((sum: number, company: CommissionData) => sum + company.invoice_total, 0),
-        companyCount: typedCompanies.length,
-        statementCount: typedCompanies.reduce((sum: number, company: CommissionData) => sum + company.statement_count, 0),
+        companyCount: uniqueCompanies.size, // Count unique companies (normalized), not all records
+        statementCount: approvedStatementCount, // Count approved uploaded files from backend
       };
     }).sort((a, b) => b.totalCommission - a.totalCommission); // Sort by total commission descending
   }, [filteredData]);
@@ -810,7 +1294,10 @@ export default function EarnedCommissionTab() {
           </div>
         </div>
 
-        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-6">
+        <div 
+          className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-6 cursor-pointer hover:shadow-lg hover:border-purple-300 dark:hover:border-purple-600 transition-all duration-200"
+          onClick={() => setCarriersModalOpen(true)}
+        >
           <div className="flex items-center justify-between">
             <div>
               <p className="font-medium text-slate-600 dark:text-slate-400 text-sm">Total Carriers</p>
@@ -826,14 +1313,17 @@ export default function EarnedCommissionTab() {
           </div>
         </div>
 
-        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-6">
+        <div 
+          className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-6 cursor-pointer hover:shadow-lg hover:border-orange-300 dark:hover:border-orange-600 transition-all duration-200"
+          onClick={() => setCompaniesModalOpen(true)}
+        >
           <div className="flex items-center justify-between">
             <div>
               <p className="font-medium text-slate-600 dark:text-slate-400 text-sm">Total Companies</p>
               <p className="font-bold text-orange-600 dark:text-orange-400 text-2xl">
-                {statsLoading ? (
+                {statsLoading || allDataLoading ? (
                   <span className="w-20 h-6 bg-slate-200 dark:bg-slate-600 rounded animate-pulse inline-block"></span>
-                ) : overallStats?.total_companies || 0}
+                ) : normalizedCompaniesCount}
               </p>
             </div>
             <div className="bg-orange-100 dark:bg-orange-900/30 rounded-lg p-3">
@@ -854,7 +1344,7 @@ export default function EarnedCommissionTab() {
                 Commission Data by Carrier
               </h3>
               <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                {carrierGroups.length} carriers • {filteredData.length} total records
+                {carrierGroups.length} carriers • {overallStats?.total_statements || 0} total statements
               </p>
             </div>
             <div className="flex items-center gap-3">
@@ -1043,7 +1533,7 @@ export default function EarnedCommissionTab() {
         <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/30">
           <div className="flex items-center justify-between">
             <div className="text-sm text-slate-700 dark:text-slate-300 font-medium">
-              Showing {carrierGroups.length} carriers with {filteredData.length} total records
+              Showing {carrierGroups.length} carriers with {overallStats?.total_statements || 0} total statements
             </div>
             <div className="flex items-center gap-4 text-sm text-slate-600 dark:text-slate-400">
               <span>Total Commission: <span className="font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(carrierGroups.reduce((sum, group) => sum + group.totalCommission, 0))}</span></span>
@@ -1078,6 +1568,38 @@ export default function EarnedCommissionTab() {
           onConfirmMerge={handleConfirmMerge}
           onCancel={handleCancelMerge}
           loading={mergeLoading}
+        />
+      )}
+
+      {/* Carriers List Modal */}
+      <CarriersListModal
+        isOpen={carriersModalOpen}
+        onClose={() => setCarriersModalOpen(false)}
+        carriers={carrierGroups}
+      />
+
+      {/* Companies List Modal */}
+      <CompaniesListModal
+        isOpen={companiesModalOpen}
+        onClose={() => setCompaniesModalOpen(false)}
+        data={allData || []}
+        onCompanyClick={(company) => {
+          setSelectedCompanyForCarriers(company);
+          setCompaniesModalOpen(false);
+        }}
+      />
+
+      {/* Company Carrier Modal */}
+      {selectedCompanyForCarriers && (
+        <CompanyCarrierModal
+          isOpen={!!selectedCompanyForCarriers}
+          onClose={() => setSelectedCompanyForCarriers(null)}
+          onBack={() => {
+            setSelectedCompanyForCarriers(null);
+            setCompaniesModalOpen(true);
+          }}
+          companyName={selectedCompanyForCarriers.client_name}
+          carriers={selectedCompanyForCarriers.carriers}
         />
       )}
     </div>

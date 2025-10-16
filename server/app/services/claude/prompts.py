@@ -16,14 +16,20 @@ class ClaudePrompts:
         """
         return """You are an expert document analyst specializing in insurance commission statements. 
 
-Your task is to extract ALL tables from this PDF with maximum accuracy. Pay special attention to:
+Your task is to extract ALL tables AND document metadata from this PDF with maximum accuracy. Pay special attention to:
 
 1. **Table Structure**: Preserve exact column headers and row relationships
 2. **Financial Data**: Accurately capture commission amounts, dates, and percentages  
-3. **Company Information**: Identify carrier names, broker details, and client companies
-4. **Data Types**: Recognize dates, currency, names, IDs, and percentages correctly
-5. **Summary Rows**: Detect and flag summary/total rows separately
-6. **Empty Cells**: Include empty cells to preserve table structure
+3. **Document Metadata**: Extract carrier name, statement date, and broker company
+4. **Company Information**: Identify carrier names, broker details, and client companies
+5. **Data Types**: Recognize dates, currency, names, IDs, and percentages correctly
+6. **Summary Rows**: Detect and flag summary/total rows separately
+7. **Empty Cells**: Include empty cells to preserve table structure
+
+METADATA EXTRACTION GUIDELINES:
+- **CARRIER NAME**: The insurance company that issued this statement (e.g., Aetna, Blue Cross, Cigna, UnitedHealthcare, Allied Benefit Systems). Look in document headers, footers, logos, and letterhead. DO NOT extract from table data columns.
+- **STATEMENT DATE**: The date of this commission statement. Look for "Statement Date:", "Commission Summary For:", "Report Date:", "Period Ending:" in headers. Format as YYYY-MM-DD.
+- **BROKER COMPANY**: The broker/agent entity receiving commissions. Look for "Agent:", "Broker:", "Agency:", "To:", "Prepared For:" labels near the top of document. This is different from the carrier.
 
 CRITICAL REQUIREMENTS:
 - Extract EVERY table, even if partially visible
@@ -55,9 +61,12 @@ Return tables in this exact JSON structure:
   ],
   "document_metadata": {
     "carrier_name": "Detected Carrier Name",
+    "carrier_confidence": 0.95,
     "statement_date": "2024-01-31",
-    "total_pages": 5,
-    "confidence": 0.92
+    "date_confidence": 0.92,
+    "broker_company": "Broker/Agent Company Name",
+    "broker_confidence": 0.90,
+    "document_type": "commission_statement"
   },
   "extraction_notes": "Any important observations about the document or extraction challenges"
 }
@@ -74,7 +83,7 @@ Analyze the document thoroughly and extract all tabular data with precision."""
 
     @staticmethod
     def get_metadata_extraction_prompt() -> str:
-        """Prompt for extracting document metadata (carrier, date, etc.)"""
+        """Prompt for extracting document metadata (carrier, date, broker, etc.)"""
         return """You are an expert at extracting metadata from insurance commission statement documents.
 
 Your task is to analyze the document and extract:
@@ -91,9 +100,11 @@ Your task is to analyze the document and extract:
    - Format: YYYY-MM-DD
    - DO NOT extract random dates from table data
 
-3. **BROKER/AGENT INFORMATION** - The entity receiving commissions
-   - Look for agent names, broker entities, or firm names
-   - Usually appears near the top of the document
+3. **BROKER/AGENT COMPANY** - The broker or agent entity receiving commissions
+   - Look for "Agent:", "Broker:", "Agency:", "To:", "Prepared For:" labels
+   - Usually appears near the top of the document or in the header
+   - This is different from the carrier - it's the entity receiving the statement
+   - Common examples: "Innovative BPS", "ABC Insurance Agency", "XYZ Benefits Group"
 
 4. **DOCUMENT TYPE** - Classification of the document
    - commission_statement, billing_statement, summary_report, etc.
@@ -104,7 +115,8 @@ Return your response in this exact JSON format:
   "carrier_confidence": 0.95,
   "statement_date": "2024-01-31",
   "date_confidence": 0.90,
-  "broker_entity": "Broker/Agent Name",
+  "broker_company": "Broker/Agent company name as it appears",
+  "broker_confidence": 0.85,
   "document_type": "commission_statement",
   "total_pages": 5,
   "evidence": "Brief explanation of where you found this information"

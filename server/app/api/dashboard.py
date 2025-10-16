@@ -516,6 +516,28 @@ async def get_all_earned_commissions(
             # Get earned commissions for user's carriers only
             commissions = await crud.get_earned_commissions_by_carriers(db, user_carrier_ids, year=year)
         
+        # Get statement counts per carrier from StatementUpload table (approved only)
+        carrier_statement_counts = {}
+        unique_carrier_ids = list(set(commission.carrier_id for commission, _ in commissions))
+        
+        for carrier_id in unique_carrier_ids:
+            count_result = await db.execute(
+                select(func.count(StatementUpload.id))
+                .where(
+                    and_(
+                        or_(
+                            StatementUpload.carrier_id == carrier_id,
+                            and_(
+                                StatementUpload.company_id == carrier_id,
+                                StatementUpload.carrier_id.is_(None)
+                            )
+                        ),
+                        StatementUpload.status.in_(['completed', 'Approved'])
+                    )
+                )
+            )
+            carrier_statement_counts[carrier_id] = count_result.scalar() or 0
+        
         formatted_commissions = []
         for commission, carrier_name in commissions:
             formatted_commissions.append({
@@ -526,6 +548,8 @@ async def get_all_earned_commissions(
                 "invoice_total": float(commission.invoice_total),
                 "commission_earned": float(commission.commission_earned),
                 "statement_count": commission.statement_count,
+                "upload_ids": commission.upload_ids or [],
+                "approved_statement_count": carrier_statement_counts.get(commission.carrier_id, 0),
                 "statement_date": commission.statement_date.isoformat() if commission.statement_date else None,
                 "statement_month": commission.statement_month,
                 "statement_year": commission.statement_year,
@@ -576,6 +600,7 @@ async def get_earned_commissions_by_carrier(carrier_id: UUID, db: AsyncSession =
                 "invoice_total": float(commission.invoice_total),
                 "commission_earned": float(commission.commission_earned),
                 "statement_count": commission.statement_count,
+                "upload_ids": commission.upload_ids or [],
                 "statement_date": commission.statement_date.isoformat() if commission.statement_date else None,
                 "statement_month": commission.statement_month,
                 "statement_year": commission.statement_year,
@@ -672,7 +697,8 @@ async def get_earned_commission_stats(
                     "total_invoice": 0.0,
                     "total_commission": 0.0,
                     "total_carriers": 0,
-                    "total_companies": 0
+                    "total_companies": 0,
+                    "total_statements": 0
                 }
             
             base_conditions.append(EarnedCommission.carrier_id.in_(user_carrier_ids))
@@ -713,23 +739,40 @@ async def get_earned_commission_stats(
             )
         total_carriers = total_carriers_result.scalar() or 0
 
-        # Get total companies/clients
+        # Get total companies/clients (normalized names)
         if base_conditions:
             total_companies_result = await db.execute(
-                select(func.count(func.distinct(EarnedCommission.client_name)))
+                select(func.count(func.distinct(func.lower(func.trim(EarnedCommission.client_name)))))
                 .where(and_(*base_conditions))
             )
         else:
             total_companies_result = await db.execute(
-                select(func.count(func.distinct(EarnedCommission.client_name)))
+                select(func.count(func.distinct(func.lower(func.trim(EarnedCommission.client_name)))))
             )
         total_companies = total_companies_result.scalar() or 0
+
+        # Get total approved statements count from StatementUpload table
+        statement_conditions = [StatementUpload.status.in_(['completed', 'Approved'])]
+        if year is not None:
+            # Note: This would require a statement_year field in StatementUpload
+            # For now, just count all approved statements
+            pass
+        
+        if not is_admin:
+            statement_conditions.append(StatementUpload.user_id == current_user.id)
+        
+        total_statements_result = await db.execute(
+            select(func.count(StatementUpload.id))
+            .where(and_(*statement_conditions))
+        )
+        total_statements = total_statements_result.scalar() or 0
 
         return {
             "total_invoice": total_invoice,
             "total_commission": total_commission,
             "total_carriers": total_carriers,
-            "total_companies": total_companies
+            "total_companies": total_companies,
+            "total_statements": total_statements
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching earned commission stats: {str(e)}")
@@ -781,23 +824,31 @@ async def get_global_earned_commission_stats(
             )
         total_carriers = total_carriers_result.scalar() or 0
 
-        # Get total companies/clients
+        # Get total companies/clients (normalized names)
         if year is not None:
             total_companies_result = await db.execute(
-                select(func.count(func.distinct(EarnedCommission.client_name)))
+                select(func.count(func.distinct(func.lower(func.trim(EarnedCommission.client_name)))))
                 .where(EarnedCommission.statement_year == year)
             )
         else:
             total_companies_result = await db.execute(
-                select(func.count(func.distinct(EarnedCommission.client_name)))
+                select(func.count(func.distinct(func.lower(func.trim(EarnedCommission.client_name)))))
             )
         total_companies = total_companies_result.scalar() or 0
+
+        # Get total approved statements count from StatementUpload table
+        total_statements_result = await db.execute(
+            select(func.count(StatementUpload.id))
+            .where(StatementUpload.status.in_(['completed', 'Approved']))
+        )
+        total_statements = total_statements_result.scalar() or 0
 
         return {
             "total_invoice": total_invoice,
             "total_commission": total_commission,
             "total_carriers": total_carriers,
-            "total_companies": total_companies
+            "total_companies": total_companies,
+            "total_statements": total_statements
         }
 
     except Exception as e:
@@ -817,6 +868,28 @@ async def get_global_earned_commissions(
         # Get all earned commissions (global data)
         commissions = await crud.get_all_earned_commissions(db, year=year)
         
+        # Get statement counts per carrier from StatementUpload table (approved only)
+        carrier_statement_counts = {}
+        unique_carrier_ids = list(set(commission.carrier_id for commission, _ in commissions))
+        
+        for carrier_id in unique_carrier_ids:
+            count_result = await db.execute(
+                select(func.count(StatementUpload.id))
+                .where(
+                    and_(
+                        or_(
+                            StatementUpload.carrier_id == carrier_id,
+                            and_(
+                                StatementUpload.company_id == carrier_id,
+                                StatementUpload.carrier_id.is_(None)
+                            )
+                        ),
+                        StatementUpload.status.in_(['completed', 'Approved'])
+                    )
+                )
+            )
+            carrier_statement_counts[carrier_id] = count_result.scalar() or 0
+        
         formatted_commissions = []
         for commission, carrier_name in commissions:
             formatted_commissions.append({
@@ -827,6 +900,8 @@ async def get_global_earned_commissions(
                 "invoice_total": float(commission.invoice_total),
                 "commission_earned": float(commission.commission_earned),
                 "statement_count": commission.statement_count,
+                "upload_ids": commission.upload_ids or [],
+                "approved_statement_count": carrier_statement_counts.get(commission.carrier_id, 0),
                 "statement_date": commission.statement_date.isoformat() if commission.statement_date else None,
                 "statement_month": commission.statement_month,
                 "statement_year": commission.statement_year,
@@ -887,12 +962,17 @@ async def get_carrier_earned_commission_stats(carrier_id: UUID, db: AsyncSession
         )
         total_companies = total_companies_result.scalar() or 0
 
-        # Get total statements for this carrier
-        total_statements_result = await db.execute(
-            select(func.sum(EarnedCommission.statement_count))
+        # Get total statements (unique uploaded files) for this carrier
+        # Collect all upload_ids from all records and count unique ones
+        upload_ids_result = await db.execute(
+            select(EarnedCommission.upload_ids)
             .where(EarnedCommission.carrier_id == carrier_id)
         )
-        total_statements = total_statements_result.scalar() or 0
+        all_upload_ids = set()
+        for row in upload_ids_result.all():
+            if row[0]:  # upload_ids field
+                all_upload_ids.update(row[0])
+        total_statements = len(all_upload_ids)
 
         return {
             "carrier_name": carrier_name,

@@ -62,14 +62,16 @@ export default function PDFViewer({ fileUrl, isCollapsed, onToggleCollapse }: PD
 
   if (isCollapsed) {
     return (
-      <div className="w-12 h-full flex items-center justify-center bg-gray-100 dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700">
-        <button
-          onClick={onToggleCollapse}
-          className="transform rotate-90 bg-blue-600 dark:bg-blue-700 text-white px-3 py-1 rounded text-sm hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors"
-          aria-label="Show PDF Preview"
-        >
-          Show PDF
-        </button>
+      <div className="w-12 h-full bg-gray-100 dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700 relative z-20">
+        <div className="px-1 py-3">
+          <button
+            onClick={onToggleCollapse}
+            className="transform rotate-90 bg-blue-600 dark:bg-blue-700 text-white px-3 py-1 rounded text-sm hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors shadow-lg"
+            aria-label="Show PDF Preview"
+          >
+            Open
+          </button>
+        </div>
       </div>
     )
   }

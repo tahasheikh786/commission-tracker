@@ -446,9 +446,12 @@ async def learn_format_patterns(
         
         # Store format learning with enhanced metadata
         # IMPORTANT: Use carrier_id for carrier-specific format learning
+        # CRITICAL: Store corrected_carrier_name at top level for extraction process to find it
         table_editor_settings = {
             "headers": main_table.header,
             "summary_rows": main_table.summaryRows if hasattr(main_table, 'summaryRows') and main_table.summaryRows else [],
+            "corrected_carrier_name": request.extracted_carrier,  # CRITICAL: Top-level for format learning
+            "corrected_statement_date": request.extracted_date,  # CRITICAL: Top-level for format learning
             "user_corrections": {
                 "carrier_name": request.extracted_carrier,
                 "statement_date": request.extracted_date

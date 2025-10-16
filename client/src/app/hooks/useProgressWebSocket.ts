@@ -368,7 +368,7 @@ export function useProgressWebSocket({
       case 'EXTRACTION_COMPLETE':
         setProgress(prev => ({
           ...prev,
-          currentStep: 5, // Final step (0-indexed, so step 6 = index 5)
+          currentStep: 4, // Final step (0-indexed, so step 5 = index 4)
           percentage: 100,
           message: 'Extraction complete!'
         }));

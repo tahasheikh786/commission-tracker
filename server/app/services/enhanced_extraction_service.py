@@ -268,40 +268,45 @@ class EnhancedExtractionService:
         # Document processing stage
         file_type = self._detect_file_type(file_path)
         
-        # NEW: Extract carrier name and statement date using GPT from first page
+        # NEW: Extract carrier name, statement date, and broker using Claude AI
         carrier_info = None
         date_info = None
-        gpt_extraction_success = False
+        broker_info = None
+        metadata_extraction_success = False
         
         if file_type == 'pdf':
             try:
-                # Stage: GPT Metadata Extraction
+                # Stage: Claude Metadata Extraction
                 await progress_tracker.connection_manager.send_stage_update(
                     progress_tracker.upload_id,
                     'metadata_extraction',
                     15,
-                    "Extracting carrier name and statement date with GPT-4..."
+                    "Extracting carrier, date, and broker with Claude AI..."
                 )
                 
-                logger.info(f"Starting GPT metadata extraction for upload {progress_tracker.upload_id}")
+                logger.info(f"Starting Claude metadata extraction for upload {progress_tracker.upload_id}")
                 
-                # Extract metadata using GPT from first page
-                gpt_metadata = await self._extract_metadata_with_gpt(file_path)
+                # Extract metadata using Claude AI (includes broker_company)
+                claude_metadata = await self.claude_service.extract_metadata_only(file_path)
                 
-                if gpt_metadata.get('success'):
+                if claude_metadata.get('success'):
                     carrier_info = {
-                        'carrier_name': gpt_metadata.get('carrier_name'),
-                        'carrier_confidence': gpt_metadata.get('carrier_confidence', 0.9)
+                        'carrier_name': claude_metadata.get('carrier_name'),
+                        'carrier_confidence': claude_metadata.get('carrier_confidence', 0.9)
                     }
                     date_info = {
-                        'document_date': gpt_metadata.get('statement_date'),
-                        'date_confidence': gpt_metadata.get('date_confidence', 0.9)
+                        'document_date': claude_metadata.get('statement_date'),
+                        'date_confidence': claude_metadata.get('date_confidence', 0.9)
                     }
-                    gpt_extraction_success = True
+                    broker_info = {
+                        'broker_company': claude_metadata.get('broker_company'),
+                        'broker_confidence': claude_metadata.get('broker_confidence', 0.8)
+                    }
+                    metadata_extraction_success = True
                     
-                    logger.info(f"GPT extracted: carrier={carrier_info.get('carrier_name')}, date={date_info.get('document_date')}")
+                    logger.info(f"Claude extracted: carrier={carrier_info.get('carrier_name')}, date={date_info.get('document_date')}, broker={broker_info.get('broker_company')}")
                     
-                    # Send carrier detected message with actual GPT results
+                    # Send carrier detected message with actual Claude results
                     await progress_tracker.connection_manager.send_commission_specific_message(
                         progress_tracker.upload_id,
                         'carrier_detected',
@@ -312,14 +317,14 @@ class EnhancedExtractionService:
                         }
                     )
                 else:
-                    logger.warning(f"GPT metadata extraction returned no success: {gpt_metadata.get('error')}")
+                    logger.warning(f"Claude metadata extraction returned no success: {claude_metadata.get('error')}")
                     
             except Exception as e:
-                logger.warning(f"GPT metadata extraction failed: {e}")
-                # Continue with extraction even if GPT fails
+                logger.warning(f"Claude metadata extraction failed: {e}")
+                # Continue with extraction even if Claude fails
         
-        # If GPT didn't extract carrier, show placeholder
-        if not gpt_extraction_success:
+        # If Claude didn't extract carrier, show placeholder
+        if not metadata_extraction_success:
             await progress_tracker.connection_manager.send_commission_specific_message(
                 progress_tracker.upload_id,
                 'carrier_detected',
@@ -428,7 +433,9 @@ class EnhancedExtractionService:
                 'carrier_name': carrier_info.get('carrier_name') if carrier_info else None,
                 'carrier_confidence': carrier_info.get('carrier_confidence') if carrier_info else 0.0,
                 'document_date': date_info.get('document_date') if date_info else None,
-                'date_confidence': date_info.get('date_confidence') if date_info else 0.0
+                'date_confidence': date_info.get('date_confidence') if date_info else 0.0,
+                'broker_company': broker_info.get('broker_company') if broker_info else None,
+                'broker_confidence': broker_info.get('broker_confidence') if broker_info else 0.0
             }
         }
 
@@ -602,40 +609,45 @@ class EnhancedExtractionService:
         
         await progress_tracker.complete_stage("document_processing", "Mistral AI initialized")
         
-        # Phase 1: Metadata Extraction with timeout
+        # Phase 1: Metadata Extraction with timeout using Claude AI
         carrier_info = None
         date_info = None
-        gpt_extraction_success = False
+        broker_info = None
+        metadata_extraction_success = False
         
         try:
             async with asyncio.timeout(self.phase_timeouts['metadata_extraction']):
-                # Stage: GPT Metadata Extraction
+                # Stage: Claude Metadata Extraction
                 await progress_tracker.connection_manager.send_stage_update(
                     progress_tracker.upload_id,
                     'metadata_extraction',
                     15,
-                    "Extracting carrier name and statement date with GPT-4..."
+                    "Extracting carrier, date, and broker with Claude AI..."
                 )
                 
-                logger.info(f"Starting GPT metadata extraction with {self.phase_timeouts['metadata_extraction']}s timeout")
+                logger.info(f"Starting Claude metadata extraction with {self.phase_timeouts['metadata_extraction']}s timeout")
                 
-                # Extract metadata using GPT from first page
-                gpt_metadata = await self._extract_metadata_with_gpt(file_path)
+                # Extract metadata using Claude AI (includes broker_company)
+                claude_metadata = await self.claude_service.extract_metadata_only(file_path)
                 
-                if gpt_metadata.get('success'):
+                if claude_metadata.get('success'):
                     carrier_info = {
-                        'carrier_name': gpt_metadata.get('carrier_name'),
-                        'carrier_confidence': gpt_metadata.get('carrier_confidence', 0.9)
+                        'carrier_name': claude_metadata.get('carrier_name'),
+                        'carrier_confidence': claude_metadata.get('carrier_confidence', 0.9)
                     }
                     date_info = {
-                        'document_date': gpt_metadata.get('statement_date'),
-                        'date_confidence': gpt_metadata.get('date_confidence', 0.9)
+                        'document_date': claude_metadata.get('statement_date'),
+                        'date_confidence': claude_metadata.get('date_confidence', 0.9)
                     }
-                    gpt_extraction_success = True
+                    broker_info = {
+                        'broker_company': claude_metadata.get('broker_company'),
+                        'broker_confidence': claude_metadata.get('broker_confidence', 0.8)
+                    }
+                    metadata_extraction_success = True
                     
-                    logger.info(f"GPT extracted: carrier={carrier_info.get('carrier_name')}, date={date_info.get('document_date')}")
+                    logger.info(f"Claude extracted: carrier={carrier_info.get('carrier_name')}, date={date_info.get('document_date')}, broker={broker_info.get('broker_company')}")
                     
-                    # Send carrier detected message with actual GPT results
+                    # Send carrier detected message with actual Claude results
                     await progress_tracker.connection_manager.send_commission_specific_message(
                         progress_tracker.upload_id,
                         'carrier_detected',
@@ -646,14 +658,14 @@ class EnhancedExtractionService:
                         }
                     )
                 else:
-                    logger.warning(f"GPT metadata extraction returned no success: {gpt_metadata.get('error')}")
+                    logger.warning(f"Claude metadata extraction returned no success: {claude_metadata.get('error')}")
                     
         except asyncio.TimeoutError:
             logger.warning("Metadata extraction timeout, continuing without metadata")
-            gpt_metadata = {'success': False, 'error': 'Timeout'}
+            claude_metadata = {'success': False, 'error': 'Timeout'}
         except Exception as e:
-            logger.warning(f"GPT metadata extraction failed: {e}")
-            # Continue with extraction even if GPT fails
+            logger.warning(f"Claude metadata extraction failed: {e}")
+            # Continue with extraction even if Claude fails
         
         # Phase 2: Mistral Table Extraction with timeout
         await progress_tracker.start_stage("table_detection", "Processing with Mistral Document AI")
@@ -711,19 +723,24 @@ class EnhancedExtractionService:
         # Merge GPT metadata with Mistral result
         document_metadata = result.get('document_metadata', {})
         
-        # If GPT extraction was successful, override with GPT values
-        if gpt_extraction_success and carrier_info:
+        # If Claude metadata extraction was successful, override with Claude values
+        if metadata_extraction_success and carrier_info:
             document_metadata['carrier_name'] = carrier_info.get('carrier_name')
             document_metadata['carrier_confidence'] = carrier_info.get('carrier_confidence', 0.9)
-            document_metadata['carrier_source'] = 'gpt4o_vision'
+            document_metadata['carrier_source'] = 'claude_ai'
         
-        if gpt_extraction_success and date_info:
+        if metadata_extraction_success and date_info:
             # Apply date normalization to extract start date from ranges
             raw_date = date_info.get('document_date')
             normalized_date = normalize_statement_date(raw_date) if raw_date else None
             document_metadata['statement_date'] = normalized_date
             document_metadata['date_confidence'] = date_info.get('date_confidence', 0.9)
-            document_metadata['date_source'] = 'gpt4o_vision'
+            document_metadata['date_source'] = 'claude_ai'
+        
+        if metadata_extraction_success and broker_info:
+            document_metadata['broker_company'] = broker_info.get('broker_company')
+            document_metadata['broker_confidence'] = broker_info.get('broker_confidence', 0.8)
+            document_metadata['broker_source'] = 'claude_ai'
         
         # Update result with merged metadata
         result['document_metadata'] = document_metadata
@@ -1020,18 +1037,25 @@ Your task is to analyze the first page of a commission statement and extract:
    - Look in document headers and titles
    - DO NOT extract random dates from table data
 
+3. BROKER/AGENT COMPANY - The broker or agent entity receiving commissions (e.g., "Innovative BPS", "ABC Insurance Agency", etc.)
+   - Look for "Agent:", "Broker:", "Agency:", "To:", "Prepared For:" labels
+   - Usually appears near the top of the document
+   - This is different from the carrier - it's the entity receiving the statement
+
 Return your response in the following JSON format ONLY:
 {
   "carrier_name": "Exact carrier name as it appears",
   "carrier_confidence": 0.95,
   "statement_date": "Date in original format",
   "date_confidence": 0.90,
+  "broker_company": "Broker/Agent company name as it appears",
+  "broker_confidence": 0.85,
   "evidence": "Brief explanation of where you found this information"
 }
 
 If you cannot find the information with high confidence, use null for the value and a lower confidence score."""
 
-            user_prompt = "Extract the carrier name and statement date from this commission statement first page."
+            user_prompt = "Extract the carrier name, statement date, and broker/agent company from this commission statement first page."
             
             # Call GPT-4 Vision API
             messages = [
@@ -1106,6 +1130,8 @@ If you cannot find the information with high confidence, use null for the value 
                 'carrier_confidence': metadata.get('carrier_confidence', 0.8),
                 'statement_date': normalized_date,
                 'date_confidence': metadata.get('date_confidence', 0.8),
+                'broker_company': metadata.get('broker_company'),
+                'broker_confidence': metadata.get('broker_confidence', 0.8),
                 'evidence': metadata.get('evidence', ''),
                 'extraction_method': 'gpt4o_vision_first_page'
             }
