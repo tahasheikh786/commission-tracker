@@ -294,9 +294,12 @@ async def extract_tables_smart(
             await connection_manager.emit_upload_step(upload_id, 'upload', 10)
         
         # Create statement upload record for progress tracking
+        # NOTE: company_id is used for the carrier here (legacy behavior)
+        # We'll set carrier_id explicitly after extraction for proper carrier association
         db_upload = schemas.StatementUpload(
             id=upload_id_uuid,
             company_id=company_id,
+            carrier_id=company_id,  # Set carrier_id to the same value for now
             user_id=current_user.id,
             file_name=gcs_key,
             file_hash=file_hash,
@@ -431,7 +434,8 @@ async def extract_tables_smart(
                     # Always save carrier_id for response
                     carrier_id_for_response = str(carrier.id)
                     
-                    # ⚠️ CRITICAL FIX: Update the carrier_id if extracted carrier differs from uploaded carrier
+                    # ⚠️ CRITICAL FIX: Always update carrier_id to the extracted carrier
+                    # This ensures the file appears under the correct carrier in My Data
                     if str(carrier.id) != str(company_id):
                         logger.warning(f"🚨 CARRIER MISMATCH DETECTED: File uploaded to {company_id} but extracted as {carrier.name} ({carrier.id})")
                         logger.info(f"🔄 Reassigning file to correct carrier: {carrier.name}")
@@ -448,22 +452,36 @@ async def extract_tables_smart(
                             gcs_url = generate_gcs_signed_url(gcs_key) or get_gcs_file_url(gcs_key)
                             logger.info(f"✅ File moved to correct carrier folder in GCS: {new_gcs_key}")
                             
-                            # CRITICAL: Update the upload record with new carrier AND new file location
+                            # CRITICAL FIX: Update carrier_id (not company_id) AND new file location
+                            # carrier_id = insurance carrier (what we extracted)
+                            # company_id = user's broker company (keep as is)
                             carrier_update_data = schemas.StatementUploadUpdate(
-                                company_id=carrier.id,
+                                carrier_id=carrier.id,  # Set carrier_id to extracted carrier
+                                company_id=carrier.id,  # Also set company_id for backwards compatibility
                                 file_name=new_gcs_key  # Update with new GCS path
                             )
                             await with_db_retry(db, crud.update_statement_upload, upload_id=upload_id_uuid, update_data=carrier_update_data)
+                            logger.info(f"✅ Updated statement upload: carrier_id={carrier.id}, company_id={carrier.id}")
                         else:
                             logger.warning(f"⚠️ Failed to move file in GCS, keeping original location")
                             # Still update carrier_id even if file move failed
                             carrier_update_data = schemas.StatementUploadUpdate(
-                                company_id=carrier.id
+                                carrier_id=carrier.id,  # Set carrier_id to extracted carrier
+                                company_id=carrier.id   # Also set company_id for backwards compatibility
                             )
                             await with_db_retry(db, crud.update_statement_upload, upload_id=upload_id_uuid, update_data=carrier_update_data)
+                            logger.info(f"✅ Updated statement upload: carrier_id={carrier.id}, company_id={carrier.id}")
                         
                         # Update company_id for all subsequent operations
                         company_id = str(carrier.id)
+                    else:
+                        # Even if carrier matches, ensure carrier_id is set
+                        logger.info(f"✅ Carrier matches upload: {carrier.name} ({carrier.id})")
+                        carrier_update_data = schemas.StatementUploadUpdate(
+                            carrier_id=carrier.id  # Ensure carrier_id is always set
+                        )
+                        await with_db_retry(db, crud.update_statement_upload, upload_id=upload_id_uuid, update_data=carrier_update_data)
+                        logger.info(f"✅ Ensured carrier_id is set: {carrier.id}")
                     
                     # ===== INTELLIGENT TABLE SELECTION =====
                     # Use AI to select the best table for field mapping when multiple tables exist
@@ -574,12 +592,26 @@ async def extract_tables_smart(
                             document_metadata['carrier_name'] = corrected_carrier
                             document_metadata['carrier_source'] = 'format_learning'
                         
-                        if table_editor_settings.get('corrected_statement_date'):
-                            corrected_date = table_editor_settings.get('corrected_statement_date')
-                            logger.info(f"🎯 Format Learning: Applying corrected statement date from learned format: {corrected_date}")
-                            extracted_date = corrected_date
-                            document_metadata['statement_date'] = corrected_date
-                            document_metadata['date_source'] = 'format_learning'
+                        # NOTE: We do NOT auto-apply statement dates from format learning 
+                        # because dates are document-specific, not format-specific
+                        # The extracted date from the current document should be used as-is
+                        logger.info(f"🎯 Format Learning: Skipping statement date auto-apply (dates are document-specific)")
+                        
+                        # CRITICAL FIX: Auto-apply table deletions from learned format
+                        if table_editor_settings.get('deleted_tables') or table_editor_settings.get('table_deletions'):
+                            deleted_tables = table_editor_settings.get('deleted_tables') or table_editor_settings.get('table_deletions', [])
+                            if deleted_tables:
+                                logger.info(f"🎯 Format Learning: Auto-applying table deletions: {deleted_tables}")
+                                # Store deletion info for frontend to apply
+                                format_learning_data['auto_delete_tables'] = deleted_tables
+                        
+                        # CRITICAL FIX: Auto-apply row deletions from learned format
+                        if table_editor_settings.get('deleted_rows') or table_editor_settings.get('row_deletions'):
+                            deleted_rows = table_editor_settings.get('deleted_rows') or table_editor_settings.get('row_deletions', [])
+                            if deleted_rows:
+                                logger.info(f"🎯 Format Learning: Auto-applying row deletions: {len(deleted_rows)} rows")
+                                # Store deletion info for frontend to apply
+                                format_learning_data['auto_delete_rows'] = deleted_rows
                     else:
                         logger.info(f"🎯 Format Learning: No matching format found (score: {match_score})")
                         
@@ -1090,6 +1122,24 @@ async def extract_tables_gpt(
                         "suggested_mapping": learned_format.get("field_mapping", {}),
                         "table_editor_settings": learned_format.get("table_editor_settings")
                     }
+                    
+                    # CRITICAL FIX: Auto-apply learned settings
+                    table_editor_settings = learned_format.get('table_editor_settings', {})
+                    
+                    # Auto-apply table deletions from learned format
+                    if table_editor_settings.get('deleted_tables') or table_editor_settings.get('table_deletions'):
+                        deleted_tables = table_editor_settings.get('deleted_tables') or table_editor_settings.get('table_deletions', [])
+                        if deleted_tables:
+                            logger.info(f"🎯 GPT Format Learning: Auto-applying table deletions: {deleted_tables}")
+                            format_learning_data['auto_delete_tables'] = deleted_tables
+                    
+                    # Auto-apply row deletions from learned format
+                    if table_editor_settings.get('deleted_rows') or table_editor_settings.get('row_deletions'):
+                        deleted_rows = table_editor_settings.get('deleted_rows') or table_editor_settings.get('row_deletions', [])
+                        if deleted_rows:
+                            logger.info(f"🎯 GPT Format Learning: Auto-applying row deletions: {len(deleted_rows)} rows")
+                            format_learning_data['auto_delete_rows'] = deleted_rows
+                    
                     logger.info(f"🎯 GPT: Created format_learning_data: {format_learning_data}")
                 else:
                     format_learning_data = {
@@ -1336,6 +1386,23 @@ async def extract_tables_google_docai(
                         "suggested_mapping": learned_format.get("field_mapping", {}),
                         "table_editor_settings": learned_format.get("table_editor_settings")
                     }
+                    
+                    # CRITICAL FIX: Auto-apply learned settings
+                    table_editor_settings = learned_format.get('table_editor_settings', {})
+                    
+                    # Auto-apply table deletions from learned format
+                    if table_editor_settings.get('deleted_tables') or table_editor_settings.get('table_deletions'):
+                        deleted_tables = table_editor_settings.get('deleted_tables') or table_editor_settings.get('table_deletions', [])
+                        if deleted_tables:
+                            logger.info(f"🎯 DocAI Format Learning: Auto-applying table deletions: {deleted_tables}")
+                            format_learning_data['auto_delete_tables'] = deleted_tables
+                    
+                    # Auto-apply row deletions from learned format
+                    if table_editor_settings.get('deleted_rows') or table_editor_settings.get('row_deletions'):
+                        deleted_rows = table_editor_settings.get('deleted_rows') or table_editor_settings.get('row_deletions', [])
+                        if deleted_rows:
+                            logger.info(f"🎯 DocAI Format Learning: Auto-applying row deletions: {len(deleted_rows)} rows")
+                            format_learning_data['auto_delete_rows'] = deleted_rows
                 else:
                     format_learning_data = {
                         "found_match": False,

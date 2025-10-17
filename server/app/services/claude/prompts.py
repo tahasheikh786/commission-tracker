@@ -27,8 +27,15 @@ Your task is to extract ALL tables AND document metadata from this PDF with maxi
 7. **Empty Cells**: Include empty cells to preserve table structure
 
 METADATA EXTRACTION GUIDELINES:
-- **CARRIER NAME**: The insurance company that issued this statement (e.g., Aetna, Blue Cross, Cigna, UnitedHealthcare, Allied Benefit Systems). Look in document headers, footers, logos, and letterhead. DO NOT extract from table data columns.
-- **STATEMENT DATE**: The date of this commission statement. Look for "Statement Date:", "Commission Summary For:", "Report Date:", "Period Ending:" in headers. Format as YYYY-MM-DD.
+- **CARRIER NAME**: The insurance company that issued this statement (e.g., Aetna, Blue Cross, Cigna, UnitedHealthcare, Allied Benefit Systems, Redirect Health). Look in document headers, footers, logos, and letterhead. DO NOT extract from table data columns.
+- **STATEMENT DATE**: The date of this commission statement. CRITICAL INSTRUCTIONS:
+  * Extract the ACTUAL date shown in the document - NEVER use current date or any default/fallback date
+  * Look for "Statement Date:", "Commission Summary For:", "Report Date:", "Period:", "Period Ending:", "Date Range:", "Statement Period:", "Reporting Period:" in headers, titles, and top of document
+  * **FOR DATE RANGES**: If you see a date range (e.g., "Period: 01/01/2025 - 01/31/2025" or "01/01/2025 - 01/31/2025"), USE THE END DATE (the second date) as the statement date
+  * For date ranges like "MM/DD/YYYY - MM/DD/YYYY", always extract the SECOND date (end date)
+  * Format as YYYY-MM-DD. Example: "Period: 01/01/2025 - 01/31/2025" → use "2025-01-31"
+  * If no date is visible or you cannot confidently extract it, return null instead of guessing
+  * DO NOT extract dates from table cells, policy effective dates, or transaction dates - only extract the statement/report date from the document header
 - **BROKER COMPANY**: The broker/agent entity receiving commissions. Look for "Agent:", "Broker:", "Agency:", "To:", "Prepared For:" labels near the top of document. This is different from the carrier.
 
 CRITICAL REQUIREMENTS:
@@ -95,10 +102,14 @@ Your task is to analyze the document and extract:
    - DO NOT extract from table data columns - look at document structure elements only
    
 2. **STATEMENT DATE** - The date of this commission statement
-   - Look for "Statement Date:", "Commission Summary For:", "Report Date:", "Period Ending:"
-   - Look in document headers and titles
-   - Format: YYYY-MM-DD
-   - DO NOT extract random dates from table data
+   - Extract the ACTUAL date shown in the document - NEVER use current date or any default/fallback date
+   - Look for "Statement Date:", "Commission Summary For:", "Report Date:", "Period:", "Period Ending:", "Date Range:", "Statement Period:", "Reporting Period:"
+   - Look in document headers, titles, and top section of the first page
+   - **CRITICAL FOR DATE RANGES**: If you see a date range (e.g., "Period: 01/01/2025 - 01/31/2025"), USE THE END DATE (the second date) as the statement date
+   - For date ranges like "MM/DD/YYYY - MM/DD/YYYY", always extract the SECOND date (end date)
+   - Format: YYYY-MM-DD (Example: "Period: 01/01/2025 - 01/31/2025" → use "2025-01-31")
+   - If no date is visible or you cannot confidently extract it, return null with a low confidence score
+   - DO NOT extract dates from table data, policy effective dates, or transaction dates - only extract the statement/report date from the document header
 
 3. **BROKER/AGENT COMPANY** - The broker or agent entity receiving commissions
    - Look for "Agent:", "Broker:", "Agency:", "To:", "Prepared For:" labels

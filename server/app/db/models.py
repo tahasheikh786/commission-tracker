@@ -155,6 +155,9 @@ class EarnedCommission(Base):
     # Track which uploads contributed to this commission record
     upload_ids = Column(JSON, nullable=True)  # Array of upload IDs that contributed to this record
     
+    # User isolation - each user has their own commission records
+    user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=True)  # Nullable for backward compatibility
+    
     # Statement date for monthly breakdown
     statement_date = Column(DateTime, nullable=True)  # Date from the statement
     statement_month = Column(Integer, nullable=True)  # Month (1-12) for easier querying
@@ -177,9 +180,9 @@ class EarnedCommission(Base):
     last_updated = Column(DateTime, server_default=text('now()'), onupdate=text('now()'), nullable=False)
     created_at = Column(DateTime, server_default=text('now()'), nullable=False)
     
-    # Add unique constraint for carrier, client, and statement date combination
+    # Add unique constraint for carrier, client, statement date, AND user_id for proper data isolation
     __table_args__ = (
-        UniqueConstraint('carrier_id', 'client_name', 'statement_date', name='uq_carrier_client_date_commission'),
+        UniqueConstraint('carrier_id', 'client_name', 'statement_date', 'user_id', name='uq_carrier_client_date_user_commission'),
     )
 
 class EditedTable(Base):

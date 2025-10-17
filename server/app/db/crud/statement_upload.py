@@ -10,6 +10,7 @@ async def save_statement_upload(db, upload: StatementUpload):
     db_upload = StatementUploadModel(
         id=upload.id,
         company_id=upload.company_id,
+        carrier_id=upload.carrier_id,  # CRITICAL FIX: Include carrier_id when saving
         user_id=upload.user_id,
         file_name=upload.file_name,
         file_hash=upload.file_hash,
@@ -227,13 +228,24 @@ async def save_statement_review(
     """
     Save statement review with updated status tracking.
     """
-    result = await db.execute(select(StatementUploadModel).where(StatementUploadModel.id == upload_id))
+    # Convert string to UUID if needed
+    try:
+        if isinstance(upload_id, str):
+            upload_id_uuid = UUID(upload_id)
+        else:
+            upload_id_uuid = upload_id
+    except (ValueError, AttributeError):
+        print(f"💾 Invalid upload_id format: {upload_id}")
+        return None
+    
+    result = await db.execute(select(StatementUploadModel).where(StatementUploadModel.id == upload_id_uuid))
     db_upload = result.scalar_one_or_none()
     
     if not db_upload:
+        print(f"💾 Upload not found for ID: {upload_id_uuid}")
         return None
     
-    print(f"💾 Saving statement review: upload_id={upload_id}, status={status}")
+    print(f"💾 Saving statement review: upload_id={upload_id_uuid}, status={status}")
     print(f"📋 Field config being saved: {field_config}")
     print(f"📊 Final data rows: {len(final_data) if final_data else 0}")
     print(f"📅 Selected statement date being saved: {selected_statement_date}")
@@ -400,7 +412,16 @@ async def get_edited_tables(db: AsyncSession, upload_id: str):
     """
     Get edited tables for an upload.
     """
-    result = await db.execute(select(StatementUploadModel).where(StatementUploadModel.id == upload_id))
+    # Convert string to UUID if needed
+    try:
+        if isinstance(upload_id, str):
+            upload_id_uuid = UUID(upload_id)
+        else:
+            upload_id_uuid = upload_id
+    except (ValueError, AttributeError):
+        return None
+    
+    result = await db.execute(select(StatementUploadModel).where(StatementUploadModel.id == upload_id_uuid))
     db_upload = result.scalar_one_or_none()
     
     if not db_upload:
@@ -417,11 +438,21 @@ async def update_upload_tables(db: AsyncSession, upload_id: str, tables_data: li
     print(f"🎯 CRUD: Selected statement date: {selected_statement_date}")
     print(f"🎯 CRUD: Carrier ID: {carrier_id}")
     
-    result = await db.execute(select(StatementUploadModel).where(StatementUploadModel.id == upload_id))
+    # Convert string to UUID if needed
+    try:
+        if isinstance(upload_id, str):
+            upload_id_uuid = UUID(upload_id)
+        else:
+            upload_id_uuid = upload_id
+    except (ValueError, AttributeError) as e:
+        print(f"🎯 CRUD: Invalid upload_id format: {upload_id}, error: {e}")
+        return None
+    
+    result = await db.execute(select(StatementUploadModel).where(StatementUploadModel.id == upload_id_uuid))
     db_upload = result.scalar_one_or_none()
     
     if not db_upload:
-        print(f"🎯 CRUD: Upload not found for ID: {upload_id}")
+        print(f"🎯 CRUD: Upload not found for ID: {upload_id_uuid}")
         return None
     
     print(f"🎯 CRUD: Found upload, updating with tables, statement date, and carrier")
@@ -441,9 +472,11 @@ async def update_upload_tables(db: AsyncSession, upload_id: str, tables_data: li
         print(f"🎯 CRUD: No selected statement date provided")
     
     # Update carrier_id if provided (this links the statement to the carrier)
+    # CRITICAL FIX: Update both carrier_id AND company_id for backwards compatibility
     if carrier_id:
         db_upload.carrier_id = carrier_id
-        print(f"🎯 CRUD: Linking statement to carrier: {carrier_id}")
+        db_upload.company_id = carrier_id  # Also update company_id for backwards compatibility
+        print(f"🎯 CRUD: Linking statement to carrier: carrier_id={carrier_id}, company_id={carrier_id}")
     
     # Save in progress_data
     if not db_upload.progress_data:
@@ -465,7 +498,7 @@ async def update_upload_tables(db: AsyncSession, upload_id: str, tables_data: li
     await db.commit()
     await db.refresh(db_upload)
     
-    print(f"🎯 CRUD: Successfully updated upload {upload_id} with tables, statement date, and carrier")
+    print(f"🎯 CRUD: Successfully updated upload {upload_id_uuid} with tables, statement date, and carrier")
     print(f"🎯 CRUD: Final selected_statement_date in database: {db_upload.selected_statement_date}")
     
     return db_upload
@@ -474,7 +507,16 @@ async def delete_edited_tables(db: AsyncSession, upload_id: str):
     """
     Delete edited tables for an upload.
     """
-    result = await db.execute(select(StatementUploadModel).where(StatementUploadModel.id == upload_id))
+    # Convert string to UUID if needed
+    try:
+        if isinstance(upload_id, str):
+            upload_id_uuid = UUID(upload_id)
+        else:
+            upload_id_uuid = upload_id
+    except (ValueError, AttributeError):
+        return False
+    
+    result = await db.execute(select(StatementUploadModel).where(StatementUploadModel.id == upload_id_uuid))
     db_upload = result.scalar_one_or_none()
     
     if not db_upload:
@@ -493,7 +535,16 @@ async def get_upload_by_id(db: AsyncSession, upload_id: str):
     """
     Get upload by ID with all progress data.
     """
-    result = await db.execute(select(StatementUploadModel).where(StatementUploadModel.id == upload_id))
+    # Convert string to UUID if needed
+    try:
+        if isinstance(upload_id, str):
+            upload_id_uuid = UUID(upload_id)
+        else:
+            upload_id_uuid = upload_id
+    except (ValueError, AttributeError):
+        return None
+    
+    result = await db.execute(select(StatementUploadModel).where(StatementUploadModel.id == upload_id_uuid))
     return result.scalar_one_or_none()
 
 def get_progress_summary(current_step: str, progress_data: Optional[dict]) -> str:

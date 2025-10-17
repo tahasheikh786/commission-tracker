@@ -8,6 +8,7 @@ from app.dependencies.auth_dependencies import get_current_user_hybrid
 from app.db.models import User
 from typing import List, Dict, Any
 from datetime import datetime
+from uuid import UUID
 import re
 import logging
 
@@ -199,7 +200,8 @@ async def update_company_mapping(
                 table_data=config.table_data,
                 headers=config.headers,
                 mapping=config.mapping,
-                statement_date=config.selected_statement_date
+                statement_date=config.selected_statement_date,
+                user_id=current_user.id  # CRITICAL: Pass user_id for proper data isolation
             )
             logger.info(f"🎯 Mapping API: Commission data processing completed successfully")
         except Exception as e:
@@ -223,10 +225,12 @@ async def process_commission_data_with_date(
     table_data: List[List[str]],
     headers: List[str],
     mapping: Dict[str, str],
-    statement_date: Dict[str, Any]
+    statement_date: Dict[str, Any],
+    user_id: UUID = None
 ):
     """
     Process commission data and create/update earned commission records with statement date.
+    Includes user_id for proper data isolation in multi-user environments.
     """
     try:
         logger.info(f"🎯 Commission Processing: Starting commission data processing")
@@ -358,7 +362,8 @@ async def process_commission_data_with_date(
                 commission_earned=commission_earned,
                 statement_date=parsed_date,
                 statement_month=statement_month,
-                statement_year=statement_year
+                statement_year=statement_year,
+                user_id=user_id  # CRITICAL: Pass user_id for proper data isolation
             )
             processed_rows += 1
             logger.info(f"🎯 Commission Processing: Successfully processed row {row_idx}")
@@ -508,20 +513,24 @@ async def create_or_update_commission_record(
     commission_earned: float,
     statement_date: datetime,
     statement_month: int,
-    statement_year: int
+    statement_year: int,
+    user_id: UUID = None
 ):
     """
     Create or update commission record with monthly breakdown.
+    Includes user_id for proper data isolation in multi-user environments.
     """
     try:
-        logger.info(f"🎯 Commission Record: Creating/updating record for {carrier_id} - {client_name} - {statement_date}")
+        logger.info(f"🎯 Commission Record: Creating/updating record for {carrier_id} - {client_name} - {statement_date} - user: {user_id}")
         
-        # Check if record exists for this carrier, client, and statement date
+        # Check if record exists for this carrier, client, statement date, AND user_id
+        # CRITICAL: Must pass user_id to ensure we only find THIS user's record
         existing_record = await crud.get_commission_record(
             db, 
             carrier_id=carrier_id,
             client_name=client_name,
-            statement_date=statement_date
+            statement_date=statement_date,
+            user_id=user_id  # CRITICAL: Filter by user_id for proper data isolation
         )
         
         if existing_record:
@@ -537,7 +546,7 @@ async def create_or_update_commission_record(
             )
             logger.info(f"🎯 Commission Record: Successfully updated existing record")
         else:
-            logger.info(f"🎯 Commission Record: Creating new record")
+            logger.info(f"🎯 Commission Record: Creating new record with user_id: {user_id}")
             # Create new record
             commission_record = schemas.EarnedCommissionCreate(
                 carrier_id=carrier_id,
@@ -547,7 +556,8 @@ async def create_or_update_commission_record(
                 statement_date=statement_date,
                 statement_month=statement_month,
                 statement_year=statement_year,
-                statement_count=1
+                statement_count=1,
+                user_id=user_id  # CRITICAL: Set user_id for proper data isolation
             )
             
             # Set the appropriate month column

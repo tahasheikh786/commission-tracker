@@ -350,15 +350,42 @@ class FormatLearningService:
             data_quality_metrics = self._convert_numpy_types(data_quality_metrics)
             field_mapping = self._convert_numpy_types(field_mapping)
             
-            # Enhanced table editor settings with carrier and date info
-            # CRITICAL: This stores the CORRECTED carrier name so format learning remembers it
+            # Enhanced table editor settings with carrier, date, and deletion info
+            # CRITICAL: This stores ALL user corrections and edits so format learning remembers them
             enhanced_table_editor_settings = table_editor_settings or {}
+            
+            # Save corrected carrier name
             if carrier_name:
                 enhanced_table_editor_settings['carrier_name'] = carrier_name
                 enhanced_table_editor_settings['corrected_carrier_name'] = carrier_name  # Explicitly mark as corrected
+                print(f"🎯 FormatLearningService: Saving corrected carrier name: {carrier_name}")
+            
+            # Save corrected statement date
             if statement_date:
                 enhanced_table_editor_settings['statement_date'] = statement_date
                 enhanced_table_editor_settings['corrected_statement_date'] = statement_date  # Explicitly mark as corrected
+                print(f"🎯 FormatLearningService: Saving corrected statement date: {statement_date}")
+            
+            # Save table editor deletions and edits
+            # These include deleted tables, deleted rows, and any manual adjustments
+            if table_editor_settings:
+                if 'deleted_tables' in table_editor_settings:
+                    enhanced_table_editor_settings['deleted_tables'] = table_editor_settings['deleted_tables']
+                    print(f"🎯 FormatLearningService: Saving deleted tables: {table_editor_settings['deleted_tables']}")
+                
+                if 'deleted_rows' in table_editor_settings:
+                    enhanced_table_editor_settings['deleted_rows'] = table_editor_settings['deleted_rows']
+                    print(f"🎯 FormatLearningService: Saving deleted rows: {len(table_editor_settings.get('deleted_rows', []))} rows")
+                
+                if 'table_deletions' in table_editor_settings:
+                    enhanced_table_editor_settings['table_deletions'] = table_editor_settings['table_deletions']
+                    print(f"🎯 FormatLearningService: Saving table deletions: {table_editor_settings['table_deletions']}")
+                
+                if 'row_deletions' in table_editor_settings:
+                    enhanced_table_editor_settings['row_deletions'] = table_editor_settings['row_deletions']
+                    print(f"🎯 FormatLearningService: Saving row deletions: {table_editor_settings['row_deletions']}")
+            
+            print(f"🎯 FormatLearningService: Final enhanced table editor settings keys: {list(enhanced_table_editor_settings.keys())}")
             
             # Create format learning record
             format_learning = schemas.CarrierFormatLearningCreate(

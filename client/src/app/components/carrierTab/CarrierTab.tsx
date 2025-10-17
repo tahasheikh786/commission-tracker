@@ -52,6 +52,8 @@ export default function CarrierTab() {
   const [commissionStats, setCommissionStats] = useState<CommissionStats | null>(null);
   const [loadingCommission, setLoadingCommission] = useState(false);
   const [viewAllData, setViewAllData] = useState(false);
+  const [filterYear, setFilterYear] = useState<number | null>(null);
+  const [filterMonth, setFilterMonth] = useState<number | null>(null);
   
   // Simplified permission logic:
   // My Data tab: All authenticated users can select and delete their own files
@@ -140,9 +142,20 @@ export default function CarrierTab() {
     }
     
     setLoadingCommission(true);
+    
+    // Build query parameters for filtering
+    const params = new URLSearchParams();
+    if (filterYear !== null) {
+      params.append('year', filterYear.toString());
+    }
+    if (filterMonth !== null) {
+      params.append('month', filterMonth.toString());
+    }
+    
+    const queryString = params.toString();
     const endpoint = viewAllData 
-      ? `${process.env.NEXT_PUBLIC_API_URL}/api/earned-commission/carrier/${selected.id}/stats`
-      : `${process.env.NEXT_PUBLIC_API_URL}/api/earned-commission/carrier/user-specific/${selected.id}/stats`;
+      ? `${process.env.NEXT_PUBLIC_API_URL}/api/earned-commission/carrier/${selected.id}/stats${queryString ? `?${queryString}` : ''}`
+      : `${process.env.NEXT_PUBLIC_API_URL}/api/earned-commission/carrier/user-specific/${selected.id}/stats${queryString ? `?${queryString}` : ''}`;
     
     axios.get(endpoint, {
       withCredentials: true  // CRITICAL FIX: Ensure cookies are sent
@@ -156,7 +169,7 @@ export default function CarrierTab() {
         setCommissionStats(null);
       })
       .finally(() => setLoadingCommission(false));
-  }, [selected, viewAllData]);
+  }, [selected, viewAllData, filterYear, filterMonth]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -383,13 +396,81 @@ export default function CarrierTab() {
               {/* Commission Stats Display */}
               {selected && (
                 <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/30">
+                  {/* Filter Controls */}
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="flex items-center gap-2">
+                      <Filter className="text-slate-500 dark:text-slate-400" size={16} />
+                      <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Filter:</span>
+                    </div>
+                    
+                    {/* Year Filter */}
+                    <select
+                      value={filterYear || ''}
+                      onChange={(e) => setFilterYear(e.target.value ? parseInt(e.target.value) : null)}
+                      className="px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                    >
+                      <option value="">All Years</option>
+                      {[2025, 2024, 2023, 2022].map(year => (
+                        <option key={year} value={year}>{year}</option>
+                      ))}
+                    </select>
+                    
+                    {/* Month Filter */}
+                    <select
+                      value={filterMonth || ''}
+                      onChange={(e) => setFilterMonth(e.target.value ? parseInt(e.target.value) : null)}
+                      className="px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+                      disabled={!filterYear}
+                    >
+                      <option value="">All Months</option>
+                      {[
+                        { value: 1, label: 'January' },
+                        { value: 2, label: 'February' },
+                        { value: 3, label: 'March' },
+                        { value: 4, label: 'April' },
+                        { value: 5, label: 'May' },
+                        { value: 6, label: 'June' },
+                        { value: 7, label: 'July' },
+                        { value: 8, label: 'August' },
+                        { value: 9, label: 'September' },
+                        { value: 10, label: 'October' },
+                        { value: 11, label: 'November' },
+                        { value: 12, label: 'December' }
+                      ].map(month => (
+                        <option key={month.value} value={month.value}>{month.label}</option>
+                      ))}
+                    </select>
+                    
+                    {/* Clear Filters Button */}
+                    {(filterYear || filterMonth) && (
+                      <button
+                        onClick={() => {
+                          setFilterYear(null);
+                          setFilterMonth(null);
+                        }}
+                        className="px-3 py-1.5 text-sm text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                      >
+                        Clear Filters
+                      </button>
+                    )}
+                  </div>
+                  
                   {loadingCommission ? (
                     <div className="flex items-center gap-3">
                       <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
                       <span className="text-slate-600 dark:text-slate-400">Loading commission data...</span>
                     </div>
                   ) : commissionStats ? (
-                    <div className="grid grid-cols-3 gap-6">
+                    <>
+                      {/* Show filter info if filters are applied */}
+                      {(filterYear || filterMonth) && (
+                        <div className="mb-3 px-3 py-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                          <p className="text-sm text-blue-700 dark:text-blue-300">
+                            Showing data for {filterYear && !filterMonth ? `all of ${filterYear}` : filterYear && filterMonth ? `${['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][filterMonth - 1]} ${filterYear}` : 'all time'}
+                          </p>
+                        </div>
+                      )}
+                      <div className="grid grid-cols-3 gap-6">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
                           <DollarSign className="text-green-600 dark:text-green-400" size={18} />
@@ -418,6 +499,7 @@ export default function CarrierTab() {
                         </div>
                       </div>
                     </div>
+                    </>
                   ) : statements.length === 0 ? (
                     <div className="text-center py-2">
                       <p className="text-slate-500 dark:text-slate-400 text-sm">No statements found for this carrier</p>

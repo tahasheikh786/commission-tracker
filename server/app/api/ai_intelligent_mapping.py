@@ -248,11 +248,12 @@ async def enhanced_extraction_analysis(
             except ValueError:
                 logger.warning(f"Invalid carrier_id format: {carrier_id}")
         
-        # Perform parallel AI analysis
-        import asyncio
+        # Perform AI analysis sequentially to avoid database session conflicts
+        # Note: Running these sequentially avoids "concurrent operations not permitted" error
+        # since both services need to use the database session
         
-        # Run both services concurrently
-        field_mapping_task = ai_field_mapping_service.get_intelligent_field_mappings(
+        # First, get field mappings
+        field_mapping_result = await ai_field_mapping_service.get_intelligent_field_mappings(
             db=db,
             extracted_headers=extracted_headers,
             table_sample_data=table_sample_data,
@@ -260,7 +261,8 @@ async def enhanced_extraction_analysis(
             document_context=document_context
         )
         
-        plan_type_task = ai_plan_type_service.detect_plan_types(
+        # Then, get plan type detection
+        plan_type_result = await ai_plan_type_service.detect_plan_types(
             db=db,
             document_context=document_context,
             table_headers=extracted_headers,
@@ -268,27 +270,8 @@ async def enhanced_extraction_analysis(
             extracted_carrier=extracted_carrier
         )
         
-        # Wait for both to complete
-        field_mapping_result, plan_type_result = await asyncio.gather(
-            field_mapping_task,
-            plan_type_task,
-            return_exceptions=True
-        )
-        
-        # Handle exceptions
-        if isinstance(field_mapping_result, Exception):
-            logger.error(f"Field mapping failed: {field_mapping_result}")
-            field_mapping_result = {
-                "success": False,
-                "error": str(field_mapping_result)
-            }
-        
-        if isinstance(plan_type_result, Exception):
-            logger.error(f"Plan type detection failed: {plan_type_result}")
-            plan_type_result = {
-                "success": False,
-                "error": str(plan_type_result)
-            }
+        # Validate results (no exception handling needed since we're not using gather anymore)
+        # If either service fails, it will raise an exception that will be caught by the outer try-except
         
         # Calculate overall analysis confidence
         overall_confidence = 0.0

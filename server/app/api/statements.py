@@ -19,10 +19,18 @@ class DeleteStatementsRequest(BaseModel):
     statement_ids: List[UUID]
 
 @router.get("/companies/{company_id}/statements/")
-async def get_statements_for_company(company_id: UUID, db: AsyncSession = Depends(get_db)):
-    """Returns all uploads/statements for a given carrier"""
-    # IMPORTANT: This endpoint fetches statements for a carrier (insurance company)
+async def get_statements_for_company(
+    company_id: UUID, 
+    current_user: User = Depends(get_current_user_hybrid),
+    db: AsyncSession = Depends(get_db)
+):
+    """Returns all uploads/statements for a given carrier - ALL DATA (admin or all users' data)"""
+    # IMPORTANT: This endpoint fetches ALL statements for a carrier (all users)
+    # For user-specific data, use /api/companies/user-specific/{company_id}/statements
     # NOTE: Support both old (company_id) and new (carrier_id) format for backwards compatibility
+    
+    # Admin can see all statements, regular users should use the user-specific endpoint
+    # But for backward compatibility, we'll return all statements here
     statements = await crud.get_statements_for_carrier(db, company_id)
     
     # Convert ORM objects to dict format with gcs_key included

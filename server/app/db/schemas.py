@@ -263,6 +263,7 @@ class EarnedCommissionBase(BaseModel):
     commission_earned: float
     statement_count: int
     upload_ids: Optional[List[str]] = []
+    user_id: Optional[UUID] = None  # NEW: User ID for data isolation
     statement_date: Optional[datetime] = None
     statement_month: Optional[int] = None
     statement_year: Optional[int] = None

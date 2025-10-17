@@ -23,6 +23,7 @@ async def create_earned_commission(db: AsyncSession, commission: EarnedCommissio
         commission_earned=commission.commission_earned,
         statement_count=commission.statement_count,
         upload_ids=commission.upload_ids,
+        user_id=commission.user_id,  # CRITICAL: Set user_id for proper data isolation
         statement_date=commission.statement_date,
         statement_month=commission.statement_month,
         statement_year=commission.statement_year,
@@ -68,6 +69,28 @@ async def get_earned_commission_by_unique_constraint(db: AsyncSession, carrier_i
     result = await db.execute(query)
     return result.scalar_one_or_none()
 
+async def get_earned_commission_by_unique_constraint_with_user(db: AsyncSession, carrier_id: UUID, client_name: str, statement_date: datetime, user_id: UUID):
+    """Get earned commission record by unique constraint INCLUDING user_id for proper user isolation."""
+    query = select(EarnedCommission).where(
+        EarnedCommission.carrier_id == carrier_id,
+        EarnedCommission.client_name == client_name,
+        EarnedCommission.statement_date == statement_date,
+        EarnedCommission.user_id == user_id
+    )
+    result = await db.execute(query)
+    return result.scalar_one_or_none()
+
+async def get_earned_commission_by_carrier_client_user(db: AsyncSession, carrier_id: UUID, client_name: str, statement_year: int, user_id: UUID):
+    """Get earned commission record by carrier, client, year, AND user for proper user isolation."""
+    query = select(EarnedCommission).where(
+        EarnedCommission.carrier_id == carrier_id,
+        EarnedCommission.client_name == client_name,
+        EarnedCommission.statement_year == statement_year,
+        EarnedCommission.user_id == user_id
+    )
+    result = await db.execute(query)
+    return result.scalar_one_or_none()
+
 async def update_earned_commission(db: AsyncSession, commission_id: UUID, update_data: EarnedCommissionUpdate):
     """Update an earned commission record."""
     result = await db.execute(select(EarnedCommission).where(EarnedCommission.id == commission_id))
@@ -85,14 +108,26 @@ async def update_earned_commission(db: AsyncSession, commission_id: UUID, update
     # ✅ REMOVED: await db.refresh(db_commission) - Not needed for bulk operations
     return db_commission
 
-async def upsert_earned_commission(db: AsyncSession, carrier_id: UUID, client_name: str, invoice_total: float, commission_earned: float, statement_date: datetime = None, statement_month: int = None, statement_year: int = None, upload_id: str = None):
-    """Upsert earned commission data - create if not exists, update if exists."""
-    # Use the correct unique constraint lookup
+async def upsert_earned_commission(db: AsyncSession, carrier_id: UUID, client_name: str, invoice_total: float, commission_earned: float, statement_date: datetime = None, statement_month: int = None, statement_year: int = None, upload_id: str = None, user_id: UUID = None):
+    """
+    Upsert earned commission data with USER ISOLATION.
+    
+    CRITICAL CHANGE: The unique constraint includes user_id to ensure each user has their own commission records.
+    
+    IMPORTANT: user_id is now REQUIRED. If not provided, record will NOT be created/updated to prevent
+    data corruption between users.
+    """
+    # CRITICAL: user_id is now REQUIRED for proper data isolation
+    if not user_id:
+        print(f"❌ ERROR: user_id is required for upsert_earned_commission. Skipping {client_name}")
+        return None
+    
+    # Use the correct unique constraint lookup WITH user_id
     if statement_date:
-        existing = await get_earned_commission_by_unique_constraint(db, carrier_id, client_name, statement_date)
+        existing = await get_earned_commission_by_unique_constraint_with_user(db, carrier_id, client_name, statement_date, user_id)
     else:
-        # Fallback to year-based lookup if no statement_date
-        existing = await get_earned_commission_by_carrier_and_client(db, carrier_id, client_name, statement_year)
+        # Fallback to year-based lookup WITH user_id
+        existing = await get_earned_commission_by_carrier_client_user(db, carrier_id, client_name, statement_year, user_id)
     
     if existing:
         # Update existing record - convert Decimal to float for proper arithmetic
@@ -146,7 +181,7 @@ async def upsert_earned_commission(db: AsyncSession, carrier_id: UUID, client_na
         result = await update_earned_commission(db, existing.id, update_data)
         return result
     else:
-        # Create new record
+        # Create new record for THIS USER
         commission_data = EarnedCommissionCreate(
             carrier_id=carrier_id,
             client_name=client_name,
@@ -156,7 +191,8 @@ async def upsert_earned_commission(db: AsyncSession, carrier_id: UUID, client_na
             statement_date=statement_date,
             statement_month=statement_month,
             statement_year=statement_year,
-            upload_ids=[upload_id] if upload_id else []
+            upload_ids=[upload_id] if upload_id else [],
+            user_id=user_id  # NEW FIELD for user isolation
         )
         
         # Set monthly breakdown if statement date is provided
@@ -207,14 +243,25 @@ async def get_earned_commissions_by_carriers(db: AsyncSession, carrier_ids: List
     result = await db.execute(query)
     return result.all()
 
-async def get_commission_record(db: AsyncSession, carrier_id: str, client_name: str, statement_date: datetime):
-    """Get commission record by carrier, client, and statement date."""
+async def get_commission_record(db: AsyncSession, carrier_id: str, client_name: str, statement_date: datetime, user_id: UUID = None):
+    """
+    Get commission record by carrier, client, statement date, and user_id.
+    
+    CRITICAL: Must filter by user_id to ensure each user has their own commission records.
+    If user_id is not provided, falls back to old behavior (for backward compatibility).
+    """
+    conditions = [
+        EarnedCommission.carrier_id == carrier_id,
+        EarnedCommission.client_name == client_name,
+        EarnedCommission.statement_date == statement_date
+    ]
+    
+    # CRITICAL: Filter by user_id to prevent updating another user's record
+    if user_id is not None:
+        conditions.append(EarnedCommission.user_id == user_id)
+    
     result = await db.execute(
-        select(EarnedCommission).where(
-            EarnedCommission.carrier_id == carrier_id,
-            EarnedCommission.client_name == client_name,
-            EarnedCommission.statement_date == statement_date
-        )
+        select(EarnedCommission).where(and_(*conditions))
     )
     return result.scalar_one_or_none()
 
@@ -666,6 +713,7 @@ def prepare_bulk_operations(commission_records: List[Dict[str, Any]], existing_r
                 'statement_date': agg_record['statement_date'],
                 'statement_month': agg_record['statement_month'],
                 'statement_year': agg_record['statement_year'],
+                'user_id': agg_record.get('user_id'),  # NEW: Include user_id for proper data isolation
                 'created_at': datetime.utcnow(),
                 'last_updated': datetime.utcnow()
             }
@@ -1081,30 +1129,36 @@ async def process_commission_data_from_statement(db: AsyncSession, statement_upl
                 if commission_earned != 0:
                     print(f"Upserting commission data: client={client_name}, commission={commission_earned}, invoice={invoice_total}")
                     # Upsert the commission data
+                    # CRITICAL FIX: Use carrier_id (insurance carrier) not company_id (user's company)
+                    carrier_id_to_use = statement_upload.carrier_id if statement_upload.carrier_id else statement_upload.company_id
                     await upsert_earned_commission(
                         db, 
-                        statement_upload.company_id, 
+                        carrier_id_to_use, 
                         client_name, 
                         invoice_total, 
                         commission_earned,
                         statement_date,
                         statement_month,
                         statement_year,
-                        str(statement_upload.id)
+                        str(statement_upload.id),
+                        statement_upload.user_id  # CRITICAL: Pass user_id for proper data isolation
                     )
                 elif commission_earned == 0 and invoice_total != 0:
                     # If commission is 0 but invoice has a value, still process it
                     print(f"Upserting invoice-only data: client={client_name}, commission={commission_earned}, invoice={invoice_total}")
+                    # CRITICAL FIX: Use carrier_id (insurance carrier) not company_id (user's company)
+                    carrier_id_to_use = statement_upload.carrier_id if statement_upload.carrier_id else statement_upload.company_id
                     await upsert_earned_commission(
                         db, 
-                        statement_upload.company_id, 
+                        carrier_id_to_use, 
                         client_name, 
                         invoice_total, 
                         commission_earned,
                         statement_date,
                         statement_month,
                         statement_year,
-                        str(statement_upload.id)
+                        str(statement_upload.id),
+                        statement_upload.user_id  # CRITICAL: Pass user_id for proper data isolation
                     )
     
     print("Commission data processing completed successfully")
@@ -1112,8 +1166,10 @@ async def process_commission_data_from_statement(db: AsyncSession, statement_upl
 
 async def bulk_process_commissions(db: AsyncSession, statement_upload: StatementUploadModel):
     """
-    🚀 ULTIMATE OPTIMIZATION: Process all commission data in bulk operations
-    This replaces the sequential row-by-row processing with bulk operations.
+    🚀 ULTIMATE OPTIMIZATION: Process all commission data in bulk operations with user isolation.
+    
+    This replaces the sequential row-by-row processing with bulk operations while ensuring
+    proper user data isolation.
     
     Performance improvement: 10-15x faster (from 45+ seconds to 3-4 seconds)
     Database operations: Reduced from 600-800 to 2-3 operations
@@ -1134,6 +1190,11 @@ async def bulk_process_commissions(db: AsyncSession, statement_upload: Statement
         print(f"❌ Statement status is not approved: {statement_upload.status}")
         return None
     
+    # Extract user_id from statement for proper user isolation
+    user_id = statement_upload.user_id
+    if not user_id:
+        print(f"⚠️  WARNING: No user_id found in statement upload {statement_upload.id}")
+    
     # ✅ OPTIMIZED: Extract field mappings ONCE at the beginning
     field_mappings = extract_field_mappings_once(statement_upload.field_config)
     client_name_field = field_mappings['client_name_field']
@@ -1145,6 +1206,7 @@ async def bulk_process_commissions(db: AsyncSession, statement_upload: Statement
         return None
     
     print(f"✅ OPTIMIZED: Pre-extracted field mappings: client={client_name_field}, commission={commission_earned_field}, invoice={invoice_total_field}")
+    print(f"👤 Processing for user_id: {user_id}")
     
     # Extract statement date information
     statement_date, statement_month, statement_year = extract_statement_date_info(statement_upload)
@@ -1193,7 +1255,8 @@ async def bulk_process_commissions(db: AsyncSession, statement_upload: Statement
                         'statement_month': statement_month,
                         'statement_year': statement_year,
                         'statement_date': statement_date,
-                        'upload_id': str(statement_upload.id)
+                        'upload_id': str(statement_upload.id),
+                        'user_id': user_id  # NEW: Include user_id for proper data isolation
                     })
     
     if not commission_records:

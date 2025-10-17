@@ -142,6 +142,7 @@ async def extract_tables_excel(
         db_upload = schemas.StatementUpload(
             id=upload_id,
             company_id=company_id,
+            carrier_id=company_id,  # Set carrier_id for proper carrier association
             file_name=gcs_key,
             uploaded_at=datetime.utcnow(),
             status="extracted",
