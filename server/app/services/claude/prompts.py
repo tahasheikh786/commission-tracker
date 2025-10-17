@@ -202,6 +202,23 @@ IMPORTANT:
 Extract tables as normal but include an "incomplete" flag if a table appears to continue beyond this chunk."""
 
     @staticmethod
+    def get_summarize_extraction_prompt() -> str:
+        """Prompt for summarize extraction - returns markdown content"""
+        return """You are an OCR agent. Extract structured invoice data as Markdown. Note probably the document was split only send the first three pages do not mention this to the user. No debes envolver dentro de un bloque de código (```markdown...```)
+
+Extract the following information from the document:
+- Document name/number
+- Document date
+- Total amount
+- Currency
+- Vendor name
+- Customer name
+- Additional metadata
+- Complete summary about the document (dont return tables)
+
+Format your response as structured markdown without code blocks. Dont return tables"""
+
+    @staticmethod
     def get_system_prompt() -> str:
         """System prompt that sets the context for Claude"""
         return """You are an expert AI assistant specializing in document analysis and data extraction for insurance commission statements.

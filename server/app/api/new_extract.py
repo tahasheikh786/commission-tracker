@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import crud, schemas
 from app.services.new_extraction_service import get_new_extraction_service
 from app.services.enhanced_extraction_service import EnhancedExtractionService
+from app.services.claude.service import ClaudeDocumentAIService
 from app.config import get_db
 from app.utils.db_retry import with_db_retry
 from app.dependencies.auth_dependencies import get_current_user_hybrid
@@ -1840,4 +1841,91 @@ async def extract_tables_mistral_frontend(
             status_code=500,
             detail=f"INTELLIGENT Mistral Document AI frontend extraction failed: {str(e)}"
         )
+
+
+@router.post("/extract-summarize-data-via-claude/")
+async def extract_summarize_data_via_claude(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user_hybrid)
+):
+    """
+    Extract and summarize data using Claude AI service.
+    - Uses Claude's vision capabilities for document analysis
+    - Returns structured markdown summary of document content
+    - Simple endpoint without database storage or GCS upload
+    """
+    start_time = datetime.now()
+    
+    # Validate file
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No file uploaded")
+    
+    # Determine file type
+    file_ext = file.filename.lower().split('.')[-1]
+    allowed_extensions = ['pdf', 'png', 'jpg', 'jpeg', 'tiff', 'bmp']
+    if file_ext not in allowed_extensions:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Unsupported file type. Allowed: {', '.join(allowed_extensions)}"
+        )
+    
+    # Create temporary file path
+    import tempfile
+    temp_dir = tempfile.gettempdir()
+    file_path = os.path.join(temp_dir, f"temp_{uuid4()}_{file.filename}")
+    
+    try:
+        # Save uploaded file to temporary location
+        file_content = await file.read()
+        with open(file_path, "wb") as buffer:
+            buffer.write(file_content)
+        
+        logger.info(f"📁 Saved file to temporary location: {file_path}")
+        
+        # Initialize Claude service
+        claude_service = ClaudeDocumentAIService()
+        
+        # Perform summarization
+        logger.info("🤖 Starting Claude summarization...")
+        summarization_result = await claude_service.extract_summarize_data_via_claude(file_path)
+        
+        # Check if summarization was successful
+        if not summarization_result.get('success', False):
+            raise HTTPException(
+                status_code=500, 
+                detail=f"Claude summarization failed: {summarization_result.get('error', 'Unknown error')}"
+            )
+        
+        # Calculate processing time
+        processing_time = (datetime.now() - start_time).total_seconds()
+        
+        # Prepare simple response
+        response = {
+            "success": True,
+            "summary": summarization_result.get('result', ''),
+            "file_name": file.filename,
+            "file_type": file_ext,
+            "processing_time": processing_time,
+            "claude_processing_time": summarization_result.get('processing_time', 0),
+            "file_info": summarization_result.get('file_info', {}),
+            "message": f"Successfully summarized document using Claude AI in {processing_time:.2f}s"
+        }
+        
+        logger.info(f"✅ Summarization completed in {processing_time:.2f}s")
+        return response
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
+    except Exception as e:
+        logger.error(f"Claude summarization error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Claude summarization failed: {str(e)}")
+    finally:
+        # Clean up temporary file
+        if os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+                logger.info(f"🗑️  Cleaned up temporary file: {file_path}")
+            except Exception as cleanup_error:
+                logger.warning(f"Failed to clean up temporary file: {cleanup_error}")
 

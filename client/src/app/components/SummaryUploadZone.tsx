@@ -106,8 +106,8 @@ export default function CarrierUploadZone({
     setIsUploading(false);
   }, []);
 
-  // Extract first 3 pages from PDF and send to webhook
-  const extractAndSendPages = useCallback(async (file: File) => {
+  // Extract first 3 pages from PDF and send to Claude API
+  const extractAndSendPages = useCallback(async (file: File): Promise<void> => {
     console.log('🚀 Starting extractAndSendPages with file:', file.name);
     setIsN8nLoading(true);
     try {
@@ -134,20 +134,22 @@ export default function CarrierUploadZone({
         const extractedFile = new File([new Uint8Array(pdfBytes)], `extracted_${file.name}`, { type: 'application/pdf' });
         setExtractedPages(extractedFile);
         
-        // Send to n8n webhook
-        console.log('📤 Sending extracted pages to n8n...');
+        // Send to Claude API
+        console.log('📤 Sending extracted pages to Claude API...');
         const formData = new FormData();
-        formData.append('data', extractedFile);
+        formData.append('file', extractedFile);
         
-        const response = await fetch('https://n8n.t24appion.com/webhook/mistral/invoice', {
-          method: 'POST',
-          body: formData,
+        const response = await axios.post('/api/extract-summarize-data-via-claude/', formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+          withCredentials: true,
         });
         
-        console.log('📡 n8n response status:', response.status);
-        if (response.ok) {
-          const responseData = await response.json();
-          console.log('✅ n8n response data:', responseData);
+        console.log('📡 Claude response status:', response.status);
+        if (response.status === 200) {
+          const responseData = response.data;
+          console.log('✅ Claude response data:', responseData);
           setN8nResponse(responseData);
           setCompletionDate(new Date().toLocaleString('en-US', {
             year: 'numeric',
@@ -158,27 +160,29 @@ export default function CarrierUploadZone({
             second: '2-digit',
             timeZoneName: 'short'
           }));
-          console.log('✅ First 3 pages sent to n8n webhook successfully', responseData);
+          console.log('✅ First 3 pages sent to Claude API successfully', responseData);
         } else {
-          console.error('❌ Failed to send pages to n8n webhook:', response.statusText);
+          console.error('❌ Failed to send pages to Claude API:', response.statusText);
         }
         setIsN8nLoading(false);
       } else {
         console.log('📄 PDF has 3 or fewer pages, no extraction needed');
         // Send original file if 3 pages or less
-        console.log('📤 Sending original PDF to n8n...');
+        console.log('📤 Sending original PDF to Claude API...');
         const formData = new FormData();
-        formData.append('data', file);
+        formData.append('file', file);
         
-        const response = await fetch('https://n8n.t24appion.com/webhook/mistral/invoice', {
-          method: 'POST',
-          body: formData,
+        const response = await axios.post('/api/extract-summarize-data-via-claude/', formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+          withCredentials: true,
         });
         
-        console.log('📡 n8n response status:', response.status);
-        if (response.ok) {
-          const responseData = await response.json();
-          console.log('✅ n8n response data:', responseData);
+        console.log('📡 Claude response status:', response.status);
+        if (response.status === 200) {
+          const responseData = response.data;
+          console.log('✅ Claude response data:', responseData);
           setN8nResponse(responseData);
           setCompletionDate(new Date().toLocaleString('en-US', {
             year: 'numeric',
@@ -189,9 +193,9 @@ export default function CarrierUploadZone({
             second: '2-digit',
             timeZoneName: 'short'
           }));
-          console.log('✅ Original PDF sent to n8n webhook successfully', responseData);
+          console.log('✅ Original PDF sent to Claude API successfully', responseData);
         } else {
-          console.error('❌ Failed to send original PDF to n8n webhook:', response.statusText);
+          console.error('❌ Failed to send original PDF to Claude API:', response.statusText);
         }
         setIsN8nLoading(false);
       }
@@ -201,8 +205,8 @@ export default function CarrierUploadZone({
     }
   }, []);
 
-  // Resend file to n8n webhook
-  const resendToN8n = useCallback(async () => {
+  // Resend file to Claude API
+  const resendToClaude = useCallback(async () => {
     if (!uploadedFile) return;
 
     setIsResending(true);
@@ -216,15 +220,17 @@ export default function CarrierUploadZone({
       }
       
       const formData = new FormData();
-      formData.append('data', fileToSend);
+      formData.append('file', fileToSend);
       
-      const response = await fetch('https://n8n.t24appion.com/webhook/mistral/invoice', {
-        method: 'POST',
-        body: formData,
+      const response = await axios.post('/api/extract-summarize-data-via-claude/', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+        withCredentials: true,
       });
       
-      if (response.ok) {
-        const responseData = await response.json();
+      if (response.status === 200) {
+        const responseData = response.data;
         setN8nResponse(responseData);
         setCompletionDate(new Date().toLocaleString('en-US', {
           year: 'numeric',
@@ -235,15 +241,15 @@ export default function CarrierUploadZone({
           second: '2-digit',
           timeZoneName: 'short'
         }));
-        toast.success('File resent to n8n successfully!');
-        console.log('✅ File resent to n8n webhook successfully', responseData);
+        toast.success('File resent to Claude API successfully!');
+        console.log('✅ File resent to Claude API successfully', responseData);
       } else {
-        toast.error('Failed to resend file to n8n');
-        console.error('❌ Failed to resend file to n8n webhook:', response.statusText);
+        toast.error('Failed to resend file to Claude API');
+        console.error('❌ Failed to resend file to Claude API:', response.statusText);
       }
     } catch (error) {
-      toast.error('Error resending file to n8n');
-      console.error('❌ Error resending file to n8n:', error);
+      toast.error('Error resending file to Claude API');
+      console.error('❌ Error resending file to Claude API:', error);
     } finally {
       setIsResending(false);
       setIsN8nLoading(false);
@@ -398,11 +404,6 @@ export default function CarrierUploadZone({
     const localUrl = URL.createObjectURL(file);
     setLocalPdfUrl(localUrl);
     
-    // Extract first 3 pages and send to webhook if it's a PDF
-    if (file.type === 'application/pdf') {
-      extractAndSendPages(file);
-    }
-
     try {
       const newUploadId = `upload_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       console.log('🆔 Generated uploadId:', newUploadId);
@@ -413,8 +414,15 @@ export default function CarrierUploadZone({
       await new Promise(resolve => setTimeout(resolve, 500));
       console.log('✅ Proceeding with file upload');
 
+      // Start summarization in parallel (if it's a PDF) - will extract first 3 pages
+      if (file.type === 'application/pdf') {
+        console.log('📝 Starting summarization in parallel (first 3 pages)...');
+        extractAndSendPages(file); // Don't await - run in parallel, extracts first 3 pages
+      }
+
+      // Start table extraction in parallel (full file)
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('file', file); // Full file for table extraction
       formData.append('extraction_method', 'smart');  // Use 'smart' to default to Claude AI
       formData.append('upload_id', newUploadId);
       
@@ -422,7 +430,7 @@ export default function CarrierUploadZone({
         formData.append('statement_date', selectedStatementDate);
       }
 
-      console.log('📤 Starting API call with uploadId:', newUploadId);
+      console.log('📤 Starting table extraction API call with uploadId:', newUploadId);
       const response = await axios.post('/api/extract-tables-smart/', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
@@ -437,7 +445,7 @@ export default function CarrierUploadZone({
       });
 
       // WebSocket will handle the progress updates automatically via useProgressWebSocket hook
-      console.log('Upload complete, WebSocket will handle progress updates');
+      console.log('Table extraction started, WebSocket will handle progress updates');
 
     } catch (error: any) {
       setIsUploading(false);
@@ -561,7 +569,11 @@ export default function CarrierUploadZone({
               return null;
             }
             
-            // Extract summary content from n8n response
+            // Extract summary content from Claude response
+            if (n8nResponse.summary) {
+              return n8nResponse.summary;
+            }
+            
             if (n8nResponse.content) {
               // Look for markdown code blocks anywhere in the content
               const markdownMatch = n8nResponse.content.match(/```markdown\n([\s\S]*?)\n```/);
@@ -739,7 +751,7 @@ ${extractedPages ? `
           className="mt-6 flex justify-center"
         >
           <button
-            onClick={resendToN8n}
+            onClick={resendToClaude}
             disabled={isResending}
             className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg font-semibold transition-colors duration-200 flex items-center gap-2"
           >
@@ -753,7 +765,7 @@ ${extractedPages ? `
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
-                Resend to n8n
+                Resend to Claude
               </>
             )}
           </button>
