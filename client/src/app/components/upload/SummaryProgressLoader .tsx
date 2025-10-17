@@ -41,22 +41,15 @@ export const UPLOAD_STEPS: UploadStep[] = [
     estimatedDuration: 7000
   },
   {
-    id: 'ai_mapping',
-    order: 4,
-    title: 'AI Field Mapping',
-    description: 'Intelligently mapping database fields...',
-    estimatedDuration: 3000
-  },
-  {
     id: 'plan_detection',
-    order: 5,
+    order: 4,
     title: 'Detecting Plan Type',
     description: 'Identifying insurance plan category...',
     estimatedDuration: 2000
   },
   {
     id: 'finalizing',
-    order: 6,
+    order: 5,
     title: 'Finalizing',
     description: 'Preparing your data for review...',
     estimatedDuration: 1000
@@ -90,8 +83,8 @@ export default function PremiumProgressLoader({
   const [countdown, setCountdown] = useState(10);
   const [isCountdownActive, setIsCountdownActive] = useState(false);
 
-  // Check if step 6 (Finalizing) is completed for continue button
-  const isStep6Completed = currentStep >= 6 || progress >= 100;
+  // Check if step 5 (Finalizing) is completed for continue button
+  const isStep5Completed = currentStep >= 5 || progress >= 100;
   const isCompleted = progress >= 100;
 
   // Smooth progress animation
@@ -104,11 +97,11 @@ export default function PremiumProgressLoader({
 
   // Countdown logic
   useEffect(() => {
-    if (isStep6Completed && !isCountdownActive) {
+    if (isStep5Completed && !isCountdownActive) {
       setIsCountdownActive(true);
       setCountdown(10);
     }
-  }, [isStep6Completed, isCountdownActive]);
+  }, [isStep5Completed, isCountdownActive]);
 
   useEffect(() => {
     if (isCountdownActive && countdown > 0) {
@@ -128,8 +121,8 @@ export default function PremiumProgressLoader({
 
   return (
     <div className="fixed inset-0 flex items-center justify-center z-50 animate-fadeIn p-4 bg-black/50 backdrop-blur-sm">
-      <div className="p-4 w-4/5 mx-auto animate-slideIn overflow-visible bg-transparent rounded-2xl shadow-2xl">
-        <div className="grid grid-cols-5 gap-6 h-[95vh]">
+      <div className="p-4 w-full sm:w-4/5 h-full mx-auto animate-slideIn overflow-visible bg-white dark:bg-transparent rounded-2xl shadow-2xl">
+        <div className="grid grid-cols-5 gap-6 h-full">
           {/* Left Column - Progress Steps (1/5) */}
           <div className="flex flex-col col-span-1">
         
@@ -155,8 +148,8 @@ export default function PremiumProgressLoader({
             <StepIndicator
               key={step.id}
               step={step}
-              isActive={index === currentStep && !(index === 5 && progress >= 100)}
-              isCompleted={index < currentStep || (index === 5 && progress >= 100)}
+              isActive={index === currentStep && !(index === 4 && progress >= 100)}
+              isCompleted={index < currentStep || (index === 4 && progress >= 100)}
               isNext={index === currentStep + 1}
             />
           ))}
@@ -169,20 +162,20 @@ export default function PremiumProgressLoader({
           </div>
         )}
 
-        {/* Continue Button - Always visible, enabled when step 6 is completed */}
+        {/* Continue Button - Always visible, enabled when step 5 is completed */}
         {onContinue && (
           <div className="mt-8 flex justify-center">
             <button
-              onClick={isStep6Completed ? onContinue : undefined}
-              disabled={!isStep6Completed}
+              onClick={isStep5Completed ? onContinue : undefined}
+              disabled={!isStep5Completed}
               className={`px-8 py-3 rounded-xl font-semibold transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 ${
-                isStep6Completed
+                isStep5Completed
                   ? 'bg-gradient-to-r from-green-500 to-blue-600 text-white hover:shadow-lg hover:scale-105 focus:ring-blue-500'
                   : 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
               }`}
             >
               <div className="flex items-center gap-2">
-                {isStep6Completed ? (
+                {isStep5Completed ? (
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
@@ -191,7 +184,7 @@ export default function PremiumProgressLoader({
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 )}
-                {isStep6Completed 
+                {isStep5Completed 
                   ? (isCountdownActive && countdown > 0 ? `Continuing in ${countdown}s` : 'Continue')
                   : 'Processing...'
                 }
@@ -230,7 +223,7 @@ export default function PremiumProgressLoader({
           
           {/* Right Column - Content (1/5) */}
           <div className="flex flex-col col-span-1">
-            <div className="flex-1 overflow-auto rounded-lg p-4 bg-transparent max-h-[90vh]">
+            <div className="flex-1 overflow-auto rounded-lg p-2 bg-transparent max-h-[90vh]">
               <div className="prose prose-sm dark:prose-invert max-w-none overflow-x-auto overflow-y-auto">
                 
                 {/* Summary Section - Always visible */}
