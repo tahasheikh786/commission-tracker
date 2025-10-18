@@ -806,4 +806,77 @@ class ClaudeDocumentAIService:
                 else 0
             )
         }
+    
+    async def extract_summarize_data_via_claude(self, file_path: str) -> Dict[str, Any]:
+        """
+        Extract summarize data using Claude with OCR agent configuration.
+        Returns only markdown result as specified.
+        """
+        start_time = time.time()
+        self.stats['total_extractions'] += 1
+        
+        try:
+            logger.info(f"Starting Claude-based summarize extraction for: {file_path}")
+            
+            # Validate service availability (same as extract_commission_data)
+            if not self.is_available():
+                raise ValueError("Claude service not available. Check API key and SDK installation.")
+            
+            # Validate file (same as extract_commission_data)
+            validation_result = self._validate_file(file_path)
+            if not validation_result['valid']:
+                raise ValueError(validation_result['error'])
+            
+            pdf_info = validation_result['pdf_info']
+            
+            # Use the same PDF processor as other methods
+            pdf_base64 = self.pdf_processor.encode_pdf_to_base64(file_path)
+            
+            # Use the specific prompt for summarize extraction
+            prompt = self.prompts.get_summarize_extraction_prompt()
+            
+            # Use the same API call method as _extract_standard_file
+            logger.info("Calling Claude API for summarize extraction")
+            extraction_result = await self._call_claude_api(
+                pdf_base64,
+                prompt,
+                model=self.primary_model
+            )
+            
+            # Extract content from the result
+            content = extraction_result.get('content', '')
+            logger.info(f"Extracted content length: {len(content) if content else 0}")
+            
+            # Update statistics (same as extract_commission_data)
+            processing_time = time.time() - start_time
+            self.stats['successful_extractions'] += 1
+            self.stats['total_processing_time'] += processing_time
+            
+            logger.info(f"✅ Claude summarize extraction completed in {processing_time:.2f}s")
+            
+            # Return result in same format as extract_commission_data
+            result = {
+                'success': True,
+                'result': content,  # Only return the markdown result
+                'processing_time': processing_time,
+                'extraction_method': 'claude',
+                'file_info': pdf_info
+            }
+            logger.info(f"Returning result with keys: {list(result.keys())}")
+            return result
+                
+        except Exception as e:
+            self.stats['failed_extractions'] += 1
+            processing_time = time.time() - start_time
+            
+            logger.error(f"❌ Claude summarize extraction failed after {processing_time:.2f}s: {e}")
+            
+            return {
+                'success': False,
+                'error': str(e),
+                'error_message': self.error_handler.format_error_message(e),
+                'result': '',
+                'extraction_method': 'claude',
+                'processing_time': processing_time
+            }
 

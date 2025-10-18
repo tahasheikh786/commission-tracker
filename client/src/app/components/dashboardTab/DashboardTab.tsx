@@ -7,7 +7,7 @@ import StatCard from "./StatCard";
 import CarriersModal from "./CarriersModal";
 import { useDashboardStats, useCarriers, useEarnedCommissionStats } from "../../hooks/useDashboard";
 import { TrendingUp, Upload, FileText, Users, Clock, CheckCircle, XCircle } from "lucide-react";
-import CarrierUploadZone from "../CarrierUploadZone";
+import SummaryUploadZone from "../SummaryUploadZone";
 import UnifiedTableEditor from "../upload/UnifiedTableEditor";
 import toast from 'react-hot-toast';
 import { useSubmission } from "@/context/SubmissionContext";
@@ -488,7 +488,7 @@ export default function DashboardTab({ showAnalytics = false }: DashboardTabProp
       {/* New Integrated Upload Interface */}
       <div className="w-full h-full min-h-[calc(100vh-200px)] p-6">
         <div className="h-full">
-          <CarrierUploadZone
+          <SummaryUploadZone
             onParsed={handleUploadResult}
             selectedStatementDate={selectedStatementDate}
             extractionMethod={extractionMethod}
