@@ -34,7 +34,9 @@ interface CarrierUploadZoneProps {
     extracted_carrier?: string,
     extracted_date?: string,
     document_metadata?: any,
-    ai_intelligence?: any
+    ai_intelligence?: any,
+    carrier_id?: string,
+    company_id?: string
   }) => void;
   selectedStatementDate?: any;
   extractionMethod?: string;
@@ -275,7 +277,9 @@ export default function CarrierUploadZone({
         extracted_carrier: extractionResults.extracted_carrier,
         extracted_date: extractionResults.extracted_date,
         document_metadata: extractionResults.document_metadata,
-        ai_intelligence: extractionResults.ai_intelligence
+        ai_intelligence: extractionResults.ai_intelligence,
+        carrier_id: extractionResults.carrier_id,  // ✅ CRITICAL: Pass carrier_id for AI field mapping
+        company_id: extractionResults.company_id   // ✅ CRITICAL: Pass company_id as fallback
       });
     }
   }, [extractionResults, uploadedFile, onParsed]);
