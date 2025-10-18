@@ -746,8 +746,16 @@ export default function UnifiedTableEditor({
       // Wait a moment to show completion
       await new Promise(resolve => setTimeout(resolve, 1000));
       
-      // Redirect to dashboard
-      window.location.href = '/?tab=dashboard';
+      // Redirect to carriers tab and open the specific carrier
+      const carrierName = editedCarrierName || extractedData?.extracted_carrier || extractedData?.carrierName || extractedData?.document_metadata?.carrier_name;
+      
+      if (carrierName) {
+        // Redirect to carriers tab with the specific carrier opened (using 'carrier' param for consistency with UploadPageContent)
+        window.location.href = `/?tab=carriers&carrier=${encodeURIComponent(carrierName)}`;
+      } else {
+        // Final fallback: redirect to carriers tab
+        window.location.href = '/?tab=carriers';
+      }
 
     } catch (error: any) {
       console.error('❌ Submission error:', error);

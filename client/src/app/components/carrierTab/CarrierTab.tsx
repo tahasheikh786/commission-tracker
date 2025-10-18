@@ -1,5 +1,6 @@
 'use client'
 import React, { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import CarrierList from "./CarrierList";
 import CarrierStatementsTable from "./CarrierStatementsTable";
 import EditMappingModal from "./EditMappingModal";
@@ -36,6 +37,7 @@ interface CommissionStats {
 }
 
 export default function CarrierTab() {
+  const searchParams = useSearchParams();
   const { triggerDashboardRefresh } = useSubmission();
   const { permissions } = useAuth();
   const [carriers, setCarriers] = useState<Carrier[]>([]);
@@ -106,6 +108,30 @@ export default function CarrierTab() {
       }
     }
   }, [viewAllData, userSpecificCompanies]);
+
+  // Auto-select carrier from URL parameter
+  useEffect(() => {
+    const carrierParam = searchParams?.get('carrier');
+    
+    if (carrierParam && carriers.length > 0 && !loadingCarriers) {
+      // Decode the carrier name from URL
+      const decodedCarrierName = decodeURIComponent(carrierParam);
+      
+      // Find matching carrier (case-insensitive comparison)
+      const matchingCarrier = carriers.find(
+        carrier => carrier.name.toLowerCase() === decodedCarrierName.toLowerCase()
+      );
+      
+      if (matchingCarrier) {
+        setSelected(matchingCarrier);
+        // Show a success message
+        toast.success(`Viewing statements for ${matchingCarrier.name}`);
+      } else {
+        // If carrier not found, show message
+        toast(`Carrier "${decodedCarrierName}" not found in your carriers list`);
+      }
+    }
+  }, [searchParams, carriers, loadingCarriers]);
 
   // Fetch statements for selected carrier
   useEffect(() => {

@@ -136,10 +136,10 @@ export default function DashboardTab({ showAnalytics = false }: DashboardTabProp
   }, [databaseFields.length]);
 
   // Handle upload result - NEW 2-STEP FLOW
-  function handleUploadResult({ tables, upload_id, extraction_id, file_name, file, plan_types, extracted_carrier, extracted_date, gcs_url, gcs_key, document_metadata, ai_intelligence }: any) {
+  function handleUploadResult({ tables, upload_id, extraction_id, file_name, file, plan_types, extracted_carrier, extracted_date, gcs_url, gcs_key, document_metadata, ai_intelligence, carrier_id, company_id }: any) {
     
     
-    // Set uploaded data with AI intelligence
+    // Set uploaded data with AI intelligence and carrier information
     setUploaded({ 
       tables, 
       upload_id, 
@@ -152,7 +152,9 @@ export default function DashboardTab({ showAnalytics = false }: DashboardTabProp
       extracted_carrier,
       extracted_date,
       document_metadata,
-      ai_intelligence
+      ai_intelligence,
+      carrier_id,  // CRITICAL: Include carrier_id for AI field mapping
+      company_id   // CRITICAL: Include company_id as fallback
     });
     
     // Handle carrier detection and auto-creation
@@ -293,8 +295,10 @@ export default function DashboardTab({ showAnalytics = false }: DashboardTabProp
             extracted_carrier: uploaded.extracted_carrier,
             extracted_date: uploaded.extracted_date,
             upload_id: uploaded.upload_id || uploaded.id,
-            company_id: company?.id || uploaded.company_id,
-            carrier_id: uploaded.carrier_id,
+            // CRITICAL FIX: Use uploaded.carrier_id (from backend) first, fallback to uploaded.company_id
+            // Don't use company?.id as it might be 'auto-detected' which is not a valid UUID
+            company_id: uploaded.carrier_id || uploaded.company_id || (company?.id !== 'auto-detected' ? company?.id : undefined),
+            carrier_id: uploaded.carrier_id || uploaded.company_id,
             document_metadata: uploaded.document_metadata,
             ai_intelligence: uploaded.ai_intelligence
           }}

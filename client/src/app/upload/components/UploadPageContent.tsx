@@ -27,6 +27,8 @@ export default function UploadPageContent() {
     extracted_carrier?: string;
     extracted_date?: string;
     document_metadata?: any;
+    carrier_id?: string;
+    company_id?: string;
   }) => {
     // Handle successful upload
     toast.success('Document uploaded and processed successfully!');
@@ -39,9 +41,15 @@ export default function UploadPageContent() {
       setExtractedDate(result.extracted_date);
     }
     
-    // Navigate to dashboard with extracted information
-    // The dashboard will use this information when saving tables
-    router.push('/');
+    // Navigate to carriers tab with the extracted carrier pre-selected
+    if (result.extracted_carrier) {
+      // Encode the carrier name to handle special characters in URLs
+      const encodedCarrier = encodeURIComponent(result.extracted_carrier);
+      router.push(`/?tab=carriers&carrier=${encodedCarrier}`);
+    } else {
+      // Fallback to carriers tab if no carrier was extracted
+      router.push('/?tab=carriers');
+    }
   };
 
   return (

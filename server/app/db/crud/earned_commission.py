@@ -566,40 +566,58 @@ async def fetch_existing_commission_records_bulk(db: AsyncSession, commission_re
     """
     CRITICAL OPTIMIZATION: Fetch all existing records in single query instead of N queries
     This eliminates the N+1 query problem that was causing 300-400 database calls.
+    
+    CRITICAL FIX: Now includes user_id in lookup to ensure proper user data isolation
     """
     if not commission_records:
         return {}
     
-    # Create lookup keys for all commission records using statement_year (aggregated by year)
-    lookup_keys = [(r['carrier_id'], r['client_name'], r['statement_year']) for r in commission_records]
+    # Create lookup keys for all commission records using statement_year (aggregated by year) AND user_id
+    # CRITICAL FIX: Include user_id in the lookup key to ensure user data isolation
+    lookup_keys = [(r['carrier_id'], r['client_name'], r['statement_year'], r.get('user_id')) for r in commission_records]
     unique_keys = list(set(lookup_keys))  # Remove duplicates
     
     if not unique_keys:
         return {}
     
-    print(f"🔍 Bulk fetch: Looking up {len(unique_keys)} unique commission records")
+    print(f"🔍 Bulk fetch: Looking up {len(unique_keys)} unique commission records (with user isolation)")
     
     # Single query with OR conditions - this replaces 300-400 individual queries
+    # CRITICAL FIX: Now includes user_id in the conditions
     conditions = []
-    for carrier_id, client_name, statement_year in unique_keys:
-        conditions.append(
-            and_(
-                EarnedCommission.carrier_id == carrier_id,
-                EarnedCommission.client_name == client_name,
-                EarnedCommission.statement_year == statement_year
+    for carrier_id, client_name, statement_year, user_id in unique_keys:
+        if user_id is not None:
+            # Include user_id filter for proper data isolation
+            conditions.append(
+                and_(
+                    EarnedCommission.carrier_id == carrier_id,
+                    EarnedCommission.client_name == client_name,
+                    EarnedCommission.statement_year == statement_year,
+                    EarnedCommission.user_id == user_id
+                )
             )
-        )
+        else:
+            # Fallback for legacy records without user_id (backward compatibility)
+            conditions.append(
+                and_(
+                    EarnedCommission.carrier_id == carrier_id,
+                    EarnedCommission.client_name == client_name,
+                    EarnedCommission.statement_year == statement_year,
+                    EarnedCommission.user_id.is_(None)
+                )
+            )
     
     # Execute single bulk query
     result = await db.execute(select(EarnedCommission).where(or_(*conditions)))
     existing_records = result.scalars().all()
     
-    print(f"✅ Bulk fetch: Found {len(existing_records)} existing records")
+    print(f"✅ Bulk fetch: Found {len(existing_records)} existing records for specified users")
     
     # Create lookup dictionary for O(1) access
+    # CRITICAL FIX: Include user_id in the key
     lookup_dict = {}
     for record in existing_records:
-        key = (record.carrier_id, record.client_name, record.statement_year)
+        key = (record.carrier_id, record.client_name, record.statement_year, record.user_id)
         lookup_dict[key] = record
     
     return lookup_dict
@@ -607,20 +625,22 @@ async def fetch_existing_commission_records_bulk(db: AsyncSession, commission_re
 def prepare_bulk_operations(commission_records: List[Dict[str, Any]], existing_records: Dict[tuple, EarnedCommission]) -> tuple:
     """
     Prepare bulk update and insert operations from commission records.
-    ✅ FIXED: Now properly aggregates records by unique constraint (carrier_id, client_name, statement_year)
+    ✅ FIXED: Now properly aggregates records by unique constraint (carrier_id, client_name, statement_year, user_id)
     Returns (updates_list, inserts_list) for bulk execution.
     """
     
     # ✅ CRITICAL FIX: Aggregate commission records by unique constraint FIRST
     print(f"📊 Aggregating {len(commission_records)} individual records by unique constraint...")
     
-    # Group records by unique constraint: (carrier_id, client_name, statement_year)
-    # This ensures one record per company per year, with monthly breakdowns
+    # Group records by unique constraint: (carrier_id, client_name, statement_year, user_id)
+    # CRITICAL FIX: Include user_id in unique key for proper user data isolation
+    # This ensures one record per company per year PER USER, with monthly breakdowns
     aggregated_records = {}
     
     for record in commission_records:
-        # Create unique key based on company and year (not specific date)
-        unique_key = (record['carrier_id'], record['client_name'], record['statement_year'])
+        # Create unique key based on company, year, AND user (not specific date)
+        # CRITICAL FIX: Include user_id in the key
+        unique_key = (record['carrier_id'], record['client_name'], record['statement_year'], record.get('user_id'))
         
         if unique_key not in aggregated_records:
             # First record for this unique key - initialize
@@ -631,6 +651,7 @@ def prepare_bulk_operations(commission_records: List[Dict[str, Any]], existing_r
                 'statement_month': record['statement_month'],
                 'statement_year': record['statement_year'],
                 'upload_id': record['upload_id'],
+                'user_id': record.get('user_id'),  # CRITICAL: Include user_id
                 'invoice_total': 0.0,
                 'commission_earned': 0.0,
                 'upload_ids': set(),  # Use set to avoid duplicates
@@ -649,11 +670,11 @@ def prepare_bulk_operations(commission_records: List[Dict[str, Any]], existing_r
                 aggregated_records[unique_key]['monthly_commissions'][month_key] = 0.0
             aggregated_records[unique_key]['monthly_commissions'][month_key] += record['commission_earned']
     
-    print(f"✅ Aggregated into {len(aggregated_records)} unique commission records")
+    print(f"✅ Aggregated into {len(aggregated_records)} unique commission records (with user isolation)")
     
     # Show aggregation results for debugging
     for unique_key, agg_record in list(aggregated_records.items())[:3]:  # Show first 3
-        print(f"   📋 {agg_record['client_name']}: ${agg_record['commission_earned']:.2f} commission, ${agg_record['invoice_total']:.2f} invoice")
+        print(f"   📋 {agg_record['client_name']} (user: {agg_record['user_id']}): ${agg_record['commission_earned']:.2f} commission, ${agg_record['invoice_total']:.2f} invoice")
     
     # Now prepare bulk operations with aggregated data
     updates = []
