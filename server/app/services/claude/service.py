@@ -41,6 +41,7 @@ from .models import (
     ClaudeChunkMetadata
 )
 from .prompts import ClaudePrompts
+from .dynamic_prompts import ClaudeDynamicPrompts
 from .utils import (
     ClaudePDFProcessor,
     ClaudeTokenEstimator,
@@ -101,6 +102,7 @@ class ClaudeDocumentAIService:
         self.quality_assessor = ClaudeQualityAssessor()
         self.error_handler = ClaudeErrorHandler()
         self.prompts = ClaudePrompts()
+        self.dynamic_prompts = ClaudeDynamicPrompts()
         
         # Processing statistics
         self.stats = {
@@ -371,7 +373,7 @@ class ClaudeDocumentAIService:
             # Single API call for both metadata and tables (more efficient)
             extraction_result = await self._call_claude_api(
                 pdf_base64,
-                self.prompts.get_table_extraction_prompt(),
+                self.prompts.get_table_extraction_prompt() + self.dynamic_prompts.get_prompt_by_name("United Health Care"),
                 model=self.primary_model
             )
             
