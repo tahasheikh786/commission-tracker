@@ -373,9 +373,16 @@ class ClaudeDocumentAIService:
                 )
             
             # Single API call for both metadata and tables (more efficient)
+            # Get carrier-specific prompt if available
+            dynamic_prompt = self.dynamic_prompts.get_prompt_by_name(carrier_name)
+            if dynamic_prompt:
+                logger.info(f"🎯 Using carrier-specific dynamic prompt for: {carrier_name}")
+            else:
+                logger.info(f"📋 No carrier-specific prompt for '{carrier_name}', using standard prompt only")
+            
             extraction_result = await self._call_claude_api(
                 pdf_base64,
-                self.prompts.get_table_extraction_prompt() + self.dynamic_prompts.get_prompt_by_name(carrier_name),
+                self.prompts.get_table_extraction_prompt() + dynamic_prompt,
                 model=self.primary_model
             )
             
@@ -448,6 +455,7 @@ class ClaudeDocumentAIService:
                 logger.info("Attempting extraction with fallback model...")
                 try:
                     return await self._extract_with_fallback(
+                        carrier_name,
                         file_path,
                         pdf_info,
                         progress_tracker
@@ -549,10 +557,11 @@ class ClaudeDocumentAIService:
                 f"{chunk_info['chunk_index'] + 1}/{chunk_info['total_chunks']}"
             )
             
-            # Call Claude API
+            # Call Claude API with carrier-specific prompt if available
+            dynamic_prompt = self.dynamic_prompts.get_prompt_by_name(carrier_name)
             extraction_result = await self._call_claude_api(
                 pdf_base64,
-                chunk_prompt + self.dynamic_prompts.get_prompt_by_name(carrier_name),
+                chunk_prompt + dynamic_prompt,
                 model=self.primary_model
             )
             
@@ -569,6 +578,7 @@ class ClaudeDocumentAIService:
     
     async def _extract_with_fallback(
         self,
+        carrier_name,
         file_path: str,
         pdf_info: Dict[str, Any],
         progress_tracker = None
@@ -586,9 +596,14 @@ class ClaudeDocumentAIService:
         # Similar to standard extraction but with fallback model
         pdf_base64 = self.pdf_processor.encode_pdf_to_base64(file_path)
         
+        # Use carrier-specific prompt if available
+        dynamic_prompt = self.dynamic_prompts.get_prompt_by_name(carrier_name)
+        if dynamic_prompt:
+            logger.info(f"🎯 Fallback: Using carrier-specific dynamic prompt for: {carrier_name}")
+        
         extraction_result = await self._call_claude_api(
             pdf_base64,
-            self.prompts.get_table_extraction_prompt(),
+            self.prompts.get_table_extraction_prompt() + dynamic_prompt,
             model=self.fallback_model
         )
         

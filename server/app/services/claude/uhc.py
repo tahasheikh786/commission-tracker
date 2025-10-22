@@ -23,34 +23,53 @@ Extract structured data for each line item under the “Base Commission and Serv
 
 **Data Definitions and Validation:**
 - Map and normalize these fields for every extracted row:
-  - coverage_type (Med, Den, Vis) → also include coverage_type_text
-  - bill_effective_date (MM/DD/YYYY format) → convert to YYYY-MM-DD
-  - billed_premium & paid_premium (currency); normalize parentheses to negatives
-  - subscriber_count, paid_count (≥0 integer)
-  - adjustment_type (A–X) → include mapped adjustment_meaning
-  - issuing_state (two-letter US code)
-  - comp_method (PEPM or POP; other carrier methods allowed)
-  - rate (currency or percent, indicate rate_unit)
-  - split_percent (0-100)
-  - comp_type (Fee, Comm)
-  - business_type (Comm, Leve)
-  - billed_fee_amount, customer_paid_fee, paid_amount (currency; normalize negatives)
+  - Cov Type (Med, Den, Vis) → also include coverage_type_text
+  - Bill Eff Date (MM/DD/YYYY format) → convert to YYYY-MM-DD
+  - Billed Premium & Paid Premium (currency); normalize parentheses to negatives
+  - Sub count (≥0 integer)
+  - Adj Typ (A–X) → include mapped adjustment_meaning
+  - Iss St (two-letter US code)
+  - Method (PEPM or POP; other carrier methods allowed)
+  - Rate (currency or percent, indicate rate_unit)
+  - Split % (0-100)
+  - Comp Type (Fee, Comm)
+  - Bus Type (Comm, Leve)
+  - Billed Fee Amount, Customer Paid Fee, Paid Amount (currency; normalize negatives)
+
+  -So the Final table headers list is:
+  - Cov Type
+  - Bill Eff Date
+  - Billed Premium (currency)
+  - Paid Premium (currency)
+  - Sub Count (≥0 integer)
+  - Adj Typ (A–X)
+  - Iss St (two-letter US code)
+  - Method (PEPM or POP; other carrier methods allowed)
+  - Rate (currency or percent, indicate rate_unit)
+  - Split % (0-100)
+  - Comp Type (Fee, Comm)
+  - Bus Type (Comm, Leve)
+  - Billed Fee Amount (currency)
+  - Customer Paid Fee (currency)
+  - Paid Amount (currency)
+
+Make sure all these header have a seperate column and each column has its own value and no value merged into each other.
 
 **Controlled Vocabulary:**
 - Use exact values for controlled fields as described above. Return extra mapped fields for types and adjustment codes.
 
 **Validation Rules:**
-- coverage_type must be one of {Med, Den, Vis}; mark error if missing or ambiguous.
-- comp_method = PEPM ⇒ rate must be >0 and ≤200.
-- adjustment_type = V ⇒ paid_amount ≥0; X ⇒ paid_amount ≤0.
-- issuing_state must be a valid two-letter US code.
-- subscriber_count, paid_count ≥0.
-- “100% Fee” implies split_percent = 100, comp_type = Fee.
+- Cov Type must be one of {Med, Den, Vis}; mark error if missing or ambiguous.
+- Method = PEPM ⇒ rate must be >0 and ≤200.
+- Adj Typ = V ⇒ Paid Amount ≥0; X ⇒ Paid Amount ≤0.
+- Iss St must be a valid two-letter US code.
+- Sub Count ≥0.
+- “100% Fee” implies Split % = 100, Comp Type = Fee.
 - For each row, return {valid: true/false, errors: [...]} in your output object.
 
 **Currency & Percentage Normalization:**
 - Strip $ and commas from currency fields, convert (xxx.xx) → -xxx.xx
-- Remove % and store numeric value; add rate_unit: percent or currency
+- Remove % and store numeric value; add Rate Unit: percent or currency
 
 **Examples for Parsing:**
 - See three provided row examples above for schema guidance.
