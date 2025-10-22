@@ -28,14 +28,35 @@ async def get_statements_for_company(
     # IMPORTANT: This endpoint fetches ALL statements for a carrier (all users)
     # For user-specific data, use /api/companies/user-specific/{company_id}/statements
     # NOTE: Support both old (company_id) and new (carrier_id) format for backwards compatibility
+    from app.db.models import StatementUpload
     
     # Admin can see all statements, regular users should use the user-specific endpoint
     # But for backward compatibility, we'll return all statements here
-    statements = await crud.get_statements_for_carrier(db, company_id)
+    # Join with User table to get uploader information
+    result = await db.execute(
+        select(StatementUpload, User)
+        .join(User, StatementUpload.user_id == User.id)
+        .where(
+            or_(
+                StatementUpload.carrier_id == company_id,
+                and_(
+                    StatementUpload.company_id == company_id,
+                    StatementUpload.carrier_id.is_(None)
+                )
+            )
+        )
+        .order_by(StatementUpload.uploaded_at.desc())
+    )
+    statements_with_users = result.all()
     
-    # Convert ORM objects to dict format with gcs_key included
+    # Convert ORM objects to dict format with gcs_key and user info included
     formatted_statements = []
-    for statement in statements:
+    for statement, user in statements_with_users:
+        # Build user display name
+        user_display_name = None
+        if user.first_name or user.last_name:
+            user_display_name = f"{user.first_name or ''} {user.last_name or ''}".strip()
+        
         formatted_statements.append({
             "id": statement.id,
             "company_id": statement.company_id,
@@ -51,14 +72,17 @@ async def get_statements_for_company(
             "plan_types": statement.plan_types,
             "raw_data": statement.raw_data,
             "selected_statement_date": statement.selected_statement_date,
-            "last_updated": statement.last_updated
+            "last_updated": statement.last_updated,
+            "uploaded_by_email": user.email,
+            "uploaded_by_name": user_display_name
         })
     
     return formatted_statements
 
-# In your CRUD:
+# CRUD function kept for backward compatibility - now unused
 async def get_statements_for_company(db, company_id):
     from app.db.models import StatementUpload
+    # NOTE: This function is deprecated - user info is now included in the endpoint directly
     # NOTE: Support both old and new format
     # Old format: carrier stored in company_id, carrier_id is NULL
     # New format: carrier stored in carrier_id

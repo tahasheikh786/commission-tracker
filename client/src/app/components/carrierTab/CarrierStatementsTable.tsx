@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Eye, LayoutList, Trash2, CheckCircle, XCircle, Clock, FileText, ExternalLink, ChevronLeft, ChevronRight, Table } from "lucide-react";
+import { Eye, LayoutList, Trash2, CheckCircle, XCircle, Clock, FileText, ExternalLink, ChevronLeft, ChevronRight, Table, User } from "lucide-react";
 import { useRouter } from 'next/navigation';
 import TableViewerModal from './TableViewerModal';
 
@@ -13,6 +13,8 @@ type Statement = {
   raw_data?: any;
   edited_tables?: any;
   final_data?: any;
+  uploaded_by_email?: string;
+  uploaded_by_name?: string;
 };
 
 type Props = {
@@ -24,9 +26,10 @@ type Props = {
   deleting?: boolean;
   canSelectFiles?: boolean;
   canDeleteFiles?: boolean;
+  showUploadedByColumn?: boolean;
 };
 
-export default function CarrierStatementsTable({ statements, setStatements, onPreview, onCompare, onDelete, deleting, canSelectFiles = true, canDeleteFiles = true }: Props) {
+export default function CarrierStatementsTable({ statements, setStatements, onPreview, onCompare, onDelete, deleting, canSelectFiles = true, canDeleteFiles = true, showUploadedByColumn = false }: Props) {
   const [selectedStatements, setSelectedStatements] = useState<Set<string>>(new Set());
   const [selectAll, setSelectAll] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
@@ -343,6 +346,14 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
                 </div>
               </th>
               <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Uploaded On</th>
+              {showUploadedByColumn && (
+                <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
+                  <div className="flex items-center gap-2">
+                    <User size={16} className="text-slate-500 dark:text-slate-400" />
+                    Uploaded By
+                  </div>
+                </th>
+              )}
               <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Statement Date</th>
               <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Status</th>
               <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Rejection Reason</th>
@@ -402,6 +413,18 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
                       {new Date(statement.uploaded_at).toLocaleTimeString()}
                     </div>
                   </td>
+                  {showUploadedByColumn && (
+                    <td className="px-6 py-4">
+                      <div className="text-sm text-slate-900 dark:text-slate-100">
+                        {statement.uploaded_by_name || statement.uploaded_by_email || '—'}
+                      </div>
+                      {statement.uploaded_by_name && statement.uploaded_by_email && (
+                        <div className="text-xs text-slate-500 dark:text-slate-400">
+                          {statement.uploaded_by_email}
+                        </div>
+                      )}
+                    </td>
+                  )}
                   <td className="px-6 py-4">
                     <div className="text-sm text-slate-900 dark:text-slate-100">
                       {formatStatementDate(statement.selected_statement_date)}

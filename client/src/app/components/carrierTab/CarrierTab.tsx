@@ -26,6 +26,8 @@ type Statement = {
   raw_data?: any[];
   rejection_reason?: string;
   selected_statement_date?: any;
+  uploaded_by_email?: string;
+  uploaded_by_name?: string;
 };
 
 interface CommissionStats {
@@ -556,6 +558,7 @@ export default function CarrierTab() {
                     deleting={deletingStatements}
                     canSelectFiles={canSelectFiles}
                     canDeleteFiles={canDeleteFiles}
+                    showUploadedByColumn={viewAllData}
                   />
                 ) : (
                   <div className="flex flex-col items-center justify-center py-16 text-center">
