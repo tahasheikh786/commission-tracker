@@ -40,7 +40,7 @@ export interface ProgressState {
 }
 
 export interface ProgressMessage {
-  type: 'STEP_STARTED' | 'STEP_PROGRESS' | 'STEP_COMPLETED' | 'EXTRACTION_COMPLETE' | 'ERROR' | 'ping' | 'pong' | 'connection_established';
+  type: 'STEP_STARTED' | 'STEP_PROGRESS' | 'STEP_COMPLETED' | 'EXTRACTION_COMPLETE' | 'ERROR' | 'ping' | 'pong' | 'connection_established' | 'progress_update' | 'commission_message';
   stepIndex?: number;
   stepId?: string;
   message?: string;
@@ -52,10 +52,13 @@ export interface ProgressMessage {
   upload_id?: string;
   session_id?: string;
   connection_count?: number;
+  current_stage?: string;
+  stage_details?: any; 
 }
 
 interface UseProgressWebSocketOptions {
   uploadId?: string;
+  onSummarizeComplete?: (results: any) => void;
   onExtractionComplete?: (results: any) => void;
   onError?: (error: string) => void;
   autoConnect?: boolean;
@@ -63,6 +66,7 @@ interface UseProgressWebSocketOptions {
 
 export function useProgressWebSocket({
   uploadId,
+  onSummarizeComplete,
   onExtractionComplete,
   onError,
   autoConnect = true
@@ -89,13 +93,15 @@ export function useProgressWebSocket({
   
   // Store callbacks in refs to avoid recreating connect/disconnect on every render
   const onExtractionCompleteRef = useRef(onExtractionComplete);
+  const onSummarizeCompleteRef = useRef(onSummarizeComplete);
   const onErrorRef = useRef(onError);
   const disconnectRef = useRef<(() => void) | null>(null);
   
   useEffect(() => {
     onExtractionCompleteRef.current = onExtractionComplete;
+    onSummarizeCompleteRef.current = onSummarizeComplete;
     onErrorRef.current = onError;
-  }, [onExtractionComplete, onError]);
+  }, [onExtractionComplete, onSummarizeComplete, onError]);
 
   const disconnect = useCallback(() => {
     // Clear all timers
@@ -355,6 +361,16 @@ export function useProgressWebSocket({
           estimatedTimeRemaining: data.estimatedTime ?? prev.estimatedTimeRemaining,
           message: data.message || prev.message
         }));
+
+        // Manejar metadata si existe
+        if (data.current_stage === 'metadata_extraction' && data.stage_details) {
+          // Llamar callback si existe
+          if (onSummarizeCompleteRef.current && data.stage_details) {
+            console.log('🏷️ Extraction summary complete:', data.results);
+            onSummarizeCompleteRef.current(data.stage_details);
+          }
+        }
+
         break;
 
       case 'STEP_COMPLETED':

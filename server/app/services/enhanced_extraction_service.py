@@ -768,6 +768,16 @@ class EnhancedExtractionService:
         
         return result
 
+    async def _extract_summary_with_progress(
+        self,
+        file_path: str,
+        company_id: str,
+        progress_tracker,
+        upload_id_uuid: str = None
+    ) -> Dict[str, Any]:
+        """Extract summary with progress tracking."""
+        return await self._extract_with_gpt4o_progress(file_path, company_id, progress_tracker, upload_id_uuid)
+
     async def _extract_with_claude_progress(
         self,
         file_path: str,
@@ -780,23 +790,68 @@ class EnhancedExtractionService:
         Enhanced with Claude's superior vision capabilities for table extraction.
         """
         try:
+
             await progress_tracker.start_stage("document_processing", "Preparing for Claude AI")
             
             # Stage 1: Document processing
             await progress_tracker.update_progress("document_processing", 30, "Validating document for Claude")
             await asyncio.sleep(0.1)
-            
             await progress_tracker.complete_stage("document_processing", "Claude AI ready")
+
+            try:
+                # Stage 1.5: GPT Metadata Extraction
+                logger.info("🔍 Starting GPT metadata extraction...")
+                await progress_tracker.start_stage("gpt_metadata_extraction", "Extracting metadata with GPT")
+                await progress_tracker.update_progress("gpt_metadata_extraction", 10, "Extracting metadata with GPT")
+                 # Emit WebSocket: Step 2 - Extraction started
+                logger.info("📡 Emitting extraction step...")
+                logger.info(f"📄 Calling _extract_metadata_with_gpt for file: {file_path}")
+                await progress_tracker.connection_manager.emit_upload_step(progress_tracker.upload_id, 'extraction', 20)
+                gpt_metadata = await self._extract_metadata_with_gpt(file_path)
+                
+                if gpt_metadata.get('success'):
+                    logger.info("✅ GPT metadata marked as successful in result")
+                else:
+                    logger.error(f"❌ GPT metadata extraction failed: {gpt_metadata.get('error')}")
+                    await progress_tracker.send_error(f"GPT metadata extraction failed: {gpt_metadata.get('error')}")
+
+                logger.info("📤 Sending step progress with metadata...")
+                # En tu stage 1.5 de metadata extraction:
+                await progress_tracker.connection_manager.send_step_progress(
+                    progress_tracker.upload_id,
+                    percentage=500,
+                    estimated_time="Metadata extraction complete",
+                    current_stage="metadata_extraction",
+                    # Data adicional:
+                    stage_details={
+                        "carrier_name": gpt_metadata.get('carrier_name'),
+                        "statement_date": gpt_metadata.get('statement_date'),
+                        "broker_company": gpt_metadata.get('broker_company'),
+                        "summary": gpt_metadata.get('summary')
+                    }
+                )
+                logger.info("✅ Step progress sent successfully")
+                
+            except Exception as e:
+                logger.error(f"❌ Error in GPT metadata extraction: {str(e)}")
+                logger.error(f"❌ Error type: {type(e).__name__}")
+                import traceback
+                logger.error(f"❌ Traceback: {traceback.format_exc()}")
+                raise e
             
             # Stage 2: Claude AI Extraction
+            # Emit WebSocket: Step 3 - Table extraction started
+            logger.info("📡 Emitting table_extraction step...")
+            await progress_tracker.connection_manager.emit_upload_step(progress_tracker.upload_id, 'table_extraction', 40)
             await progress_tracker.start_stage("table_detection", "Processing with Claude AI")
             await progress_tracker.update_progress("table_detection", 20, "Analyzing document with Claude vision")
             
             # Perform actual extraction using Claude
             logger.info(f"Starting Claude extraction for {file_path}")
             result = await self.claude_service.extract_commission_data(
-                file_path,
-                progress_tracker
+                file_path=file_path,
+                progress_tracker=progress_tracker,
+                carrier_name = gpt_metadata.get('carrier_name')
             )
             
             await progress_tracker.update_progress("table_detection", 80, "Processing Claude results")
@@ -839,7 +894,8 @@ class EnhancedExtractionService:
                 'document_metadata': result.get('document_metadata', {}),
                 'extracted_carrier': result.get('extracted_carrier'),
                 'extracted_date': result.get('extracted_date'),
-                'extraction_quality': result.get('extraction_quality', {})
+                'extraction_quality': result.get('extraction_quality', {}),
+                'gpt_metadata': gpt_metadata
             })
             
             return result
@@ -986,6 +1042,7 @@ class EnhancedExtractionService:
             Dictionary with carrier_name, statement_date, and confidence scores
         """
         try:
+            logger.info(f"🔍 Starting _extract_metadata_with_gpt for file: {file_path}")
             import fitz  # PyMuPDF
             import base64
             from io import BytesIO
@@ -994,34 +1051,42 @@ class EnhancedExtractionService:
             logger.info(f"Extracting metadata with GPT from first page of {file_path}")
             
             # Open PDF and get first page
+            logger.info(f"📄 Opening PDF file: {file_path}")
             doc = fitz.open(file_path)
             if len(doc) == 0:
-                logger.error("PDF has no pages")
+                logger.error("❌ PDF has no pages")
                 return {'success': False, 'error': 'PDF has no pages'}
             
+            logger.info(f"📄 PDF has {len(doc)} pages, loading first page")
             first_page = doc.load_page(0)
             
             # Convert first page to high-quality image
+            logger.info("🖼️ Converting first page to image...")
             matrix = fitz.Matrix(300/72, 300/72)  # 300 DPI for good quality
             pix = first_page.get_pixmap(matrix=matrix, alpha=False)
             
             # Convert to PIL Image
+            logger.info("🖼️ Converting to PIL Image...")
             img_data = pix.tobytes("png")
             img = Image.open(BytesIO(img_data))
             
             # Convert to base64
+            logger.info("🖼️ Converting to base64...")
             buffer = BytesIO()
             img.save(buffer, format='PNG', optimize=True)
             img_base64 = base64.b64encode(buffer.getvalue()).decode()
             
             doc.close()
             
-            logger.info(f"Converted first page to image ({len(img_base64)} chars)")
+            logger.info(f"✅ Converted first page to image ({len(img_base64)} chars)")
             
             # Check if GPT service is available
+            logger.info("🔍 Checking GPT service availability...")
             if not self.gpt4o_service.is_available():
-                logger.warning("GPT-4 service not available")
+                logger.warning("❌ GPT-4 service not available")
                 return {'success': False, 'error': 'GPT-4 service not available'}
+            
+            logger.info("✅ GPT-4 service is available")
             
             # Create specialized prompt for metadata extraction
             system_prompt = """You are an expert at extracting metadata from commission statement documents.
@@ -1042,6 +1107,20 @@ Your task is to analyze the first page of a commission statement and extract:
    - Usually appears near the top of the document
    - This is different from the carrier - it's the entity receiving the statement
 
+4. SUMMARY - A summary of the document, extract structured invoice data as Markdown. 
+    Format your response as structured markdown without code blocks. Dont return tables. 
+    You must not wrap inside a code block. (```markdown...```)
+    Extract the following information from the document:
+    - Document name/number
+    - Document date
+    - Total amount
+    - Currency
+    - Vendor name
+    - Customer name
+    - Additional metadata
+    - Complete summary about the document (dont return tables)
+
+
 Return your response in the following JSON format ONLY:
 {
   "carrier_name": "Exact carrier name as it appears",
@@ -1050,12 +1129,13 @@ Return your response in the following JSON format ONLY:
   "date_confidence": 0.90,
   "broker_company": "Broker/Agent company name as it appears",
   "broker_confidence": 0.85,
-  "evidence": "Brief explanation of where you found this information"
+  "evidence": "Brief explanation of where you found this information",
+  "summary": "Summary of the document"
 }
 
 If you cannot find the information with high confidence, use null for the value and a lower confidence score."""
 
-            user_prompt = "Extract the carrier name, statement date, and broker/agent company from this commission statement first page."
+            user_prompt = "Extract the carrier name, statement date, broker/agent and summary company from this commission statement first page."
             
             # Call GPT-4 Vision API
             messages = [
@@ -1110,12 +1190,13 @@ If you cannot find the information with high confidence, use null for the value 
                 # Try to extract using regex as fallback
                 carrier_match = re.search(r'"carrier_name":\s*"([^"]+)"', cleaned_content)
                 date_match = re.search(r'"statement_date":\s*"([^"]+)"', cleaned_content)
-                
+                summary_match = re.search(r'"summary":\s*"([^"]+)"', cleaned_content)
                 metadata = {
                     'carrier_name': carrier_match.group(1) if carrier_match else None,
                     'statement_date': date_match.group(1) if date_match else None,
                     'carrier_confidence': 0.7,
                     'date_confidence': 0.7,
+                    'summary': summary_match.group(1) if summary_match else None,
                     'evidence': 'Extracted with regex fallback'
                 }
             
@@ -1132,15 +1213,18 @@ If you cannot find the information with high confidence, use null for the value 
                 'date_confidence': metadata.get('date_confidence', 0.8),
                 'broker_company': metadata.get('broker_company'),
                 'broker_confidence': metadata.get('broker_confidence', 0.8),
+                'summary': metadata.get('summary', ''),
                 'evidence': metadata.get('evidence', ''),
                 'extraction_method': 'gpt4o_vision_first_page'
             }
             
-            logger.info(f"GPT metadata extraction successful: {result}")
+            logger.info(f"✅ GPT metadata extraction successful: {result}")
             return result
             
         except Exception as e:
-            logger.error(f"Error extracting metadata with GPT: {e}", exc_info=True)
+            logger.error(f"❌ Error extracting metadata with GPT: {e}", exc_info=True)
+            import traceback
+            logger.error(f"❌ Traceback: {traceback.format_exc()}")
             return {
                 'success': False,
                 'error': f'Metadata extraction failed: {str(e)}'

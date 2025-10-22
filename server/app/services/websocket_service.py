@@ -309,15 +309,21 @@ class ConnectionManager:
         await self.broadcast_to_upload(message, upload_id)
         logger.info(f"Step started: {step_title} (Step {step_index + 1}) for upload_id {upload_id}")
     
-    async def send_step_progress(self, upload_id: str, percentage: int, estimated_time: str = None):
+    async def send_step_progress(self, upload_id: str, percentage: int, estimated_time: str = None, current_stage: str = None, **kwargs):
         """Send STEP_PROGRESS event for real-time progress updates."""
         message = {
             'type': 'STEP_PROGRESS',
             'upload_id': upload_id,
             'percentage': percentage,
             'estimatedTime': estimated_time,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.utcnow().isoformat(),
+            'current_stage': current_stage,
         }
+
+        # Update message with additional keyword arguments
+        if kwargs:
+            message.update(kwargs)
+
         await self.broadcast_to_upload(message, upload_id)
         logger.debug(f"Step progress: {percentage}% for upload_id {upload_id}")
     

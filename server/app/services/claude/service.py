@@ -233,6 +233,7 @@ class ClaudeDocumentAIService:
     
     async def extract_commission_data(
         self,
+        carrier_name,
         file_path: str,
         progress_tracker = None
     ) -> Dict[str, Any]:
@@ -271,10 +272,10 @@ class ClaudeDocumentAIService:
             # Determine processing strategy based on file size
             if pdf_info['is_large_file']:
                 logger.info(f"Large file detected ({pdf_info['page_count']} pages, {pdf_info['file_size_mb']:.2f}MB)")
-                result = await self._extract_large_file(file_path, pdf_info, progress_tracker)
+                result = await self._extract_large_file(carrier_name, file_path, pdf_info, progress_tracker)
             else:
                 logger.info(f"Standard file ({pdf_info['page_count']} pages, {pdf_info['file_size_mb']:.2f}MB)")
-                result = await self._extract_standard_file(file_path, pdf_info, progress_tracker)
+                result = await self._extract_standard_file(carrier_name, file_path, pdf_info, progress_tracker)
             
             # Update statistics
             processing_time = time.time() - start_time
@@ -336,6 +337,7 @@ class ClaudeDocumentAIService:
     
     async def _extract_standard_file(
         self,
+        carrier_name,
         file_path: str,
         pdf_info: Dict[str, Any],
         progress_tracker = None
@@ -373,7 +375,7 @@ class ClaudeDocumentAIService:
             # Single API call for both metadata and tables (more efficient)
             extraction_result = await self._call_claude_api(
                 pdf_base64,
-                self.prompts.get_table_extraction_prompt() + self.dynamic_prompts.get_prompt_by_name("United Health Care"),
+                self.prompts.get_table_extraction_prompt() + self.dynamic_prompts.get_prompt_by_name(carrier_name),
                 model=self.primary_model
             )
             
@@ -457,6 +459,7 @@ class ClaudeDocumentAIService:
     
     async def _extract_large_file(
         self,
+        carrier_name,
         file_path: str,
         pdf_info: Dict[str, Any],
         progress_tracker = None
@@ -490,6 +493,7 @@ class ClaudeDocumentAIService:
                 
                 # Extract this chunk
                 chunk_result = await self._extract_chunk(
+                    carrier_name,
                     file_path,
                     chunk_info,
                     progress_tracker
@@ -529,6 +533,7 @@ class ClaudeDocumentAIService:
     
     async def _extract_chunk(
         self,
+        carrier_name,
         file_path: str,
         chunk_info: Dict[str, Any],
         progress_tracker = None
@@ -547,7 +552,7 @@ class ClaudeDocumentAIService:
             # Call Claude API
             extraction_result = await self._call_claude_api(
                 pdf_base64,
-                chunk_prompt,
+                chunk_prompt + self.dynamic_prompts.get_prompt_by_name(carrier_name),
                 model=self.primary_model
             )
             

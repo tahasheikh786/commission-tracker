@@ -235,9 +235,16 @@ async def extract_tables_smart(
         )
     
     try:
+        logger.info(f"🚀 Starting extract-tables-smart for file: {file.filename}")
+        logger.info(f"📁 File path: {file_path}")
+        logger.info(f"📊 File size: {file_size} bytes")
+        logger.info(f"🆔 Upload ID: {upload_id_str}")
+        
         # Save uploaded file
+        logger.info("💾 Saving uploaded file...")
         with open(file_path, "wb") as buffer:
             buffer.write(file_content)
+        logger.info("✅ File saved successfully")
 
         # Handle company_id - if not provided, we'll extract it from the document
         if not company_id:
@@ -328,27 +335,31 @@ async def extract_tables_smart(
             upload_id=upload_id_uuid
         )
         
-        # Emit WebSocket: Step 2 - Extraction started
-        if upload_id:
-            await connection_manager.emit_upload_step(upload_id, 'extraction', 20)
-        
         # Get enhanced extraction service with websocket progress tracking
+        logger.info("🔧 Getting enhanced extraction service...")
         enhanced_service = await get_enhanced_extraction_service_instance()
-        
-        # Emit WebSocket: Step 3 - Table extraction started
-        if upload_id:
-            await connection_manager.emit_upload_step(upload_id, 'table_extraction', 40)
+        logger.info("✅ Enhanced extraction service obtained")
         
         # Create extraction task for cancellation support
+        logger.info("🚀 Starting extraction task...")
         async def extraction_task():
-            return await enhanced_service.extract_tables_with_progress(
-                file_path=file_path,
-                company_id=company_id,
-                upload_id=upload_id_str,
-                file_type=file_ext,
-                extraction_method=extraction_method,
-                upload_id_uuid=str(upload_id_uuid)  # Pass UUID for WebSocket completion message
-            )
+            try:
+                logger.info("📊 Calling extract_tables_with_progress...")
+                result = await enhanced_service.extract_tables_with_progress(
+                    file_path=file_path,
+                    company_id=company_id,
+                    upload_id=upload_id_str,
+                    file_type=file_ext,
+                    extraction_method=extraction_method,
+                    upload_id_uuid=str(upload_id_uuid)  # Pass UUID for WebSocket completion message
+                )
+                logger.info(f"✅ Extraction completed successfully: {result}")
+                return result
+            except Exception as e:
+                logger.error(f"❌ Error in extraction task: {str(e)}")
+                import traceback
+                logger.error(f"❌ Traceback: {traceback.format_exc()}")
+                raise e
         
         # Store the task for potential cancellation
         task = asyncio.create_task(extraction_task())
@@ -371,6 +382,7 @@ async def extract_tables_smart(
             running_extractions.pop(upload_id_str, None)
         
         # Update upload record with results - set to 'pending' for review
+        logger.info("💾 Updating upload record with results...")
         update_data = schemas.StatementUploadUpdate(
             status="pending",  # Changed from "extracted" to "pending" for review workflow
             current_step="extracted",
@@ -385,6 +397,7 @@ async def extract_tables_smart(
         )
         
         await with_db_retry(db, crud.update_statement_upload, upload_id=upload_id_uuid, update_data=update_data)
+        logger.info("✅ Upload record updated successfully")
         
         # Log successful extraction
         processing_time = (datetime.now() - start_time).total_seconds()
@@ -1229,14 +1242,17 @@ async def extract_tables_gpt(
             "format_learning": format_learning_data
         }
         
-        logger.info(f"GPT extraction completed successfully in {processing_time:.2f} seconds")
+        logger.info(f"✅ GPT extraction completed successfully in {processing_time:.2f} seconds")
+        logger.info(f"📊 Response data: {response_data}")
         
         return JSONResponse(response_data)
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error in GPT extraction: {str(e)}")
+        logger.error(f"❌ Error in GPT extraction: {str(e)}")
+        import traceback
+        logger.error(f"❌ Traceback: {traceback.format_exc()}")
         raise HTTPException(
             status_code=500,
             detail=f"GPT extraction failed: {str(e)}"

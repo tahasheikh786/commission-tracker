@@ -108,155 +108,6 @@ export default function CarrierUploadZone({
     setIsUploading(false);
   }, []);
 
-  // Extract first 3 pages from PDF and send to Claude API
-  const extractAndSendPages = useCallback(async (file: File): Promise<void> => {
-    console.log('🚀 Starting extractAndSendPages with file:', file.name);
-    setIsN8nLoading(true);
-    try {
-      // Create a new PDF with only first 3 pages using PDF-lib
-      console.log('📚 Importing pdf-lib...');
-      const pdfLib = await import('pdf-lib');
-      const { PDFDocument } = pdfLib;
-      
-      console.log('📄 Loading PDF...');
-      const existingPdfBytes = await file.arrayBuffer();
-      const pdfDoc = await PDFDocument.load(existingPdfBytes);
-      const pageCount = pdfDoc.getPageCount();
-      console.log('📊 PDF page count:', pageCount);
-      setTotalPages(pageCount);
-      
-      // Only extract if PDF has more than 3 pages
-      if (pageCount > 3) {
-        console.log('✂️ Extracting first 3 pages...');
-        const newPdf = await PDFDocument.create();
-        const pages = await newPdf.copyPages(pdfDoc, [0, 1, 2]); // First 3 pages (0-indexed)
-        pages.forEach((page) => newPdf.addPage(page));
-        
-        const pdfBytes = await newPdf.save();
-        const extractedFile = new File([new Uint8Array(pdfBytes)], `extracted_${file.name}`, { type: 'application/pdf' });
-        setExtractedPages(extractedFile);
-        
-        // Send to Claude API
-        console.log('📤 Sending extracted pages to Claude API...');
-        const formData = new FormData();
-        formData.append('file', extractedFile);
-        
-        const response = await axios.post('/api/extract-summarize-data-via-claude/', formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-          withCredentials: true,
-        });
-        
-        console.log('📡 Claude response status:', response.status);
-        if (response.status === 200) {
-          const responseData = response.data;
-          console.log('✅ Claude response data:', responseData);
-          setN8nResponse(responseData);
-          setCompletionDate(new Date().toLocaleString('en-US', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            timeZoneName: 'short'
-          }));
-          console.log('✅ First 3 pages sent to Claude API successfully', responseData);
-        } else {
-          console.error('❌ Failed to send pages to Claude API:', response.statusText);
-        }
-        setIsN8nLoading(false);
-      } else {
-        console.log('📄 PDF has 3 or fewer pages, no extraction needed');
-        // Send original file if 3 pages or less
-        console.log('📤 Sending original PDF to Claude API...');
-        const formData = new FormData();
-        formData.append('file', file);
-        
-        const response = await axios.post('/api/extract-summarize-data-via-claude/', formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-          withCredentials: true,
-        });
-        
-        console.log('📡 Claude response status:', response.status);
-        if (response.status === 200) {
-          const responseData = response.data;
-          console.log('✅ Claude response data:', responseData);
-          setN8nResponse(responseData);
-          setCompletionDate(new Date().toLocaleString('en-US', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            timeZoneName: 'short'
-          }));
-          console.log('✅ Original PDF sent to Claude API successfully', responseData);
-        } else {
-          console.error('❌ Failed to send original PDF to Claude API:', response.statusText);
-        }
-        setIsN8nLoading(false);
-      }
-    } catch (error) {
-      console.error('❌ Error extracting PDF pages:', error);
-      setIsN8nLoading(false);
-    }
-  }, []);
-
-  // Resend file to Claude API
-  const resendToClaude = useCallback(async () => {
-    if (!uploadedFile) return;
-
-    setIsResending(true);
-    setIsN8nLoading(true);
-    try {
-      let fileToSend = uploadedFile;
-      
-      // If we have extracted pages, use those; otherwise use original
-      if (extractedPages) {
-        fileToSend = extractedPages;
-      }
-      
-      const formData = new FormData();
-      formData.append('file', fileToSend);
-      
-      const response = await axios.post('/api/extract-summarize-data-via-claude/', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-        withCredentials: true,
-      });
-      
-      if (response.status === 200) {
-        const responseData = response.data;
-        setN8nResponse(responseData);
-        setCompletionDate(new Date().toLocaleString('en-US', {
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-          timeZoneName: 'short'
-        }));
-        toast.success('File resent to Claude API successfully!');
-        console.log('✅ File resent to Claude API successfully', responseData);
-      } else {
-        toast.error('Failed to resend file to Claude API');
-        console.error('❌ Failed to resend file to Claude API:', response.statusText);
-      }
-    } catch (error) {
-      toast.error('Error resending file to Claude API');
-      console.error('❌ Error resending file to Claude API:', error);
-    } finally {
-      setIsResending(false);
-      setIsN8nLoading(false);
-    }
-  }, [uploadedFile, extractedPages]);
 
   // Handle Continue button click
   const handleContinue = useCallback(() => {
@@ -289,6 +140,27 @@ export default function CarrierUploadZone({
     uploadId: uploadId || undefined,
     autoConnect: true,  // ✅ Auto-connect when uploadId changes
     onExtractionComplete: handleExtractionComplete,
+    onSummarizeComplete: (metadata) => {
+      console.log('📊 Metadata received:', metadata);
+      console.log('📅 Carrier:', metadata.carrier_name);
+      console.log('📅 Statement Date:', metadata.statement_date);
+      console.log('🏢 Broker:', metadata.broker_company);
+      console.log('📝 Summary:', metadata.summary);
+      // Store the complete metadata object, not just the summary
+      setIsN8nLoading(false);
+      setN8nResponse(metadata); // Store the complete metadata object
+      setCompletionDate(new Date().toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        timeZoneName: 'short'
+      }));
+      toast.success('File successfully summarized!');
+      console.log('✅ File successfully summarized', metadata);
+    },
     onError: handleWebSocketError
   });
 
@@ -417,12 +289,6 @@ export default function CarrierUploadZone({
       console.log('⏱️ Waiting 500ms for WebSocket to connect...');
       await new Promise(resolve => setTimeout(resolve, 500));
       console.log('✅ Proceeding with file upload');
-
-      // Start summarization in parallel (if it's a PDF) - will extract first 3 pages
-      if (file.type === 'application/pdf') {
-        console.log('📝 Starting summarization in parallel (first 3 pages)...');
-        extractAndSendPages(file); // Don't await - run in parallel, extracts first 3 pages
-      }
 
       // Start table extraction in parallel (full file)
       const formData = new FormData();
@@ -573,11 +439,35 @@ export default function CarrierUploadZone({
               return null;
             }
             
-            // Extract summary content from Claude response
-            if (n8nResponse.summary) {
-              return n8nResponse.summary;
+            // Create structured content with metadata information
+            if (n8nResponse && typeof n8nResponse === 'object') {
+              let content = ``;
+              
+              // Add carrier information
+              if (n8nResponse.carrier_name) {
+                content += `**🏢 Carrier:** ${n8nResponse.carrier_name}\n\n`;
+              }
+              
+              // Add statement date
+              if (n8nResponse.statement_date) {
+                content += `**📅 Statement Date:** ${n8nResponse.statement_date}\n\n`;
+              }
+              
+              // Add broker information
+              if (n8nResponse.broker_company) {
+                content += `**🏪 Broker:** ${n8nResponse.broker_company}\n\n`;
+              }
+              
+              // Add summary if available
+              if (n8nResponse.summary) {
+                content += `\n${n8nResponse.summary}\n`;
+              }
+            
+              
+              return content;
             }
             
+            // Fallback to original logic for other response types
             if (n8nResponse.content) {
               // Look for markdown code blocks anywhere in the content
               const markdownMatch = n8nResponse.content.match(/```markdown\n([\s\S]*?)\n```/);
@@ -597,31 +487,29 @@ export default function CarrierUploadZone({
           })()}
           metadataContent={(() => {
             return `
-## Document Metadata
-
 ### File Information
-- **Original File**: ${uploadedFile?.name || 'Unknown'}
-- **File Size**: ${uploadedFile ? (uploadedFile.size / 1024 / 1024).toFixed(2) + ' MB' : 'Unknown'}
-- **File Type**: ${uploadedFile?.type || 'Unknown'}
-- **Upload Date**: ${uploadDate || 'Unknown'}
-- **Processing Status**: ${isN8nLoading ? '🔄 In Progress' : '✅ Completed'}
+**Original File**: ${uploadedFile?.name || 'Unknown'}
+**File Size**: ${uploadedFile ? (uploadedFile.size / 1024 / 1024).toFixed(2) + ' MB' : 'Unknown'}
+**File Type**: ${uploadedFile?.type || 'Unknown'}
+**Upload Date**: ${uploadDate || 'Unknown'}
+**Processing Status**: ${isN8nLoading ? '🔄 In Progress' : '✅ Completed'}
 
 ### PDF Processing Details
 ${extractedPages ? `
-- **Pages Extracted**: First 3 pages (${uploadedFile?.name} had more than 3 pages)
-- **Extracted File**: ${extractedPages.name}
-- **Extraction Method**: PDF-lib automatic extraction
-- **Processing Type**: Partial document analysis
+**Pages Extracted**: First 3 pages (${uploadedFile?.name} had more than 3 pages)
+**Extracted File**: ${extractedPages.name}
+**Extraction Method**: PDF-lib automatic extraction
+**Processing Type**: Partial document analysis
 ` : `
-- **Pages**: Using original file (${uploadedFile?.name} - ${totalPages || 'Unknown'} pages)
-- **Processing**: Full document analysis
-- **Processing Type**: Complete document analysis
+**Pages**: Using original file (${uploadedFile?.name} - ${totalPages || 'Unknown'} pages)
+**Processing**: Full document analysis
+**Processing Type**: Complete document analysis
 `}
 
 ### AI Analysis Details
-- **Analysis Date**: ${completionDate || uploadDate || 'Unknown'}
-- **Processing Time**: Real-time analysis
-- **Data Quality**: High confidence extraction
+**Analysis Date**: ${completionDate || uploadDate || 'Unknown'}
+**Processing Time**: Real-time analysis
+**Data Quality**: High confidence extraction
 
 ---
 *Analysis ${isN8nLoading ? 'started' : 'completed'} at ${isN8nLoading ? uploadDate : completionDate || 'Unknown'}*`;
@@ -744,35 +632,6 @@ ${extractedPages ? `
               </button>
             </div>
           </div>
-        </motion.div>
-      )}
-
-      {/* Resend to n8n Button */}
-      {uploadedFile && (
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mt-6 flex justify-center"
-        >
-          <button
-            onClick={resendToClaude}
-            disabled={isResending}
-            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg font-semibold transition-colors duration-200 flex items-center gap-2"
-          >
-            {isResending ? (
-              <>
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                Resending...
-              </>
-            ) : (
-              <>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                Resend to Claude
-              </>
-            )}
-          </button>
         </motion.div>
       )}
     </div>
