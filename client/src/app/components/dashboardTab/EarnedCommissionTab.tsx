@@ -2,33 +2,18 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  DollarSign,
-  Building2,
-  TrendingUp,
-  Users,
   Search,
-  Download,
-  Edit,
   ChevronLeft,
   ChevronRight,
   BarChart3,
-  RefreshCw,
-  Eye,
-  EyeOff,
   ChevronDown,
-  Filter,
-  Calendar,
-  ArrowUpRight,
-  ArrowDownRight,
-  Minus,
+ 
   ArrowLeft,
   ArrowRight
 } from 'lucide-react';
 import EditCommissionModal from './EditCommissionModal';
 import MergeConfirmationModal from './MergeConfirmationModal';
-import { CompanyNameNormalizer } from '../../utils/CompanyNameNormalizer';
 import { formatCurrency, formatCurrencyCompact } from '../../utils/formatters';
-import { cardVariants, staggerContainer, springConfig, premiumSpring, quickSpring } from './animations';
 import { 
   useCarriersWithCommission, 
   useAvailableYears
@@ -1634,10 +1619,9 @@ export default function EarnedCommissionTab() {
     const result = Object.entries(groups).map(([carrierName, companies]) => {
       const typedCompanies = companies as CommissionData[];
       const uniqueCompanies = new Set(typedCompanies.map(c => c.client_name.toLowerCase().trim()));
-      // Sum up all statement counts from all companies
-      const totalStatementCount = typedCompanies.reduce((sum: number, company: CommissionData) => 
-        sum + (company.statement_count || 0), 0
-      );
+      // Use approved_statement_count from the first company (it's the same for all companies in the carrier)
+      // This represents the actual number of statement files uploaded for the carrier
+      const totalStatementCount = typedCompanies[0]?.approved_statement_count || 0;
       
       return {
         carrierName,
