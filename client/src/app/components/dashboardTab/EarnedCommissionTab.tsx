@@ -30,11 +30,7 @@ import { CompanyNameNormalizer } from '../../utils/CompanyNameNormalizer';
 import { formatCurrency, formatCurrencyCompact } from '../../utils/formatters';
 import { cardVariants, staggerContainer, springConfig, premiumSpring, quickSpring } from './animations';
 import { 
-  useEarnedCommissionStats, 
-  useGlobalEarnedCommissionStats,
-  useGlobalCommissionData,
   useCarriersWithCommission, 
-  useAllCommissionData,
   useAvailableYears
 } from '../../hooks/useDashboard';
 import { useSubmission } from '@/context/SubmissionContext';
@@ -1034,9 +1030,22 @@ TimelineInsightPanel.displayName = 'TimelineInsightPanel';
 interface OverviewModeProps {
   carriers: CarrierGroup[];
   onSelectCarrier: (carrier: CarrierGroup) => void;
+  viewAllData: boolean;
+  onSetViewAllData: (value: boolean) => void;
+  selectedYear: number | null;
+  onYearChange: (year: number | null) => void;
+  availableYears: number[];
 }
 
-const OverviewMode: React.FC<OverviewModeProps> = ({ carriers, onSelectCarrier }) => {
+const OverviewMode: React.FC<OverviewModeProps> = ({ 
+  carriers, 
+  onSelectCarrier,
+  viewAllData,
+  onSetViewAllData,
+  selectedYear,
+  onYearChange,
+  availableYears
+}) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortMode, setSortMode] = useState<'commission' | 'companies' | 'alpha'>('commission');
@@ -1143,6 +1152,59 @@ const OverviewMode: React.FC<OverviewModeProps> = ({ carriers, onSelectCarrier }
             🔤 A-Z
           </button>
         </div>
+
+        {/* Year Selector */}
+        {availableYears && availableYears.length > 0 && (
+          <select
+            value={selectedYear || ''}
+            onChange={(e) => {
+              const year = e.target.value ? parseInt(e.target.value) : null;
+              onYearChange(year);
+            }}
+            className="px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+          >
+            <option value="">All Years</option>
+            {availableYears.map((year) => (
+              <option key={year} value={year}>
+                {year}
+              </option>
+            ))}
+          </select>
+        )}
+
+        {/* My Data / All Data Toggle */}
+        <div className="flex gap-0 p-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              console.log('🖱️ My Data button clicked');
+              onSetViewAllData(false);
+            }}
+            className={`px-4 py-2 text-sm font-medium rounded transition-all ${
+              !viewAllData
+                ? 'bg-blue-500 text-white shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            My Data
+          </button>
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              console.log('🖱️ All Data button clicked');
+              onSetViewAllData(true);
+            }}
+            className={`px-4 py-2 text-sm font-medium rounded transition-all ${
+              viewAllData
+                ? 'bg-blue-500 text-white shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            All Data
+          </button>
+        </div>
       </div>
 
       <div className="carrier-cards-grid">
@@ -1235,7 +1297,7 @@ const CarrierDetailMode: React.FC<CarrierDetailModeProps> = ({
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
       transition={{ duration: 0.4 }}
-      className="p-6 pt-20 space-y-6"
+      className="p-6 space-y-6"
     >
       {/* Back Button and Breadcrumb */}
       <div className="flex items-center gap-3">
@@ -1382,7 +1444,7 @@ const CompanyDetailMode: React.FC<CompanyDetailModeProps> = ({ company, carrier,
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
       transition={{ duration: 0.4 }}
-      className="p-6 pt-20 space-y-6"
+      className="p-6 space-y-6"
     >
       {/* Breadcrumb */}
       <div className="breadcrumb-premium">
@@ -1489,43 +1551,77 @@ export default function EarnedCommissionTab() {
   const startXRef = useRef(0);
   const startWidthRef = useRef(0);
 
-  // Fetch data
-  const { stats: userStats, loading: userStatsLoading, refetch: refetchUserStats } = useEarnedCommissionStats(selectedYear || undefined);
-  const { stats: globalStats, loading: globalStatsLoading, refetch: refetchGlobalStats } = useGlobalEarnedCommissionStats(selectedYear || undefined);
-  const { data: userData, loading: userDataLoading, refetch: refetchUserData } = useAllCommissionData(selectedYear || undefined);
-  const { data: globalData, loading: globalDataLoading, refetch: refetchGlobalData } = useGlobalCommissionData(selectedYear || undefined);
+  // Fetch data based on viewAllData state
+  const [commissionData, setCommissionData] = useState<any[]>([]);
+  const [commissionStats, setCommissionStats] = useState<any>(null);
+  const [dataLoading, setDataLoading] = useState(true);
+  
   const { carriers, loading: carriersLoading, refetch: refetchCarriers } = useCarriersWithCommission();
   const { years: availableYears, loading: yearsLoading, refetch: refetchYears } = useAvailableYears();
 
-  const overallStats = viewAllData ? globalStats : userStats;
-  const statsLoading = viewAllData ? globalStatsLoading : userStatsLoading;
-  const allData = viewAllData ? globalData : userData;
-  const allDataLoading = viewAllData ? globalDataLoading : userDataLoading;
-
-  // Refresh all data
-  const refreshAllData = useCallback(() => {
-    if (viewAllData) {
-      refetchGlobalStats();
-      refetchGlobalData();
-    } else {
-      refetchUserStats();
-      refetchUserData();
+  // Fetch data based on viewAllData and selectedYear
+  const fetchCommissionData = useCallback(async () => {
+    setDataLoading(true);
+    try {
+      console.log('🔄 Fetching commission data:', { viewAllData, selectedYear });
+      
+      // Fetch stats
+      const statsEndpoint = viewAllData
+        ? `${process.env.NEXT_PUBLIC_API_URL}/api/earned-commission/global/stats${selectedYear ? `?year=${selectedYear}` : ''}`
+        : `${process.env.NEXT_PUBLIC_API_URL}/api/earned-commission/stats${selectedYear ? `?year=${selectedYear}` : ''}`;
+      
+      const statsResponse = await fetch(statsEndpoint, { credentials: 'include' });
+      const stats = await statsResponse.json();
+      setCommissionStats(stats);
+      
+      // Fetch data
+      const dataEndpoint = viewAllData
+        ? `${process.env.NEXT_PUBLIC_API_URL}/api/earned-commission/global/data${selectedYear ? `?year=${selectedYear}` : ''}`
+        : `${process.env.NEXT_PUBLIC_API_URL}/api/dashboard/earned-commissions${selectedYear ? `?year=${selectedYear}` : ''}`;
+      
+      const dataResponse = await fetch(dataEndpoint, { credentials: 'include' });
+      const data = await dataResponse.json();
+      setCommissionData(data);
+      
+      console.log('✅ Data fetched successfully:', { 
+        viewAllData, 
+        dataCount: data?.length || 0,
+        statsCount: stats?.total_carriers || 0
+      });
+    } catch (error) {
+      console.error('❌ Error fetching commission data:', error);
+      setCommissionData([]);
+      setCommissionStats(null);
+    } finally {
+      setDataLoading(false);
     }
-    refetchCarriers();
-    refetchYears();
-  }, [viewAllData, refetchGlobalStats, refetchGlobalData, refetchUserStats, refetchUserData, refetchCarriers, refetchYears]);
+  }, [viewAllData, selectedYear]);
 
+  // Fetch data when viewAllData or selectedYear changes
+  useEffect(() => {
+    fetchCommissionData();
+  }, [fetchCommissionData]);
+
+  // Refresh when refreshTrigger changes
   useEffect(() => {
     if (refreshTrigger) {
-      refreshAllData();
+      fetchCommissionData();
+      refetchCarriers();
+      refetchYears();
     }
-  }, [refreshTrigger, refreshAllData]);
+  }, [refreshTrigger, fetchCommissionData, refetchCarriers, refetchYears]);
 
-  // Use allData directly (filtering is now done in OverviewMode component)
-  const filteredData = allData || [];
+  const allData = commissionData;
+  const allDataLoading = dataLoading;
+  const overallStats = commissionStats;
+  const statsLoading = dataLoading;
 
   // Transform data into carrier groups
   const carrierGroups = useMemo(() => {
+    const filteredData = allData || [];
+    console.log('🔄 Recalculating carrier groups with data count:', filteredData.length);
+    console.log('🔍 Using data source:', viewAllData ? 'GLOBAL DATA' : 'USER DATA');
+    
     const groups = filteredData.reduce((groups, item: CommissionData) => {
       const carrierName = item.carrier_name || 'Unknown Carrier';
       if (!groups[carrierName]) {
@@ -1535,7 +1631,7 @@ export default function EarnedCommissionTab() {
       return groups;
     }, {} as Record<string, CommissionData[]>);
 
-    return Object.entries(groups).map(([carrierName, companies]) => {
+    const result = Object.entries(groups).map(([carrierName, companies]) => {
       const typedCompanies = companies as CommissionData[];
       const uniqueCompanies = new Set(typedCompanies.map(c => c.client_name.toLowerCase().trim()));
       // Sum up all statement counts from all companies
@@ -1552,7 +1648,10 @@ export default function EarnedCommissionTab() {
         statementCount: totalStatementCount,
       };
     }).sort((a, b) => b.totalCommission - a.totalCommission);
-  }, [filteredData]);
+    
+    console.log('✅ Carrier groups calculated:', result.length, 'carriers');
+    return result;
+  }, [allData, viewAllData]);
 
   // Get all companies flattened
   const getAllCompanies = useCallback(() => {
@@ -1729,6 +1828,23 @@ export default function EarnedCommissionTab() {
               <OverviewMode
                 carriers={carrierGroups}
                 onSelectCarrier={handleCarrierSelect}
+                viewAllData={viewAllData}
+                onSetViewAllData={(value) => {
+                  console.log('⚙️ onSetViewAllData called with value:', value);
+                  console.log('⚙️ Current viewAllData state before:', viewAllData);
+                  setViewAllData(value);
+                  console.log('⚙️ State set to:', value);
+                  // Data will be automatically refetched by the useEffect watching viewAllData
+                }}
+                selectedYear={selectedYear}
+                onYearChange={(year) => {
+                  console.log('⚙️ Year changed to:', year);
+                  setSelectedYear(year);
+                  setSelectedCarrier(null);
+                  setSelectedCompany(null);
+                  // Data will be automatically refetched by the useEffect watching selectedYear
+                }}
+                availableYears={availableYears || []}
               />
             )}
 
