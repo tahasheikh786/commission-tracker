@@ -1,56 +1,106 @@
 'use client'
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   DollarSign,
   Building2,
   TrendingUp,
   Users,
   Search,
-  ChevronRight,
-  FileText,
-  Calendar,
-  ArrowUpRight,
-  ArrowDownRight,
-  Filter,
   Download,
   Edit,
   ChevronLeft,
-  Menu,
-  Sparkles,
+  ChevronRight,
   BarChart3,
   RefreshCw,
-  X,
-  SlidersHorizontal,
   Eye,
   EyeOff,
   ChevronDown,
-  ChevronUp,
+  Filter,
+  Calendar,
+  ArrowUpRight,
+  ArrowDownRight,
+  Minus,
   ArrowLeft,
   ArrowRight
 } from 'lucide-react';
 import EditCommissionModal from './EditCommissionModal';
 import MergeConfirmationModal from './MergeConfirmationModal';
-import CompanyCarrierModal from './CompanyCarrierModal';
 import { CompanyNameNormalizer } from '../../utils/CompanyNameNormalizer';
+import { formatCurrency, formatCurrencyCompact } from '../../utils/formatters';
+import { cardVariants, staggerContainer, springConfig, premiumSpring, quickSpring } from './animations';
 import { 
   useEarnedCommissionStats, 
   useGlobalEarnedCommissionStats,
   useGlobalCommissionData,
   useCarriersWithCommission, 
-  useCarrierCommissionStats, 
-  useCarrierCommissionData,
   useAllCommissionData,
   useAvailableYears
 } from '../../hooks/useDashboard';
 import { useSubmission } from '@/context/SubmissionContext';
 
-interface CarrierDetail {
-  carrier_name: string;
-  commission_earned: number;
-  invoice_total: number;
-  statement_count: number;
-  statement_year?: number;
-}
+// ============================================
+// TYPE DEFINITIONS
+// ============================================
+
+// Loading Skeleton Components
+const CarrierCardSkeleton: React.FC = () => (
+  <div className="glass-card-premium rounded-xl p-6 border border-slate-200/50 dark:border-slate-700/50 animate-pulse">
+    <div className="flex items-center gap-3 mb-4">
+      <div className="w-12 h-12 bg-slate-200 dark:bg-slate-700 rounded-full" />
+      <div className="flex-1">
+        <div className="h-5 bg-slate-200 dark:bg-slate-700 rounded w-3/4 mb-2" />
+        <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-1/2" />
+      </div>
+    </div>
+    <div className="mb-3">
+      <div className="h-8 bg-slate-200 dark:bg-slate-700 rounded w-32 mb-2" />
+      <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-24" />
+    </div>
+    <div className="flex items-center justify-between text-xs">
+      <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-20" />
+      <div className="w-4 h-4 bg-slate-200 dark:bg-slate-700 rounded" />
+    </div>
+  </div>
+);
+
+const CompanyCardSkeleton: React.FC = () => (
+  <div className="expandable-company-card bg-white dark:bg-slate-800 rounded-xl shadow-sm p-4 border border-slate-200/50 dark:border-slate-700/50 animate-pulse">
+    <div className="mb-3">
+      <div className="h-5 bg-slate-200 dark:bg-slate-700 rounded w-3/4 mb-2" />
+      <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-1/2" />
+    </div>
+    <div className="grid grid-cols-2 gap-3 mb-3">
+      <div>
+        <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-16 mb-1" />
+        <div className="h-6 bg-slate-200 dark:bg-slate-700 rounded" />
+      </div>
+      <div>
+        <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-20 mb-1" />
+        <div className="h-6 bg-slate-200 dark:bg-slate-700 rounded" />
+      </div>
+    </div>
+    <div className="h-12 bg-slate-200 dark:bg-slate-700 rounded" />
+  </div>
+);
+
+const TimelineSkeleton: React.FC = () => (
+  <div className="h-full flex flex-col bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl p-4">
+    <div className="h-6 bg-slate-200 dark:bg-slate-700 rounded w-32 mb-4 animate-pulse" />
+    <div className="grid grid-cols-2 gap-3 mb-6">
+      <div className="h-20 bg-slate-200 dark:bg-slate-700 rounded animate-pulse" />
+      <div className="h-20 bg-slate-200 dark:bg-slate-700 rounded animate-pulse" />
+    </div>
+    <div className="space-y-2">
+      {[...Array(12)].map((_, i) => (
+        <div key={i} className="flex items-center gap-2">
+          <div className="w-10 h-4 bg-slate-200 dark:bg-slate-700 rounded animate-pulse" />
+          <div className="flex-1 h-10 bg-slate-200 dark:bg-slate-700 rounded animate-pulse" />
+        </div>
+      ))}
+    </div>
+  </div>
+);
 
 interface CommissionData {
   id: string;
@@ -65,23 +115,12 @@ interface CommissionData {
   statement_month?: number;
   statement_year?: number;
   monthly_breakdown?: {
-    jan: number;
-    feb: number;
-    mar: number;
-    apr: number;
-    may: number;
-    jun: number;
-    jul: number;
-    aug: number;
-    sep: number;
-    oct: number;
-    nov: number;
-    dec: number;
+    jan: number; feb: number; mar: number; apr: number;
+    may: number; jun: number; jul: number; aug: number;
+    sep: number; oct: number; nov: number; dec: number;
   };
   last_updated?: string;
   created_at?: string;
-  carrierDetails?: CarrierDetail[];
-  carrierCount?: number;
 }
 
 interface CarrierGroup {
@@ -93,745 +132,1347 @@ interface CarrierGroup {
   statementCount: number;
 }
 
+// ============================================
+// SPARKLINE COMPONENTS
+// ============================================
+
+const MicroSparkline: React.FC<{ data: number[] }> = ({ data }) => {
+  if (!data || data.length === 0) return null;
+
+  const max = Math.max(...data);
+  const min = Math.min(...data);
+  const range = max - min || 1;
+
+  const points = data
+    .map((value, index) => {
+      const x = (index / (data.length - 1)) * 100;
+      const y = 100 - ((value - min) / range) * 100;
+      return `${x},${y}`;
+    })
+    .join(' ');
+
+  return (
+    <svg className="micro-sparkline w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+      <polyline
+        points={points}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        vectorEffect="non-scaling-stroke"
+      />
+    </svg>
+  );
+};
+
+const ResponsiveSparkline: React.FC<{ data: { month: string; value: number }[] }> = ({ data }) => {
+  if (!data || data.length === 0) return null;
+
+  const max = Math.max(...data.map(d => d.value));
+  const min = Math.min(...data.map(d => d.value));
+  const range = max - min || 1;
+
+  const points = data
+    .map((item, index) => {
+      const x = (index / (data.length - 1)) * 100;
+      const y = 100 - ((item.value - min) / range) * 80; // Leave 20% padding
+      return `${x},${y}`;
+    })
+    .join(' ');
+
+  return (
+    <svg className="responsive-sparkline w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+      <defs>
+        <linearGradient id="sparklineGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor="rgba(59, 130, 246, 0.3)" />
+          <stop offset="100%" stopColor="rgba(59, 130, 246, 0.05)" />
+        </linearGradient>
+      </defs>
+      <polyline
+        points={`0,100 ${points} 100,100`}
+        fill="url(#sparklineGradient)"
+        stroke="none"
+      />
+      <polyline
+        points={points}
+        fill="none"
+        stroke="rgba(59, 130, 246, 0.8)"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        vectorEffect="non-scaling-stroke"
+      />
+    </svg>
+  );
+};
+
+// ============================================
+// PREMIUM HOVER-REVEAL CARRIER CARD
+// ============================================
+
 interface CarrierCardProps {
-  carrierGroup: CarrierGroup;
-  isExpanded: boolean;
-  showMonthlyDetails: boolean;
-  onToggleExpand: () => void;
-  onToggleMonthlyDetails: () => void;
-  onEditCompany: (data: CommissionData) => void;
-  viewAllData: boolean;
+  carrier: CarrierGroup;
+  onClick: () => void;
 }
 
+const CarrierCard: React.FC<CarrierCardProps> = ({ carrier, onClick }) => {
+  const [isHovered, setIsHovered] = useState(false);
 
-// Component definitions for the new full-width table view
-
-const CarrierCard: React.FC<CarrierCardProps> = ({ 
-  carrierGroup, 
-  isExpanded, 
-  showMonthlyDetails, 
-  onToggleExpand, 
-  onToggleMonthlyDetails, 
-  onEditCompany,
-  viewAllData 
-}) => {
-  
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(amount);
-  };
-  
-  return (
-    <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md transition-all duration-300">
-      {/* Card Header */}
-      <div 
-        className="p-4 md:p-6 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors duration-200"
-        onClick={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          onToggleExpand(); // This should call toggleCarrierExpansion(carrierGroup.carrierName)
-        }}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            onToggleExpand();
-          }
-        }}
-        aria-expanded={isExpanded}
-        aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${carrierGroup.carrierName} details`}
-      >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3 md:gap-4 min-w-0 flex-1">
-            {/* Carrier Logo Placeholder */}
-            <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white font-bold text-sm md:text-lg flex-shrink-0">
-              {carrierGroup.carrierName.charAt(0).toUpperCase()}
-            </div>
-            
-            {/* Carrier Info */}
-            <div className="min-w-0 flex-1">
-              <h3 className="text-lg md:text-xl font-bold text-slate-800 dark:text-slate-200 truncate">{carrierGroup.carrierName}</h3>
-              <p className="text-xs md:text-sm text-slate-600 dark:text-slate-400">{carrierGroup.companyCount} companies • {carrierGroup.statementCount} statements</p>
-            </div>
-          </div>
-
-          {/* Key Metrics */}
-          <div className="text-right ml-2">
-            <p className="text-lg md:text-2xl font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(carrierGroup.totalCommission)}</p>
-            <p className="text-xs md:text-sm text-slate-600 dark:text-slate-400 hidden md:block">Total Commission</p>
-            <p className="text-xs text-slate-500 dark:text-slate-500 hidden lg:block">Invoice: {formatCurrency(carrierGroup.totalInvoice)}</p>
-          </div>
-
-          {/* Expand/Collapse Icon */}
-          <div className="ml-2 flex-shrink-0">
-            {isExpanded ? (
-              <ChevronUp className="w-5 h-5 md:w-6 md:h-6 text-slate-400 dark:text-slate-500" />
-            ) : (
-              <ChevronDown className="w-5 h-5 md:w-6 md:h-6 text-slate-400 dark:text-slate-500" />
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Card Content - Simple clickable card, no expansion */}
-      <div className="px-4 md:px-6 pb-4 md:pb-6">
-        <div className="pt-2">
-          <div className="text-xs text-slate-500 dark:text-slate-400 text-center">
-            Click to view all {carrierGroup.companyCount} companies
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const CarrierFullTableView: React.FC<{
-  carrier: CarrierGroup;
-  onBack: () => void;
-  onEditCompany: (data: CommissionData) => void;
-  viewAllData: boolean;
-  searchQuery: string;
-  onSearchChange: (query: string) => void;
-  expandedCompanies: Set<string>;
-  onToggleCompanyExpansion: (companyId: string) => void;
-}> = ({ 
-  carrier, 
-  onBack, 
-  onEditCompany, 
-  viewAllData, 
-  searchQuery, 
-  onSearchChange,
-  expandedCompanies,
-  onToggleCompanyExpansion 
-}) => {
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(amount);
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onClick();
+    }
   };
 
-  // Filter companies based on search
-  const filteredCompanies = useMemo(() => {
-    if (!searchQuery) return carrier.companies;
-    return carrier.companies.filter(company => 
-      company.client_name.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  }, [carrier.companies, searchQuery]);
-
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
-      {/* Header with Back Button */}
-      <div className="p-6 border-b border-slate-200 dark:border-slate-700">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={onBack}
-              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+    <motion.div
+      role="button"
+      tabIndex={0}
+      aria-label={`View details for ${carrier.carrierName}`}
+      onKeyPress={handleKeyPress}
+      onClick={onClick}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      onFocus={() => setIsHovered(true)}
+      onBlur={() => setIsHovered(false)}
+      whileHover={{ 
+        y: -8,
+        scale: 1.02,
+        transition: { duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }
+      }}
+      className="carrier-card-premium group relative cursor-pointer"
+    >
+      {/* Background Gradient Overlay - Intensifies on Hover */}
+      <motion.div
+        className="absolute inset-0 rounded-2xl bg-gradient-to-br from-blue-500/5 via-purple-500/5 to-pink-500/5 dark:from-blue-500/10 dark:via-purple-500/10 dark:to-pink-500/10"
+        animate={{
+          opacity: isHovered ? 1 : 0.3
+        }}
+        transition={{ duration: 0.5, ease: "easeInOut" }}
+      />
+
+      {/* Main Card Content Container */}
+      <div className="relative p-6 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden transition-all duration-300">
+        
+        {/* Decorative Corner Element */}
+        <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-500/10 to-purple-500/10 rounded-bl-full transform translate-x-16 -translate-y-16" />
+
+        {/* INITIAL STATE - Always Visible */}
+        <div className="relative z-10">
+          {/* Carrier Avatar/Icon */}
+          <div className="flex items-center justify-between mb-4">
+            <motion.div
+              animate={{
+                scale: isHovered ? 0.9 : 1,
+              }}
+              transition={{ duration: 0.4, ease: "easeInOut" }}
+              className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center text-white font-bold text-lg shadow-lg"
             >
-              <ChevronLeft size={16} />
-              Back to Carriers
-            </button>
-            <div className="h-6 w-px bg-slate-300 dark:bg-slate-600" />
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white font-bold text-lg">
-                {carrier.carrierName.charAt(0).toUpperCase()}
+              {carrier.carrierName.substring(0, 2).toUpperCase()}
+            </motion.div>
+
+            {/* Small Badge - Company Count (Always Visible) */}
+            <motion.div
+              animate={{
+                opacity: isHovered ? 0 : 1,
+                y: isHovered ? -10 : 0
+              }}
+              transition={{ duration: 0.4, ease: "easeInOut" }}
+              className="text-xs font-medium text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 px-3 py-1 rounded-full"
+            >
+              {carrier.companyCount} companies
+            </motion.div>
+          </div>
+
+          {/* Carrier Name - Large and Prominent */}
+          <motion.h3
+            animate={{
+              fontSize: isHovered ? '1.25rem' : '1.5rem',
+              marginBottom: isHovered ? '1rem' : '0.5rem',
+              textAlign: isHovered ? 'center' : 'left'
+            }}
+            transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
+            className="font-bold text-slate-900 dark:text-white truncate"
+          >
+            {carrier.carrierName}
+          </motion.h3>
+
+          {/* Hover Hint Text - Fades Out on Hover */}
+          <motion.p
+            animate={{
+              opacity: isHovered ? 0 : 0.6,
+              height: isHovered ? 0 : 'auto'
+            }}
+            transition={{ duration: 0.3, ease: "easeInOut" }}
+            className="text-sm text-slate-500 dark:text-slate-400 overflow-hidden"
+          >
+            <motion.span
+              animate={{
+                opacity: [0.6, 1, 0.6]
+              }}
+              transition={{
+                duration: 2,
+                repeat: Infinity,
+                ease: "easeInOut"
+              }}
+            >
+              Hover to view details
+            </motion.span>
+          </motion.p>
+        </div>
+
+        {/* HOVER STATE - Details Reveal */}
+        <AnimatePresence>
+          {isHovered && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 20 }}
+              transition={{ duration: 0.5, delay: 0.1, ease: [0.25, 0.46, 0.45, 0.94] }}
+              className="relative z-20 mt-4"
+            >
+              {/* Two-Column Layout for Balanced Information Display */}
+              <div className="grid grid-cols-2 gap-4">
+                
+                {/* LEFT COLUMN */}
+                <motion.div
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.5, delay: 0.2, ease: [0.25, 0.46, 0.45, 0.94] }}
+                  className="space-y-3"
+                >
+                  {/* Total Commission */}
+                  <div>
+                    <div className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wide">
+                      Total Commission
+                    </div>
+                    <div className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                      {formatCurrencyCompact(carrier.totalCommission)}
+                    </div>
+                  </div>
+
+                  {/* Company Count - Detailed */}
+                  <div>
+                    <div className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wide">
+                      Companies
+                    </div>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-xl font-bold text-slate-900 dark:text-white">
+                        {carrier.companyCount}
+                      </span>
+                      <span className="text-sm text-slate-500 dark:text-slate-400">
+                        active
+                      </span>
+                    </div>
+                  </div>
+                </motion.div>
+
+                {/* RIGHT COLUMN */}
+                <motion.div
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.5, delay: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
+                  className="space-y-3"
+                >
+                  {/* Statements Count */}
+                  <div>
+                    <div className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wide">
+                      Statements
+                    </div>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-xl font-bold text-slate-900 dark:text-white">
+                        {carrier.statementCount}
+                      </span>
+                      <span className="text-sm text-slate-500 dark:text-slate-400">
+                        total
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Average per Company */}
+                  <div>
+                    <div className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wide">
+                      Avg per Company
+                    </div>
+                    <div className="text-lg font-semibold text-emerald-600 dark:text-emerald-400">
+                      {formatCurrencyCompact(carrier.totalCommission / carrier.companyCount)}
+                    </div>
+                  </div>
+                </motion.div>
               </div>
-              <div>
-                <h2 className="text-xl font-bold text-slate-800 dark:text-slate-200">{carrier.carrierName}</h2>
-                <p className="text-sm text-slate-600 dark:text-slate-400">
-                  {carrier.companyCount} companies • {formatCurrency(carrier.totalCommission)} total commission
-                </p>
+
+              {/* Action Button - Appears on Hover */}
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, delay: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}
+                className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700"
+              >
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-blue-600 dark:text-blue-400 font-medium">
+                    View Details
+                  </span>
+                  <ChevronRight className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </motion.div>
+  );
+};
+
+// ============================================
+// PREMIUM HOVER-REVEAL COMPANY CARD
+// ============================================
+
+interface CompanyCardProps {
+  company: CommissionData;
+  onClick: () => void;
+}
+
+const CompanyCard: React.FC<CompanyCardProps> = ({ company, onClick }) => {
+  const [isHovered, setIsHovered] = useState(false);
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onClick();
+    }
+  };
+
+  return (
+    <motion.div
+      role="button"
+      tabIndex={0}
+      aria-label={`View details for ${company.client_name}`}
+      onKeyPress={handleKeyPress}
+      onClick={onClick}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      onFocus={() => setIsHovered(true)}
+      onBlur={() => setIsHovered(false)}
+      whileHover={{ 
+        y: -6,
+        scale: 1.01,
+        transition: { duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }
+      }}
+      className="company-card-premium group relative cursor-pointer"
+    >
+      {/* Background with Subtle Gradient */}
+      <motion.div
+        className="absolute inset-0 rounded-xl bg-gradient-to-br from-emerald-500/5 via-blue-500/5 to-purple-500/5 dark:from-emerald-500/10 dark:via-blue-500/10 dark:to-purple-500/10"
+        animate={{
+          opacity: isHovered ? 1 : 0.3
+        }}
+        transition={{ duration: 0.5, ease: "easeInOut" }}
+      />
+
+      {/* Main Card Content */}
+      <div className="relative p-5 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden transition-all duration-300">
+        
+        {/* Decorative Element */}
+        <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-blue-500/5 to-purple-500/5 rounded-bl-full transform translate-x-12 -translate-y-12" />
+
+        {/* INITIAL STATE - Company Name Only */}
+        <div className="relative z-10">
+          
+          {/* Company Name - Prominent Display */}
+          <motion.h4
+            animate={{
+              fontSize: isHovered ? '1.125rem' : '1.25rem',
+              marginBottom: isHovered ? '0.75rem' : '0.5rem',
+              textAlign: isHovered ? 'center' : 'left'
+            }}
+            transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
+            className="font-bold text-slate-900 dark:text-white line-clamp-2 min-h-[3rem]"
+          >
+            {company.client_name}
+          </motion.h4>
+
+          {/* Year Badge - Small, Always Visible */}
+          <motion.div
+            animate={{
+              opacity: isHovered ? 0 : 1,
+              height: isHovered ? 0 : 'auto'
+            }}
+            transition={{ duration: 0.3, ease: "easeInOut" }}
+            className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 overflow-hidden"
+          >
+            <span className="bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded">
+              {company.statement_year || '2025'}
+            </span>
+            <span className="text-slate-400">•</span>
+            <motion.span
+              animate={{
+                opacity: [0.6, 1, 0.6]
+              }}
+              transition={{
+                duration: 2,
+                repeat: Infinity,
+                ease: "easeInOut"
+              }}
+            >
+              Hover for details
+            </motion.span>
+          </motion.div>
+        </div>
+
+        {/* HOVER STATE - Details Reveal */}
+        <AnimatePresence>
+          {isHovered && (
+            <motion.div
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 15 }}
+              transition={{ duration: 0.5, delay: 0.1, ease: [0.25, 0.46, 0.45, 0.94] }}
+              className="relative z-20 mt-3"
+            >
+              {/* Metadata Row */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.4, delay: 0.15, ease: "easeInOut" }}
+                className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 mb-3"
+              >
+                <span className="bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded">
+                  {company.statement_year || '2025'}
+                </span>
+                <span>•</span>
+                <span>{company.statement_count} statements</span>
+              </motion.div>
+
+              {/* Two-Column Stats Layout */}
+              <div className="grid grid-cols-2 gap-3">
+                
+                {/* LEFT: Commission */}
+                <motion.div
+                  initial={{ opacity: 0, x: -15 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.5, delay: 0.2, ease: [0.25, 0.46, 0.45, 0.94] }}
+                >
+                  <div className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wide">
+                    Commission
+                  </div>
+                  <div className="text-xl font-bold text-blue-600 dark:text-blue-400">
+                    {formatCurrencyCompact(company.commission_earned)}
+                  </div>
+                </motion.div>
+
+                {/* RIGHT: Invoice Total */}
+                <motion.div
+                  initial={{ opacity: 0, x: 15 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.5, delay: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
+                >
+                  <div className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wide">
+                    Invoice Total
+                  </div>
+                  <div className="text-lg font-semibold text-slate-700 dark:text-slate-300">
+                    {formatCurrencyCompact(company.invoice_total)}
+                  </div>
+                </motion.div>
               </div>
+
+              {/* Commission Rate Indicator */}
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, delay: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}
+                className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700"
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400">
+                      Commission Rate
+                    </div>
+                    <div className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                      {((company.commission_earned / company.invoice_total) * 100).toFixed(1)}%
+                    </div>
+                  </div>
+                  
+                  <div className="text-blue-600 dark:text-blue-400 flex items-center gap-1 text-sm font-medium">
+                    <span>View Breakdown</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </div>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </motion.div>
+  );
+};
+
+// ============================================
+// EXPANDABLE COMPANY CARD
+// ============================================
+
+interface ExpandableCompanyCardProps {
+  company: CommissionData;
+  isExpanded: boolean;
+  onToggleExpand: (companyId: string) => void;
+  onSelect: (company: CommissionData) => void;
+}
+
+const ExpandableCompanyCard: React.FC<ExpandableCompanyCardProps> = ({
+  company,
+  isExpanded, 
+  onToggleExpand, 
+  onSelect
+}) => {
+  const monthlyData = Object.entries(company.monthly_breakdown || {}).map(([month, value]) => ({
+    month: month.charAt(0).toUpperCase() + month.slice(1),
+    value: value as number
+  }));
+
+  const maxValue = Math.max(...monthlyData.map(m => m.value));
+
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.95 }}
+      transition={{
+        layout: { duration: 0.3, ease: [0.4, 0, 0.2, 1] },
+        opacity: { duration: 0.2 }
+      }}
+      className="expandable-company-card bg-white dark:bg-slate-800 rounded-xl shadow-sm hover:shadow-md transition-shadow overflow-hidden border border-slate-200/50 dark:border-slate-700/50"
+    >
+      {/* Collapsed View - Always Visible */}
+      <div
+        onClick={() => onToggleExpand(company.id)}
+        className="p-4 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
+      >
+        {/* Top Row: Company Name and Year/Statements Badge */}
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <h3 className="font-semibold text-slate-900 dark:text-white text-base truncate flex-1">
+            {company.client_name}
+          </h3>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <div className="px-2.5 py-1 bg-blue-50 dark:bg-blue-900/30 rounded-md">
+              <span className="text-xs font-medium text-blue-700 dark:text-blue-300">
+                {company.statement_year || '2025'}
+              </span>
+            </div>
+            <motion.div
+              animate={{ rotate: isExpanded ? 180 : 0 }}
+              transition={{ duration: 0.3 }}
+              className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+            >
+              <ChevronDown className="w-5 h-5" />
+            </motion.div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <div className="text-xs text-slate-600 dark:text-slate-400 mb-1">Commission</div>
+            <div className="text-lg font-bold text-blue-600 dark:text-blue-400">
+              {formatCurrency(company.commission_earned)}
+            </div>
+          </div>
+          <div>
+            <div className="text-xs text-slate-600 dark:text-slate-400 mb-1">Invoice Total</div>
+            <div className="text-lg font-bold text-slate-700 dark:text-slate-300">
+              {formatCurrency(company.invoice_total)}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Expanded View - Smooth Height Animation */}
+      <AnimatePresence>
+        {isExpanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+            className="border-t border-slate-200 dark:border-slate-700 overflow-hidden"
+          >
+            <div className="p-4 bg-slate-50 dark:bg-slate-900/50">
+              <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">
+                Monthly Breakdown
+              </h4>
+
+              {/* Horizontal Monthly Timeline */}
+              <div className="space-y-2">
+                {monthlyData.map((item, index) => {
+                  const widthPercent = maxValue > 0 ? (item.value / maxValue) * 100 : 0;
+                  const hasValue = item.value > 0;
+
+                  return (
+                    <motion.div
+                      key={item.month}
+                      initial={{ scaleX: 0, opacity: 0 }}
+                      animate={{ scaleX: 1, opacity: 1 }}
+                      transition={{
+                        delay: index * 0.03,
+                        duration: 0.4,
+                        ease: [0.34, 1.56, 0.64, 1]
+                      }}
+                      className="flex items-center gap-2"
+                    >
+                      <div className="w-12 text-xs font-medium text-slate-600 dark:text-slate-400">
+                        {item.month}
+                      </div>
+
+                      <div className="flex-1 relative h-8">
+                        {hasValue ? (
+                          <div
+                            className="month-bar-inline h-full rounded-md bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-end pr-2 cursor-pointer hover:scale-y-110 transition-transform"
+                            style={{ width: `${widthPercent}%` }}
+                          >
+                            <span className="text-white text-xs font-semibold">
+                              {formatCurrency(item.value)}
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="h-full rounded-md border-2 border-dashed border-slate-300 dark:border-slate-600 flex items-center justify-center">
+                            <span className="text-xs text-slate-400">—</span>
+                          </div>
+                        )}
+                      </div>
+                    </motion.div>
+                  );
+                })}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-2 mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelect(company);
+                  }}
+                  className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+                >
+                  View Full Details
+                </button>
+                <button className="px-4 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg text-sm font-medium transition-colors">
+                  Export
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+};
+
+// ============================================
+// TIMELINE INSIGHT PANEL
+// ============================================
+
+interface TimelineInsightPanelProps {
+  selectedCarrier: CarrierGroup | null;
+  selectedCompany: CommissionData | null;
+  compareMode: boolean;
+  selectedCompaniesForCompare: Set<string>;
+  allCompanies: CommissionData[];
+}
+
+const TimelineInsightPanel: React.FC<TimelineInsightPanelProps> = React.memo(({
+  selectedCarrier,
+  selectedCompany,
+  compareMode,
+  selectedCompaniesForCompare,
+  allCompanies
+}) => {
+  const getDisplayData = () => {
+    if (compareMode && selectedCompaniesForCompare.size > 0) {
+      return Array.from(selectedCompaniesForCompare)
+        .map(companyId => allCompanies.find(c => c.id === companyId))
+        .filter(Boolean) as CommissionData[];
+    } else if (selectedCompany) {
+      return [selectedCompany];
+    } else if (selectedCarrier) {
+      return selectedCarrier.companies;
+    }
+    return [];
+  };
+
+  const displayData = getDisplayData();
+
+  const SingleTimeline: React.FC<{ data: CommissionData }> = ({ data }) => {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const monthKeys = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+
+    const monthlyValues = monthKeys.map((key, index) => ({
+      month: months[index],
+      value: data.monthly_breakdown?.[key as keyof typeof data.monthly_breakdown] || 0
+    }));
+
+    const maxValue = Math.max(...monthlyValues.map(m => m.value));
+    const totalCommission = monthlyValues.reduce((sum, m) => sum + m.value, 0);
+    const avgMonthly = totalCommission / 12;
+    const peakMonth = monthlyValues.reduce((max, m) => m.value > max.value ? m : max, monthlyValues[0]);
+
+    return (
+      <div className="space-y-6">
+        {/* Quick Stats */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 p-3 rounded-lg">
+            <div className="text-xs text-blue-600 dark:text-blue-400 mb-1">Peak Month</div>
+            <div className="text-lg font-bold text-blue-900 dark:text-blue-100">
+              {peakMonth.month}
+            </div>
+            <div className="text-xs text-blue-600 dark:text-blue-400">
+              {formatCurrency(peakMonth.value)}
+            </div>
+          </div>
+
+          <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 p-3 rounded-lg">
+            <div className="text-xs text-purple-600 dark:text-purple-400 mb-1">Avg Monthly</div>
+            <div className="text-lg font-bold text-purple-900 dark:text-purple-100">
+              {formatCurrency(avgMonthly)}
             </div>
           </div>
         </div>
 
-        {/* Search Bar */}
-        <div className="relative max-w-md">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 dark:text-slate-500" size={16} />
-          <input
-            type="text"
-            placeholder={`Search companies in ${carrier.carrierName}...`}
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 text-sm bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-lg border border-slate-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200"
-          />
-        </div>
-      </div>
+        {/* Vertical Monthly Bars */}
+        <div>
+          <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">
+            Monthly Performance
+          </h3>
+          <div className="space-y-2">
+            {monthlyValues.map((item, index) => {
+              const heightPercent = maxValue > 0 ? (item.value / maxValue) * 100 : 0;
+              const hasValue = item.value > 0;
 
-      {/* Companies Table */}
-      <div className="overflow-x-auto">
-        <table className="w-full company-table">
-          <thead className="bg-slate-50 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-700">
-            <tr>
-              <th className="text-left py-3 px-6 font-semibold text-slate-700 dark:text-slate-300">Company Name</th>
-              <th className="text-right py-3 px-4 font-semibold text-slate-700 dark:text-slate-300">Total Commission</th>
-              <th className="text-right py-3 px-4 font-semibold text-slate-700 dark:text-slate-300">Total Invoice</th>
-              <th className="text-center py-3 px-4 font-semibold text-slate-700 dark:text-slate-300">Statements</th>
-              <th className="text-center py-3 px-4 font-semibold text-slate-700 dark:text-slate-300">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredCompanies.map((company) => (
-              <React.Fragment key={company.id}>
-                {/* Company Row */}
-                <tr 
-                  className="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer transition-colors"
-                  onClick={() => onToggleCompanyExpansion(company.id)}
+              return (
+                <motion.div
+                  key={item.month}
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{
+                    delay: index * 0.04,
+                    duration: 0.3
+                  }}
+                  className="group relative"
                 >
-                  <td className="py-4 px-6">
-                    <div className="flex items-center gap-3">
-                      {expandedCompanies.has(company.id) ? (
-                        <ChevronDown size={16} className="text-slate-400 dark:text-slate-500" />
-                      ) : (
-                        <ChevronRight size={16} className="text-slate-400 dark:text-slate-500" />
-                      )}
-                      <div>
-                        <div className="font-semibold text-slate-900 dark:text-slate-200">{company.client_name}</div>
-                        <div className="text-xs text-slate-500 dark:text-slate-400">Year: {company.statement_year || 'N/A'}</div>
-                      </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 text-xs font-medium text-slate-600 dark:text-slate-400">
+                      {item.month}
                     </div>
-                  </td>
-                  <td className="py-4 px-4 text-right">
-                    <span className="font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(company.commission_earned)}</span>
-                  </td>
-                  <td className="py-4 px-4 text-right">
-                    <span className="font-medium text-slate-700 dark:text-slate-300">{formatCurrency(company.invoice_total)}</span>
-                  </td>
-                  <td className="py-4 px-4 text-center">
-                    <span className="text-slate-600 dark:text-slate-400">{company.statement_count}</span>
-                  </td>
-                  <td className="py-4 px-4 text-center">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onEditCompany(company);
-                      }}
-                      disabled={viewAllData}
-                      className={`p-2 rounded-lg transition-colors ${ 
-                        viewAllData 
-                          ? 'text-slate-400 dark:text-slate-600 cursor-not-allowed opacity-50' 
-                          : 'text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30'
-                      }`}
-                      title={viewAllData ? 'Read-only mode - switch to My Data to edit' : 'Edit commission data'}
-                    >
-                      <Edit size={16} />
-                    </button>
-                  </td>
-                </tr>
 
-                {/* Expanded Monthly Breakdown Row */}
-                {expandedCompanies.has(company.id) && (
-                  <tr>
-                    <td colSpan={5} className="py-4 px-6 bg-slate-50 dark:bg-slate-700/30">
-                      <div className="space-y-3">
-                        <h4 className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                          <BarChart3 size={16} />
-                          Monthly Breakdown for {company.client_name}
-                        </h4>
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-sm company-table">
-                            <thead>
-                              <tr className="border-b border-slate-200 dark:border-slate-600">
-                                {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map(month => (
-                                  <th key={month} className="text-center py-2 px-3 font-medium text-slate-600 dark:text-slate-400 min-w-[80px]">
-                                    {month}
-                                  </th>
-                                ))}
-                              </tr>
-                            </thead>
-                            <tbody>
-                              <tr>
-                                {['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'].map(month => (
-                                  <td key={month} className="text-center py-2 px-3 text-slate-700 dark:text-slate-300">
-                                    {company.monthly_breakdown?.[month as keyof typeof company.monthly_breakdown] 
-                                      ? formatCurrency(company.monthly_breakdown[month as keyof typeof company.monthly_breakdown])
-                                      : '-'
-                                    }
-                                  </td>
-                                ))}
-                              </tr>
-                            </tbody>
-                          </table>
+                    <div className="flex-1 flex items-center gap-2">
+                      {hasValue ? (
+                        <>
+                          <motion.div
+                            initial={{ scaleX: 0 }}
+                            animate={{ scaleX: 1 }}
+                            transition={{
+                              delay: index * 0.04,
+                              duration: 0.5,
+                              ease: [0.34, 1.56, 0.64, 1]
+                            }}
+                            className="h-10 rounded-lg bg-gradient-to-r from-blue-500 via-purple-500 to-purple-600 shadow-sm hover:shadow-md transition-shadow cursor-pointer origin-left"
+                            style={{ width: `${heightPercent}%` }}
+                          />
+
+                          <div className="text-xs font-semibold text-slate-700 dark:text-slate-300 min-w-[80px] text-right">
+                            {formatCurrency(item.value)}
+                          </div>
+                        </>
+                      ) : (
+                        <div className="flex-1 h-10 rounded-lg border-2 border-dashed border-slate-200 dark:border-slate-700 flex items-center justify-center">
+                          <span className="text-xs text-slate-400">No data</span>
                         </div>
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </React.Fragment>
-            ))}
-          </tbody>
-        </table>
+                      )}
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const AggregatedTimeline: React.FC<{ companies: CommissionData[] }> = ({ companies }) => {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const monthKeys = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+
+    const aggregatedValues = monthKeys.map((key, index) => {
+      const value = companies.reduce((sum, company) => {
+        return sum + (company.monthly_breakdown?.[key as keyof typeof company.monthly_breakdown] || 0);
+      }, 0);
+      return { month: months[index], value };
+    });
+
+    const maxValue = Math.max(...aggregatedValues.map(m => m.value));
+    const totalCommission = aggregatedValues.reduce((sum, m) => sum + m.value, 0);
+
+    return (
+      <div className="space-y-6">
+        <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-900/20 dark:to-emerald-800/20 p-4 rounded-lg">
+          <div className="text-xs text-emerald-600 dark:text-emerald-400 mb-1">Total Commission</div>
+          <div className="text-2xl font-bold text-emerald-900 dark:text-emerald-100">
+            {formatCurrency(totalCommission)}
+          </div>
+          <div className="text-xs text-emerald-600 dark:text-emerald-400 mt-1">
+            Across {companies.length} {companies.length === 1 ? 'company' : 'companies'}
+          </div>
+        </div>
+
+        <div>
+          <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">
+            Aggregated Monthly Performance
+          </h3>
+          <div className="space-y-2">
+            {aggregatedValues.map((item, index) => {
+              const heightPercent = maxValue > 0 ? (item.value / maxValue) * 100 : 0;
+              const hasValue = item.value > 0;
+
+              return (
+                <motion.div
+                  key={item.month}
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{
+                    delay: index * 0.04,
+                    duration: 0.3
+                  }}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 text-xs font-medium text-slate-600 dark:text-slate-400">
+                      {item.month}
+                    </div>
+
+                    <div className="flex-1 flex items-center gap-2">
+                      {hasValue ? (
+                        <>
+                          <motion.div
+                            initial={{ scaleX: 0 }}
+                            animate={{ scaleX: 1 }}
+                            transition={{
+                              delay: index * 0.04,
+                              duration: 0.5,
+                              ease: [0.34, 1.56, 0.64, 1]
+                            }}
+                            className="h-10 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-600 shadow-sm hover:shadow-md transition-shadow cursor-pointer origin-left"
+                            style={{ width: `${heightPercent}%` }}
+                          />
+
+                          <div className="text-xs font-semibold text-slate-700 dark:text-slate-300 min-w-[80px] text-right">
+                            {formatCurrency(item.value)}
+                          </div>
+                        </>
+                      ) : (
+                        <div className="flex-1 h-10 rounded-lg border-2 border-dashed border-slate-200 dark:border-slate-700 flex items-center justify-center">
+                          <span className="text-xs text-slate-400">No data</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="h-full flex flex-col bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-l border-slate-200/50 dark:border-slate-700/50">
+      {/* Header */}
+      <div className="p-4 border-b border-slate-200/50 dark:border-slate-700/50">
+        <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-1">
+          Timeline Insights
+        </h2>
+        <p className="text-xs text-slate-500">
+          {compareMode && selectedCompaniesForCompare.size > 0 && `Comparing ${selectedCompaniesForCompare.size} companies`}
+          {!compareMode && selectedCompany && 'Company monthly breakdown'}
+          {!compareMode && selectedCarrier && !selectedCompany && 'Carrier monthly trends'}
+          {!compareMode && !selectedCarrier && !selectedCompany && 'Select an item to view details'}
+        </p>
       </div>
 
-      {/* Footer */}
-      <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/30">
-        <div className="flex items-center justify-between text-sm text-slate-600 dark:text-slate-400">
-          <span>Showing {filteredCompanies.length} of {carrier.companyCount} companies</span>
-          <span className="font-medium">
-            Total Commission: <span className="text-emerald-600 dark:text-emerald-400 font-bold">{formatCurrency(carrier.totalCommission)}</span>
-          </span>
-        </div>
+      {/* Scrollable Timeline Content */}
+      <div className="flex-1 overflow-y-auto custom-scrollbar p-4">
+        {displayData.length === 0 ? (
+          <div className="flex items-center justify-center h-full text-slate-400">
+            <div className="text-center">
+              <BarChart3 className="w-12 h-12 mx-auto mb-2 opacity-50" />
+              <p className="text-sm">Select a carrier or company</p>
+            </div>
+          </div>
+        ) : displayData.length === 1 ? (
+          <SingleTimeline data={displayData[0]} />
+        ) : (
+          <AggregatedTimeline companies={displayData} />
+        )}
       </div>
     </div>
   );
-};
+}, (prevProps, nextProps) => {
+  // Only re-render if these specific props change
+  return (
+    prevProps.selectedCarrier?.carrierName === nextProps.selectedCarrier?.carrierName &&
+    prevProps.selectedCompany?.id === nextProps.selectedCompany?.id &&
+    prevProps.compareMode === nextProps.compareMode &&
+    prevProps.selectedCompaniesForCompare.size === nextProps.selectedCompaniesForCompare.size
+  );
+});
 
-// Carriers List Modal Component
-const CarriersListModal: React.FC<{
-  isOpen: boolean;
-  onClose: () => void;
+TimelineInsightPanel.displayName = 'TimelineInsightPanel';
+
+// ============================================
+// INTERACTIVE CONTEXT PANE
+// ============================================
+
+interface OverviewModeProps {
   carriers: CarrierGroup[];
-}> = ({ isOpen, onClose, carriers }) => {
-  const [searchQuery, setSearchQuery] = useState('');
+  onSelectCarrier: (carrier: CarrierGroup) => void;
+}
+
+const OverviewMode: React.FC<OverviewModeProps> = ({ carriers, onSelectCarrier }) => {
   const [currentPage, setCurrentPage] = useState(1);
-  const ITEMS_PER_PAGE = 10;
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortMode, setSortMode] = useState<'commission' | 'companies' | 'alpha'>('commission');
+  const ITEMS_PER_PAGE = 15;
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(amount);
-  };
-
-  // Filter and sort carriers alphabetically
-  const filteredCarriers = useMemo(() => {
+  // Filter and sort carriers
+  const filteredAndSortedCarriers = useMemo(() => {
     const filtered = carriers.filter(carrier =>
       carrier.carrierName.toLowerCase().includes(searchQuery.toLowerCase())
     );
-    return filtered.sort((a, b) => a.carrierName.localeCompare(b.carrierName));
-  }, [carriers, searchQuery]);
 
-  // Pagination
-  const totalPages = Math.ceil(filteredCarriers.length / ITEMS_PER_PAGE);
-  const paginatedCarriers = filteredCarriers.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE
-  );
+    const sorted = [...filtered];
+    switch (sortMode) {
+      case 'commission':
+        sorted.sort((a, b) => b.totalCommission - a.totalCommission);
+        break;
+      case 'companies':
+        sorted.sort((a, b) => b.companyCount - a.companyCount);
+        break;
+      case 'alpha':
+        sorted.sort((a, b) => a.carrierName.localeCompare(b.carrierName));
+        break;
+    }
+    return sorted;
+  }, [carriers, searchQuery, sortMode]);
 
-  // Reset page when search changes
+  const paginatedCarriers = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    const endIndex = startIndex + ITEMS_PER_PAGE;
+    return filteredAndSortedCarriers.slice(startIndex, endIndex);
+  }, [filteredAndSortedCarriers, currentPage]);
+
+  const totalPages = Math.ceil(filteredAndSortedCarriers.length / ITEMS_PER_PAGE);
+
+  // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery]);
-
-  if (!isOpen) return null;
+  }, [searchQuery, sortMode]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-3xl w-full mx-4 max-h-[80vh] overflow-hidden" onClick={e => e.stopPropagation()}>
-        {/* Modal Header */}
-        <div className="p-6 border-b border-slate-200 dark:border-slate-700">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
-              <Building2 className="text-purple-600 dark:text-purple-400" size={24} />
-              All Carriers
-            </h2>
-            <button
-              onClick={onClose}
-              className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
-            >
-              <X size={20} className="text-slate-500 dark:text-slate-400" />
-            </button>
-          </div>
-          
-          {/* Search Bar */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 dark:text-slate-500" size={16} />
-            <input
-              type="text"
-              placeholder="Search carriers..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 text-sm bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-lg border border-slate-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200"
-            />
-          </div>
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      transition={{ duration: 0.4 }}
+      className="p-6 space-y-6"
+    >
+      <div className="text-center mb-8">
+        <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
+          Commission Explorer
+        </h1>
+        <p className="text-slate-600 dark:text-slate-400">
+          Select a carrier to explore commission details
+        </p>
+      </div>
+
+      {/* Search and Filter Controls */}
+      <div className="flex items-center gap-4 mb-6">
+        {/* Search Bar */}
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search carriers..."
+            className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+          />
         </div>
 
-        {/* Modal Content */}
-        <div className="p-6 overflow-y-auto max-h-[calc(80vh-200px)]">
-          {paginatedCarriers.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-slate-500 dark:text-slate-400">
-              <Building2 className="text-slate-300 dark:text-slate-600 mb-4" size={48} />
-              <p className="text-lg font-medium">No carriers found</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {paginatedCarriers.map((carrier, index) => (
-                <div
-                  key={carrier.carrierName}
-                  className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors border border-slate-200 dark:border-slate-600"
-                >
-                  <div className="flex items-center gap-3 flex-1">
-                    <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-                      {carrier.carrierName.charAt(0).toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-slate-800 dark:text-slate-200 truncate">{carrier.carrierName}</h3>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">
-                        {carrier.companyCount} companies • {carrier.statementCount} statements
-                      </p>
-                    </div>
-                  </div>
-                  <div className="text-right ml-4">
-                    <p className="font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(carrier.totalCommission)}</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">Total Commission</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Modal Footer with Pagination */}
-        <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/30">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-slate-600 dark:text-slate-400">
-              Showing {Math.min((currentPage - 1) * ITEMS_PER_PAGE + 1, filteredCarriers.length)} - {Math.min(currentPage * ITEMS_PER_PAGE, filteredCarriers.length)} of {filteredCarriers.length}
-            </p>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                disabled={currentPage === 1}
-                className="p-2 rounded-lg border border-slate-200 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                <ArrowLeft size={16} className="text-slate-600 dark:text-slate-400" />
-              </button>
-              <span className="text-sm text-slate-600 dark:text-slate-400 px-3">
-                Page {currentPage} of {totalPages || 1}
-              </span>
-              <button
-                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                disabled={currentPage === totalPages || totalPages === 0}
-                className="p-2 rounded-lg border border-slate-200 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                <ArrowRight size={16} className="text-slate-600 dark:text-slate-400" />
-              </button>
-            </div>
-          </div>
+        {/* Sort Buttons */}
+        <div className="flex gap-2 p-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
+          <button
+            onClick={() => setSortMode('commission')}
+            className={`px-3 py-2 text-sm font-medium rounded transition-all ${
+              sortMode === 'commission'
+                ? 'bg-blue-500 text-white shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+            title="Sort by commission"
+          >
+            💰 Commission
+          </button>
+          <button
+            onClick={() => setSortMode('companies')}
+            className={`px-3 py-2 text-sm font-medium rounded transition-all ${
+              sortMode === 'companies'
+                ? 'bg-blue-500 text-white shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+            title="Sort by companies"
+          >
+            🏢 Companies
+          </button>
+          <button
+            onClick={() => setSortMode('alpha')}
+            className={`px-3 py-2 text-sm font-medium rounded transition-all ${
+              sortMode === 'alpha'
+                ? 'bg-blue-500 text-white shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+            title="Sort alphabetically"
+          >
+            🔤 A-Z
+          </button>
         </div>
       </div>
-    </div>
+
+      <div className="carrier-cards-grid">
+        {paginatedCarriers.map((carrier, index) => (
+          <CarrierCard
+            key={carrier.carrierName}
+            carrier={carrier}
+            onClick={() => onSelectCarrier(carrier)}
+          />
+        ))}
+      </div>
+
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mt-6 px-4 py-3 bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl border border-slate-200/50 dark:border-slate-700/50 rounded-lg">
+          <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+            Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, filteredAndSortedCarriers.length)} of {filteredAndSortedCarriers.length} carriers
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              disabled={currentPage === 1}
+              className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-800/50 hover:bg-white dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Previous
+            </button>
+
+            <div className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300">
+              Page {currentPage} of {totalPages}
+            </div>
+
+            <button
+              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              disabled={currentPage === totalPages}
+              className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-800/50 hover:bg-white dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+            >
+              Next
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+    </motion.div>
   );
 };
 
-// Companies List Modal Component
-const CompaniesListModal: React.FC<{
-  isOpen: boolean;
-  onClose: () => void;
-  data: CommissionData[];
-  onCompanyClick?: (company: { client_name: string; carriers: CarrierDetail[] }) => void;
-}> = ({ isOpen, onClose, data, onCompanyClick }) => {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
-  const ITEMS_PER_PAGE = 10;
+interface CarrierDetailModeProps {
+  carrier: CarrierGroup;
+  expandedCompanyIds: Set<string>;
+  onToggleExpand: (companyId: string) => void;
+  onSelectCompany: (company: CommissionData) => void;
+  onBack: () => void;
+}
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(amount);
-  };
+const CarrierDetailMode: React.FC<CarrierDetailModeProps> = ({
+  carrier,
+  expandedCompanyIds,
+  onToggleExpand,
+  onSelectCompany,
+  onBack
+}) => {
+  const [companyPage, setCompanyPage] = useState(1);
+  const [companySearch, setCompanySearch] = useState('');
+  const COMPANIES_PER_PAGE = 15;
 
-  // Normalize and aggregate companies with carrier tracking
-  const normalizedCompanies = useMemo(() => {
-    // Step 1: Group by exact core name
-    const companiesMap = new Map<string, {
-      normalizedName: string;
-      originalNames: Set<string>;
-      commission_earned: number;
-      invoice_total: number;
-      statement_count: number;
-      carrierDetails: CarrierDetail[];
-      id: string;
-      coreName: string;
-    }>();
-    
-    data.forEach(item => {
-      // CRITICAL: Use core name (without suffix) as the grouping key
-      const coreName = CompanyNameNormalizer.getCoreName(item.client_name).trim();
-      const normalizedName = CompanyNameNormalizer.normalize(item.client_name);
-      const carrierName = item.carrier_name || 'Unknown Carrier';
-      
-      if (!companiesMap.has(coreName)) {
-        companiesMap.set(coreName, {
-          normalizedName,
-          originalNames: new Set([item.client_name]),
-          commission_earned: item.commission_earned,
-          invoice_total: item.invoice_total,
-          statement_count: item.statement_count,
-          carrierDetails: [{
-            carrier_name: carrierName,
-            commission_earned: item.commission_earned,
-            invoice_total: item.invoice_total,
-            statement_count: item.statement_count,
-            statement_year: item.statement_year
-          }],
-          id: item.id,
-          coreName
-        });
-      } else {
-        const existing = companiesMap.get(coreName)!;
-        existing.originalNames.add(item.client_name);
-        existing.commission_earned += item.commission_earned;
-        existing.invoice_total += item.invoice_total;
-        existing.statement_count += item.statement_count;
-        
-        // Update to the longest/most complete normalized name
-        if (normalizedName.length > existing.normalizedName.length) {
-          existing.normalizedName = normalizedName;
-        }
-        
-        // Check if carrier already exists for this company
-        const existingCarrierIndex = existing.carrierDetails.findIndex(
-          c => c.carrier_name === carrierName
-        );
-        
-        if (existingCarrierIndex >= 0) {
-          // Aggregate existing carrier
-          existing.carrierDetails[existingCarrierIndex].commission_earned += item.commission_earned;
-          existing.carrierDetails[existingCarrierIndex].invoice_total += item.invoice_total;
-          existing.carrierDetails[existingCarrierIndex].statement_count += item.statement_count;
-        } else {
-          // Add new carrier
-          existing.carrierDetails.push({
-            carrier_name: carrierName,
-            commission_earned: item.commission_earned,
-            invoice_total: item.invoice_total,
-            statement_count: item.statement_count,
-            statement_year: item.statement_year
-          });
-        }
-      }
-    });
-    
-    // Step 2: OPTIMIZED similarity merging - only compare companies with same prefix
-    // This reduces O(n²) to O(n) by grouping first
-    const companiesArray = Array.from(companiesMap.values());
-    
-    // Group by first 3 characters for efficient comparison
-    const prefixGroups = new Map<string, typeof companiesArray>();
-    companiesArray.forEach(company => {
-      const prefix = company.coreName.substring(0, 3).toLowerCase();
-      if (!prefixGroups.has(prefix)) {
-        prefixGroups.set(prefix, []);
-      }
-      prefixGroups.get(prefix)!.push(company);
-    });
-    
-    // Merge within each prefix group (much smaller groups!)
-    const merged: typeof companiesArray = [];
-    prefixGroups.forEach(group => {
-      const processed = new Set<number>();
-      
-      group.forEach((company, i) => {
-        if (processed.has(i)) return;
-        
-        // Start a new merged company
-        const mergedCompany = { ...company };
-        processed.add(i);
-        
-        // Only compare within this small prefix group
-        group.forEach((otherCompany, j) => {
-          if (j <= i || processed.has(j)) return;
-          
-          const similarity = CompanyNameNormalizer.calculateSimilarity(
-            company.coreName,
-            otherCompany.coreName
-          );
-          
-          // Merge if highly similar (handles "Advanced Carrier Ser" vs "Advanced Carrier Services")
-          if (similarity >= 0.85) {
-            // Merge into group
-            mergedCompany.commission_earned += otherCompany.commission_earned;
-            mergedCompany.invoice_total += otherCompany.invoice_total;
-            mergedCompany.statement_count += otherCompany.statement_count;
-            
-            // Use the longest name
-            if (otherCompany.normalizedName.length > mergedCompany.normalizedName.length) {
-              mergedCompany.normalizedName = otherCompany.normalizedName;
-            }
-            
-            // Merge original names
-            otherCompany.originalNames.forEach(name => mergedCompany.originalNames.add(name));
-            
-            // Merge carriers
-            otherCompany.carrierDetails.forEach(otherCarrier => {
-              const existingCarrierIndex = mergedCompany.carrierDetails.findIndex(
-                c => c.carrier_name === otherCarrier.carrier_name
-              );
-              
-              if (existingCarrierIndex >= 0) {
-                mergedCompany.carrierDetails[existingCarrierIndex].commission_earned += otherCarrier.commission_earned;
-                mergedCompany.carrierDetails[existingCarrierIndex].invoice_total += otherCarrier.invoice_total;
-                mergedCompany.carrierDetails[existingCarrierIndex].statement_count += otherCarrier.statement_count;
-              } else {
-                mergedCompany.carrierDetails.push({ ...otherCarrier });
-              }
-            });
-            
-            processed.add(j);
-          }
-        });
-        
-        merged.push(mergedCompany);
-      });
-    });
-    
-    // Convert to final format and sort
-    return merged
-      .map(company => ({
-        id: company.id,
-        client_name: company.normalizedName,
-        commission_earned: company.commission_earned,
-        invoice_total: company.invoice_total,
-        statement_count: company.statement_count,
-        carrierDetails: company.carrierDetails,
-        carrierCount: company.carrierDetails.length,
-        carrier_name: company.carrierDetails.map(c => c.carrier_name).join(', ')
-      }))
-      .sort((a, b) => a.client_name.localeCompare(b.client_name));
-  }, [data]);
-
-  // Filter companies
   const filteredCompanies = useMemo(() => {
-    return normalizedCompanies.filter(company =>
-      company.client_name.toLowerCase().includes(searchQuery.toLowerCase())
+    return carrier.companies.filter(company => 
+      company.client_name.toLowerCase().includes(companySearch.toLowerCase())
     );
-  }, [normalizedCompanies, searchQuery]);
+  }, [carrier.companies, companySearch]);
 
-  // Pagination
-  const totalPages = Math.ceil(filteredCompanies.length / ITEMS_PER_PAGE);
-  const paginatedCompanies = filteredCompanies.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE
-  );
+  const paginatedCompanies = useMemo(() => {
+    const startIndex = (companyPage - 1) * COMPANIES_PER_PAGE;
+    const endIndex = startIndex + COMPANIES_PER_PAGE;
+    return filteredCompanies.slice(startIndex, endIndex);
+  }, [filteredCompanies, companyPage]);
 
-  // Reset page when search changes
+  const companyTotalPages = Math.ceil(filteredCompanies.length / COMPANIES_PER_PAGE);
+
+  // Reset to page 1 when search changes
   useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery]);
-
-  if (!isOpen) return null;
+    setCompanyPage(1);
+  }, [companySearch]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-3xl w-full mx-4 max-h-[80vh] overflow-hidden" onClick={e => e.stopPropagation()}>
-        {/* Modal Header */}
-        <div className="p-6 border-b border-slate-200 dark:border-slate-700">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
-              <Users className="text-orange-600 dark:text-orange-400" size={24} />
-              All Companies
+    <motion.div
+      initial={{ opacity: 0, x: 20 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -20 }}
+      transition={{ duration: 0.4 }}
+      className="p-6 pt-20 space-y-6"
+    >
+      {/* Back Button and Breadcrumb */}
+      <div className="flex items-center gap-3">
+          <button
+            onClick={onBack}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-800/50 hover:bg-white dark:hover:bg-slate-800 transition-colors text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+          >
+          <ArrowLeft className="w-4 h-4" />
+          Back to All Carriers
+          </button>
+
+        {/* Breadcrumb */}
+        <div className="flex items-center gap-2 text-sm text-slate-500">
+          <span 
+            className="cursor-pointer hover:text-slate-900 dark:hover:text-white transition-colors"
+            onClick={onBack}
+          >
+            All Carriers
+          </span>
+          <ChevronRight className="w-4 h-4" />
+          <span className="text-slate-900 dark:text-white font-medium">
+            {carrier.carrierName}
+          </span>
+        </div>
+        </div>
+
+      {/* Carrier Header */}
+      <div className="glass-card-premium p-6 rounded-xl">
+        <div className="flex items-center gap-4 mb-4">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-2xl shadow-lg">
+            {carrier.carrierName.charAt(0)}
+            </div>
+            <div>
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
+              {carrier.carrierName}
             </h2>
-            <button
-              onClick={onClose}
-              className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
-            >
-              <X size={20} className="text-slate-500 dark:text-slate-400" />
-            </button>
+            <p className="text-slate-600 dark:text-slate-400">
+              {carrier.companyCount} companies • {carrier.statementCount} statements
+              </p>
+            </div>
           </div>
-          
-          {/* Search Bar */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 dark:text-slate-500" size={16} />
-            <input
-              type="text"
-              placeholder="Search companies..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 text-sm bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-lg border border-slate-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200"
-            />
+
+        <div className="grid grid-cols-3 gap-4">
+          <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
+            <div className="text-sm text-blue-600 dark:text-blue-400 mb-1">Total Commission</div>
+            <div className="text-2xl font-bold text-blue-900 dark:text-blue-100">
+              {formatCurrency(carrier.totalCommission)}
+            </div>
           </div>
+          <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg">
+            <div className="text-sm text-purple-600 dark:text-purple-400 mb-1">Total Invoice</div>
+            <div className="text-2xl font-bold text-purple-900 dark:text-purple-100">
+              {formatCurrency(carrier.totalInvoice)}
+            </div>
+          </div>
+          <div className="bg-emerald-50 dark:bg-emerald-900/20 p-4 rounded-lg">
+            <div className="text-sm text-emerald-600 dark:text-emerald-400 mb-1">Avg per Company</div>
+            <div className="text-2xl font-bold text-emerald-900 dark:text-emerald-100">
+              {formatCurrency(carrier.totalCommission / carrier.companyCount)}
+            </div>
+          </div>
+        </div>
         </div>
 
-        {/* Modal Content */}
-        <div className="p-6 overflow-y-auto max-h-[calc(80vh-200px)]">
-          {paginatedCompanies.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-slate-500 dark:text-slate-400">
-              <Users className="text-slate-300 dark:text-slate-600 mb-4" size={48} />
-              <p className="text-lg font-medium">No companies found</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {paginatedCompanies.map((company) => (
-                <div
-                  key={company.id}
-                  className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors border border-slate-200 dark:border-slate-600 cursor-pointer"
-                  onClick={() => {
-                    if (onCompanyClick && company.carrierDetails) {
-                      onCompanyClick({
-                        client_name: company.client_name,
-                        carriers: company.carrierDetails
-                      });
-                    }
-                  }}
-                >
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-slate-800 dark:text-slate-200 truncate">{company.client_name}</h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      {company.carrierCount || 0} carrier{(company.carrierCount || 0) !== 1 ? 's' : ''} • {company.statement_count} statements
-                    </p>
-                  </div>
-                  <div className="text-right ml-4">
-                    <p className="font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(company.commission_earned)}</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">Invoice: {formatCurrency(company.invoice_total)}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+      {/* Company Search */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <input
+            type="text"
+          value={companySearch}
+          onChange={(e) => setCompanySearch(e.target.value)}
+          placeholder="Search companies..."
+          className="w-full pl-10 pr-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+          />
         </div>
 
-        {/* Modal Footer with Pagination */}
-        <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/30">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-slate-600 dark:text-slate-400">
-              Showing {Math.min((currentPage - 1) * ITEMS_PER_PAGE + 1, filteredCompanies.length)} - {Math.min(currentPage * ITEMS_PER_PAGE, filteredCompanies.length)} of {filteredCompanies.length}
-            </p>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                disabled={currentPage === 1}
-                className="p-2 rounded-lg border border-slate-200 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                <ArrowLeft size={16} className="text-slate-600 dark:text-slate-400" />
-              </button>
-              <span className="text-sm text-slate-600 dark:text-slate-400 px-3">
-                Page {currentPage} of {totalPages || 1}
-              </span>
-              <button
-                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                disabled={currentPage === totalPages || totalPages === 0}
-                className="p-2 rounded-lg border border-slate-200 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                <ArrowRight size={16} className="text-slate-600 dark:text-slate-400" />
-              </button>
-            </div>
-          </div>
-        </div>
+      {/* Company Cards Grid */}
+      <div className="grid gap-4 grid-cols-1 lg:grid-cols-2 items-start">
+        {paginatedCompanies.map((company) => (
+          <ExpandableCompanyCard
+            key={company.id}
+            company={company}
+            isExpanded={expandedCompanyIds.has(company.id)}
+            onToggleExpand={onToggleExpand}
+            onSelect={onSelectCompany}
+          />
+        ))}
       </div>
-    </div>
+
+      {/* Company Pagination */}
+      {companyTotalPages > 1 && (
+        <div className="flex items-center justify-between px-4 py-3 bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl border border-slate-200/50 dark:border-slate-700/50 rounded-lg">
+          <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+            Showing {(companyPage - 1) * COMPANIES_PER_PAGE + 1} - {Math.min(companyPage * COMPANIES_PER_PAGE, filteredCompanies.length)} of {filteredCompanies.length} companies
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setCompanyPage(prev => Math.max(1, prev - 1))}
+              disabled={companyPage === 1}
+              className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-800/50 hover:bg-white dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Previous
+            </button>
+
+            <div className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300">
+              Page {companyPage} of {companyTotalPages}
+                      </div>
+
+                    <button
+              onClick={() => setCompanyPage(prev => Math.min(companyTotalPages, prev + 1))}
+              disabled={companyPage === companyTotalPages}
+              className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-800/50 hover:bg-white dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+            >
+              Next
+              <ArrowRight className="w-4 h-4" />
+                    </button>
+                        </div>
+                      </div>
+      )}
+    </motion.div>
   );
 };
+
+interface CompanyDetailModeProps {
+  company: CommissionData;
+  carrier: CarrierGroup | null;
+  onBack: () => void;
+}
+
+const CompanyDetailMode: React.FC<CompanyDetailModeProps> = ({ company, carrier, onBack }) => {
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const monthKeys = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+
+  const monthlyData = monthKeys.map((key, index) => ({
+    month: months[index],
+    value: company.monthly_breakdown?.[key as keyof typeof company.monthly_breakdown] || 0
+  }));
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: 20 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -20 }}
+      transition={{ duration: 0.4 }}
+      className="p-6 pt-20 space-y-6"
+    >
+      {/* Breadcrumb */}
+      <div className="breadcrumb-premium">
+        <button onClick={onBack} className="breadcrumb-item">
+          <ChevronLeft className="w-4 h-4" />
+          <span>{carrier?.carrierName || 'Back'}</span>
+        </button>
+        <ChevronRight className="w-4 h-4 breadcrumb-chevron" />
+        <span className="breadcrumb-item cursor-default bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
+          {company.client_name}
+        </span>
+      </div>
+
+      {/* Company Details */}
+      <div className="glass-card-premium p-6 rounded-xl">
+        <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6">
+          {company.client_name}
+        </h2>
+
+        <div className="grid grid-cols-4 gap-4 mb-6">
+          <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
+            <div className="text-sm text-blue-600 dark:text-blue-400 mb-1">Commission Earned</div>
+            <div className="text-xl font-bold text-blue-900 dark:text-blue-100">
+              {formatCurrency(company.commission_earned)}
+            </div>
+          </div>
+          <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg">
+            <div className="text-sm text-purple-600 dark:text-purple-400 mb-1">Invoice Total</div>
+            <div className="text-xl font-bold text-purple-900 dark:text-purple-100">
+              {formatCurrency(company.invoice_total)}
+            </div>
+          </div>
+          <div className="bg-emerald-50 dark:bg-emerald-900/20 p-4 rounded-lg">
+            <div className="text-sm text-emerald-600 dark:text-emerald-400 mb-1">Statements</div>
+            <div className="text-xl font-bold text-emerald-900 dark:text-emerald-100">
+              {company.statement_count}
+            </div>
+          </div>
+          <div className="bg-orange-50 dark:bg-orange-900/20 p-4 rounded-lg">
+            <div className="text-sm text-orange-600 dark:text-orange-400 mb-1">Year</div>
+            <div className="text-xl font-bold text-orange-900 dark:text-orange-100">
+              {company.statement_year || 'N/A'}
+            </div>
+          </div>
+        </div>
+
+        <div className="h-64 mb-6">
+          <ResponsiveSparkline data={monthlyData} />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          {monthlyData.map((item, index) => (
+            <div
+              key={item.month}
+              className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg"
+            >
+              <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                {item.month}
+              </span>
+              <span className="text-sm font-bold text-slate-900 dark:text-white">
+                {item.value > 0 ? formatCurrency(item.value) : '—'}
+          </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </motion.div>
+  );
+};
+
+// ============================================
+// MAIN COMPONENT
+// ============================================
 
 export default function EarnedCommissionTab() {
   const { refreshTrigger } = useSubmission();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [sortField, setSortField] = useState<keyof CommissionData>('client_name');
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+
+  // Three-pane state
+  const [selectedCarrier, setSelectedCarrier] = useState<CarrierGroup | null>(null);
+  const [selectedCompany, setSelectedCompany] = useState<CommissionData | null>(null);
+  const [timelinePanelWidth, setTimelinePanelWidth] = useState(350);
+  const [expandedCompanyIds, setExpandedCompanyIds] = useState<Set<string>>(new Set());
+  const [compareMode, setCompareMode] = useState(false);
+  const [selectedCompaniesForCompare, setSelectedCompaniesForCompare] = useState<Set<string>>(new Set());
+
+  // Existing state
+  const [selectedYear, setSelectedYear] = useState<number | null>(2025);
+  const [viewAllData, setViewAllData] = useState(false);
+
+  // Edit modals (keep for compatibility)
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editingData, setEditingData] = useState<CommissionData | null>(null);
   const [editLoading, setEditLoading] = useState(false);
@@ -842,30 +1483,13 @@ export default function EarnedCommissionTab() {
     sourceId: string;
   } | null>(null);
   const [mergeLoading, setMergeLoading] = useState(false);
-  const [showFilters, setShowFilters] = useState(false);
-  const [carrierFilter, setCarrierFilter] = useState<string>('');
-  const [minCommissionFilter, setMinCommissionFilter] = useState<string>('');
-  const [maxCommissionFilter, setMaxCommissionFilter] = useState<string>('');
-  const [selectedYear, setSelectedYear] = useState<number | null>(2025);
-  const [viewAllData, setViewAllData] = useState(false);
-  
-  // NEW state for carrier interface (simplified)
-  const [expandedCarriers, setExpandedCarriers] = useState<Set<string>>(new Set());
-  
-  // NEW state for full-width table view
-  const [selectedCarrierForFullView, setSelectedCarrierForFullView] = useState<string | null>(null);
-  const [expandedCompanies, setExpandedCompanies] = useState<Set<string>>(new Set());
-  const [carrierCompanySearch, setCarrierCompanySearch] = useState('');
-  
-  // Modal states
-  const [carriersModalOpen, setCarriersModalOpen] = useState(false);
-  const [companiesModalOpen, setCompaniesModalOpen] = useState(false);
-  const [selectedCompanyForCarriers, setSelectedCompanyForCarriers] = useState<{
-    client_name: string;
-    carriers: CarrierDetail[];
-  } | null>(null);
 
-  // Fetch data - use different endpoints based on view toggle
+  // Resizing state
+  const [isResizing, setIsResizing] = useState<'timeline' | null>(null);
+  const startXRef = useRef(0);
+  const startWidthRef = useRef(0);
+
+  // Fetch data
   const { stats: userStats, loading: userStatsLoading, refetch: refetchUserStats } = useEarnedCommissionStats(selectedYear || undefined);
   const { stats: globalStats, loading: globalStatsLoading, refetch: refetchGlobalStats } = useGlobalEarnedCommissionStats(selectedYear || undefined);
   const { data: userData, loading: userDataLoading, refetch: refetchUserData } = useAllCommissionData(selectedYear || undefined);
@@ -873,25 +1497,10 @@ export default function EarnedCommissionTab() {
   const { carriers, loading: carriersLoading, refetch: refetchCarriers } = useCarriersWithCommission();
   const { years: availableYears, loading: yearsLoading, refetch: refetchYears } = useAvailableYears();
 
-  // Use the appropriate data based on view toggle
   const overallStats = viewAllData ? globalStats : userStats;
   const statsLoading = viewAllData ? globalStatsLoading : userStatsLoading;
   const allData = viewAllData ? globalData : userData;
   const allDataLoading = viewAllData ? globalDataLoading : userDataLoading;
-
-  // Calculate normalized companies count using core names
-  const normalizedCompaniesCount = useMemo(() => {
-    if (!allData) return 0;
-    
-    const companiesMap = new Map<string, boolean>();
-    allData.forEach(item => {
-      // Use core name to group companies with/without suffixes
-      const coreName = CompanyNameNormalizer.getCoreName(item.client_name);
-      companiesMap.set(coreName, true);
-    });
-    
-    return companiesMap.size;
-  }, [allData]);
 
   // Refresh all data
   const refreshAllData = useCallback(() => {
@@ -906,74 +1515,16 @@ export default function EarnedCommissionTab() {
     refetchYears();
   }, [viewAllData, refetchGlobalStats, refetchGlobalData, refetchUserStats, refetchUserData, refetchCarriers, refetchYears]);
 
-  // Listen for global refresh events only
   useEffect(() => {
     if (refreshTrigger) {
       refreshAllData();
     }
   }, [refreshTrigger, refreshAllData]);
 
-  const ITEMS_PER_PAGE = 20;
+  // Use allData directly (filtering is now done in OverviewMode component)
+  const filteredData = allData || [];
 
-  // Filter and sort data
-  const filteredData = useMemo(() => {
-    let data = allData || [];
-    
-    // Note: The backend already filters data based on user role and view permissions
-    // viewAllData toggle is for UI indication only - the actual filtering happens on the backend
-    
-    // Filter by search query (company name or carrier name)
-    if (searchQuery) {
-      data = data.filter((item: CommissionData) =>
-        item.client_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (item.carrier_name && item.carrier_name.toLowerCase().includes(searchQuery.toLowerCase()))
-      );
-    }
-
-    // Filter by carrier
-    if (carrierFilter) {
-      data = data.filter((item: CommissionData) =>
-        item.carrier_name && item.carrier_name.toLowerCase().includes(carrierFilter.toLowerCase())
-      );
-    }
-
-    // Filter by commission range
-    if (minCommissionFilter) {
-      const minCommission = parseFloat(minCommissionFilter);
-      if (!isNaN(minCommission)) {
-        data = data.filter((item: CommissionData) => item.commission_earned >= minCommission);
-      }
-    }
-
-    if (maxCommissionFilter) {
-      const maxCommission = parseFloat(maxCommissionFilter);
-      if (!isNaN(maxCommission)) {
-        data = data.filter((item: CommissionData) => item.commission_earned <= maxCommission);
-      }
-    }
-    
-    // Sort data - default to alphabetical by company name
-    data.sort((a: CommissionData, b: CommissionData) => {
-      const aValue = a[sortField];
-      const bValue = b[sortField];
-      
-      if (typeof aValue === 'string' && typeof bValue === 'string') {
-        return sortDirection === 'asc' 
-          ? aValue.localeCompare(bValue)
-          : bValue.localeCompare(aValue);
-      }
-      
-      if (typeof aValue === 'number' && typeof bValue === 'number') {
-        return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
-      }
-      
-      return 0;
-    });
-    
-    return data;
-  }, [allData, searchQuery, sortField, sortDirection, carrierFilter, minCommissionFilter, maxCommissionFilter]);
-
-  // NEW: Transform data into carrier groups
+  // Transform data into carrier groups
   const carrierGroups = useMemo(() => {
     const groups = filteredData.reduce((groups, item: CommissionData) => {
       const carrierName = item.carrier_name || 'Unknown Carrier';
@@ -986,43 +1537,96 @@ export default function EarnedCommissionTab() {
 
     return Object.entries(groups).map(([carrierName, companies]) => {
       const typedCompanies = companies as CommissionData[];
-      // Count unique companies by client_name (normalized)
       const uniqueCompanies = new Set(typedCompanies.map(c => c.client_name.toLowerCase().trim()));
-      // Get approved statement count from first record (all records from same carrier have same count)
-      const approvedStatementCount = typedCompanies[0]?.approved_statement_count || 0;
+      // Sum up all statement counts from all companies
+      const totalStatementCount = typedCompanies.reduce((sum: number, company: CommissionData) => 
+        sum + (company.statement_count || 0), 0
+      );
       
       return {
         carrierName,
         companies: typedCompanies,
         totalCommission: typedCompanies.reduce((sum: number, company: CommissionData) => sum + company.commission_earned, 0),
         totalInvoice: typedCompanies.reduce((sum: number, company: CommissionData) => sum + company.invoice_total, 0),
-        companyCount: uniqueCompanies.size, // Count unique companies (normalized), not all records
-        statementCount: approvedStatementCount, // Count approved uploaded files from backend
+        companyCount: uniqueCompanies.size,
+        statementCount: totalStatementCount,
       };
-    }).sort((a, b) => b.totalCommission - a.totalCommission); // Sort by total commission descending
+    }).sort((a, b) => b.totalCommission - a.totalCommission);
   }, [filteredData]);
 
-  // Pagination
-  const totalPages = Math.ceil(filteredData.length / ITEMS_PER_PAGE);
-  const paginatedData = filteredData.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE
-  );
+  // Get all companies flattened
+  const getAllCompanies = useCallback(() => {
+    return carrierGroups.flatMap(c => c.companies);
+  }, [carrierGroups]);
 
-  // Handle sorting
-  const handleSort = (field: keyof CommissionData) => {
-    if (sortField === field) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+  // Handle carrier selection
+  const handleCarrierSelect = useCallback((carrier: CarrierGroup) => {
+    setSelectedCarrier(carrier);
+    setSelectedCompany(null);
+  }, []);
+
+  // Handle company selection
+  const handleCompanySelect = useCallback((company: CommissionData) => {
+    setSelectedCompany(company);
+  }, []);
+
+  // Handle toggle expand
+  const handleToggleExpand = useCallback((companyId: string) => {
+    setExpandedCompanyIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(companyId)) {
+        newSet.delete(companyId);
+      } else {
+        newSet.add(companyId);
+      }
+      return newSet;
+    });
+  }, []);
+
+  // Handle toggle compare
+  const handleToggleCompare = useCallback((value: boolean | Set<string>) => {
+    if (typeof value === 'boolean') {
+      setCompareMode(value);
+      if (!value) {
+        setSelectedCompaniesForCompare(new Set());
+      }
     } else {
-      setSortField(field);
-      // Set default direction based on field type
-      const isStringField = field === 'client_name' || field === 'carrier_name';
-      setSortDirection(isStringField ? 'asc' : 'desc');
+      setSelectedCompaniesForCompare(value);
     }
-    setCurrentPage(1);
+  }, []);
+
+  // Handle resizing
+  const handleResizeStart = (e: React.MouseEvent, pane: 'timeline') => {
+    setIsResizing(pane);
+    startXRef.current = e.clientX;
+    startWidthRef.current = timelinePanelWidth;
+    e.preventDefault();
   };
 
-  // Handle edit commission data
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing) return;
+
+      const delta = startXRef.current - e.clientX;
+      const newWidth = Math.max(250, Math.min(600, startWidthRef.current + delta));
+      setTimelinePanelWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(null);
+    };
+
+    if (isResizing) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [isResizing]);
+
+  // Handle edit/merge (keep for compatibility)
   const handleEditCommission = (data: CommissionData) => {
     setEditingData(data);
     setEditModalOpen(true);
@@ -1033,9 +1637,7 @@ export default function EarnedCommissionTab() {
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/earned-commission/${updatedData.id}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           client_name: updatedData.client_name,
           invoice_total: updatedData.invoice_total,
@@ -1043,13 +1645,9 @@ export default function EarnedCommissionTab() {
         }),
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to update commission data');
-      }
-
+      if (!response.ok) throw new Error('Failed to update commission data');
       const result = await response.json();
 
-      // Check if merge confirmation is required
       if (result.requires_merge_confirmation) {
         setMergeData({
           existingRecord: result.existing_record,
@@ -1061,7 +1659,6 @@ export default function EarnedCommissionTab() {
         return;
       }
 
-      // Refresh the data
       window.location.reload();
     } catch (error) {
       console.error('Error updating commission data:', error);
@@ -1078,20 +1675,14 @@ export default function EarnedCommissionTab() {
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/earned-commission/merge`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           source_id: mergeData.sourceId,
           target_id: mergeData.existingRecord.id,
         }),
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to merge commission records');
-      }
-
-      // Close modal and refresh data
+      if (!response.ok) throw new Error('Failed to merge commission records');
       setMergeModalOpen(false);
       setMergeData(null);
       window.location.reload();
@@ -1106,444 +1697,100 @@ export default function EarnedCommissionTab() {
   const handleCancelMerge = () => {
     setMergeModalOpen(false);
     setMergeData(null);
-    setEditModalOpen(true); // Reopen the edit modal
+    setEditModalOpen(true);
   };
 
-  // Clear all filters
   const clearFilters = () => {
-    setSearchQuery('');
-    setCarrierFilter('');
-    setMinCommissionFilter('');
-    setMaxCommissionFilter('');
     setSelectedYear(2025);
-    setCurrentPage(1);
   };
 
-  // NEW: Carrier management functions
-  const toggleCarrierExpansion = useCallback((carrierName: string) => {
-    if (selectedCarrierForFullView === carrierName) {
-      // Currently in full view - collapse back to cards
-      setSelectedCarrierForFullView(null);
-      setCarrierCompanySearch('');
-      setExpandedCompanies(new Set());
-    } else {
-      // Expand to full view
-      setSelectedCarrierForFullView(carrierName);
-      setCarrierCompanySearch('');
-      setExpandedCompanies(new Set());
-    }
-  }, [selectedCarrierForFullView]);
+  const hasActiveFilters = selectedYear !== 2025;
 
+  const isLoading = allDataLoading || carriersLoading;
 
-  // NEW: Company expansion handler for full table view
-  const toggleCompanyExpansion = useCallback((companyId: string) => {
-    setExpandedCompanies(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(companyId)) {
-        newSet.delete(companyId);
-      } else {
-        newSet.add(companyId);
-      }
-      return newSet;
-    });
-  }, []);
-
-  // Debug logs to help troubleshoot
-
-  // Check if any filters are active
-  const hasActiveFilters = searchQuery || carrierFilter || minCommissionFilter || maxCommissionFilter || selectedYear !== 2025;
-
-  // Format currency
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(amount);
-  };
-
-  // Format monthly value - show dash for 0, currency for non-zero values
-  const formatMonthlyValue = (value: number | undefined | null) => {
-    if (value === undefined || value === null || value === 0) {
-      return '-';
-    }
-    return formatCurrency(value);
-  };
-
-  // Format date
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
-  };
-
+  // Show timeline only when there's something selected
+  const showTimeline = selectedCarrier !== null || selectedCompany !== null;
 
   return (
-    <div className="w-full space-y-6 bg-slate-50 dark:bg-slate-900 min-h-screen" style={{
-      '--primary-blue': '#3B82F6',
-      '--success-green': '#10B981',
-      '--warning-orange': '#F59E0B',
-      '--neutral-gray': '#6B7280',
-      '--background-white': '#FFFFFF',
-      '--card-background': '#F9FAFB',
-      '--border-color': '#E5E7EB'
-    } as React.CSSProperties}>
-      {/* Controls */}
-      <div className="flex justify-between items-center">
-        {/* View Toggle */}
-        <div className="flex items-center gap-2 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-1">
-          <button
-            onClick={() => setViewAllData(false)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
-              !viewAllData
-                ? 'bg-blue-500 text-white shadow-sm'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
-            }`}
-          >
-            <Eye className="w-4 h-4" />
-            My Data
-          </button>
-          <button
-            onClick={() => setViewAllData(true)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
-              viewAllData
-                ? 'bg-blue-500 text-white shadow-sm'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
-            }`}
-          >
-            <EyeOff className="w-4 h-4" />
-            All Data
-          </button>
-        </div>
-
-        {/* Refresh Button */}
-        <button
-          onClick={refreshAllData}
-          disabled={statsLoading || carriersLoading || allDataLoading}
-          className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-lg font-medium shadow-sm hover:bg-emerald-600 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <RefreshCw size={16} className={statsLoading || carriersLoading || allDataLoading ? 'animate-spin' : ''} />
-          Refresh Data
-        </button>
+    <div className="commission-explorer-container flex h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 relative">
+      {/* Main Content - Full Width */}
+      <main className="interactive-context-pane flex-1 overflow-y-auto relative">
+        {isLoading ? (
+          <div className="p-6">
+            <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+              {[...Array(9)].map((_, i) => (
+                <CarrierCardSkeleton key={i} />
+              ))}
       </div>
-
-      {/* Status Indicators */}
-      {selectedYear && selectedYear !== 2025 && (
-        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center">
-              <span className="text-blue-600 dark:text-blue-400 text-sm">📅</span>
-            </div>
-            <div>
-              <p className="text-sm font-medium text-blue-800 dark:text-blue-300">Year Filter Active</p>
-              <p className="text-xs text-blue-600 dark:text-blue-400">Showing data for year {selectedYear}</p>
-            </div>
-          </div>
         </div>
-      )}
-      {viewAllData && (
-        <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-600 rounded-xl p-4 shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-amber-100 dark:bg-amber-800/60 rounded-full flex items-center justify-center">
-              <span className="text-amber-600 dark:text-amber-200 text-sm">🔒</span>
-            </div>
-            <div>
-              <p className="text-sm font-medium text-amber-800 dark:text-amber-100">Read-Only Mode</p>
-              <p className="text-xs text-amber-600 dark:text-amber-200">Viewing all company data</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      
-
-      {/* Stats Cards */}
-      <div className="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
-        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-medium text-slate-600 dark:text-slate-400 text-sm">Total Invoice Amount</p>
-              <div className="font-bold text-slate-800 dark:text-slate-200 text-2xl">
-                {statsLoading ? (
-                  <div className="w-20 h-6 bg-slate-200 dark:bg-slate-600 rounded animate-pulse"></div>
-                ) : formatCurrency(overallStats?.total_invoice || 0)}
-              </div>
-            </div>
-            <div className="bg-blue-100 dark:bg-blue-900/30 rounded-lg p-3">
-              <DollarSign className="text-blue-600 dark:text-blue-400" size={24} />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-medium text-slate-600 dark:text-slate-400 text-sm">Total Commission Earned</p>
-              <div className="font-bold text-emerald-600 dark:text-emerald-400 text-2xl">
-                {statsLoading ? (
-                  <div className="w-20 h-6 bg-slate-200 dark:bg-slate-600 rounded animate-pulse"></div>
-                ) : formatCurrency(overallStats?.total_commission || 0)}
-              </div>
-            </div>
-            <div className="bg-emerald-100 dark:bg-emerald-900/30 rounded-lg p-3">
-              <TrendingUp className="text-emerald-600 dark:text-emerald-400" size={24} />
-            </div>
-          </div>
-        </div>
-
-        <div 
-          className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-6 cursor-pointer hover:shadow-lg hover:border-purple-300 dark:hover:border-purple-600 transition-all duration-200"
-          onClick={() => setCarriersModalOpen(true)}
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-medium text-slate-600 dark:text-slate-400 text-sm">Total Carriers</p>
-              <p className="font-bold text-purple-600 dark:text-purple-400 text-2xl">
-                {statsLoading ? (
-                  <span className="w-20 h-6 bg-slate-200 dark:bg-slate-600 rounded animate-pulse inline-block"></span>
-                ) : overallStats?.total_carriers || 0}
-              </p>
-            </div>
-            <div className="bg-purple-100 dark:bg-purple-900/30 rounded-lg p-3">
-              <Building2 className="text-purple-600 dark:text-purple-400" size={24} />
-            </div>
-          </div>
-        </div>
-
-        <div 
-          className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-6 cursor-pointer hover:shadow-lg hover:border-orange-300 dark:hover:border-orange-600 transition-all duration-200"
-          onClick={() => setCompaniesModalOpen(true)}
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-medium text-slate-600 dark:text-slate-400 text-sm">Total Companies</p>
-              <p className="font-bold text-orange-600 dark:text-orange-400 text-2xl">
-                {statsLoading || allDataLoading ? (
-                  <span className="w-20 h-6 bg-slate-200 dark:bg-slate-600 rounded animate-pulse inline-block"></span>
-                ) : normalizedCompaniesCount}
-              </p>
-            </div>
-            <div className="bg-orange-100 dark:bg-orange-900/30 rounded-lg p-3">
-              <Users className="text-orange-600 dark:text-orange-400" size={24} />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Carrier-Centric Dashboard */}
-      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
-        {/* Dashboard Header */}
-        <div className="p-6 border-b border-slate-200 dark:border-slate-700">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                <BarChart3 className="text-emerald-600 dark:text-emerald-400" size={18} />
-                Commission Data by Carrier
-              </h3>
-              <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                {carrierGroups.length} carriers • {overallStats?.total_statements || 0} total statements
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setShowFilters(!showFilters)}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-200 ${
-                  showFilters 
-                    ? 'bg-emerald-500 text-white shadow-sm' 
-                    : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
-                }`}
-              >
-                <SlidersHorizontal size={14} />
-                <span className="text-sm font-medium">Filters</span>
-                {(minCommissionFilter || maxCommissionFilter) && (
-                  <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                )}
-              </button>
-              <button className="p-2 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-all duration-200">
-                <Download size={16} />
-              </button>
-            </div>
-          </div>
-
-          {/* Search and Filter Row */}
-          <div className="space-y-4 mb-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 dark:text-slate-500" size={16} />
-                <input
-                  type="text"
-                  placeholder="Search by company..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 text-sm bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-lg border border-slate-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200"
-                />
-              </div>
-              <div className="relative">
-                <Building2 className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 dark:text-slate-500" size={16} />
-                <input
-                  type="text"
-                  placeholder="Search by carrier..."
-                  value={carrierFilter}
-                  onChange={(e) => setCarrierFilter(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 text-sm bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-lg border border-slate-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200"
-                />
-              </div>
-              <div>
-                <select
-                  value={selectedYear || 2025}
-                  onChange={(e) => setSelectedYear(e.target.value ? parseInt(e.target.value) : null)}
-                  className="w-full px-4 py-2 text-sm bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-lg border border-slate-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200"
-                >
-                  <option value="" className="bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100">All Years</option>
-                  {yearsLoading ? (
-                    <option value="" disabled className="bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100">Loading years...</option>
-                  ) : (
-                    availableYears.map((year) => (
-                      <option key={year} value={year} className="bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100">{year}</option>
-                    ))
-                  )}
-                </select>
-              </div>
-            </div>
-            
-            {/* Clear Filters Button */}
-            {hasActiveFilters && (
-              <div className="flex justify-center">
-                <button
-                  onClick={clearFilters}
-                  className="flex items-center gap-2 px-3 py-1 text-sm bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors font-medium"
-                >
-                  <X size={14} />
-                  Clear All Filters
-                </button>
-              </div>
+        ) : (
+          <AnimatePresence mode="wait">
+            {!selectedCarrier && !selectedCompany && (
+              <OverviewMode
+                carriers={carrierGroups}
+                onSelectCarrier={handleCarrierSelect}
+              />
             )}
-          </div>
 
-          {/* Advanced Filters Panel */}
-          {showFilters && (
-            <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4 mb-4 border border-slate-200 dark:border-slate-600">
-              <div className="flex items-center justify-between mb-4">
-                <h4 className="font-medium text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                  <Filter size={14} />
-                  Advanced Filters
-                </h4>
-                {hasActiveFilters && (
-                  <button
-                    onClick={clearFilters}
-                    className="flex items-center gap-1 px-2 py-1 text-xs bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors"
-                  >
-                    <X size={10} />
-                    Clear All
-                  </button>
-                )}
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">Min Commission</label>
-                  <input
-                    type="number"
-                    placeholder="Min amount..."
-                    value={minCommissionFilter}
-                    onChange={(e) => setMinCommissionFilter(e.target.value)}
-                    className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded border border-slate-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">Max Commission</label>
-                  <input
-                    type="number"
-                    placeholder="Max amount..."
-                    value={maxCommissionFilter}
-                    onChange={(e) => setMaxCommissionFilter(e.target.value)}
-                    className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded border border-slate-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
+            {selectedCarrier && !selectedCompany && (
+              <CarrierDetailMode
+                carrier={selectedCarrier}
+                expandedCompanyIds={expandedCompanyIds}
+                onToggleExpand={handleToggleExpand}
+                onSelectCompany={handleCompanySelect}
+                onBack={() => {
+                  setSelectedCarrier(null);
+                  setSelectedCompany(null);
+                }}
+              />
+            )}
 
-        {/* Conditional Rendering: Full Table View OR Card Grid View */}
-        <div className="p-6">
-          {selectedCarrierForFullView ? (
-            // FULL TABLE VIEW MODE
-            <CarrierFullTableView
-              carrier={carrierGroups.find(c => c.carrierName === selectedCarrierForFullView)!}
-              onBack={() => {
-                setSelectedCarrierForFullView(null);
-                setCarrierCompanySearch('');
-                setExpandedCompanies(new Set());
-              }}
-              onEditCompany={handleEditCommission}
-              viewAllData={viewAllData}
-              searchQuery={carrierCompanySearch}
-              onSearchChange={setCarrierCompanySearch}
-              expandedCompanies={expandedCompanies}
-              onToggleCompanyExpansion={toggleCompanyExpansion}
+            {selectedCompany && (
+              <CompanyDetailMode
+                company={selectedCompany}
+                carrier={selectedCarrier}
+                onBack={() => setSelectedCompany(null)}
+              />
+            )}
+          </AnimatePresence>
+        )}
+      </main>
+
+      {/* PANE 3: Timeline Insight Panel - Only show when carrier/company selected */}
+                        <AnimatePresence>
+        {showTimeline && (
+          <>
+            {/* Resizer for timeline */}
+            <div
+              className="resize-handle"
+              onMouseDown={(e) => handleResizeStart(e, 'timeline')}
             />
-          ) : (
-            // CARD GRID VIEW MODE (existing code)
-            <>
-              {allDataLoading ? (
-                <div className="flex items-center justify-center py-12">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 border-2 border-slate-200 dark:border-slate-600 border-t-emerald-500 rounded-full animate-spin"></div>
-                    <span className="text-slate-500 dark:text-slate-400">Loading commission data...</span>
-                  </div>
-                </div>
-              ) : carrierGroups.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-slate-500 dark:text-slate-400">
-                  <BarChart3 className="text-slate-300 dark:text-slate-600 mb-4" size={48} />
-                  <p className="text-lg font-medium mb-2">No commission data found</p>
-                  {hasActiveFilters && (
-                    <button
-                      onClick={clearFilters}
-                      className="text-sm text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 underline"
-                    >
-                      Clear filters to see all data
-                    </button>
-                  )}
-                </div>
+
+            <motion.aside
+              initial={{ x: timelinePanelWidth, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: timelinePanelWidth, opacity: 0 }}
+              transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+              className="timeline-insight-panel"
+              style={{ width: `${timelinePanelWidth}px` }}
+            >
+              {isLoading ? (
+                <TimelineSkeleton />
               ) : (
-                <div className="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-                  {carrierGroups.map(carrierGroup => (
-                    <CarrierCard
-                      key={carrierGroup.carrierName}
-                      carrierGroup={carrierGroup}
-                      isExpanded={false} // Always false in card mode
-                      showMonthlyDetails={false} // Not used in card mode
-                      onToggleExpand={() => toggleCarrierExpansion(carrierGroup.carrierName)} // Now opens full table
-                      onToggleMonthlyDetails={() => {}} // Not used anymore
-                      onEditCompany={handleEditCommission}
-                      viewAllData={viewAllData}
-                    />
-                  ))}
-                </div>
+                <TimelineInsightPanel
+                  selectedCarrier={selectedCarrier}
+                  selectedCompany={selectedCompany}
+                  compareMode={compareMode}
+                  selectedCompaniesForCompare={selectedCompaniesForCompare}
+                  allCompanies={getAllCompanies()}
+                />
               )}
+            </motion.aside>
             </>
           )}
-        </div>
+      </AnimatePresence>
 
-        {/* Summary Footer */}
-        <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/30">
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-slate-700 dark:text-slate-300 font-medium">
-              Showing {carrierGroups.length} carriers with {overallStats?.total_statements || 0} total statements
-            </div>
-            <div className="flex items-center gap-4 text-sm text-slate-600 dark:text-slate-400">
-              <span>Total Commission: <span className="font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(carrierGroups.reduce((sum, group) => sum + group.totalCommission, 0))}</span></span>
-              <span>Total Invoice: <span className="font-bold text-slate-800 dark:text-slate-200">{formatCurrency(carrierGroups.reduce((sum, group) => sum + group.totalInvoice, 0))}</span></span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Edit Commission Modal */}
+      {/* Modals (Keep for compatibility) */}
       <EditCommissionModal
         isOpen={editModalOpen}
         onClose={() => {
@@ -1555,7 +1802,6 @@ export default function EarnedCommissionTab() {
         loading={editLoading}
       />
 
-      {/* Merge Confirmation Modal */}
       {mergeData?.existingRecord && mergeData?.newData && (
         <MergeConfirmationModal
           isOpen={mergeModalOpen}
@@ -1568,38 +1814,6 @@ export default function EarnedCommissionTab() {
           onConfirmMerge={handleConfirmMerge}
           onCancel={handleCancelMerge}
           loading={mergeLoading}
-        />
-      )}
-
-      {/* Carriers List Modal */}
-      <CarriersListModal
-        isOpen={carriersModalOpen}
-        onClose={() => setCarriersModalOpen(false)}
-        carriers={carrierGroups}
-      />
-
-      {/* Companies List Modal */}
-      <CompaniesListModal
-        isOpen={companiesModalOpen}
-        onClose={() => setCompaniesModalOpen(false)}
-        data={allData || []}
-        onCompanyClick={(company) => {
-          setSelectedCompanyForCarriers(company);
-          setCompaniesModalOpen(false);
-        }}
-      />
-
-      {/* Company Carrier Modal */}
-      {selectedCompanyForCarriers && (
-        <CompanyCarrierModal
-          isOpen={!!selectedCompanyForCarriers}
-          onClose={() => setSelectedCompanyForCarriers(null)}
-          onBack={() => {
-            setSelectedCompanyForCarriers(null);
-            setCompaniesModalOpen(true);
-          }}
-          companyName={selectedCompanyForCarriers.client_name}
-          carriers={selectedCompanyForCarriers.carriers}
         />
       )}
     </div>
