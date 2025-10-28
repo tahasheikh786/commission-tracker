@@ -501,17 +501,18 @@ export default function UnifiedTableEditor({
         throw new Error('Company ID or Carrier ID is required. Please check the extraction response.');
       }
 
-      // Use the provided selectedStatementDate or parse from extractedData
+      // Use the provided selectedStatementDate or parse from editedStatementDate or extractedData
       console.log('🔍 Statement Date Debug - selectedStatementDate prop:', selectedStatementDate);
+      console.log('🔍 Statement Date Debug - editedStatementDate state:', editedStatementDate);
       console.log('🔍 Statement Date Debug - extractedData.statementDate:', extractedData?.statementDate);
       console.log('🔍 Statement Date Debug - extractedData.extracted_date:', extractedData?.extracted_date);
       
       let statementDateObj = selectedStatementDate;
       
-      // If not provided as prop, try to parse from extractedData
+      // If not provided as prop, try to parse from editedStatementDate (user manually edited) or extractedData
       if (!statementDateObj) {
-        console.log('⚠️ No selectedStatementDate prop provided, parsing from extractedData...');
-        const statementDateStr = extractedData?.statementDate || extractedData?.extracted_date || '';
+        console.log('⚠️ No selectedStatementDate prop provided, parsing from editedStatementDate or extractedData...');
+        const statementDateStr = editedStatementDate || extractedData?.statementDate || extractedData?.extracted_date || '';
         const dateParts = statementDateStr.split('/');
         statementDateObj = dateParts.length === 3 ? {
           month: parseInt(dateParts[0]),
@@ -1137,15 +1138,15 @@ export default function UnifiedTableEditor({
                   <div>
                     <span className="text-xs text-purple-600 dark:text-purple-400 font-semibold block">Plan Type</span>
                     <span className="text-sm font-bold text-gray-900 dark:text-slate-100">
-                      {aiIntelligence.plan_type_detection.detected_plan_types[0]?.plan_type || 'Unknown'}
+                      {aiIntelligence?.plan_type_detection?.detected_plan_types?.[0]?.plan_type || 'Unknown'}
                     </span>
                   </div>
                   <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ml-2 ${
-                    aiIntelligence.plan_type_detection.confidence >= 0.8 ? 'bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400' :
-                    aiIntelligence.plan_type_detection.confidence >= 0.6 ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300' :
+                    (aiIntelligence?.plan_type_detection?.confidence ?? 0) >= 0.8 ? 'bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400' :
+                    (aiIntelligence?.plan_type_detection?.confidence ?? 0) >= 0.6 ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300' :
                     'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300'
                   }`}>
-                    {Math.round(aiIntelligence.plan_type_detection.confidence * 100)}%
+                    {Math.round((aiIntelligence?.plan_type_detection?.confidence ?? 0) * 100)}%
                   </span>
                 </div>
               </div>

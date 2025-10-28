@@ -14,16 +14,44 @@ router = APIRouter(prefix="/api")
 
 @router.get("/dashboard/stats")
 async def get_dashboard_stats(
+    environment_id: Optional[UUID] = Query(None, description="Filter by environment ID"),
+    view_mode: Optional[str] = Query("my_data", description="View mode: my_data or all_data"),
     current_user: User = Depends(get_current_user_hybrid),
     db: AsyncSession = Depends(get_db)
 ):
-    """Get dashboard statistics - automatically filters by user data for regular users, global for admins"""
+    """
+    Get dashboard statistics:
+    - My Data: Shows only current user's data (can be filtered by environment)
+    - All Data: Shows all data from users in the same company/organization
+    """
     try:
-        # For admin users, show global data. For regular users, show only their data
-        is_admin = current_user.role == 'admin'
+        # Build conditions based on view mode
+        base_conditions = []
         
-        # Base query condition - admin sees all, regular users see only their data
-        user_condition = True if is_admin else (StatementUpload.user_id == current_user.id)
+        if view_mode == "all_data":
+            # Show all data from the same company (organization)
+            if current_user.company_id:
+                users_in_company_result = await db.execute(
+                    select(User.id).where(User.company_id == current_user.company_id)
+                )
+                user_ids_in_company = [row[0] for row in users_in_company_result.all()]
+                if user_ids_in_company:
+                    base_conditions.append(StatementUpload.user_id.in_(user_ids_in_company))
+                else:
+                    base_conditions.append(StatementUpload.user_id == None)
+            else:
+                base_conditions.append(StatementUpload.user_id == current_user.id)
+        else:
+            # My Data: Show only user's own data
+            base_conditions.append(StatementUpload.user_id == current_user.id)
+        
+        # Add environment filter if provided (for both My Data and All Data views)
+        if environment_id:
+            base_conditions.append(StatementUpload.environment_id == environment_id)
+        
+        # Legacy variables for backward compatibility
+        user_condition = and_(*base_conditions) if base_conditions else True
+        environment_condition = True  # Already handled in base_conditions
         
         # Get total statements count
         total_statements_result = await db.execute(
@@ -32,24 +60,23 @@ async def get_dashboard_stats(
         )
         total_statements = total_statements_result.scalar() or 0
 
-        # Get total carriers count - for admin show carriers with statements, for regular users show carriers they've worked with
+        # Get total carriers count
         # NOTE: Use COALESCE to support both old (company_id) and new (carrier_id) data
-        if is_admin:
-            # For admin, get all unique carriers (both old and new format)
-            # Old format: carrier stored in company_id, carrier_id is NULL
-            # New format: carrier stored in carrier_id
+        if view_mode == "all_data":
+            # All Data: Count all unique carriers from users in the same company
             total_carriers_result = await db.execute(
                 select(func.count(func.distinct(
                     func.coalesce(StatementUpload.carrier_id, StatementUpload.company_id)
                 )))
+                .where(user_condition)
             )
         else:
-            # For regular users, only count carriers they've worked with
+            # My Data: Count only carriers the user has worked with
             total_carriers_result = await db.execute(
                 select(func.count(func.distinct(
                     func.coalesce(StatementUpload.carrier_id, StatementUpload.company_id)
                 )))
-                .where(StatementUpload.user_id == current_user.id)
+                .where(user_condition)
             )
         total_carriers = total_carriers_result.scalar() or 0
 
@@ -57,7 +84,8 @@ async def get_dashboard_stats(
         pending_query = select(func.count(StatementUpload.id)).where(
             and_(
                 StatementUpload.status.in_(['extracted', 'success']),
-                user_condition
+                user_condition,
+                environment_condition
             )
         )
         pending_reviews_result = await db.execute(pending_query)
@@ -67,7 +95,8 @@ async def get_dashboard_stats(
         approved_query = select(func.count(StatementUpload.id)).where(
             and_(
                 StatementUpload.status.in_(['completed', 'Approved']),
-                user_condition
+                user_condition,
+                environment_condition
             )
         )
         approved_statements_result = await db.execute(approved_query)
@@ -77,7 +106,8 @@ async def get_dashboard_stats(
         rejected_query = select(func.count(StatementUpload.id)).where(
             and_(
                 StatementUpload.status == 'rejected',
-                user_condition
+                user_condition,
+                environment_condition
             )
         )
         rejected_statements_result = await db.execute(rejected_query)
@@ -97,6 +127,7 @@ async def get_dashboard_stats(
 
 @router.get("/dashboard/statements")
 async def get_all_statements(
+    environment_id: Optional[UUID] = Query(None, description="Filter by environment ID"),
     current_user: User = Depends(get_current_user_hybrid),
     db: AsyncSession = Depends(get_db)
 ):
@@ -112,6 +143,10 @@ async def get_all_statements(
         # Apply user filter - admin sees all, regular users see only their data
         if not is_admin:
             query = query.where(StatementUpload.user_id == current_user.id)
+        
+        # Add environment filter if provided
+        if environment_id:
+            query = query.where(StatementUpload.environment_id == environment_id)
         
         query = query.order_by(StatementUpload.uploaded_at.desc())
         
@@ -143,7 +178,8 @@ async def get_all_statements(
 
 @router.get("/dashboard/statements/{status}")
 async def get_statements_by_status(
-    status: str, 
+    status: str,
+    environment_id: Optional[UUID] = Query(None, description="Filter by environment ID"),
     current_user: User = Depends(get_current_user_hybrid),
     db: AsyncSession = Depends(get_db)
 ):
@@ -171,6 +207,10 @@ async def get_statements_by_status(
         # Apply user filter - admin sees all, regular users see only their data
         if not is_admin:
             query = query.where(StatementUpload.user_id == current_user.id)
+        
+        # Add environment filter if provided
+        if environment_id:
+            query = query.where(StatementUpload.environment_id == environment_id)
         
         query = query.order_by(StatementUpload.uploaded_at.desc())
         
@@ -202,53 +242,74 @@ async def get_statements_by_status(
 
 @router.get("/dashboard/carriers")
 async def get_carriers_with_statement_counts(
+    environment_id: Optional[UUID] = Query(None, description="Filter by environment ID"),
+    view_mode: Optional[str] = Query("my_data", description="View mode: my_data or all_data"),
     current_user: User = Depends(get_current_user_hybrid),
     db: AsyncSession = Depends(get_db)
 ):
-    """Get carriers with their statement counts - automatically filters by user data for regular users"""
+    """
+    Get carriers with their statement counts:
+    - My Data: Shows only carriers the user has uploaded statements for (can be filtered by environment)
+    - All Data: Shows all carriers with data from users in the same company/organization
+    """
     try:
-        # For admin users, show all carriers. For regular users, show only carriers they've worked with
-        is_admin = current_user.role == 'admin'
+        # Base query setup
+        query = select(
+            Company.id,
+            Company.name,
+            func.count(StatementUpload.id).label('statement_count')
+        ).outerjoin(StatementUpload, or_(
+            Company.id == StatementUpload.carrier_id,
+            and_(
+                Company.id == StatementUpload.company_id,
+                StatementUpload.carrier_id.is_(None)
+            )
+        ))
         
-        if is_admin:
-            # Admin sees all carriers with total statement counts
-            # NOTE: Support both old (company_id) and new (carrier_id) format
-            result = await db.execute(
-                select(
-                    Company.id,
-                    Company.name,
-                    func.count(StatementUpload.id).label('statement_count')
+        # Apply filter based on view mode
+        if view_mode == "all_data":
+            # Show carriers with data from all users in the same company
+            if current_user.company_id:
+                users_in_company_result = await db.execute(
+                    select(User.id).where(User.company_id == current_user.company_id)
                 )
-                .outerjoin(StatementUpload, or_(
-                    Company.id == StatementUpload.carrier_id,
-                    and_(
-                        Company.id == StatementUpload.company_id,
-                        StatementUpload.carrier_id.is_(None)
+                user_ids_in_company = [row[0] for row in users_in_company_result.all()]
+                if user_ids_in_company:
+                    query = query.where(
+                        or_(
+                            StatementUpload.user_id.in_(user_ids_in_company),
+                            StatementUpload.id.is_(None)  # Include carriers with no statements
+                        )
                     )
-                ))
-                .group_by(Company.id, Company.name)
-                .order_by(Company.name)
-            )
+            else:
+                # User has no company, show only their carriers
+                query = query.where(
+                    or_(
+                        StatementUpload.user_id == current_user.id,
+                        StatementUpload.id.is_(None)
+                    )
+                )
         else:
-            # Regular users see only carriers they've uploaded statements for
-            # NOTE: Support both old (company_id) and new (carrier_id) format
-            result = await db.execute(
-                select(
-                    Company.id,
-                    Company.name,
-                    func.count(StatementUpload.id).label('statement_count')
+            # My Data: Show only carriers the user has worked with
+            query = query.where(
+                or_(
+                    StatementUpload.user_id == current_user.id,
+                    StatementUpload.id.is_(None)  # Include carriers with no statements (optional)
                 )
-                .join(StatementUpload, or_(
-                    Company.id == StatementUpload.carrier_id,
-                    and_(
-                        Company.id == StatementUpload.company_id,
-                        StatementUpload.carrier_id.is_(None)
-                    )
-                ))
-                .where(StatementUpload.user_id == current_user.id)
-                .group_by(Company.id, Company.name)
-                .order_by(Company.name)
             )
+        
+        # Add environment filter if provided (for both My Data and All Data views)
+        if environment_id:
+            query = query.where(
+                or_(
+                    StatementUpload.environment_id == environment_id,
+                    StatementUpload.id.is_(None)
+                )
+            )
+        
+        result = await db.execute(
+            query.group_by(Company.id, Company.name).order_by(Company.name)
+        )
         
         carriers = result.all()
         
@@ -265,7 +326,11 @@ async def get_carriers_with_statement_counts(
         raise HTTPException(status_code=500, detail=f"Error fetching carriers: {str(e)}")
 
 @router.get("/dashboard/carriers/{carrier_id}/statements")
-async def get_statements_by_carrier(carrier_id: UUID, db: AsyncSession = Depends(get_db)):
+async def get_statements_by_carrier(
+    carrier_id: UUID,
+    environment_id: Optional[UUID] = Query(None, description="Filter by environment ID"),
+    db: AsyncSession = Depends(get_db)
+):
     """Get all statements for a specific carrier"""
     try:
         # Get carrier name
@@ -279,19 +344,21 @@ async def get_statements_by_carrier(carrier_id: UUID, db: AsyncSession = Depends
         
         # Get statements for this carrier
         # NOTE: Support both old (company_id) and new (carrier_id) format
-        result = await db.execute(
-            select(StatementUpload)
-            .where(
-                or_(
-                    StatementUpload.carrier_id == carrier_id,
-                    and_(
-                        StatementUpload.company_id == carrier_id,
-                        StatementUpload.carrier_id.is_(None)
-                    )
+        query = select(StatementUpload).where(
+            or_(
+                StatementUpload.carrier_id == carrier_id,
+                and_(
+                    StatementUpload.company_id == carrier_id,
+                    StatementUpload.carrier_id.is_(None)
                 )
             )
-            .order_by(StatementUpload.uploaded_at.desc())
         )
+        
+        # Add environment filter if provided
+        if environment_id:
+            query = query.where(StatementUpload.environment_id == environment_id)
+        
+        result = await db.execute(query.order_by(StatementUpload.uploaded_at.desc()))
         statements = result.scalars().all()
         
         formatted_statements = []
@@ -319,8 +386,9 @@ async def get_statements_by_carrier(carrier_id: UUID, db: AsyncSession = Depends
 
 @router.get("/dashboard/carriers/{carrier_id}/statements/{status}")
 async def get_statements_by_carrier_and_status(
-    carrier_id: UUID, 
-    status: str, 
+    carrier_id: UUID,
+    status: str,
+    environment_id: Optional[UUID] = Query(None, description="Filter by environment ID"),
     db: AsyncSession = Depends(get_db)
 ):
     """Get statements for a specific carrier filtered by status"""
@@ -348,20 +416,21 @@ async def get_statements_by_carrier_and_status(
         
         # Get statements for this carrier with status filter
         # NOTE: Support both old (company_id) and new (carrier_id) format
-        result = await db.execute(
-            select(StatementUpload)
-            .where(
-                or_(
-                    StatementUpload.carrier_id == carrier_id,
-                    and_(
-                        StatementUpload.company_id == carrier_id,
-                        StatementUpload.carrier_id.is_(None)
-                    )
+        query = select(StatementUpload).where(
+            or_(
+                StatementUpload.carrier_id == carrier_id,
+                and_(
+                    StatementUpload.company_id == carrier_id,
+                    StatementUpload.carrier_id.is_(None)
                 )
             )
-            .where(StatementUpload.status.in_(db_statuses))
-            .order_by(StatementUpload.uploaded_at.desc())
-        )
+        ).where(StatementUpload.status.in_(db_statuses))
+        
+        # Add environment filter if provided
+        if environment_id:
+            query = query.where(StatementUpload.environment_id == environment_id)
+        
+        result = await db.execute(query.order_by(StatementUpload.uploaded_at.desc()))
         statements = result.scalars().all()
         
         formatted_statements = []
@@ -389,6 +458,7 @@ async def get_statements_by_carrier_and_status(
 
 @router.get("/companies/user-specific")
 async def get_user_specific_companies(
+    environment_id: Optional[UUID] = Query(None, description="Filter by environment ID"),
     current_user: User = Depends(get_current_user_hybrid),
     db: AsyncSession = Depends(get_db)
 ):
@@ -400,13 +470,15 @@ async def get_user_specific_companies(
         # New format: carrier stored in carrier_id
         
         # Get all unique carrier IDs from both old and new format
-        user_carriers_result = await db.execute(
-            select(
-                func.coalesce(StatementUpload.carrier_id, StatementUpload.company_id).label('carrier_id')
-            )
-            .where(StatementUpload.user_id == current_user.id)
-            .distinct()
-        )
+        query = select(
+            func.coalesce(StatementUpload.carrier_id, StatementUpload.company_id).label('carrier_id')
+        ).where(StatementUpload.user_id == current_user.id)
+        
+        # Add environment filter if provided
+        if environment_id:
+            query = query.where(StatementUpload.environment_id == environment_id)
+        
+        user_carriers_result = await db.execute(query.distinct())
         user_carrier_ids = [row[0] for row in user_carriers_result.all() if row[0] is not None]
         
         if not user_carrier_ids:
@@ -434,6 +506,7 @@ async def get_user_specific_companies(
 @router.get("/companies/user-specific/{company_id}/statements")
 async def get_user_specific_company_statements(
     company_id: UUID,
+    environment_id: Optional[UUID] = Query(None, description="Filter by environment ID"),
     current_user: User = Depends(get_current_user_hybrid),
     db: AsyncSession = Depends(get_db)
 ):
@@ -441,22 +514,24 @@ async def get_user_specific_company_statements(
     try:
         # Get statements for this carrier that the user has uploaded
         # NOTE: Support both old (company_id) and new (carrier_id) format
-        statements_result = await db.execute(
-            select(StatementUpload)
-            .where(
-                and_(
-                    or_(
-                        StatementUpload.carrier_id == company_id,
-                        and_(
-                            StatementUpload.company_id == company_id,
-                            StatementUpload.carrier_id.is_(None)
-                        )
-                    ),
-                    StatementUpload.user_id == current_user.id
-                )
+        query = select(StatementUpload).where(
+            and_(
+                or_(
+                    StatementUpload.carrier_id == company_id,
+                    and_(
+                        StatementUpload.company_id == company_id,
+                        StatementUpload.carrier_id.is_(None)
+                    )
+                ),
+                StatementUpload.user_id == current_user.id
             )
-            .order_by(StatementUpload.uploaded_at.desc())
         )
+        
+        # Add environment filter if provided
+        if environment_id:
+            query = query.where(StatementUpload.environment_id == environment_id)
+        
+        statements_result = await db.execute(query.order_by(StatementUpload.uploaded_at.desc()))
         
         statements = statements_result.scalars().all()
         
@@ -483,27 +558,51 @@ async def get_user_specific_company_statements(
 
 @router.get("/dashboard/earned-commissions")
 async def get_all_earned_commissions(
-    year: Optional[int] = None, 
+    year: Optional[int] = None,
+    environment_id: Optional[UUID] = Query(None, description="Filter by environment ID"),
+    view_mode: Optional[str] = Query("my_data", description="View mode: my_data or all_data"),
     current_user: User = Depends(get_current_user_hybrid),
     db: AsyncSession = Depends(get_db)
 ):
-    """Get earned commission data - user-specific for regular users, global for admins"""
+    """
+    Get earned commission data with proper My Data vs All Data logic:
+    - My Data: Shows only current user's data (can be filtered by environment)
+    - All Data: Shows all data from users in the same company/organization
+    """
     try:
-        # For admin users, show global data. For regular users, show only their data
-        is_admin = current_user.role == 'admin'
-        
-        # Build base query with proper user filtering using the new user_id field
+        # Build base query
         query = select(EarnedCommission, Company.name.label('carrier_name')).join(
             Company, EarnedCommission.carrier_id == Company.id
         )
         
-        # Apply user filter for non-admin users - now using the user_id field directly
-        if not is_admin:
+        # Apply filter based on view mode
+        if view_mode == "all_data":
+            # Show all data from the same company (organization)
+            if current_user.company_id:
+                # Get all users from the same company
+                users_in_company_result = await db.execute(
+                    select(User.id).where(User.company_id == current_user.company_id)
+                )
+                user_ids_in_company = [row[0] for row in users_in_company_result.all()]
+                if user_ids_in_company:
+                    query = query.where(EarnedCommission.user_id.in_(user_ids_in_company))
+                else:
+                    # No users in company, return empty result
+                    query = query.where(EarnedCommission.user_id == None)
+            else:
+                # User has no company, show only their data
+                query = query.where(EarnedCommission.user_id == current_user.id)
+        else:
+            # My Data: Show only user's own data
             query = query.where(EarnedCommission.user_id == current_user.id)
         
         # Apply year filter if provided
         if year is not None:
             query = query.where(EarnedCommission.statement_year == year)
+        
+        # Apply environment filter if provided (for both My Data and All Data views)
+        if environment_id is not None:
+            query = query.where(EarnedCommission.environment_id == environment_id)
         
         query = query.order_by(Company.name, EarnedCommission.client_name)
         
@@ -527,9 +626,28 @@ async def get_all_earned_commissions(
                 StatementUpload.status.in_(['completed', 'Approved'])
             ]
             
-            # Add user filter for non-admin users
-            if not is_admin:
+            # Apply filter based on view mode
+            if view_mode == "all_data":
+                # Show all data from the same company (organization)
+                if current_user.company_id:
+                    # Get all users from the same company (reuse from earlier)
+                    users_in_company_result = await db.execute(
+                        select(User.id).where(User.company_id == current_user.company_id)
+                    )
+                    user_ids_in_company = [row[0] for row in users_in_company_result.all()]
+                    if user_ids_in_company:
+                        statement_conditions.append(StatementUpload.user_id.in_(user_ids_in_company))
+                    else:
+                        statement_conditions.append(StatementUpload.user_id == None)
+                else:
+                    statement_conditions.append(StatementUpload.user_id == current_user.id)
+            else:
+                # My Data: Show only user's own data
                 statement_conditions.append(StatementUpload.user_id == current_user.id)
+            
+            # Apply environment filter if provided (for both My Data and All Data views)
+            if environment_id is not None:
+                statement_conditions.append(StatementUpload.environment_id == environment_id)
             
             count_result = await db.execute(
                 select(func.count(StatementUpload.id))
@@ -663,23 +781,47 @@ async def get_earned_commissions_summary(db: AsyncSession = Depends(get_db)):
 
 @router.get("/earned-commission/stats")
 async def get_earned_commission_stats(
-    year: Optional[int] = None, 
+    year: Optional[int] = None,
+    environment_id: Optional[UUID] = Query(None, description="Filter by environment ID"),
+    view_mode: Optional[str] = Query("my_data", description="View mode: my_data or all_data"),
     current_user: User = Depends(get_current_user_hybrid),
     db: AsyncSession = Depends(get_db)
 ):
-    """Get earned commission statistics - user-specific for regular users, global for admins"""
+    """
+    Get earned commission statistics with proper My Data vs All Data logic:
+    - My Data: Shows only current user's data (can be filtered by environment)
+    - All Data: Shows all data from users in the same company/organization
+    """
     try:
-        # For admin users, show global data. For regular users, show only their data
-        is_admin = current_user.role == 'admin'
-        
-        # Build base conditions using the new user_id field
+        # Build base conditions
         base_conditions = []
         if year is not None:
             base_conditions.append(EarnedCommission.statement_year == year)
         
-        # Add user filter for non-admin users - now using the user_id field directly
-        if not is_admin:
+        # Apply filter based on view mode
+        if view_mode == "all_data":
+            # Show all data from the same company (organization)
+            if current_user.company_id:
+                # Get all users from the same company
+                users_in_company_result = await db.execute(
+                    select(User.id).where(User.company_id == current_user.company_id)
+                )
+                user_ids_in_company = [row[0] for row in users_in_company_result.all()]
+                if user_ids_in_company:
+                    base_conditions.append(EarnedCommission.user_id.in_(user_ids_in_company))
+                else:
+                    # No users in company, return empty result
+                    base_conditions.append(EarnedCommission.user_id == None)
+            else:
+                # User has no company, show only their data
+                base_conditions.append(EarnedCommission.user_id == current_user.id)
+        else:
+            # My Data: Show only user's own data
             base_conditions.append(EarnedCommission.user_id == current_user.id)
+        
+        # Apply environment filter if provided (for both My Data and All Data views)
+        if environment_id is not None:
+            base_conditions.append(EarnedCommission.environment_id == environment_id)
 
         # Get total invoice amounts
         if base_conditions:
@@ -729,15 +871,32 @@ async def get_earned_commission_stats(
             )
         total_companies = total_companies_result.scalar() or 0
 
-        # Get total approved statements count from StatementUpload table
+        # For statement counts, we need to apply the same view_mode logic but to StatementUpload
         statement_conditions = [StatementUpload.status.in_(['completed', 'Approved'])]
         if year is not None:
             # Note: This would require a statement_year field in StatementUpload
             # For now, just count all approved statements
             pass
         
-        if not is_admin:
+        # Apply view mode filter for statements
+        if view_mode == "all_data":
+            if current_user.company_id:
+                users_in_company_result_stmt = await db.execute(
+                    select(User.id).where(User.company_id == current_user.company_id)
+                )
+                user_ids_in_company_stmt = [row[0] for row in users_in_company_result_stmt.all()]
+                if user_ids_in_company_stmt:
+                    statement_conditions.append(StatementUpload.user_id.in_(user_ids_in_company_stmt))
+                else:
+                    statement_conditions.append(StatementUpload.user_id == None)
+            else:
+                statement_conditions.append(StatementUpload.user_id == current_user.id)
+        else:
             statement_conditions.append(StatementUpload.user_id == current_user.id)
+        
+        # Apply environment filter for statements (for both My Data and All Data views)
+        if environment_id is not None:
+            statement_conditions.append(StatementUpload.environment_id == environment_id)
         
         total_statements_result = await db.execute(
             select(func.count(StatementUpload.id))
@@ -1134,28 +1293,49 @@ async def get_carriers_with_commission_data(
 @router.get("/earned-commission/carriers-detailed")
 async def get_carriers_with_detailed_commission_data(
     year: int = None,
+    environment_id: Optional[UUID] = Query(None, description="Filter by environment ID"),
+    view_mode: Optional[str] = Query("my_data", description="View mode: my_data or all_data"),
     current_user: User = Depends(get_current_user_hybrid),
     db: AsyncSession = Depends(get_db)
 ):
-    """Get carriers with detailed commission data including statement counts"""
+    """
+    Get carriers with detailed commission data including statement counts:
+    - My Data: Shows only carriers the user has commission data for (can be filtered by environment)
+    - All Data: Shows all carriers with data from users in the same company/organization
+    """
     try:
-        # For admin users, show all carriers. For regular users, show only carriers they've worked with
-        is_admin = current_user.role == 'admin'
-        
-        # Build query with proper user filtering using the new user_id field
+        # Build base query
         commission_query = select(
             Company.id,
             Company.name,
             func.sum(EarnedCommission.commission_earned).label('total_commission')
         ).join(EarnedCommission, Company.id == EarnedCommission.carrier_id)
         
-        # Add user filter for non-admin users - now using the user_id field directly
-        if not is_admin:
+        # Apply filter based on view mode
+        if view_mode == "all_data":
+            # Show all data from the same company (organization)
+            if current_user.company_id:
+                users_in_company_result = await db.execute(
+                    select(User.id).where(User.company_id == current_user.company_id)
+                )
+                user_ids_in_company = [row[0] for row in users_in_company_result.all()]
+                if user_ids_in_company:
+                    commission_query = commission_query.where(EarnedCommission.user_id.in_(user_ids_in_company))
+                else:
+                    commission_query = commission_query.where(EarnedCommission.user_id == None)
+            else:
+                commission_query = commission_query.where(EarnedCommission.user_id == current_user.id)
+        else:
+            # My Data: Show only user's own data
             commission_query = commission_query.where(EarnedCommission.user_id == current_user.id)
         
         # Filter by year if provided
         if year:
             commission_query = commission_query.where(EarnedCommission.statement_year == year)
+        
+        # Apply environment filter if provided (for both My Data and All Data views)
+        if environment_id:
+            commission_query = commission_query.where(EarnedCommission.environment_id == environment_id)
         
         commission_query = commission_query.group_by(Company.id, Company.name).order_by(
             func.sum(EarnedCommission.commission_earned).desc()
@@ -1172,9 +1352,18 @@ async def get_carriers_with_detailed_commission_data(
                 func.coalesce(StatementUpload.carrier_id, StatementUpload.company_id) == carrier_id
             )
             
-            # Add user filter for non-admin users
-            if not is_admin:
+            # Apply filter based on view mode
+            if view_mode == "all_data":
+                if current_user.company_id:
+                    statement_count_query = statement_count_query.where(StatementUpload.user_id.in_(user_ids_in_company))
+                else:
+                    statement_count_query = statement_count_query.where(StatementUpload.user_id == current_user.id)
+            else:
                 statement_count_query = statement_count_query.where(StatementUpload.user_id == current_user.id)
+            
+            # Apply environment filter if provided (for both My Data and All Data views)
+            if environment_id:
+                statement_count_query = statement_count_query.where(StatementUpload.environment_id == environment_id)
             
             statement_count_result = await db.execute(statement_count_query)
             statement_count = statement_count_result.scalar() or 0

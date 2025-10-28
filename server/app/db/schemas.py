@@ -16,6 +16,25 @@ class Company(CompanyBase):
     class Config:
         from_attributes = True
 
+class EnvironmentBase(BaseModel):
+    name: str
+
+class EnvironmentCreate(EnvironmentBase):
+    company_id: UUID
+    created_by: UUID
+
+class EnvironmentUpdate(BaseModel):
+    name: Optional[str] = None
+
+class Environment(EnvironmentBase):
+    id: UUID
+    company_id: UUID
+    created_by: UUID
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
 class CompanyFieldMappingBase(BaseModel):
     display_name: str
     column_name: str
@@ -95,6 +114,7 @@ class StatementUpload(BaseModel):
     company_id: UUID  # User's company
     carrier_id: Optional[UUID] = None  # Insurance carrier company
     user_id: UUID  # User who uploaded the file
+    environment_id: Optional[UUID] = None  # Environment context
     file_name: str
     file_hash: Optional[str] = None  # SHA-256 hash for duplicate detection
     file_size: Optional[int] = None  # File size in bytes
@@ -133,6 +153,7 @@ class StatementUploadCreate(BaseModel):
     company_id: UUID  # User's company
     carrier_id: Optional[UUID] = None  # Insurance carrier company
     user_id: UUID  # User who uploaded the file
+    environment_id: Optional[UUID] = None  # Environment context
     file_name: str
     file_hash: Optional[str] = None  # SHA-256 hash for duplicate detection
     file_size: Optional[int] = None  # File size in bytes
@@ -144,6 +165,7 @@ class StatementUploadUpdate(BaseModel):
     status: Optional[str] = None
     current_step: Optional[str] = None
     carrier_id: Optional[UUID] = None  # Insurance carrier company
+    environment_id: Optional[UUID] = None  # Environment context
     progress_data: Optional[Dict[str, Any]] = None
     raw_data: Optional[List[Dict[str, Any]]] = None
     edited_tables: Optional[List[Dict[str, Any]]] = None
@@ -264,6 +286,7 @@ class EarnedCommissionBase(BaseModel):
     statement_count: int
     upload_ids: Optional[List[str]] = []
     user_id: Optional[UUID] = None  # NEW: User ID for data isolation
+    environment_id: Optional[UUID] = None  # Environment context for data isolation
     statement_date: Optional[datetime] = None
     statement_month: Optional[int] = None
     statement_year: Optional[int] = None

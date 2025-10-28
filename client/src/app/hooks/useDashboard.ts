@@ -32,7 +32,7 @@ interface Statement {
   final_data?: any;
 }
 
-export function useDashboardStats(shouldFetch: boolean = true) {
+export function useDashboardStats(shouldFetch: boolean = true, environmentId?: string | null, viewMode: 'my_data' | 'all_data' = 'my_data') {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(shouldFetch);
   const [error, setError] = useState<string | null>(null);
@@ -41,7 +41,14 @@ export function useDashboardStats(shouldFetch: boolean = true) {
     setLoading(true);
     setError(null);
     try {
-      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/dashboard/stats`, {
+      const params = new URLSearchParams();
+      params.append('view_mode', viewMode);
+      // CRITICAL FIX: Only pass environment_id in "My Data" mode
+      if (viewMode === 'my_data' && environmentId) {
+        params.append('environment_id', environmentId);
+      }
+      const url = `${process.env.NEXT_PUBLIC_API_URL}/api/dashboard/stats?${params.toString()}`;
+      const response = await axios.get(url, {
         withCredentials: true
       });
       setStats(response.data);
@@ -54,7 +61,7 @@ export function useDashboardStats(shouldFetch: boolean = true) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [environmentId, viewMode]);
 
   useEffect(() => {
     if (shouldFetch) {
@@ -65,7 +72,7 @@ export function useDashboardStats(shouldFetch: boolean = true) {
   return { stats, loading, error, refetch: fetchStats };
 }
 
-export function useCarriers() {
+export function useCarriers(environmentId?: string | null, viewMode: 'my_data' | 'all_data' = 'my_data') {
   const [carriers, setCarriers] = useState<Carrier[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -74,16 +81,33 @@ export function useCarriers() {
     setLoading(true);
     setError(null);
     try {
-      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/dashboard/carriers`, {
+      const params = new URLSearchParams();
+      params.append('view_mode', viewMode);
+      // CRITICAL FIX: Only pass environment_id in "My Data" mode
+      if (viewMode === 'my_data' && environmentId) {
+        params.append('environment_id', environmentId);
+      }
+      const url = `${process.env.NEXT_PUBLIC_API_URL}/api/dashboard/carriers?${params.toString()}`;
+      const response = await axios.get(url, {
         withCredentials: true
       });
       const data = response.data;
+      
+      // Ensure data is an array
+      if (!Array.isArray(data)) {
+        console.warn('⚠️ API returned non-array carriers data:', typeof data);
+        setCarriers([]);
+        return;
+      }
+      
       // Sort carriers alphabetically by name
       const sortedCarriers = data.sort((a: Carrier, b: Carrier) => 
         a.name.localeCompare(b.name)
       );
       setCarriers(sortedCarriers);
     } catch (err: any) {
+      // Always set to empty array on error
+      setCarriers([]);
       // Don't set error for 401s as they're handled by auth interceptor
       if (err.response?.status !== 401) {
         setError(err instanceof Error ? err.message : 'An error occurred');
@@ -92,12 +116,12 @@ export function useCarriers() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [environmentId, viewMode]);
 
   return { carriers, loading, error, fetchCarriers };
 }
 
-export function useStatements() {
+export function useStatements(environmentId?: string | null) {
   const [statements, setStatements] = useState<Statement[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -106,16 +130,29 @@ export function useStatements() {
     setLoading(true);
     setError(null);
     try {
+      const params = new URLSearchParams();
+      if (environmentId) params.append('environment_id', environmentId);
+      
       const endpoint = status 
-        ? `${process.env.NEXT_PUBLIC_API_URL}/api/dashboard/statements/${status}`
-        : `${process.env.NEXT_PUBLIC_API_URL}/api/dashboard/statements`;
+        ? `${process.env.NEXT_PUBLIC_API_URL}/api/dashboard/statements/${status}${params.toString() ? `?${params.toString()}` : ''}`
+        : `${process.env.NEXT_PUBLIC_API_URL}/api/dashboard/statements${params.toString() ? `?${params.toString()}` : ''}`;
       
       const response = await axios.get(endpoint, {
         withCredentials: true
       });
       const data = response.data;
+      
+      // Ensure data is an array
+      if (!Array.isArray(data)) {
+        console.warn('⚠️ API returned non-array statements data:', typeof data);
+        setStatements([]);
+        return;
+      }
+      
       setStatements(data);
     } catch (err: any) {
+      // Always set to empty array on error
+      setStatements([]);
       // Don't set error for 401s as they're handled by auth interceptor
       if (err.response?.status !== 401) {
         setError(err instanceof Error ? err.message : 'An error occurred');
@@ -124,13 +161,13 @@ export function useStatements() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [environmentId]);
 
   return { statements, loading, error, fetchStatements };
 } 
 
 // Earned Commission Hooks
-export const useEarnedCommissionStats = (year?: number, shouldFetch: boolean = true) => {
+export const useEarnedCommissionStats = (year?: number, shouldFetch: boolean = true, environmentId?: string | null, viewMode: 'my_data' | 'all_data' = 'my_data') => {
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(shouldFetch);
   const [error, setError] = useState<string | null>(null);
@@ -139,9 +176,12 @@ export const useEarnedCommissionStats = (year?: number, shouldFetch: boolean = t
     setLoading(true);
     setError(null);
     try {
-      const url = year 
-        ? `${process.env.NEXT_PUBLIC_API_URL}/api/earned-commission/stats?year=${year}`
-        : `${process.env.NEXT_PUBLIC_API_URL}/api/earned-commission/stats`;
+      const params = new URLSearchParams();
+      params.append('view_mode', viewMode);
+      if (year) params.append('year', year.toString());
+      // CRITICAL FIX: Only pass environment_id in "My Data" mode
+      if (viewMode === 'my_data' && environmentId) params.append('environment_id', environmentId);
+      const url = `${process.env.NEXT_PUBLIC_API_URL}/api/earned-commission/stats?${params.toString()}`;
       const response = await axios.get(url, {
         withCredentials: true
       });
@@ -155,7 +195,7 @@ export const useEarnedCommissionStats = (year?: number, shouldFetch: boolean = t
     } finally {
       setLoading(false);
     }
-  }, [year]);
+  }, [year, environmentId, viewMode]);
 
   useEffect(() => {
     if (shouldFetch) {
@@ -212,9 +252,18 @@ export const useGlobalCommissionData = (year?: number) => {
       const response = await axios.get(url, {
         withCredentials: true
       });
+      
+      // Ensure data is an array
+      if (!Array.isArray(response.data)) {
+        console.warn('⚠️ API returned non-array global commission data:', typeof response.data);
+        setData([]);
+        return;
+      }
+      
       setData(response.data);
     } catch (err) {
       console.error('❌ Error fetching global commission data:', err);
+      setData([]);
       setError('Error fetching global commission data');
     } finally {
       setLoading(false);
@@ -228,7 +277,7 @@ export const useGlobalCommissionData = (year?: number) => {
   return { data, loading, error, refetch: fetchData };
 };
 
-export const useUserSpecificCompanies = () => {
+export const useUserSpecificCompanies = (environmentId?: string | null) => {
   const [companies, setCompanies] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -237,17 +286,29 @@ export const useUserSpecificCompanies = () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/companies/user-specific`, {
+      const params = new URLSearchParams();
+      if (environmentId) params.append('environment_id', environmentId);
+      const url = `${process.env.NEXT_PUBLIC_API_URL}/api/companies/user-specific${params.toString() ? `?${params.toString()}` : ''}`;
+      const response = await axios.get(url, {
         withCredentials: true
       });
+      
+      // Ensure data is an array
+      if (!Array.isArray(response.data)) {
+        console.warn('⚠️ API returned non-array companies data:', typeof response.data);
+        setCompanies([]);
+        return;
+      }
+      
       setCompanies(response.data);
     } catch (err) {
       console.error('❌ Error fetching user-specific companies:', err);
+      setCompanies([]);
       setError('Error fetching user-specific companies');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [environmentId]);
 
   useEffect(() => {
     fetchCompanies();
@@ -302,9 +363,18 @@ export const useCarriersWithCommission = () => {
       const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/earned-commission/carriers`, {
         withCredentials: true
       });
+      
+      // Ensure data is an array
+      if (!Array.isArray(response.data)) {
+        console.warn('⚠️ API returned non-array carriers with commission data:', typeof response.data);
+        setCarriers([]);
+        return;
+      }
+      
       console.log('🏢 Carriers with commission data fetched:', response.data);
       setCarriers(response.data);
     } catch (err) {
+      setCarriers([]);
       setError('Error fetching carriers with commission data');
       console.error('Error fetching carriers with commission data:', err);
     } finally {
@@ -364,9 +434,20 @@ export const useAvailableYears = () => {
       const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/dashboard/earned-commissions/years`, {
         withCredentials: true
       });
-      setYears(response.data.years || []);
+      
+      const yearsData = response.data.years || [];
+      
+      // Ensure years is an array
+      if (!Array.isArray(yearsData)) {
+        console.warn('⚠️ API returned non-array years data:', typeof yearsData);
+        setYears([]);
+        return;
+      }
+      
+      setYears(yearsData);
     } catch (err) {
       console.error('❌ Error fetching available years:', err);
+      setYears([]);
       setError('Error fetching available years');
     } finally {
       setLoading(false);
@@ -380,7 +461,7 @@ export const useAvailableYears = () => {
   return { years, loading, error, refetch: fetchYears };
 };
 
-export const useAllCommissionData = (year?: number) => {
+export const useAllCommissionData = (year?: number, environmentId?: string | null, viewMode: 'my_data' | 'all_data' = 'my_data') => {
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -389,20 +470,32 @@ export const useAllCommissionData = (year?: number) => {
     setLoading(true);
     setError(null);
     try {
-      const url = year 
-        ? `${process.env.NEXT_PUBLIC_API_URL}/api/dashboard/earned-commissions?year=${year}`
-        : `${process.env.NEXT_PUBLIC_API_URL}/api/dashboard/earned-commissions`;
+      const params = new URLSearchParams();
+      params.append('view_mode', viewMode);
+      if (year) params.append('year', year.toString());
+      // CRITICAL FIX: Only pass environment_id in "My Data" mode
+      if (viewMode === 'my_data' && environmentId) params.append('environment_id', environmentId);
+      const url = `${process.env.NEXT_PUBLIC_API_URL}/api/dashboard/earned-commissions?${params.toString()}`;
       const response = await axios.get(url, {
         withCredentials: true
       });
+      
+      // Ensure data is an array
+      if (!Array.isArray(response.data)) {
+        console.warn('⚠️ API returned non-array commission data:', typeof response.data);
+        setData([]);
+        return;
+      }
+      
       setData(response.data);
     } catch (err) {
       console.error('❌ Error fetching all commission data:', err);
+      setData([]);
       setError('Error fetching all commission data');
     } finally {
       setLoading(false);
     }
-  }, [year]);
+  }, [year, environmentId, viewMode]);
 
   useEffect(() => {
     fetchData();
@@ -411,7 +504,7 @@ export const useAllCommissionData = (year?: number) => {
   return { data, loading, error, refetch: fetchData };
 };
 
-export const useCarrierPieChartData = (year?: number) => {
+export const useCarrierPieChartData = (year?: number, environmentId?: string | null, viewMode: 'my_data' | 'all_data' = 'my_data') => {
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -420,11 +513,21 @@ export const useCarrierPieChartData = (year?: number) => {
     setLoading(true);
     setError(null);
     try {
-      const url = year
-        ? `${process.env.NEXT_PUBLIC_API_URL}/api/earned-commission/carriers-detailed?year=${year}`
-        : `${process.env.NEXT_PUBLIC_API_URL}/api/earned-commission/carriers-detailed`;
+      const params = new URLSearchParams();
+      params.append('view_mode', viewMode);
+      if (year) params.append('year', year.toString());
+      // CRITICAL FIX: Only pass environment_id in "My Data" mode
+      if (viewMode === 'my_data' && environmentId) params.append('environment_id', environmentId);
+      const url = `${process.env.NEXT_PUBLIC_API_URL}/api/earned-commission/carriers-detailed?${params.toString()}`;
       
       const response = await axios.get(url, { withCredentials: true });
+      
+      // Ensure data is an array
+      if (!Array.isArray(response.data)) {
+        console.warn('⚠️ API returned non-array carrier pie chart data:', typeof response.data);
+        setData([]);
+        return;
+      }
       
       // Filter out carriers with zero commission
       const filteredData = response.data.filter((carrier: any) => 
@@ -435,11 +538,12 @@ export const useCarrierPieChartData = (year?: number) => {
       setData(filteredData);
     } catch (err) {
       console.error('❌ Error fetching carrier pie chart data:', err);
+      setData([]);
       setError('Error fetching carrier pie chart data');
     } finally {
       setLoading(false);
     }
-  }, [year]);
+  }, [year, environmentId, viewMode]);
 
   useEffect(() => {
     fetchData();

@@ -6,7 +6,7 @@ from app.utils.db_retry import with_db_retry
 from app.services.format_learning_service import FormatLearningService
 from app.dependencies.auth_dependencies import get_current_user_hybrid
 from app.db.models import User
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from datetime import datetime
 from uuid import UUID
 import re
@@ -26,7 +26,7 @@ class MappingConfig(BaseModel):
     field_config: List[Dict[str, str]] = []
     table_data: List[List[str]] = []  # Add table data for learning
     headers: List[str] = []  # Add headers for learning
-    selected_statement_date: Dict[str, Any] = None  # Add selected statement date
+    selected_statement_date: Optional[Dict[str, Any]] = None  # Add selected statement date
 
 @router.get("/companies/{company_id}/mapping/", response_model=MappingConfig)
 async def get_company_mapping(
@@ -194,6 +194,18 @@ async def update_company_mapping(
         try:
             logger.info(f"🎯 Mapping API: Processing commission data with statement date")
             logger.info(f"🎯 Mapping API: Statement date object: {config.selected_statement_date}")
+            
+            # Get environment_id from upload if available
+            environment_id = None
+            if upload_id:
+                try:
+                    upload_record = await crud.get_statement_upload(db, upload_id)
+                    if upload_record:
+                        environment_id = upload_record.environment_id
+                        logger.info(f"🎯 Mapping API: Retrieved environment_id {environment_id} from upload {upload_id}")
+                except Exception as env_error:
+                    logger.warning(f"🎯 Mapping API: Could not retrieve environment_id: {env_error}")
+            
             await process_commission_data_with_date(
                 db=db,
                 company_id=carrier_id,  # carrier_id (retrieved from upload or provided as parameter)
@@ -201,7 +213,8 @@ async def update_company_mapping(
                 headers=config.headers,
                 mapping=config.mapping,
                 statement_date=config.selected_statement_date,
-                user_id=current_user.id  # CRITICAL: Pass user_id for proper data isolation
+                user_id=current_user.id,  # CRITICAL: Pass user_id for proper data isolation
+                environment_id=environment_id  # Pass environment_id for environment isolation
             )
             logger.info(f"🎯 Mapping API: Commission data processing completed successfully")
         except Exception as e:
@@ -226,11 +239,12 @@ async def process_commission_data_with_date(
     headers: List[str],
     mapping: Dict[str, str],
     statement_date: Dict[str, Any],
-    user_id: UUID = None
+    user_id: UUID = None,
+    environment_id: UUID = None
 ):
     """
     Process commission data and create/update earned commission records with statement date.
-    Includes user_id for proper data isolation in multi-user environments.
+    Includes user_id and environment_id for proper data isolation in multi-user and multi-environment setups.
     """
     try:
         logger.info(f"🎯 Commission Processing: Starting commission data processing")
@@ -363,7 +377,8 @@ async def process_commission_data_with_date(
                 statement_date=parsed_date,
                 statement_month=statement_month,
                 statement_year=statement_year,
-                user_id=user_id  # CRITICAL: Pass user_id for proper data isolation
+                user_id=user_id,  # CRITICAL: Pass user_id for proper data isolation
+                environment_id=environment_id  # Pass environment_id for environment isolation
             )
             processed_rows += 1
             logger.info(f"🎯 Commission Processing: Successfully processed row {row_idx}")
@@ -514,11 +529,12 @@ async def create_or_update_commission_record(
     statement_date: datetime,
     statement_month: int,
     statement_year: int,
-    user_id: UUID = None
+    user_id: UUID = None,
+    environment_id: UUID = None
 ):
     """
     Create or update commission record with monthly breakdown.
-    Includes user_id for proper data isolation in multi-user environments.
+    Includes user_id and environment_id for proper data isolation in multi-user and multi-environment setups.
     """
     try:
         logger.info(f"🎯 Commission Record: Creating/updating record for {carrier_id} - {client_name} - {statement_date} - user: {user_id}")
@@ -546,7 +562,7 @@ async def create_or_update_commission_record(
             )
             logger.info(f"🎯 Commission Record: Successfully updated existing record")
         else:
-            logger.info(f"🎯 Commission Record: Creating new record with user_id: {user_id}")
+            logger.info(f"🎯 Commission Record: Creating new record with user_id: {user_id} and environment_id: {environment_id}")
             # Create new record
             commission_record = schemas.EarnedCommissionCreate(
                 carrier_id=carrier_id,
@@ -557,7 +573,8 @@ async def create_or_update_commission_record(
                 statement_month=statement_month,
                 statement_year=statement_year,
                 statement_count=1,
-                user_id=user_id  # CRITICAL: Set user_id for proper data isolation
+                user_id=user_id,  # CRITICAL: Set user_id for proper data isolation
+                environment_id=environment_id  # Set environment_id for environment isolation
             )
             
             # Set the appropriate month column

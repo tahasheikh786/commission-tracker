@@ -2,6 +2,7 @@
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { useEnvironment } from "@/context/EnvironmentContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import DashboardTab from "./components/dashboardTab/DashboardTab";
 import CarrierTab from "./components/carrierTab/CarrierTab";
@@ -27,12 +28,14 @@ import {
   Upload
 } from "lucide-react";
 import { useTheme } from "@/context/ThemeContext";
+import EnvironmentSelector from "./components/EnvironmentSelector";
 
 function HomePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, logout } = useAuth();
   const { theme, setTheme, actualTheme } = useTheme();
+  const { activeEnvironment } = useEnvironment();
   const [tab, setTab] = useState<"dashboard" | "carriers" | "earned-commission" | "analytics">("analytics");
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
@@ -164,6 +167,9 @@ function HomePageContent() {
             </div>
           </div>
         </div>
+
+        {/* Environment Selector */}
+        <EnvironmentSelector collapsed={sidebarCollapsed} />
 
         {/* Navigation */}
         <nav className="flex-1 space-y-2 px-3 py-4 transition-all duration-300 scrollbar-none overflow-y-auto">
@@ -346,10 +352,10 @@ function HomePageContent() {
         {/* Main Content */}
         <main className="flex-1 p-6 bg-slate-50 dark:bg-slate-900 overflow-y-auto main-content-scroll">
           <div className="max-w-none">
-            {tab === "analytics" && <PremiumAnalyticsTab onNavigate={(newTab) => router.push(`/?tab=${newTab}`)} />}
-            {tab === "dashboard" && <DashboardTab />}
-            {tab === "earned-commission" && <EarnedCommissionTab />}
-            {tab === "carriers" && <CarrierTab />}
+            {tab === "analytics" && <PremiumAnalyticsTab environmentId={activeEnvironment?.id || null} onNavigate={(newTab) => router.push(`/?tab=${newTab}`)} />}
+            {tab === "dashboard" && <DashboardTab environmentId={activeEnvironment?.id || null} />}
+            {tab === "earned-commission" && <EarnedCommissionTab environmentId={activeEnvironment?.id || null} />}
+            {tab === "carriers" && <CarrierTab environmentId={activeEnvironment?.id || null} />}
           </div>
         </main>
       </div>

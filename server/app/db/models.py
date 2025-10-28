@@ -13,6 +13,19 @@ class Company(Base):
     name = Column(String, unique=True, nullable=False)
     created_at = Column(DateTime, server_default=text('now()'), nullable=False)
 
+class Environment(Base):
+    __tablename__ = 'environments'
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    company_id = Column(UUID(as_uuid=True), ForeignKey('companies.id', ondelete='CASCADE'), nullable=False)
+    name = Column(String, nullable=False)
+    created_at = Column(DateTime, server_default=text('now()'), nullable=False)
+    created_by = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False)
+    
+    # Add unique constraint for company and environment name
+    __table_args__ = (
+        UniqueConstraint('company_id', 'name', name='uq_company_environment_name'),
+    )
+
 class CompanyFieldMapping(Base):
     __tablename__ = 'company_field_mappings'
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -78,6 +91,7 @@ class StatementUpload(Base):
     company_id = Column(UUID(as_uuid=True), ForeignKey('companies.id'), nullable=False)  # User's company
     carrier_id = Column(UUID(as_uuid=True), ForeignKey('companies.id'), nullable=True)  # Insurance carrier company
     user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False)  # User who uploaded the file
+    environment_id = Column(UUID(as_uuid=True), ForeignKey('environments.id', ondelete='CASCADE'), nullable=True)  # Environment context
     file_name = Column(Text)
     file_hash = Column(String, nullable=True)  # SHA-256 hash for duplicate detection
     file_size = Column(Integer, nullable=True)  # File size in bytes
@@ -158,6 +172,9 @@ class EarnedCommission(Base):
     # User isolation - each user has their own commission records
     user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=True)  # Nullable for backward compatibility
     
+    # Environment context for data isolation
+    environment_id = Column(UUID(as_uuid=True), ForeignKey('environments.id', ondelete='CASCADE'), nullable=True)
+    
     # Statement date for monthly breakdown
     statement_date = Column(DateTime, nullable=True)  # Date from the statement
     statement_month = Column(Integer, nullable=True)  # Month (1-12) for easier querying
@@ -180,16 +197,17 @@ class EarnedCommission(Base):
     last_updated = Column(DateTime, server_default=text('now()'), onupdate=text('now()'), nullable=False)
     created_at = Column(DateTime, server_default=text('now()'), nullable=False)
     
-    # Add unique constraint for carrier, client, statement date, AND user_id for proper data isolation
+    # Add unique constraint for carrier, client, statement date, user_id, AND environment_id for proper data isolation
     __table_args__ = (
-        UniqueConstraint('carrier_id', 'client_name', 'statement_date', 'user_id', name='uq_carrier_client_date_user_commission'),
+        UniqueConstraint('carrier_id', 'client_name', 'statement_date', 'user_id', 'environment_id', name='uq_carrier_client_date_user_env_commission'),
     )
 
 class EditedTable(Base):
     __tablename__ = 'edited_tables'
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    upload_id = Column(UUID(as_uuid=True), ForeignKey('statement_uploads.id'), nullable=False)
+    upload_id = Column(UUID(as_uuid=True), ForeignKey('statement_uploads.id', ondelete='CASCADE'), nullable=False)
     company_id = Column(UUID(as_uuid=True), ForeignKey('companies.id'), nullable=False)
+    environment_id = Column(UUID(as_uuid=True), ForeignKey('environments.id', ondelete='CASCADE'), nullable=True)
     name = Column(String, nullable=False)
     header = Column(JSON, nullable=False)  # Array of column names
     rows = Column(JSON, nullable=False)    # Array of arrays (table data)

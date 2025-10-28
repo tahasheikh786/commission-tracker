@@ -16,16 +16,21 @@ type FieldConfig = { field: string, label: string }
 
 interface DashboardTabProps {
   showAnalytics?: boolean;
+  environmentId?: string | null;
 }
 
-export default function DashboardTab({ showAnalytics = false }: DashboardTabProps) {
+export default function DashboardTab({ showAnalytics = false, environmentId }: DashboardTabProps) {
   const router = useRouter();
   const { refreshTrigger } = useSubmission();
   
+  // View mode state for My Data vs All Data
+  const [viewAllData, setViewAllData] = useState(false);
+  const viewMode = viewAllData ? 'all_data' : 'my_data';
+  
   // Only fetch stats when analytics are needed
-  const { stats, loading, refetch: refetchStats } = useDashboardStats(showAnalytics);
-  const { carriers, loading: carriersLoading, fetchCarriers } = useCarriers();
-  const { stats: earnedCommissionStats, loading: earnedCommissionLoading, refetch: refetchEarnedCommissionStats } = useEarnedCommissionStats(undefined, showAnalytics);
+  const { stats, loading, refetch: refetchStats } = useDashboardStats(showAnalytics, environmentId, viewMode);
+  const { carriers, loading: carriersLoading, fetchCarriers } = useCarriers(environmentId, viewMode);
+  const { stats: earnedCommissionStats, loading: earnedCommissionLoading, refetch: refetchEarnedCommissionStats } = useEarnedCommissionStats(undefined, showAnalytics, environmentId, viewMode);
   const [carriersModalOpen, setCarriersModalOpen] = useState(false);
 
   // Upload and processing states - NEW 2-STEP FLOW ONLY
@@ -45,6 +50,14 @@ export default function DashboardTab({ showAnalytics = false }: DashboardTabProp
       refetchEarnedCommissionStats();
     }
   }, [refetchEarnedCommissionStats, showAnalytics]);
+
+  // Refetch data when environment changes
+  useEffect(() => {
+    if (showAnalytics) {
+      refetchStats();
+      refetchEarnedCommissionStats();
+    }
+  }, [environmentId, showAnalytics, refetchStats, refetchEarnedCommissionStats]);
 
   // Listen for global refresh events (only if analytics are shown)
   useEffect(() => {
@@ -369,6 +382,31 @@ export default function DashboardTab({ showAnalytics = false }: DashboardTabProp
 
     return (
       <div className="w-full space-y-8">
+        {/* My Data / All Data Toggle */}
+        <div className="flex justify-end">
+          <div className="flex items-center gap-2 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-1">
+            <button
+              onClick={() => setViewAllData(false)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+                !viewAllData
+                  ? 'bg-blue-500 text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
+              }`}
+            >
+              My Data
+            </button>
+            <button
+              onClick={() => setViewAllData(true)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+                viewAllData
+                  ? 'bg-blue-500 text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
+              }`}
+            >
+              All Data
+            </button>
+          </div>
+        </div>
         {/* Primary Card - Total Earned Commission (Hero Card) */}
         {primaryCard && (
           <div className="animate-scale-in">
@@ -493,6 +531,7 @@ export default function DashboardTab({ showAnalytics = false }: DashboardTabProp
             selectedStatementDate={selectedStatementDate}
             extractionMethod={extractionMethod}
             onExtractionMethodChange={setExtractionMethod}
+            environmentId={environmentId}
           />
         </div>
       </div>

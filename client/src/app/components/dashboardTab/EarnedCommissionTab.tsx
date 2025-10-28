@@ -19,6 +19,7 @@ import {
   useAvailableYears
 } from '../../hooks/useDashboard';
 import { useSubmission } from '@/context/SubmissionContext';
+import { useEnvironment } from '@/context/EnvironmentContext';
 
 // ============================================
 // TYPE DEFINITIONS
@@ -1192,18 +1193,51 @@ const OverviewMode: React.FC<OverviewModeProps> = ({
         </div>
       </div>
 
-      <div className="carrier-cards-grid">
-        {paginatedCarriers.map((carrier, index) => (
-          <CarrierCard
-            key={carrier.carrierName}
-            carrier={carrier}
-            onClick={() => onSelectCarrier(carrier)}
-          />
-        ))}
-      </div>
+      {/* Empty State */}
+      {filteredAndSortedCarriers.length === 0 ? (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex flex-col items-center justify-center py-20 px-4"
+        >
+          <div className="w-24 h-24 bg-gradient-to-br from-blue-100 to-purple-100 dark:from-blue-900/20 dark:to-purple-900/20 rounded-full flex items-center justify-center mb-6">
+            <BarChart3 className="w-12 h-12 text-blue-600 dark:text-blue-400" />
+          </div>
+          <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-3">
+            No Commission Data Available
+          </h3>
+          <p className="text-slate-600 dark:text-slate-400 text-center max-w-md mb-6">
+            {searchQuery ? (
+              <>No carriers found matching &ldquo;<strong>{searchQuery}</strong>&rdquo;. Try adjusting your search or filters.</>
+            ) : viewAllData ? (
+              <>There&apos;s no commission data available across all users yet. Upload statements to get started.</>
+            ) : (
+              <>You haven&apos;t uploaded any commission statements yet. Upload your first statement to start tracking your earnings.</>
+            )}
+          </p>
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="px-6 py-2.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-colors shadow-lg hover:shadow-xl"
+            >
+              Clear Search
+            </button>
+          )}
+        </motion.div>
+      ) : (
+        <>
+          <div className="carrier-cards-grid">
+            {paginatedCarriers.map((carrier, index) => (
+              <CarrierCard
+                key={carrier.carrierName}
+                carrier={carrier}
+                onClick={() => onSelectCarrier(carrier)}
+              />
+            ))}
+          </div>
 
-      {/* Pagination Controls */}
-      {totalPages > 1 && (
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
         <div className="flex items-center justify-between mt-6 px-4 py-3 bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl border border-slate-200/50 dark:border-slate-700/50 rounded-lg">
           <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
             Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, filteredAndSortedCarriers.length)} of {filteredAndSortedCarriers.length} carriers
@@ -1233,6 +1267,8 @@ const OverviewMode: React.FC<OverviewModeProps> = ({
             </button>
           </div>
         </div>
+      )}
+        </>
       )}
     </motion.div>
   );
@@ -1504,8 +1540,13 @@ const CompanyDetailMode: React.FC<CompanyDetailModeProps> = ({ company, carrier,
 // MAIN COMPONENT
 // ============================================
 
-export default function EarnedCommissionTab() {
+interface EarnedCommissionTabProps {
+  environmentId?: string | null;
+}
+
+export default function EarnedCommissionTab({ environmentId }: EarnedCommissionTabProps) {
   const { refreshTrigger } = useSubmission();
+  const { loading: environmentsLoading } = useEnvironment();
 
   // Three-pane state
   const [selectedCarrier, setSelectedCarrier] = useState<CarrierGroup | null>(null);
@@ -1544,33 +1585,73 @@ export default function EarnedCommissionTab() {
   const { carriers, loading: carriersLoading, refetch: refetchCarriers } = useCarriersWithCommission();
   const { years: availableYears, loading: yearsLoading, refetch: refetchYears } = useAvailableYears();
 
+  // Determine view mode for API calls
+  const viewMode = viewAllData ? 'all_data' : 'my_data';
+
   // Fetch data based on viewAllData and selectedYear
   const fetchCommissionData = useCallback(async () => {
     setDataLoading(true);
     try {
-      console.log('🔄 Fetching commission data:', { viewAllData, selectedYear });
+      console.log('🔄 Fetching commission data:', { viewAllData, selectedYear, environmentId, viewMode });
       
-      // Fetch stats
-      const statsEndpoint = viewAllData
-        ? `${process.env.NEXT_PUBLIC_API_URL}/api/earned-commission/global/stats${selectedYear ? `?year=${selectedYear}` : ''}`
-        : `${process.env.NEXT_PUBLIC_API_URL}/api/earned-commission/stats${selectedYear ? `?year=${selectedYear}` : ''}`;
+      // Build params with new view_mode parameter
+      const params = new URLSearchParams();
+      params.append('view_mode', viewMode);
+      if (selectedYear) params.append('year', selectedYear.toString());
+      // CRITICAL FIX: Only pass environment_id in "My Data" mode
+      // In "All Data" mode, we want to see ALL data across ALL environments
+      if (viewMode === 'my_data' && environmentId) {
+        params.append('environment_id', environmentId);
+      }
+      const queryString = params.toString();
       
-      const statsResponse = await fetch(statsEndpoint, { credentials: 'include' });
+      // Fetch stats using unified endpoint
+      const statsResponse = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/earned-commission/stats?${queryString}`,
+        { credentials: 'include' }
+      );
+      
+      if (!statsResponse.ok) {
+        if (statsResponse.status === 401) {
+          console.log('⚠️ Unauthorized - user needs to login');
+          setCommissionData([]);
+          setCommissionStats(null);
+          return;
+        }
+        throw new Error(`Stats fetch failed: ${statsResponse.status}`);
+      }
+      
       const stats = await statsResponse.json();
       setCommissionStats(stats);
       
-      // Fetch data
-      const dataEndpoint = viewAllData
-        ? `${process.env.NEXT_PUBLIC_API_URL}/api/earned-commission/global/data${selectedYear ? `?year=${selectedYear}` : ''}`
-        : `${process.env.NEXT_PUBLIC_API_URL}/api/dashboard/earned-commissions${selectedYear ? `?year=${selectedYear}` : ''}`;
+      // Fetch data using unified endpoint
+      const dataResponse = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/dashboard/earned-commissions?${queryString}`,
+        { credentials: 'include' }
+      );
       
-      const dataResponse = await fetch(dataEndpoint, { credentials: 'include' });
+      if (!dataResponse.ok) {
+        if (dataResponse.status === 401) {
+          console.log('⚠️ Unauthorized - user needs to login');
+          setCommissionData([]);
+          return;
+        }
+        throw new Error(`Data fetch failed: ${dataResponse.status}`);
+      }
+      
       const data = await dataResponse.json();
-      setCommissionData(data);
+      
+      // Ensure data is always an array
+      if (Array.isArray(data)) {
+        setCommissionData(data);
+      } else {
+        console.warn('⚠️ API returned non-array data:', typeof data, data);
+        setCommissionData([]);
+      }
       
       console.log('✅ Data fetched successfully:', { 
-        viewAllData, 
-        dataCount: data?.length || 0,
+        viewMode, 
+        dataCount: Array.isArray(data) ? data.length : 0,
         statsCount: stats?.total_carriers || 0
       });
     } catch (error) {
@@ -1580,12 +1661,15 @@ export default function EarnedCommissionTab() {
     } finally {
       setDataLoading(false);
     }
-  }, [viewAllData, selectedYear]);
+  }, [viewMode, selectedYear, environmentId]);
 
-  // Fetch data when viewAllData or selectedYear changes
+  // CRITICAL FIX: Wait for environments to load before fetching data
+  // This prevents multiple redundant API calls during initial page load
   useEffect(() => {
-    fetchCommissionData();
-  }, [fetchCommissionData]);
+    if (!environmentsLoading) {
+      fetchCommissionData();
+    }
+  }, [fetchCommissionData, environmentsLoading]);
 
   // Refresh when refreshTrigger changes
   useEffect(() => {
@@ -1603,38 +1687,63 @@ export default function EarnedCommissionTab() {
 
   // Transform data into carrier groups
   const carrierGroups = useMemo(() => {
-    const filteredData = allData || [];
+    // Ensure filteredData is always an array
+    const rawData = allData || [];
+    
+    // Validate that rawData is an array
+    if (!Array.isArray(rawData)) {
+      console.error('❌ Expected array but got:', typeof rawData, rawData);
+      return [];
+    }
+    
+    const filteredData = rawData;
     console.log('🔄 Recalculating carrier groups with data count:', filteredData.length);
     console.log('🔍 Using data source:', viewAllData ? 'GLOBAL DATA' : 'USER DATA');
     
-    const groups = filteredData.reduce((groups, item: CommissionData) => {
-      const carrierName = item.carrier_name || 'Unknown Carrier';
-      if (!groups[carrierName]) {
-        groups[carrierName] = [];
-      }
-      groups[carrierName].push(item);
-      return groups;
-    }, {} as Record<string, CommissionData[]>);
-
-    const result = Object.entries(groups).map(([carrierName, companies]) => {
-      const typedCompanies = companies as CommissionData[];
-      const uniqueCompanies = new Set(typedCompanies.map(c => c.client_name.toLowerCase().trim()));
-      // Use approved_statement_count from the first company (it's the same for all companies in the carrier)
-      // This represents the actual number of statement files uploaded for the carrier
-      const totalStatementCount = typedCompanies[0]?.approved_statement_count || 0;
-      
-      return {
-        carrierName,
-        companies: typedCompanies,
-        totalCommission: typedCompanies.reduce((sum: number, company: CommissionData) => sum + company.commission_earned, 0),
-        totalInvoice: typedCompanies.reduce((sum: number, company: CommissionData) => sum + company.invoice_total, 0),
-        companyCount: uniqueCompanies.size,
-        statementCount: totalStatementCount,
-      };
-    }).sort((a, b) => b.totalCommission - a.totalCommission);
+    // Return empty array if no data
+    if (filteredData.length === 0) {
+      console.log('⚠️ No data available for carrier groups');
+      return [];
+    }
     
-    console.log('✅ Carrier groups calculated:', result.length, 'carriers');
-    return result;
+    try {
+      const groups = filteredData.reduce((groups, item: CommissionData) => {
+        if (!item || typeof item !== 'object') {
+          console.warn('⚠️ Invalid item in data:', item);
+          return groups;
+        }
+        
+        const carrierName = item.carrier_name || 'Unknown Carrier';
+        if (!groups[carrierName]) {
+          groups[carrierName] = [];
+        }
+        groups[carrierName].push(item);
+        return groups;
+      }, {} as Record<string, CommissionData[]>);
+
+      const result = Object.entries(groups).map(([carrierName, companies]) => {
+        const typedCompanies = companies as CommissionData[];
+        const uniqueCompanies = new Set(typedCompanies.map(c => c.client_name?.toLowerCase()?.trim() || 'unknown'));
+        // Use approved_statement_count from the first company (it's the same for all companies in the carrier)
+        // This represents the actual number of statement files uploaded for the carrier
+        const totalStatementCount = typedCompanies[0]?.approved_statement_count || 0;
+        
+        return {
+          carrierName,
+          companies: typedCompanies,
+          totalCommission: typedCompanies.reduce((sum: number, company: CommissionData) => sum + (company.commission_earned || 0), 0),
+          totalInvoice: typedCompanies.reduce((sum: number, company: CommissionData) => sum + (company.invoice_total || 0), 0),
+          companyCount: uniqueCompanies.size,
+          statementCount: totalStatementCount,
+        };
+      }).sort((a, b) => b.totalCommission - a.totalCommission);
+      
+      console.log('✅ Carrier groups calculated:', result.length, 'carriers');
+      return result;
+    } catch (error) {
+      console.error('❌ Error calculating carrier groups:', error);
+      return [];
+    }
   }, [allData, viewAllData]);
 
   // Get all companies flattened

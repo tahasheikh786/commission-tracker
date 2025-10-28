@@ -30,6 +30,9 @@ import {
   formatPercentage 
 } from '../../utils/analyticsUtils';
 
+// Import Environment Context
+import { useEnvironment } from '@/context/EnvironmentContext';
+
 // Chart.js imports
 import {
   Chart as ChartJS,
@@ -700,19 +703,31 @@ function PlanDistributionChart({ data }: { data: any }) {
 }
 
 // Main Component with 90% Width
-export default function PremiumAnalyticsTab({ onNavigate }: { onNavigate?: (tab: string) => void }) {
+export default function PremiumAnalyticsTab({ environmentId, onNavigate }: { environmentId?: string | null; onNavigate?: (tab: string) => void }) {
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState(currentYear);
+  const [viewAllData, setViewAllData] = useState(false);
+  const viewMode = viewAllData ? 'all_data' : 'my_data';
+  const { environments, activeEnvironment, setActiveEnvironment, loading: environmentsLoading } = useEnvironment();
 
-  // Data hooks
-  const { stats: currentStats, loading: currentStatsLoading } = useEarnedCommissionStats(selectedYear);
-  const { stats: dashboardStats, loading: dashboardLoading } = useDashboardStats(true);
-  const { data: currentYearData, loading: currentDataLoading } = useAllCommissionData(selectedYear);
+  // CRITICAL FIX: Wait for environment context to load before determining effective environment
+  // Only pass environment_id in "My Data" mode, and only after environments have loaded
+  const effectiveEnvironmentId = useMemo(() => {
+    if (environmentsLoading) return undefined; // Don't fetch yet while loading
+    return viewMode === 'my_data' ? (activeEnvironment?.id || null) : null;
+  }, [viewMode, activeEnvironment?.id, environmentsLoading]);
+
+  // CRITICAL FIX: Only fetch data after environments have loaded
+  const shouldFetchData = !environmentsLoading && effectiveEnvironmentId !== undefined;
+  
+  const { stats: currentStats, loading: currentStatsLoading } = useEarnedCommissionStats(selectedYear, shouldFetchData, effectiveEnvironmentId || null, viewMode);
+  const { stats: dashboardStats, loading: dashboardLoading } = useDashboardStats(shouldFetchData, effectiveEnvironmentId || null, viewMode);
+  const { data: currentYearData, loading: currentDataLoading } = useAllCommissionData(selectedYear, effectiveEnvironmentId || null, viewMode);
   const { carriers, loading: carriersLoading } = useCarriersWithCommission();
   const { years: availableYears, loading: yearsLoading } = useAvailableYears();
-  const { data: pieChartData, loading: pieChartLoading } = useCarrierPieChartData(selectedYear);
+  const { data: pieChartData, loading: pieChartLoading } = useCarrierPieChartData(selectedYear, effectiveEnvironmentId || null, viewMode);
 
-  const loading = currentStatsLoading || dashboardLoading || currentDataLoading;
+  const loading = environmentsLoading || currentStatsLoading || dashboardLoading || currentDataLoading;
 
   // Hero metrics calculation with proper backend data integration
   const heroMetrics = useMemo(() => {
@@ -751,8 +766,52 @@ export default function PremiumAnalyticsTab({ onNavigate }: { onNavigate?: (tab:
       {/* Full Width Content - 90% of screen width */}
       <div className="w-full px-4 md:px-6 lg:px-8 py-6 md:py-8" style={{ maxWidth: '90vw', margin: '0 auto' }}>
         
-        {/* Year Selector - Top Right */}
-        <div className="flex justify-end mb-6">
+        {/* Year Selector, Environment Selector, and View Mode Toggle - Top Right */}
+        <div className="flex justify-end items-center gap-4 mb-6">
+          {/* Environment Selector - Only show in My Data mode */}
+          {!viewAllData && environments && environments.length > 0 && (
+            <select
+              value={activeEnvironment?.id || ''}
+              onChange={(e) => {
+                const selectedEnv = environments.find(env => env.id === e.target.value);
+                setActiveEnvironment(selectedEnv || null);
+              }}
+              className="px-4 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium text-slate-700 dark:text-white hover:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-colors"
+            >
+              <option value="" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100">All Environments</option>
+              {environments.map((env) => (
+                <option key={env.id} value={env.id} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100">
+                  {env.name}
+                </option>
+              ))}
+            </select>
+          )}
+          
+          {/* My Data / All Data Toggle */}
+          <div className="flex items-center gap-2 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-1">
+            <button
+              onClick={() => setViewAllData(false)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+                !viewAllData
+                  ? 'bg-blue-500 text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
+              }`}
+            >
+              My Data
+            </button>
+            <button
+              onClick={() => setViewAllData(true)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+                viewAllData
+                  ? 'bg-blue-500 text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
+              }`}
+            >
+              All Data
+            </button>
+          </div>
+          
+          {/* Year Selector */}
           {!yearsLoading && availableYears && availableYears.length > 0 && (
             <select
               value={selectedYear}

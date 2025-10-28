@@ -42,6 +42,7 @@ interface CarrierUploadZoneProps {
   extractionMethod?: string;
   onExtractionMethodChange?: (method: string) => void;
   onContinue?: () => void;
+  environmentId?: string | null;
 }
 
 export default function CarrierUploadZone({
@@ -49,7 +50,8 @@ export default function CarrierUploadZone({
   selectedStatementDate,
   extractionMethod,
   onExtractionMethodChange,
-  onContinue
+  onContinue,
+  environmentId
 }: CarrierUploadZoneProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -298,6 +300,11 @@ export default function CarrierUploadZone({
       
       if (selectedStatementDate) {
         formData.append('statement_date', selectedStatementDate);
+      }
+      
+      // Pass active environment ID to ensure upload is associated with correct environment
+      if (environmentId) {
+        formData.append('environment_id', environmentId);
       }
 
       console.log('📤 Starting table extraction API call with uploadId:', newUploadId);

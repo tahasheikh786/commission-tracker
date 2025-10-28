@@ -305,6 +305,39 @@ async def verify_otp(
                     detail="User not found"
                 )
         
+        # Ensure existing users have a company_id
+        if not user.company_id:
+            from app.db.models import AllowedDomain, Company
+            from sqlalchemy import select
+            
+            email_domain = verification.email.split('@')[1].lower()
+            
+            # Check if domain is associated with a company
+            result = await db.execute(
+                select(AllowedDomain).where(AllowedDomain.domain == email_domain)
+            )
+            allowed_domain = result.scalars().first()
+            
+            if allowed_domain and allowed_domain.company_id:
+                user.company_id = allowed_domain.company_id
+            else:
+                # Create or find default company for this email domain
+                company_name = email_domain.split('.')[0].capitalize()
+                
+                result = await db.execute(
+                    select(Company).where(Company.name == company_name)
+                )
+                existing_company = result.scalars().first()
+                
+                if existing_company:
+                    user.company_id = existing_company.id
+                else:
+                    # Create new company
+                    new_company = Company(name=company_name)
+                    db.add(new_company)
+                    await db.flush()
+                    user.company_id = new_company.id
+        
         # Update user login time and email verification status
         user.last_login = datetime.utcnow()
         user.is_email_verified = 1
@@ -783,15 +816,57 @@ async def test_cookies(
 
 async def create_user_from_email(email: str, db: AsyncSession) -> User:
     """Create a new user from email address"""
+    from app.db.models import AllowedDomain, Company
+    from sqlalchemy import select
+    
+    email_domain = email.split('@')[1].lower()
+    company_id = None
+    
+    # Check if domain is associated with a company
+    result = await db.execute(
+        select(AllowedDomain).where(AllowedDomain.domain == email_domain)
+    )
+    allowed_domain = result.scalars().first()
+    
+    if allowed_domain and allowed_domain.company_id:
+        company_id = allowed_domain.company_id
+    else:
+        # Create a default company for this email domain
+        # Extract company name from email domain (e.g., example.com -> Example)
+        company_name = email_domain.split('.')[0].capitalize()
+        
+        # Check if company already exists with this name
+        result = await db.execute(
+            select(Company).where(Company.name == company_name)
+        )
+        existing_company = result.scalars().first()
+        
+        if existing_company:
+            company_id = existing_company.id
+        else:
+            # Create new company
+            new_company = Company(
+                name=company_name,
+                # Other fields can be updated by the user later
+            )
+            db.add(new_company)
+            await db.flush()  # Flush to get the company ID
+            company_id = new_company.id
+            
+            # Optionally create allowed domain entry
+            # Note: We'll skip creating the allowed_domain entry here to avoid circular dependency
+            # The user can be the created_by for the company
+    
     user = User(
         email=email,
-        email_domain=email.split('@')[1].lower(),
+        email_domain=email_domain,
         role="user",
         is_active=1,
         is_verified=0,
         is_email_verified=1,  # Verified via OTP
         auth_method="otp",
-        access_level="basic"
+        access_level="basic",
+        company_id=company_id
     )
     db.add(user)
     await db.commit()

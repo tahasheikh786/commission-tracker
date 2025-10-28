@@ -12,6 +12,7 @@ async def save_statement_upload(db, upload: StatementUpload):
         company_id=upload.company_id,
         carrier_id=upload.carrier_id,  # CRITICAL FIX: Include carrier_id when saving
         user_id=upload.user_id,
+        environment_id=upload.environment_id,  # Include environment_id for multi-environment support
         file_name=upload.file_name,
         file_hash=upload.file_hash,
         file_size=upload.file_size,
@@ -33,7 +34,9 @@ async def create_statement_upload(db: AsyncSession, upload: StatementUploadCreat
     """
     db_upload = StatementUploadModel(
         company_id=upload.company_id,
+        carrier_id=upload.carrier_id,  # Include carrier_id from schema
         user_id=upload.user_id,
+        environment_id=upload.environment_id,  # Include environment_id for multi-environment support
         file_name=upload.file_name,
         file_hash=upload.file_hash,
         file_size=upload.file_size,

@@ -38,7 +38,11 @@ interface CommissionStats {
   total_statements: number;
 }
 
-export default function CarrierTab() {
+interface CarrierTabProps {
+  environmentId?: string | null;
+}
+
+export default function CarrierTab({ environmentId }: CarrierTabProps) {
   const searchParams = useSearchParams();
   const { triggerDashboardRefresh } = useSubmission();
   const { permissions } = useAuth();
@@ -75,41 +79,43 @@ export default function CarrierTab() {
 
 
   // Fetch user-specific companies
-  const { companies: userSpecificCompanies, loading: userCompaniesLoading, refetch: refetchUserCompanies } = useUserSpecificCompanies();
+  const { companies: userSpecificCompanies, loading: userCompaniesLoading, refetch: refetchUserCompanies } = useUserSpecificCompanies(environmentId);
+
+  // Refetch data when environment changes
+  useEffect(() => {
+    if (!viewAllData) {
+      refetchUserCompanies();
+    }
+  }, [environmentId, viewAllData, refetchUserCompanies]);
 
   // Fetch carriers on mount and when view toggle changes
   useEffect(() => {
     setLoadingCarriers(true);
     
-    if (viewAllData) {
-      // Fetch all companies using axios for proper authentication
-      axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/companies/`, {
-        withCredentials: true  // CRITICAL FIX: Ensure cookies are sent
-      })
-        .then((response) => {
-          const data = response.data;
-          // Sort carriers alphabetically by name
-          const sortedCarriers = data.sort((a: Carrier, b: Carrier) => 
-            a.name.localeCompare(b.name)
-          );
-          setCarriers(sortedCarriers);
-        })
-        .catch((error) => {
-          console.error('Error fetching all companies:', error);
-          setCarriers([]);
-        })
-        .finally(() => setLoadingCarriers(false));
-    } else {
-      // Use user-specific companies
-      if (userSpecificCompanies !== null && userSpecificCompanies !== undefined) {
-        const sortedCarriers = userSpecificCompanies.sort((a: Carrier, b: Carrier) => 
+    // Use unified API endpoint with view_mode parameter
+    const params = new URLSearchParams();
+    params.append('view_mode', viewAllData ? 'all_data' : 'my_data');
+    if (environmentId && !viewAllData) {
+      params.append('environment_id', environmentId);
+    }
+    
+    axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/companies/?${params.toString()}`, {
+      withCredentials: true
+    })
+      .then((response) => {
+        const data = response.data;
+        // Sort carriers alphabetically by name
+        const sortedCarriers = data.sort((a: Carrier, b: Carrier) => 
           a.name.localeCompare(b.name)
         );
         setCarriers(sortedCarriers);
-        setLoadingCarriers(false);
-      }
-    }
-  }, [viewAllData, userSpecificCompanies]);
+      })
+      .catch((error) => {
+        console.error('Error fetching companies:', error);
+        setCarriers([]);
+      })
+      .finally(() => setLoadingCarriers(false));
+  }, [viewAllData, environmentId]);
 
   // Auto-select carrier from URL parameter
   useEffect(() => {

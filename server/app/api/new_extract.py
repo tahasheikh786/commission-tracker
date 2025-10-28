@@ -146,6 +146,7 @@ async def extract_tables_smart(
     company_id: Optional[str] = Form(None),
     extraction_method: str = Form("smart"),
     upload_id: Optional[str] = Form(None),
+    environment_id: Optional[str] = Form(None),
     current_user: User = Depends(get_current_user_hybrid),
     db: AsyncSession = Depends(get_db)
 ):
@@ -301,6 +302,30 @@ async def extract_tables_smart(
         if upload_id:
             await connection_manager.emit_upload_step(upload_id, 'upload', 10)
         
+        # Get or create default environment for the user's company
+        from app.db.crud.environment import get_or_create_default_environment, get_environment_by_id
+        
+        # Use provided environment_id if available, otherwise get/create default
+        if environment_id:
+            try:
+                env_uuid = UUID(environment_id)
+                target_env = await get_environment_by_id(db, env_uuid, current_user.company_id)
+                logger.info(f"Using specified environment {target_env.id} ({target_env.name}) for upload")
+            except (ValueError, Exception) as e:
+                logger.warning(f"Invalid or inaccessible environment_id {environment_id}: {e}. Using default.")
+                target_env = await get_or_create_default_environment(
+                    db=db,
+                    company_id=current_user.company_id,
+                    user_id=current_user.id
+                )
+        else:
+            target_env = await get_or_create_default_environment(
+                db=db,
+                company_id=current_user.company_id,
+                user_id=current_user.id
+            )
+            logger.info(f"Using default environment {target_env.id} ({target_env.name}) for upload")
+        
         # Create statement upload record for progress tracking
         # NOTE: company_id is used for the carrier here (legacy behavior)
         # We'll set carrier_id explicitly after extraction for proper carrier association
@@ -309,6 +334,7 @@ async def extract_tables_smart(
             company_id=company_id,
             carrier_id=company_id,  # Set carrier_id to the same value for now
             user_id=current_user.id,
+            environment_id=target_env.id,  # Use the determined environment (either specified or default)
             file_name=gcs_key,
             file_hash=file_hash,
             file_size=file_size,

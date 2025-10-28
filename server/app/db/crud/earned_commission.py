@@ -24,6 +24,7 @@ async def create_earned_commission(db: AsyncSession, commission: EarnedCommissio
         statement_count=commission.statement_count,
         upload_ids=commission.upload_ids,
         user_id=commission.user_id,  # CRITICAL: Set user_id for proper data isolation
+        environment_id=commission.environment_id,  # Set environment_id for multi-environment isolation
         statement_date=commission.statement_date,
         statement_month=commission.statement_month,
         statement_year=commission.statement_year,
@@ -108,11 +109,11 @@ async def update_earned_commission(db: AsyncSession, commission_id: UUID, update
     # ✅ REMOVED: await db.refresh(db_commission) - Not needed for bulk operations
     return db_commission
 
-async def upsert_earned_commission(db: AsyncSession, carrier_id: UUID, client_name: str, invoice_total: float, commission_earned: float, statement_date: datetime = None, statement_month: int = None, statement_year: int = None, upload_id: str = None, user_id: UUID = None):
+async def upsert_earned_commission(db: AsyncSession, carrier_id: UUID, client_name: str, invoice_total: float, commission_earned: float, statement_date: datetime = None, statement_month: int = None, statement_year: int = None, upload_id: str = None, user_id: UUID = None, environment_id: UUID = None):
     """
-    Upsert earned commission data with USER ISOLATION.
+    Upsert earned commission data with USER and ENVIRONMENT ISOLATION.
     
-    CRITICAL CHANGE: The unique constraint includes user_id to ensure each user has their own commission records.
+    CRITICAL CHANGE: The unique constraint includes user_id and environment_id to ensure proper data isolation.
     
     IMPORTANT: user_id is now REQUIRED. If not provided, record will NOT be created/updated to prevent
     data corruption between users.
@@ -181,7 +182,7 @@ async def upsert_earned_commission(db: AsyncSession, carrier_id: UUID, client_na
         result = await update_earned_commission(db, existing.id, update_data)
         return result
     else:
-        # Create new record for THIS USER
+        # Create new record for THIS USER and ENVIRONMENT
         commission_data = EarnedCommissionCreate(
             carrier_id=carrier_id,
             client_name=client_name,
@@ -192,7 +193,8 @@ async def upsert_earned_commission(db: AsyncSession, carrier_id: UUID, client_na
             statement_month=statement_month,
             statement_year=statement_year,
             upload_ids=[upload_id] if upload_id else [],
-            user_id=user_id  # NEW FIELD for user isolation
+            user_id=user_id,  # FIELD for user isolation
+            environment_id=environment_id  # NEW FIELD for environment isolation
         )
         
         # Set monthly breakdown if statement date is provided
@@ -652,6 +654,7 @@ def prepare_bulk_operations(commission_records: List[Dict[str, Any]], existing_r
                 'statement_year': record['statement_year'],
                 'upload_id': record['upload_id'],
                 'user_id': record.get('user_id'),  # CRITICAL: Include user_id
+                'environment_id': record.get('environment_id'),  # CRITICAL: Include environment_id
                 'invoice_total': 0.0,
                 'commission_earned': 0.0,
                 'upload_ids': set(),  # Use set to avoid duplicates
@@ -734,7 +737,8 @@ def prepare_bulk_operations(commission_records: List[Dict[str, Any]], existing_r
                 'statement_date': agg_record['statement_date'],
                 'statement_month': agg_record['statement_month'],
                 'statement_year': agg_record['statement_year'],
-                'user_id': agg_record.get('user_id'),  # NEW: Include user_id for proper data isolation
+                'user_id': agg_record.get('user_id'),  # CRITICAL: Include user_id for proper data isolation
+                'environment_id': agg_record.get('environment_id'),  # CRITICAL: Include environment_id for environment isolation
                 'created_at': datetime.utcnow(),
                 'last_updated': datetime.utcnow()
             }
@@ -1162,7 +1166,8 @@ async def process_commission_data_from_statement(db: AsyncSession, statement_upl
                         statement_month,
                         statement_year,
                         str(statement_upload.id),
-                        statement_upload.user_id  # CRITICAL: Pass user_id for proper data isolation
+                        statement_upload.user_id,  # CRITICAL: Pass user_id for proper data isolation
+                        statement_upload.environment_id  # CRITICAL: Pass environment_id for environment isolation
                     )
                 elif commission_earned == 0 and invoice_total != 0:
                     # If commission is 0 but invoice has a value, still process it
@@ -1179,7 +1184,8 @@ async def process_commission_data_from_statement(db: AsyncSession, statement_upl
                         statement_month,
                         statement_year,
                         str(statement_upload.id),
-                        statement_upload.user_id  # CRITICAL: Pass user_id for proper data isolation
+                        statement_upload.user_id,  # CRITICAL: Pass user_id for proper data isolation
+                        statement_upload.environment_id  # CRITICAL: Pass environment_id for environment isolation
                     )
     
     print("Commission data processing completed successfully")
@@ -1211,10 +1217,13 @@ async def bulk_process_commissions(db: AsyncSession, statement_upload: Statement
         print(f"❌ Statement status is not approved: {statement_upload.status}")
         return None
     
-    # Extract user_id from statement for proper user isolation
+    # Extract user_id and environment_id from statement for proper user and environment isolation
     user_id = statement_upload.user_id
+    environment_id = statement_upload.environment_id
     if not user_id:
         print(f"⚠️  WARNING: No user_id found in statement upload {statement_upload.id}")
+    if not environment_id:
+        print(f"⚠️  WARNING: No environment_id found in statement upload {statement_upload.id}")
     
     # ✅ OPTIMIZED: Extract field mappings ONCE at the beginning
     field_mappings = extract_field_mappings_once(statement_upload.field_config)
@@ -1228,6 +1237,7 @@ async def bulk_process_commissions(db: AsyncSession, statement_upload: Statement
     
     print(f"✅ OPTIMIZED: Pre-extracted field mappings: client={client_name_field}, commission={commission_earned_field}, invoice={invoice_total_field}")
     print(f"👤 Processing for user_id: {user_id}")
+    print(f"🌍 Processing for environment_id: {environment_id}")
     
     # Extract statement date information
     statement_date, statement_month, statement_year = extract_statement_date_info(statement_upload)
@@ -1277,7 +1287,8 @@ async def bulk_process_commissions(db: AsyncSession, statement_upload: Statement
                         'statement_year': statement_year,
                         'statement_date': statement_date,
                         'upload_id': str(statement_upload.id),
-                        'user_id': user_id  # NEW: Include user_id for proper data isolation
+                        'user_id': user_id,  # CRITICAL: Include user_id for proper data isolation
+                        'environment_id': environment_id  # CRITICAL: Include environment_id for environment isolation
                     })
     
     if not commission_records:

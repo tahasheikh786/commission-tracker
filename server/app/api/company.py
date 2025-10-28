@@ -4,7 +4,7 @@ from sqlalchemy import select, or_
 from app.db import crud, schemas
 from app.config import get_db
 from app.dependencies.auth_dependencies import get_current_user_hybrid
-from app.db.models import User, StatementUpload
+from app.db.models import User, StatementUpload, Company
 from typing import List
 from pydantic import BaseModel
 
@@ -17,8 +17,56 @@ class CompanyUpdate(BaseModel):
 router = APIRouter(prefix="/api")
 
 @router.get("/companies/", response_model=List[schemas.Company])
-async def list_companies(db: AsyncSession = Depends(get_db)):
-    return await crud.get_all_companies(db)
+async def list_companies(
+    view_mode: str = "my_data",
+    environment_id: str = None,
+    current_user: User = Depends(get_current_user_hybrid),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get carrier companies based on view mode and environment"""
+    from sqlalchemy import and_, func, distinct
+    
+    # Build base query for carriers (companies without users)
+    base_query = (
+        select(Company)
+        .outerjoin(User, Company.id == User.company_id)
+        .where(User.id.is_(None))  # Only companies with no users (carriers)
+    )
+    
+    # Filter based on view_mode
+    if view_mode == "my_data":
+        # Show only carriers where user has uploaded statements
+        # Optionally filter by environment_id
+        statement_filters = [StatementUpload.user_id == current_user.id]
+        if environment_id:
+            statement_filters.append(StatementUpload.environment_id == environment_id)
+        
+        # Get distinct carrier IDs from user's statements
+        carrier_subquery = (
+            select(distinct(StatementUpload.carrier_id))
+            .where(and_(*statement_filters))
+        )
+        
+        base_query = base_query.where(Company.id.in_(carrier_subquery))
+    
+    elif view_mode == "all_data":
+        # Show carriers where anyone in user's company has uploaded statements
+        if current_user.company_id:
+            # Get all user IDs in the same company
+            company_users_subquery = select(User.id).where(User.company_id == current_user.company_id)
+            
+            # Get distinct carrier IDs from company users' statements
+            carrier_subquery = (
+                select(distinct(StatementUpload.carrier_id))
+                .where(StatementUpload.user_id.in_(company_users_subquery))
+            )
+            
+            base_query = base_query.where(Company.id.in_(carrier_subquery))
+    
+    base_query = base_query.order_by(Company.name)
+    result = await db.execute(base_query)
+    companies = result.scalars().all()
+    return companies
 
 @router.get("/companies/{company_id}", response_model=schemas.Company)
 async def get_company(company_id: str, db: AsyncSession = Depends(get_db)):
@@ -43,6 +91,17 @@ async def delete_company(
     company = await crud.get_company_by_id(db, company_id)
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
+    
+    # SAFETY CHECK: Prevent deletion of user companies (companies that have users)
+    result = await db.execute(
+        select(User).where(User.company_id == company_id).limit(1)
+    )
+    has_users = result.scalar_one_or_none()
+    if has_users:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot delete a user company. Only carrier companies can be deleted."
+        )
     
     # Check if user has permission to delete this company/carrier
     # Non-admin users can only delete companies where ALL statements belong to them
@@ -88,6 +147,15 @@ async def delete_multiple_companies(
                 company = await crud.get_company_by_id(db, company_id)
                 if not company:
                     errors.append(f"Company with ID {company_id} not found")
+                    continue
+                
+                # SAFETY CHECK: Prevent deletion of user companies (companies that have users)
+                user_check = await db.execute(
+                    select(User).where(User.company_id == company_id).limit(1)
+                )
+                has_users = user_check.scalar_one_or_none()
+                if has_users:
+                    errors.append(f"Cannot delete {company.name} - it is a user company, not a carrier")
                     continue
                 
                 # Check if user has permission to delete this company/carrier
