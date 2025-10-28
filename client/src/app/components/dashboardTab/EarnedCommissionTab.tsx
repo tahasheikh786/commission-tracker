@@ -7,13 +7,16 @@ import {
   ChevronRight,
   BarChart3,
   ChevronDown,
- 
   ArrowLeft,
-  ArrowRight
+  ArrowRight,
+  X,
+  Building2,
+  Users
 } from 'lucide-react';
 import EditCommissionModal from './EditCommissionModal';
 import MergeConfirmationModal from './MergeConfirmationModal';
 import { formatCurrency, formatCurrencyCompact } from '../../utils/formatters';
+import { InteractiveLineChart } from './InteractiveLineChart';
 import { 
   useCarriersWithCommission, 
   useAvailableYears
@@ -27,57 +30,59 @@ import { useEnvironment } from '@/context/EnvironmentContext';
 
 // Loading Skeleton Components
 const CarrierCardSkeleton: React.FC = () => (
-  <div className="glass-card-premium rounded-xl p-6 border border-slate-200/50 dark:border-slate-700/50 animate-pulse">
-    <div className="flex items-center gap-3 mb-4">
-      <div className="w-12 h-12 bg-slate-200 dark:bg-slate-700 rounded-full" />
-      <div className="flex-1">
-        <div className="h-5 bg-slate-200 dark:bg-slate-700 rounded w-3/4 mb-2" />
-        <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-1/2" />
+  <div className="premium-card-container premium-skeleton">
+    <div className="card-header">
+      <div className="w-10 h-10 skeleton-item rounded-full" />
+      <div className="w-16 h-5 skeleton-item rounded" />
+    </div>
+    <div className="card-body space-y-3">
+      <div className="w-32 h-6 skeleton-item rounded" />
+      <div className="stats-grid gap-3">
+        <div className="space-y-2">
+          <div className="w-16 h-3 skeleton-item rounded" />
+          <div className="w-20 h-5 skeleton-item rounded" />
+        </div>
+        <div className="space-y-2">
+          <div className="w-16 h-3 skeleton-item rounded" />
+          <div className="w-20 h-5 skeleton-item rounded" />
+        </div>
       </div>
-    </div>
-    <div className="mb-3">
-      <div className="h-8 bg-slate-200 dark:bg-slate-700 rounded w-32 mb-2" />
-      <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-24" />
-    </div>
-    <div className="flex items-center justify-between text-xs">
-      <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-20" />
-      <div className="w-4 h-4 bg-slate-200 dark:bg-slate-700 rounded" />
     </div>
   </div>
 );
 
 const CompanyCardSkeleton: React.FC = () => (
-  <div className="expandable-company-card bg-white dark:bg-slate-800 rounded-xl shadow-sm p-4 border border-slate-200/50 dark:border-slate-700/50 animate-pulse">
+  <div className="premium-card-container premium-skeleton">
     <div className="mb-3">
-      <div className="h-5 bg-slate-200 dark:bg-slate-700 rounded w-3/4 mb-2" />
-      <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-1/2" />
+      <div className="h-5 skeleton-item rounded w-3/4 mb-2" />
+      <div className="h-3 skeleton-item rounded w-1/2" />
     </div>
     <div className="grid grid-cols-2 gap-3 mb-3">
       <div>
-        <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-16 mb-1" />
-        <div className="h-6 bg-slate-200 dark:bg-slate-700 rounded" />
+        <div className="h-3 skeleton-item rounded w-16 mb-1" />
+        <div className="h-6 skeleton-item rounded" />
       </div>
       <div>
-        <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-20 mb-1" />
-        <div className="h-6 bg-slate-200 dark:bg-slate-700 rounded" />
+        <div className="h-3 skeleton-item rounded w-20 mb-1" />
+        <div className="h-6 skeleton-item rounded" />
       </div>
     </div>
-    <div className="h-12 bg-slate-200 dark:bg-slate-700 rounded" />
+    <div className="h-12 skeleton-item rounded" />
   </div>
 );
 
 const TimelineSkeleton: React.FC = () => (
-  <div className="h-full flex flex-col bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl p-4">
-    <div className="h-6 bg-slate-200 dark:bg-slate-700 rounded w-32 mb-4 animate-pulse" />
+  <div className="h-full flex flex-col bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl p-4 premium-skeleton">
+    <div className="h-6 skeleton-item rounded w-32 mb-4" />
     <div className="grid grid-cols-2 gap-3 mb-6">
-      <div className="h-20 bg-slate-200 dark:bg-slate-700 rounded animate-pulse" />
-      <div className="h-20 bg-slate-200 dark:bg-slate-700 rounded animate-pulse" />
+      <div className="h-20 skeleton-item rounded" />
+      <div className="h-20 skeleton-item rounded" />
     </div>
     <div className="space-y-2">
       {[...Array(12)].map((_, i) => (
         <div key={i} className="flex items-center gap-2">
-          <div className="w-10 h-4 bg-slate-200 dark:bg-slate-700 rounded animate-pulse" />
-          <div className="flex-1 h-10 bg-slate-200 dark:bg-slate-700 rounded animate-pulse" />
+          <div className="w-10 h-4 skeleton-item rounded" />
+          <div className="flex-1 h-10 skeleton-item rounded" />
         </div>
       ))}
     </div>
@@ -220,11 +225,11 @@ const CarrierCard: React.FC<CarrierCardProps> = ({ carrier, onClick }) => {
       onFocus={() => setIsHovered(true)}
       onBlur={() => setIsHovered(false)}
       whileHover={{ 
-        y: -8,
-        scale: 1.02,
-        transition: { duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }
+        y: -2,
+        scale: 1.01,
+        transition: { duration: 0.3, ease: 'easeOut' }
       }}
-      className="carrier-card-premium group relative cursor-pointer"
+      className="carrier-card-premium group relative cursor-pointer h-full"
     >
       {/* Background Gradient Overlay - Intensifies on Hover */}
       <motion.div
@@ -235,16 +240,16 @@ const CarrierCard: React.FC<CarrierCardProps> = ({ carrier, onClick }) => {
         transition={{ duration: 0.5, ease: "easeInOut" }}
       />
 
-      {/* Main Card Content Container */}
-      <div className="relative p-6 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden transition-all duration-300">
+      {/* Main Card Content Container - 8px-based spacing */}
+      <div className="relative bg-white dark:bg-slate-800 rounded-xl border border-slate-200/60 dark:border-slate-700/60 hover:border-slate-300/60 dark:hover:border-slate-600/60 hover:shadow-xl overflow-hidden transition-all duration-300 h-full flex flex-col" style={{ padding: '24px' }}> {/* p-6 = 24px */}
         
         {/* Decorative Corner Element */}
-        <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-500/10 to-purple-500/10 rounded-bl-full transform translate-x-16 -translate-y-16" />
+        <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-500/5 to-purple-500/5 rounded-bl-full transform translate-x-16 -translate-y-16" />
 
         {/* INITIAL STATE - Always Visible */}
-        <div className="relative z-10">
+        <div className="relative z-10 flex-1 flex flex-col">
           {/* Carrier Avatar/Icon */}
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between" style={{ marginBottom: '16px' }}> {/* mb-4 = 16px */}
             <motion.div
               animate={{
                 scale: isHovered ? 0.9 : 1,
@@ -262,17 +267,18 @@ const CarrierCard: React.FC<CarrierCardProps> = ({ carrier, onClick }) => {
                 y: isHovered ? -10 : 0
               }}
               transition={{ duration: 0.4, ease: "easeInOut" }}
-              className="text-xs font-medium text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 px-3 py-1 rounded-full"
+              className="text-xs font-medium text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 rounded-full"
+              style={{ padding: '4px 12px' }}
             >
               {carrier.companyCount} companies
             </motion.div>
           </div>
 
-          {/* Carrier Name - Large and Prominent */}
+          {/* Carrier Name - Large and Prominent with 8px spacing */}
           <motion.h3
             animate={{
               fontSize: isHovered ? '1.25rem' : '1.5rem',
-              marginBottom: isHovered ? '1rem' : '0.5rem',
+              marginBottom: isHovered ? '16px' : '8px',
               textAlign: isHovered ? 'center' : 'left'
             }}
             transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
@@ -313,21 +319,22 @@ const CarrierCard: React.FC<CarrierCardProps> = ({ carrier, onClick }) => {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 20 }}
               transition={{ duration: 0.5, delay: 0.1, ease: [0.25, 0.46, 0.45, 0.94] }}
-              className="relative z-20 mt-4"
+              className="relative z-20"
+              style={{ marginTop: '16px' }}
             >
-              {/* Two-Column Layout for Balanced Information Display */}
-              <div className="grid grid-cols-2 gap-4">
+              {/* Two-Column Layout for Balanced Information Display with 8px gap */}
+              <div className="grid grid-cols-2" style={{ gap: '16px' }}> {/* gap-4 = 16px */}
                 
                 {/* LEFT COLUMN */}
                 <motion.div
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ duration: 0.5, delay: 0.2, ease: [0.25, 0.46, 0.45, 0.94] }}
-                  className="space-y-3"
+                  style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
                 >
                   {/* Total Commission */}
                   <div>
-                    <div className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wide">
+                    <div className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide" style={{ marginBottom: '4px' }}>
                       Total Commission
                     </div>
                     <div className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
@@ -337,10 +344,10 @@ const CarrierCard: React.FC<CarrierCardProps> = ({ carrier, onClick }) => {
 
                   {/* Company Count - Detailed */}
                   <div>
-                    <div className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wide">
+                    <div className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide" style={{ marginBottom: '4px' }}>
                       Companies
                     </div>
-                    <div className="flex items-baseline gap-2">
+                    <div className="flex items-baseline" style={{ gap: '8px' }}>
                       <span className="text-xl font-bold text-slate-900 dark:text-white">
                         {carrier.companyCount}
                       </span>
@@ -356,14 +363,14 @@ const CarrierCard: React.FC<CarrierCardProps> = ({ carrier, onClick }) => {
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ duration: 0.5, delay: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
-                  className="space-y-3"
+                  style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
                 >
                   {/* Statements Count */}
                   <div>
-                    <div className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wide">
+                    <div className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide" style={{ marginBottom: '4px' }}>
                       Statements
                     </div>
-                    <div className="flex items-baseline gap-2">
+                    <div className="flex items-baseline" style={{ gap: '8px' }}>
                       <span className="text-xl font-bold text-slate-900 dark:text-white">
                         {carrier.statementCount}
                       </span>
@@ -375,7 +382,7 @@ const CarrierCard: React.FC<CarrierCardProps> = ({ carrier, onClick }) => {
 
                   {/* Average per Company */}
                   <div>
-                    <div className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wide">
+                    <div className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide" style={{ marginBottom: '4px' }}>
                       Avg per Company
                     </div>
                     <div className="text-lg font-semibold text-emerald-600 dark:text-emerald-400">
@@ -385,12 +392,13 @@ const CarrierCard: React.FC<CarrierCardProps> = ({ carrier, onClick }) => {
                 </motion.div>
               </div>
 
-              {/* Action Button - Appears on Hover */}
+              {/* Action Button - Appears on Hover with 8px spacing */}
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4, delay: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}
-                className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700"
+                className="border-t border-slate-200 dark:border-slate-700"
+                style={{ marginTop: '16px', paddingTop: '16px' }}
               >
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-blue-600 dark:text-blue-400 font-medium">
@@ -438,11 +446,11 @@ const CompanyCard: React.FC<CompanyCardProps> = ({ company, onClick }) => {
       onFocus={() => setIsHovered(true)}
       onBlur={() => setIsHovered(false)}
       whileHover={{ 
-        y: -6,
+        y: -2,
         scale: 1.01,
-        transition: { duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }
+        transition: { duration: 0.3, ease: 'easeOut' }
       }}
-      className="company-card-premium group relative cursor-pointer"
+      className="company-card-premium group relative cursor-pointer h-full"
     >
       {/* Background with Subtle Gradient */}
       <motion.div
@@ -453,40 +461,48 @@ const CompanyCard: React.FC<CompanyCardProps> = ({ company, onClick }) => {
         transition={{ duration: 0.5, ease: "easeInOut" }}
       />
 
-      {/* Main Card Content */}
-      <div className="relative p-5 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden transition-all duration-300">
+      {/* Main Card Content with 8px-based spacing */}
+      <div className="relative bg-white dark:bg-slate-800 rounded-xl border border-slate-200/60 dark:border-slate-700/60 hover:border-slate-300/60 dark:hover:border-slate-600/60 hover:shadow-xl overflow-hidden transition-all duration-300 h-full flex flex-col" style={{ padding: '24px' }}> {/* p-6 = 24px */}
         
         {/* Decorative Element */}
         <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-blue-500/5 to-purple-500/5 rounded-bl-full transform translate-x-12 -translate-y-12" />
 
         {/* INITIAL STATE - Company Name Only */}
-        <div className="relative z-10">
+        <div className="relative z-10 flex-1 flex flex-col">
           
-          {/* Company Name - Prominent Display */}
+          {/* Company Name - Prominent Display with 8px spacing */}
           <motion.h4
             animate={{
               fontSize: isHovered ? '1.125rem' : '1.25rem',
-              marginBottom: isHovered ? '0.75rem' : '0.5rem',
+              marginBottom: isHovered ? '12px' : '8px',
               textAlign: isHovered ? 'center' : 'left'
             }}
             transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
-            className="font-bold text-slate-900 dark:text-white line-clamp-2 min-h-[3rem]"
+            className="font-bold text-slate-900 dark:text-white line-clamp-2 h-[3.5rem] flex items-center"
           >
             {company.client_name}
           </motion.h4>
 
-          {/* Year Badge - Small, Always Visible */}
+          {/* Year Badge and Carrier Tag - Always Visible */}
           <motion.div
             animate={{
               opacity: isHovered ? 0 : 1,
               height: isHovered ? 0 : 'auto'
             }}
             transition={{ duration: 0.3, ease: "easeInOut" }}
-            className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 overflow-hidden"
+            className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 overflow-hidden flex-wrap"
           >
             <span className="bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded">
               {company.statement_year || '2025'}
             </span>
+            {company.carrier_name && (
+              <>
+                <span className="text-slate-400">•</span>
+                <span className="bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-1 rounded font-medium">
+                  {company.carrier_name}
+                </span>
+              </>
+            )}
             <span className="text-slate-400">•</span>
             <motion.span
               animate={{
@@ -511,24 +527,34 @@ const CompanyCard: React.FC<CompanyCardProps> = ({ company, onClick }) => {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 15 }}
               transition={{ duration: 0.5, delay: 0.1, ease: [0.25, 0.46, 0.45, 0.94] }}
-              className="relative z-20 mt-3"
+              className="relative z-20"
+              style={{ marginTop: '12px' }}
             >
               {/* Metadata Row */}
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.4, delay: 0.15, ease: "easeInOut" }}
-                className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 mb-3"
+                className="flex items-center text-xs text-slate-500 dark:text-slate-400 flex-wrap"
+                style={{ gap: '8px', marginBottom: '12px' }}
               >
                 <span className="bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded">
                   {company.statement_year || '2025'}
                 </span>
+                {company.carrier_name && (
+                  <>
+                    <span>•</span>
+                    <span className="bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-1 rounded font-medium">
+                      {company.carrier_name}
+                    </span>
+                  </>
+                )}
                 <span>•</span>
                 <span>{company.statement_count} statements</span>
               </motion.div>
 
-              {/* Two-Column Stats Layout */}
-              <div className="grid grid-cols-2 gap-3">
+              {/* Two-Column Stats Layout with 8px gap */}
+              <div className="grid grid-cols-2" style={{ gap: '12px' }}>
                 
                 {/* LEFT: Commission */}
                 <motion.div
@@ -536,7 +562,7 @@ const CompanyCard: React.FC<CompanyCardProps> = ({ company, onClick }) => {
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ duration: 0.5, delay: 0.2, ease: [0.25, 0.46, 0.45, 0.94] }}
                 >
-                  <div className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wide">
+                  <div className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide" style={{ marginBottom: '4px' }}>
                     Commission
                   </div>
                   <div className="text-xl font-bold text-blue-600 dark:text-blue-400">
@@ -550,7 +576,7 @@ const CompanyCard: React.FC<CompanyCardProps> = ({ company, onClick }) => {
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ duration: 0.5, delay: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
                 >
-                  <div className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wide">
+                  <div className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide" style={{ marginBottom: '4px' }}>
                     Invoice Total
                   </div>
                   <div className="text-lg font-semibold text-slate-700 dark:text-slate-300">
@@ -559,12 +585,13 @@ const CompanyCard: React.FC<CompanyCardProps> = ({ company, onClick }) => {
                 </motion.div>
               </div>
 
-              {/* Commission Rate Indicator */}
+              {/* Commission Rate Indicator with 8px spacing */}
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4, delay: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}
-                className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700"
+                className="border-t border-slate-200 dark:border-slate-700"
+                style={{ marginTop: '12px', paddingTop: '12px' }}
               >
                 <div className="flex items-center justify-between">
                   <div>
@@ -572,7 +599,10 @@ const CompanyCard: React.FC<CompanyCardProps> = ({ company, onClick }) => {
                       Commission Rate
                     </div>
                     <div className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
-                      {((company.commission_earned / company.invoice_total) * 100).toFixed(1)}%
+                      {company.invoice_total > 0 
+                        ? `${((company.commission_earned / company.invoice_total) * 100).toFixed(1)}%`
+                        : 'N/A'
+                      }
                     </div>
                   </div>
                   
@@ -633,12 +663,20 @@ const ExpandableCompanyCard: React.FC<ExpandableCompanyCardProps> = ({
       >
         {/* Top Row: Company Name and Year/Statements Badge */}
         <div className="flex items-start justify-between gap-3 mb-3">
-          <h3 className="font-semibold text-slate-900 dark:text-white text-base truncate flex-1">
-            {company.client_name}
-          </h3>
+          <div className="flex-1 min-w-0">
+            <h3 className="font-semibold text-slate-900 dark:text-white text-base truncate mb-2">
+              {company.client_name}
+            </h3>
+            {company.carrier_name && (
+              <div className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full text-xs font-medium">
+                <Users className="w-3 h-3" />
+                {company.carrier_name}
+              </div>
+            )}
+          </div>
           <div className="flex items-center gap-2 flex-shrink-0">
-            <div className="px-2.5 py-1 bg-blue-50 dark:bg-blue-900/30 rounded-md">
-              <span className="text-xs font-medium text-blue-700 dark:text-blue-300">
+            <div className="px-2.5 py-1 bg-slate-100 dark:bg-slate-700 rounded-md">
+              <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
                 {company.statement_year || '2025'}
               </span>
             </div>
@@ -1021,6 +1059,11 @@ interface OverviewModeProps {
   selectedYear: number | null;
   onYearChange: (year: number | null) => void;
   availableYears: number[];
+  viewMode: 'carriers' | 'companies';
+  onViewModeChange: (mode: 'carriers' | 'companies') => void;
+  selectedCarriers: string[];
+  onCarriersFilterChange: (carriers: string[]) => void;
+  onSelectCompany: (company: CommissionData) => void;
 }
 
 const OverviewMode: React.FC<OverviewModeProps> = ({ 
@@ -1030,12 +1073,78 @@ const OverviewMode: React.FC<OverviewModeProps> = ({
   onSetViewAllData,
   selectedYear,
   onYearChange,
-  availableYears
+  availableYears,
+  viewMode,
+  onViewModeChange,
+  selectedCarriers,
+  onCarriersFilterChange,
+  onSelectCompany
 }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortMode, setSortMode] = useState<'commission' | 'companies' | 'alpha'>('commission');
+  const [showCarrierDropdown, setShowCarrierDropdown] = useState(false);
+  const [carrierSearchQuery, setCarrierSearchQuery] = useState('');
+  const [focusedCompany, setFocusedCompany] = useState<CommissionData | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const ITEMS_PER_PAGE = 15;
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowCarrierDropdown(false);
+        setCarrierSearchQuery('');
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Get all companies flattened across all carriers
+  const allCompanies = useMemo(() => {
+    return carriers.flatMap(carrier => 
+      carrier.companies.map(company => ({
+        ...company,
+        carrier_name: carrier.carrierName
+      }))
+    );
+  }, [carriers]);
+
+  // Filter and sort companies
+  const filteredAndSortedCompanies = useMemo(() => {
+    let filtered = allCompanies;
+
+    // Filter by search query
+    if (searchQuery) {
+      filtered = filtered.filter(company =>
+        company.client_name.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+
+    // Filter by selected carriers
+    if (selectedCarriers.length > 0) {
+      filtered = filtered.filter(company =>
+        selectedCarriers.includes(company.carrier_name || '')
+      );
+    }
+
+    // Sort
+    const sorted = [...filtered];
+    switch (sortMode) {
+      case 'commission':
+        sorted.sort((a, b) => b.commission_earned - a.commission_earned);
+        break;
+      case 'companies':
+        // In companies view, this doesn't make sense, so sort by alpha
+        sorted.sort((a, b) => a.client_name.localeCompare(b.client_name));
+        break;
+      case 'alpha':
+        sorted.sort((a, b) => a.client_name.localeCompare(b.client_name));
+        break;
+    }
+    return sorted;
+  }, [allCompanies, searchQuery, selectedCarriers, sortMode]);
 
   // Filter and sort carriers
   const filteredAndSortedCarriers = useMemo(() => {
@@ -1058,18 +1167,54 @@ const OverviewMode: React.FC<OverviewModeProps> = ({
     return sorted;
   }, [carriers, searchQuery, sortMode]);
 
+  // Paginate based on view mode
   const paginatedCarriers = useMemo(() => {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
     const endIndex = startIndex + ITEMS_PER_PAGE;
     return filteredAndSortedCarriers.slice(startIndex, endIndex);
   }, [filteredAndSortedCarriers, currentPage]);
 
-  const totalPages = Math.ceil(filteredAndSortedCarriers.length / ITEMS_PER_PAGE);
+  const paginatedCompanies = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    const endIndex = startIndex + ITEMS_PER_PAGE;
+    return filteredAndSortedCompanies.slice(startIndex, endIndex);
+  }, [filteredAndSortedCompanies, currentPage]);
+
+  const totalPages = viewMode === 'carriers' 
+    ? Math.ceil(filteredAndSortedCarriers.length / ITEMS_PER_PAGE)
+    : Math.ceil(filteredAndSortedCompanies.length / ITEMS_PER_PAGE);
+
+  const totalItems = viewMode === 'carriers' 
+    ? filteredAndSortedCarriers.length 
+    : filteredAndSortedCompanies.length;
 
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, sortMode]);
+  }, [searchQuery, sortMode, viewMode, selectedCarriers]);
+
+  // Reset focused company when view mode changes
+  useEffect(() => {
+    setFocusedCompany(null);
+  }, [viewMode]);
+
+  // Handle company focus
+  const handleCompanyClick = (company: CommissionData) => {
+    if (focusedCompany?.id === company.id) {
+      setFocusedCompany(null);
+    } else {
+      setFocusedCompany(company);
+    }
+  };
+
+  // Handle carrier filter toggle
+  const toggleCarrierFilter = (carrierName: string) => {
+    if (selectedCarriers.includes(carrierName)) {
+      onCarriersFilterChange(selectedCarriers.filter(c => c !== carrierName));
+    } else {
+      onCarriersFilterChange([...selectedCarriers, carrierName]);
+    }
+  };
 
   return (
     <motion.div
@@ -1077,199 +1222,494 @@ const OverviewMode: React.FC<OverviewModeProps> = ({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
       transition={{ duration: 0.4 }}
-      className="p-6 space-y-6"
+      className="flex flex-col h-full"
     >
-      <div className="text-center mb-8">
-        <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
-          Commission Explorer
-        </h1>
-        <p className="text-slate-600 dark:text-slate-400">
-          Select a carrier to explore commission details
-        </p>
+      {/* UNIFIED PREMIUM HEADER - Single Sticky Filter Bar */}
+      <div className="commission-page-header">
+        <div style={{ padding: '16px 24px' }}> {/* py-4 px-6 = 16px 24px */}
+          {/* PRIMARY CONTROLS ROW */}
+          <div className="flex items-center justify-between" style={{ marginBottom: '16px' }}> {/* mb-4 = 16px */}
+            <div className="flex items-center" style={{ gap: '12px' }}> {/* gap-3 = 12px */}
+              <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
+                Commission Overview
+              </h1>
+              <div className="flex items-center gap-1 px-3 py-1 bg-blue-50 dark:bg-blue-900/20 rounded-full">
+                <span className="text-xs font-medium text-blue-700 dark:text-blue-300">
+                  {totalItems} {totalItems === 1 ? 'result' : 'results'}
+                </span>
+              </div>
+            </div>
+            
+            <div className="flex items-center" style={{ gap: '12px' }}> {/* gap-3 = 12px */}
+              {/* Year Selector */}
+              {availableYears && availableYears.length > 0 && (
+                <select
+                  value={selectedYear || ''}
+                  onChange={(e) => {
+                    const year = e.target.value ? parseInt(e.target.value) : null;
+                    onYearChange(year);
+                  }}
+                  className="compact-select"
+                >
+                  <option value="">All Years</option>
+                  {availableYears.map((year) => (
+                    <option key={year} value={year}>
+                      {year}
+                    </option>
+                  ))}
+                </select>
+              )}
+              
+              {/* Data Scope Toggle */}
+              <div className="toggle-group">
+                <button 
+                  className={viewAllData ? '' : 'active'}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onSetViewAllData(false);
+                  }}
+                >
+                  My Data
+                </button>
+                <button 
+                  className={viewAllData ? 'active' : ''}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onSetViewAllData(true);
+                  }}
+                >
+                  All Data
+                </button>
+              </div>
+            </div>
+          </div>
+          
+          {/* SECONDARY CONTROLS ROW */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center" style={{ gap: '16px' }}> {/* gap-4 = 16px */}
+              {/* View Toggle */}
+              <div className="view-toggle-premium">
+                <button 
+                  className={viewMode === 'companies' ? 'active' : ''}
+                  onClick={() => onViewModeChange('companies')}
+                >
+                  <Building2 className="w-4 h-4" />
+                  Companies
+                </button>
+                <button 
+                  className={viewMode === 'carriers' ? 'active' : ''}
+                  onClick={() => onViewModeChange('carriers')}
+                >
+                  <Users className="w-4 h-4" />
+                  Carriers
+                </button>
+              </div>
+              
+              {/* Search */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder={viewMode === 'carriers' ? 'Search carriers...' : 'Search companies...'}
+                  className="search-input-premium"
+                />
+              </div>
+              
+              {/* Carrier Filter - Only in Companies View */}
+              {viewMode === 'companies' && (
+                <div className="dropdown-container" ref={dropdownRef}>
+                  <button
+                    onClick={() => setShowCarrierDropdown(!showCarrierDropdown)}
+                    className="filter-trigger"
+                  >
+                    <Users className="w-4 h-4" />
+                    {selectedCarriers.length === 0 ? 'All Carriers' : `${selectedCarriers.length} selected`}
+                    {selectedCarriers.length > 0 && (
+                      <span className="filter-badge">{selectedCarriers.length}</span>
+                    )}
+                    <ChevronDown className={`w-4 h-4 transition-transform ${showCarrierDropdown ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  <AnimatePresence>
+                    {showCarrierDropdown && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                        transition={{ duration: 0.2, ease: 'easeOut' }}
+                        className="filter-dropdown"
+                      >
+                        {/* Filter Content */}
+                        <div style={{ padding: '16px', gap: '16px', display: 'flex', flexDirection: 'column' }}> {/* p-4 space-y-4 = 16px */}
+                          <div className="flex items-center justify-between">
+                            <h3 className="font-semibold text-slate-900 dark:text-white">Filter by Carrier</h3>
+                            {selectedCarriers.length > 0 && (
+                              <button
+                                onClick={() => {
+                                  onCarriersFilterChange([]);
+                                  setCarrierSearchQuery('');
+                                }}
+                                className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium"
+                              >
+                                Clear all
+                              </button>
+                            )}
+                          </div>
+                          
+                          {/* Search Input */}
+                          <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                            <input
+                              type="text"
+                              value={carrierSearchQuery}
+                              onChange={(e) => setCarrierSearchQuery(e.target.value)}
+                              placeholder="Search carriers..."
+                              className="w-full pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          </div>
+                          
+                          {/* Carrier List */}
+                          <div className="overflow-y-auto max-h-72 -mx-2 px-2 space-y-1">
+                            {carriers
+                              .filter(carrier => carrier.carrierName.toLowerCase().includes(carrierSearchQuery.toLowerCase()))
+                              .map((carrier) => (
+                                <label
+                                  key={carrier.carrierName}
+                                  className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer transition-colors"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedCarriers.includes(carrier.carrierName)}
+                                    onChange={() => toggleCarrierFilter(carrier.carrierName)}
+                                    className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
+                                  />
+                                  <div className="flex-1">
+                                    <div className="text-sm font-medium text-slate-900 dark:text-white">
+                                      {carrier.carrierName}
+                                    </div>
+                                    <div className="text-xs text-slate-500 dark:text-slate-400">
+                                      {carrier.companyCount} companies
+                                    </div>
+                                  </div>
+                                </label>
+                              ))}
+                            {carriers.filter(carrier => carrier.carrierName.toLowerCase().includes(carrierSearchQuery.toLowerCase())).length === 0 && (
+                              <div className="text-center py-6 text-sm text-slate-500 dark:text-slate-400">
+                                No carriers found
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              )}
+            </div>
+            
+            <div className="flex items-center" style={{ gap: '8px' }}> {/* gap-2 = 8px */}
+              {/* Sort Options */}
+              <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Sort:</span>
+              <div className="flex" style={{ gap: '8px' }}> {/* gap-2 = 8px */}
+                <button
+                  onClick={() => setSortMode('commission')}
+                  className={`sort-button ${sortMode === 'commission' ? 'active' : ''}`}
+                  title="Sort by commission"
+                >
+                  💰 Commission
+                </button>
+                {viewMode === 'carriers' && (
+                  <button
+                    onClick={() => setSortMode('companies')}
+                    className={`sort-button ${sortMode === 'companies' ? 'active' : ''}`}
+                    title="Sort by companies"
+                  >
+                    🏢 Companies
+                  </button>
+                )}
+                <button
+                  onClick={() => setSortMode('alpha')}
+                  className={`sort-button ${sortMode === 'alpha' ? 'active' : ''}`}
+                  title="Sort alphabetically"
+                >
+                  🔤 A-Z
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Search and Filter Controls */}
-      <div className="flex items-center gap-4 mb-6">
-        {/* Search Bar */}
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search carriers..."
-            className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-          />
-        </div>
-
-        {/* Sort Buttons */}
-        <div className="flex gap-2 p-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
-          <button
-            onClick={() => setSortMode('commission')}
-            className={`px-3 py-2 text-sm font-medium rounded transition-all ${
-              sortMode === 'commission'
-                ? 'bg-blue-500 text-white shadow-sm'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
-            title="Sort by commission"
-          >
-            💰 Commission
-          </button>
-          <button
-            onClick={() => setSortMode('companies')}
-            className={`px-3 py-2 text-sm font-medium rounded transition-all ${
-              sortMode === 'companies'
-                ? 'bg-blue-500 text-white shadow-sm'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
-            title="Sort by companies"
-          >
-            🏢 Companies
-          </button>
-          <button
-            onClick={() => setSortMode('alpha')}
-            className={`px-3 py-2 text-sm font-medium rounded transition-all ${
-              sortMode === 'alpha'
-                ? 'bg-blue-500 text-white shadow-sm'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
-            title="Sort alphabetically"
-          >
-            🔤 A-Z
-          </button>
-        </div>
-
-        {/* Year Selector */}
-        {availableYears && availableYears.length > 0 && (
-          <select
-            value={selectedYear || ''}
-            onChange={(e) => {
-              const year = e.target.value ? parseInt(e.target.value) : null;
-              onYearChange(year);
-            }}
-            className="px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-          >
-            <option value="">All Years</option>
-            {availableYears.map((year) => (
-              <option key={year} value={year}>
-                {year}
-              </option>
-            ))}
-          </select>
-        )}
-
-        {/* My Data / All Data Toggle */}
-        <div className="flex gap-0 p-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
-          <button
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              console.log('🖱️ My Data button clicked');
-              onSetViewAllData(false);
-            }}
-            className={`px-4 py-2 text-sm font-medium rounded transition-all ${
-              !viewAllData
-                ? 'bg-blue-500 text-white shadow-sm'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
-          >
-            My Data
-          </button>
-          <button
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              console.log('🖱️ All Data button clicked');
-              onSetViewAllData(true);
-            }}
-            className={`px-4 py-2 text-sm font-medium rounded transition-all ${
-              viewAllData
-                ? 'bg-blue-500 text-white shadow-sm'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
-          >
-            All Data
-          </button>
-        </div>
-      </div>
+      {/* CONTENT AREA with proper 8px-based spacing */}
+      <div className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-900" style={{ padding: '32px 24px' }}> {/* py-8 px-6 = 32px 24px */}
 
       {/* Empty State */}
-      {filteredAndSortedCarriers.length === 0 ? (
+      {(viewMode === 'carriers' ? filteredAndSortedCarriers.length === 0 : filteredAndSortedCompanies.length === 0) ? (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="flex flex-col items-center justify-center py-20 px-4"
+          transition={{ duration: 0.6 }}
+          className="empty-state-container"
         >
-          <div className="w-24 h-24 bg-gradient-to-br from-blue-100 to-purple-100 dark:from-blue-900/20 dark:to-purple-900/20 rounded-full flex items-center justify-center mb-6">
-            <BarChart3 className="w-12 h-12 text-blue-600 dark:text-blue-400" />
+          <div className="empty-state-icon">
+            <BarChart3 className="w-16 h-16" />
           </div>
-          <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-3">
-            No Commission Data Available
+          <h3 className="empty-state-title">
+            {searchQuery ? 'No results found' : `No ${viewMode === 'carriers' ? 'Carriers' : 'Companies'} Found`}
           </h3>
-          <p className="text-slate-600 dark:text-slate-400 text-center max-w-md mb-6">
+          <p className="empty-state-description">
             {searchQuery ? (
-              <>No carriers found matching &ldquo;<strong>{searchQuery}</strong>&rdquo;. Try adjusting your search or filters.</>
+              <>No {viewMode === 'carriers' ? 'carriers' : 'companies'} matching &ldquo;<strong>{searchQuery}</strong>&rdquo;. Try adjusting your search or filters.</>
             ) : viewAllData ? (
-              <>There&apos;s no commission data available across all users yet. Upload statements to get started.</>
+              <>There&apos;s no commission data available yet. Upload statements to get started.</>
             ) : (
               <>You haven&apos;t uploaded any commission statements yet. Upload your first statement to start tracking your earnings.</>
             )}
           </p>
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="px-6 py-2.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-colors shadow-lg hover:shadow-xl"
-            >
-              Clear Search
-            </button>
+          {(searchQuery || selectedCarriers.length > 0) && (
+            <div className="flex gap-2">
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="empty-state-action"
+                >
+                  Clear Search
+                </button>
+              )}
+              {selectedCarriers.length > 0 && (
+                <button
+                  onClick={() => onCarriersFilterChange([])}
+                  className="empty-state-action bg-slate-500 hover:bg-slate-600"
+                >
+                  Clear Filters
+                </button>
+              )}
+            </div>
           )}
         </motion.div>
       ) : (
         <>
-          <div className="carrier-cards-grid">
-            {paginatedCarriers.map((carrier, index) => (
-              <CarrierCard
-                key={carrier.carrierName}
-                carrier={carrier}
-                onClick={() => onSelectCarrier(carrier)}
-              />
-            ))}
-          </div>
+          {/* Carriers Grid View with max-width container */}
+          {viewMode === 'carriers' && !focusedCompany && (
+            <div style={{ maxWidth: '1920px', margin: '0 auto' }}>
+              <div className="cards-grid-premium">
+                <AnimatePresence mode="popLayout">
+                  {paginatedCarriers.map((carrier, index) => (
+                    <CarrierCard
+                      key={carrier.carrierName}
+                      carrier={carrier}
+                      onClick={() => onSelectCarrier(carrier)}
+                    />
+                  ))}
+                </AnimatePresence>
+              </div>
+            </div>
+          )}
+
+          {/* Companies Grid View with max-width container */}
+          {viewMode === 'companies' && !focusedCompany && (
+            <div style={{ maxWidth: '1920px', margin: '0 auto' }}>
+              <div className="cards-grid-premium">
+                <AnimatePresence mode="popLayout">
+                  {paginatedCompanies.map((company, index) => (
+                    <CompanyCard
+                      key={company.id}
+                      company={company}
+                      onClick={() => handleCompanyClick(company)}
+                    />
+                  ))}
+                </AnimatePresence>
+              </div>
+            </div>
+          )}
+
+          {/* Focused Company View with Bar Chart */}
+          {focusedCompany && viewMode === 'companies' && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
+              className="space-y-6"
+            >
+              {/* Back Button */}
+              <button
+                onClick={() => setFocusedCompany(null)}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-800/50 hover:bg-white dark:hover:bg-slate-800 transition-colors text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Back to Companies
+              </button>
+
+              {/* Company Details Card with Bar Chart */}
+              <motion.div
+                layout
+                className="glass-card-premium p-8 rounded-2xl border border-slate-200/50 dark:border-slate-700/50"
+              >
+                {/* Header */}
+                <div className="mb-8">
+                  <div className="flex items-start justify-between mb-4">
+                    <div>
+                      <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
+                        {focusedCompany.client_name}
+                      </h2>
+                      <p className="text-slate-600 dark:text-slate-400">
+                        Carrier: {focusedCompany.carrier_name} • {focusedCompany.statement_year || 2025}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setFocusedCompany(null)}
+                      className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                    >
+                      <X className="w-5 h-5 text-slate-400" />
+                    </button>
+                  </div>
+
+                  {/* Stats Grid */}
+                  <div className="grid grid-cols-4 gap-4">
+                    <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
+                      <div className="text-sm text-blue-600 dark:text-blue-400 mb-1">Commission Earned</div>
+                      <div className="text-2xl font-bold text-blue-900 dark:text-blue-100">
+                        {formatCurrency(focusedCompany.commission_earned)}
+                      </div>
+                    </div>
+                    <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg">
+                      <div className="text-sm text-purple-600 dark:text-purple-400 mb-1">Invoice Total</div>
+                      <div className="text-2xl font-bold text-purple-900 dark:text-purple-100">
+                        {formatCurrency(focusedCompany.invoice_total)}
+                      </div>
+                    </div>
+                    <div className="bg-emerald-50 dark:bg-emerald-900/20 p-4 rounded-lg">
+                      <div className="text-sm text-emerald-600 dark:text-emerald-400 mb-1">Statements</div>
+                      <div className="text-2xl font-bold text-emerald-900 dark:text-emerald-100">
+                        {focusedCompany.statement_count}
+                      </div>
+                    </div>
+                    <div className="bg-orange-50 dark:bg-orange-900/20 p-4 rounded-lg">
+                      <div className="text-sm text-orange-600 dark:text-orange-400 mb-1">Commission Rate</div>
+                      <div className="text-2xl font-bold text-orange-900 dark:text-orange-100">
+                        {focusedCompany.invoice_total > 0 
+                          ? `${((focusedCompany.commission_earned / focusedCompany.invoice_total) * 100).toFixed(1)}%`
+                          : 'N/A'
+                        }
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Monthly Breakdown Bar Chart - Vertical */}
+                <div>
+                  <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-4">
+                    Monthly Breakdown
+                  </h3>
+                  <div className="flex items-end justify-between gap-2 h-64 bg-slate-50 dark:bg-slate-800/30 rounded-xl p-4">
+                    {['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'].map((monthKey, index) => {
+                      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                      const value = focusedCompany.monthly_breakdown?.[monthKey as keyof typeof focusedCompany.monthly_breakdown] || 0;
+                      const maxValue = Math.max(...Object.values(focusedCompany.monthly_breakdown || {}));
+                      const heightPercent = maxValue > 0 ? (value / maxValue) * 100 : 0;
+                      const hasValue = value > 0;
+
+                      return (
+                        <div key={monthKey} className="flex-1 flex flex-col items-center gap-2 h-full">
+                          {/* Amount Label on Top */}
+                          <motion.div
+                            initial={{ opacity: 0, y: -10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{
+                              delay: index * 0.05 + 0.3,
+                              duration: 0.4,
+                            }}
+                            className="text-xs font-bold text-slate-700 dark:text-slate-300 min-h-[16px]"
+                          >
+                            {hasValue && formatCurrencyCompact(value)}
+                          </motion.div>
+
+                          {/* Bar */}
+                          <div className="flex-1 w-full flex items-end justify-center relative group">
+                            {hasValue ? (
+                              <motion.div
+                                initial={{ scaleY: 0 }}
+                                animate={{ scaleY: 1 }}
+                                transition={{
+                                  delay: index * 0.05,
+                                  duration: 0.6,
+                                  ease: [0.34, 1.56, 0.64, 1]
+                                }}
+                                className="w-full rounded-t-lg bg-gradient-to-t from-blue-500 via-purple-500 to-purple-600 cursor-pointer hover:shadow-lg transition-all origin-bottom relative"
+                                style={{ height: `${heightPercent}%` }}
+                                whileHover={{ scaleX: 1.05 }}
+                              />
+                            ) : (
+                              <div className="w-full h-8 rounded-t-lg border-2 border-dashed border-slate-300 dark:border-slate-600 flex items-center justify-center">
+                                <span className="text-xs text-slate-400">—</span>
+                              </div>
+                            )}
+                          </div>
+                          
+                          {/* Month Label */}
+                          <div className="text-xs font-medium text-slate-600 dark:text-slate-400">
+                            {monthNames[index]}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Action Button */}
+                <div className="mt-6 pt-6 border-t border-slate-200 dark:border-slate-700">
+                  <button
+                    onClick={() => onSelectCompany(focusedCompany)}
+                    className="w-full px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-base font-medium transition-colors shadow-lg hover:shadow-xl"
+                  >
+                    View Full Details
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
 
           {/* Pagination Controls */}
-          {totalPages > 1 && (
-        <div className="flex items-center justify-between mt-6 px-4 py-3 bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl border border-slate-200/50 dark:border-slate-700/50 rounded-lg">
-          <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
-            Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, filteredAndSortedCarriers.length)} of {filteredAndSortedCarriers.length} carriers
-          </div>
+          {!focusedCompany && totalPages > 1 && (
+            <div className="pagination-container">
+              <div className="pagination-info">
+                Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, totalItems)} of {totalItems} {viewMode === 'carriers' ? 'carriers' : 'companies'}
+              </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-              disabled={currentPage === 1}
-              className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-800/50 hover:bg-white dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Previous
-            </button>
+              <div className="pagination-buttons">
+                <button
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                  className="pagination-button flex items-center gap-2"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Previous
+                </button>
 
-            <div className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300">
-              Page {currentPage} of {totalPages}
+                <div className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Page {currentPage} of {totalPages}
+                </div>
+
+                <button
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages}
+                  className="pagination-button flex items-center gap-2"
+                >
+                  Next
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
             </div>
-
-            <button
-              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-              disabled={currentPage === totalPages}
-              className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-800/50 hover:bg-white dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
-            >
-              Next
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      )}
+          )}
         </>
       )}
+      </div>
     </motion.div>
   );
 };
@@ -1512,24 +1952,16 @@ const CompanyDetailMode: React.FC<CompanyDetailModeProps> = ({ company, carrier,
           </div>
         </div>
 
-        <div className="h-64 mb-6">
-          <ResponsiveSparkline data={monthlyData} />
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          {monthlyData.map((item, index) => (
-            <div
-              key={item.month}
-              className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg"
-            >
-              <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                {item.month}
-              </span>
-              <span className="text-sm font-bold text-slate-900 dark:text-white">
-                {item.value > 0 ? formatCurrency(item.value) : '—'}
-          </span>
+        {/* Interactive Line Chart */}
+        <div className="mb-6">
+          <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-4">
+            Monthly Commission Trend
+          </h3>
+          <div className="glass-card-premium p-6 rounded-2xl border border-slate-200/50 dark:border-slate-700/50 hover:shadow-2xl hover:border-slate-300/50 dark:hover:border-slate-600/50 transition-all duration-500">
+            <div className="h-96">
+              <InteractiveLineChart data={monthlyData} />
             </div>
-          ))}
+          </div>
         </div>
       </div>
     </motion.div>
@@ -1559,6 +1991,10 @@ export default function EarnedCommissionTab({ environmentId }: EarnedCommissionT
   // Existing state
   const [selectedYear, setSelectedYear] = useState<number | null>(2025);
   const [viewAllData, setViewAllData] = useState(false);
+
+  // New state for Companies/Carriers toggle and carrier filtering
+  const [explorerViewMode, setExplorerViewMode] = useState<'carriers' | 'companies'>('companies');
+  const [selectedCarrierFilters, setSelectedCarrierFilters] = useState<string[]>([]);
 
   // Edit modals (keep for compatibility)
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -1904,9 +2340,9 @@ export default function EarnedCommissionTab({ environmentId }: EarnedCommissionT
   const showTimeline = selectedCarrier !== null || selectedCompany !== null;
 
   return (
-    <div className="commission-explorer-container flex h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 relative">
+    <div className="commission-explorer-container flex h-full bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 relative">
       {/* Main Content - Full Width */}
-      <main className="interactive-context-pane flex-1 overflow-y-auto relative">
+      <main className="interactive-context-pane flex-1 relative">
         {isLoading ? (
           <div className="p-6">
             <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
@@ -1938,6 +2374,11 @@ export default function EarnedCommissionTab({ environmentId }: EarnedCommissionT
                   // Data will be automatically refetched by the useEffect watching selectedYear
                 }}
                 availableYears={availableYears || []}
+                viewMode={explorerViewMode}
+                onViewModeChange={setExplorerViewMode}
+                selectedCarriers={selectedCarrierFilters}
+                onCarriersFilterChange={setSelectedCarrierFilters}
+                onSelectCompany={handleCompanySelect}
               />
             )}
 

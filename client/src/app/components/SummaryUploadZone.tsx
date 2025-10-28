@@ -20,6 +20,15 @@ import { useProgressWebSocket } from '../hooks/useProgressWebSocket';
 import toast from 'react-hot-toast';
 import axios from 'axios';
 
+// Premium UI Components
+import PremiumUploadHero from './premium/PremiumUploadHero';
+import LiveEngagementMetrics from './premium/LiveEngagementMetrics';
+import PremiumUploadZone from './premium/PremiumUploadZone';
+import ActivityFeed from './premium/ActivityFeed';
+import SupportedFormatsSection from './premium/SupportedFormatsSection';
+import AISupportedCarriers from './premium/AISupportedCarriers';
+import SecurityBadge from './premium/SecurityBadge';
+
 interface CarrierUploadZoneProps {
   onParsed: (result: {
     tables: any[],
@@ -166,70 +175,7 @@ export default function CarrierUploadZone({
     onError: handleWebSocketError
   });
 
-  // Handle upload click
-  const handleUploadClick = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    if (isUploading) return;
-    
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.pdf,.xlsx,.xls,.xlsm,.xlsb';
-    input.multiple = false;
-    
-    input.onchange = (event) => {
-      const files = (event.target as HTMLInputElement).files;
-      if (files && files.length > 0) {
-        handleFileUpload([files[0]]);
-      }
-    };
-    
-    input.click();
-  }, [isUploading]);
-
-  // Handle select files button click specifically
-  const handleSelectFilesClick = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    if (isUploading) return;
-    
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.pdf,.xlsx,.xls,.xlsm,.xlsb';
-    input.multiple = false;
-    
-    input.onchange = (event) => {
-      const files = (event.target as HTMLInputElement).files;
-      if (files && files.length > 0) {
-        handleFileUpload([files[0]]);
-      }
-    };
-    
-    input.click();
-  }, [isUploading]);
-
-  const onDrop = useCallback((acceptedFiles: File[]) => {
-    if (acceptedFiles.length > 0) {
-      handleFileUpload(acceptedFiles);
-    }
-  }, []);
-
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    accept: {
-      'application/pdf': ['.pdf'],
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
-      'application/vnd.ms-excel': ['.xls'],
-      'application/vnd.ms-excel.sheet.macroEnabled.12': ['.xlsm'],
-      'application/vnd.ms-excel.sheet.binary.macroEnabled.12': ['.xlsb']
-    },
-    multiple: false,
-    disabled: isUploading,
-    noClick: true, // We handle clicks manually
-    noKeyboard: true
-  });
+  // handleFileUpload is passed directly to PremiumUploadZone component
 
 
   // Commission-specific error handling
@@ -527,120 +473,73 @@ ${extractedPages ? `
   }
 
   return (
-    <div className="w-full h-full min-h-[calc(100vh-300px)]">
-      {/* Clean, Minimal Upload Zone */}
-      <div
-        {...getRootProps()}
-        onClick={handleUploadClick}
-        className={`
-          relative border-2 border-dashed rounded-2xl p-8 md:p-12 text-center transition-all duration-300 h-full flex flex-col justify-center
-          ${isDragActive
-            ? 'border-blue-400 dark:border-blue-500 bg-blue-50 dark:bg-blue-900/20 scale-[1.02] cursor-pointer' 
-            : 'border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/50 hover:border-blue-300 dark:hover:border-blue-500 hover:bg-blue-25 dark:hover:bg-blue-900/10 cursor-pointer'
-          }
-        `}
-      >
-        <input {...getInputProps()} />
-        
-        <AnimatePresence mode="wait">
-          {(
-            <motion.div
-              key="default"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="space-y-8"
-            >
-              {/* Header */}
-              <div>
-                <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-slate-800 via-blue-600 to-purple-600 dark:from-slate-100 dark:via-blue-400 dark:to-purple-400 bg-clip-text text-transparent mb-4">
-                  AI-Powered Commission Processing
-                </h1>
-                <p className="text-lg md:text-xl text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
-                  Upload your commission statements and let AI automatically detect carriers, extract dates, and process tables
-                </p>
-              </div>
+    <div className="min-h-screen relative overflow-hidden">
+      {/* Background Pattern */}
+      <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900" />
+      
+      {/* Grid Pattern Overlay */}
+      <div 
+        className="absolute inset-0 opacity-[0.02]"
+        style={{
+          backgroundImage: `
+            linear-gradient(to right, #000 1px, transparent 1px),
+            linear-gradient(to bottom, #000 1px, transparent 1px)
+          `,
+          backgroundSize: '40px 40px'
+        }}
+      />
 
-              {/* Upload Section */}
-              <div className="space-y-6">
-                <div className="w-20 h-20 mx-auto bg-gradient-to-r from-green-500 to-blue-600 rounded-full flex items-center justify-center">
-                  <FileSpreadsheet className="w-10 h-10 text-white" />
-                </div>
-                
-                <div>
-                  <h3 className="text-xl font-bold text-slate-800 dark:text-slate-200 mb-2">
-                    Ready to Upload
-                  </h3>
-                  <p className="text-slate-600 dark:text-slate-400">
-                    Drag & drop your files here or click to browse
-                  </p>
-                </div>
+      {/* Main Content Container */}
+      <div className="relative z-10 container mx-auto px-6 py-12">
+        {/* Premium Hero Section */}
+        <PremiumUploadHero />
 
-                <motion.button
-                  type="button"
-                  onClick={handleSelectFilesClick}
-                  className="px-8 py-3 bg-gradient-to-r from-green-500 to-blue-600 text-white rounded-xl font-semibold hover:shadow-lg transition-all duration-200 cursor-pointer"
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
+        {/* Live Engagement Metrics */}
+        <LiveEngagementMetrics />
+
+        {/* Premium Upload Zone */}
+        <div className="max-w-5xl mx-auto">
+          <PremiumUploadZone 
+            onFileUpload={handleFileUpload}
+            isUploading={isUploading}
+          />
+        </div>
+
+        {/* Error Display */}
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-6 p-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl max-w-5xl mx-auto"
+          >
+            <div className="flex items-start gap-4">
+              <AlertCircle className="w-6 h-6 text-red-500 flex-shrink-0 mt-1" />
+              <div className="flex-1">
+                <p className="text-red-800 dark:text-red-200 font-semibold mb-2 text-lg">Upload Error</p>
+                <p className="text-red-700 dark:text-red-300 mb-4">{error}</p>
+                <button
+                  onClick={handleRetry}
+                  className="px-4 py-2 bg-red-100 dark:bg-red-800/30 text-red-700 dark:text-red-200 rounded-lg text-sm hover:bg-red-200 dark:hover:bg-red-800/50 transition-colors"
                 >
-                  <div className="flex items-center gap-2">
-                    <Upload className="w-5 h-5" />
-                    Select Files
-                  </div>
-                </motion.button>
+                  Try Again
+                </button>
               </div>
+            </div>
+          </motion.div>
+        )}
 
-              {/* Features Grid */}
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-slate-500 dark:text-slate-400">
-                  <div className="flex items-center justify-center gap-2">
-                    <Shield className="w-4 h-4" />
-                    <span>Secure Processing</span>
-                  </div>
-                  <div className="flex items-center justify-center gap-2">
-                    <FileText className="w-4 h-4" />
-                    <span>PDF & Excel Supported</span>
-                  </div>
-                  <div className="flex items-center justify-center gap-2">
-                    <Sparkles className="w-4 h-4" />
-                    <span>AI Auto-Detection</span>
-                  </div>
-                </div>
-              </div>
+        {/* Supported Formats Section */}
+        <SupportedFormatsSection />
 
-              {/* File Format Info */}
-              <div className="text-xs text-slate-400 dark:text-slate-500 space-y-1">
-                <p><strong>Supported formats:</strong> PDF, XLSX, XLS, XLSM, XLSB</p>
-                <p><strong>Max file size:</strong> 50MB per file</p>
-                <p><strong>Auto-detects:</strong> Aetna, BCBS, Cigna, Humana, UHC</p>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {/* AI Carriers Section */}
+        <AISupportedCarriers />
+
+        {/* Security Badge */}
+        <SecurityBadge />
       </div>
 
-      {/* Error Display */}
-      {error && (
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mt-6 p-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl"
-        >
-          <div className="flex items-start gap-4">
-            <AlertCircle className="w-6 h-6 text-red-500 flex-shrink-0 mt-1" />
-            <div className="flex-1">
-              <p className="text-red-800 dark:text-red-200 font-semibold mb-2 text-lg">Upload Error</p>
-              <p className="text-red-700 dark:text-red-300 mb-4">{error}</p>
-              <button
-                onClick={handleRetry}
-                className="px-4 py-2 bg-red-100 dark:bg-red-800/30 text-red-700 dark:text-red-200 rounded-lg text-sm hover:bg-red-200 dark:hover:bg-red-800/50 transition-colors"
-              >
-                Try Again
-              </button>
-            </div>
-          </div>
-        </motion.div>
-      )}
+      {/* Activity Feed Sidebar */}
+      <ActivityFeed />
     </div>
   );
 }

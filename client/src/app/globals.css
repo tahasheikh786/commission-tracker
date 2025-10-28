@@ -1026,3 +1026,475 @@ body,
     transition: none;
   }
 }
+
+/* ============================================================================
+   EARNED COMMISSION PREMIUM DESIGN SYSTEM
+   Modern SaaS UI with proper spacing, z-index, and responsive design
+   ============================================================================ */
+
+/* Z-Index Scale - Premium SaaS Standard */
+:root {
+  --z-base: 0;
+  --z-dropdown-container: 10;
+  --z-sticky: 20;
+  --z-dropdown-trigger: 30;
+  --z-overlay: 40;
+  --z-dropdown-menu: 50;
+  --z-modal: 60;
+  --z-toast: 70;
+  --z-tooltip: 80;
+}
+
+/* ============================================================================
+   COMMISSION PAGE HEADER - Single Unified Sticky Filter Bar
+   CRITICAL: This is the ONLY filter bar container - no nested backgrounds
+   ============================================================================ */
+
+.commission-page-header {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+  @apply bg-white/95 dark:bg-slate-900/95;
+  @apply backdrop-blur-sm;
+  @apply border-b border-slate-200/50 dark:border-slate-700/50;
+  @apply shadow-sm;
+}
+
+/* ============================================================================
+   PREMIUM CARD SYSTEM - Optimized for Commission Display
+   8px-based spacing system applied throughout
+   ============================================================================ */
+
+.premium-card-container {
+  position: relative;
+  z-index: var(--z-base);
+  @apply bg-white dark:bg-slate-800;
+  @apply rounded-xl;
+  @apply border border-slate-200/60 dark:border-slate-700/60;
+  @apply shadow-sm;
+  
+  /* Hover effects with scale transform */
+  @apply hover:shadow-xl hover:border-slate-300/60 dark:hover:border-slate-600/60;
+  @apply transition-all duration-300 ease-out;
+  
+  /* 8px-based spacing: p-6 = 24px */
+  padding: 24px;
+  min-height: auto;
+  
+  /* Fixed card dimensions - prevents stretching (4 cards per row) */
+  width: 320px;
+  max-width: 100%; /* Allow full width on mobile */
+}
+
+.premium-card-container:hover {
+  transform: scale(1.02);
+}
+
+/* Tablet: Adjust card width */
+@media (min-width: 640px) and (max-width: 1024px) {
+  .premium-card-container {
+    width: 300px;
+  }
+}
+
+/* Mobile: Allow cards to be full width */
+@media (max-width: 640px) {
+  .premium-card-container {
+    width: 100%;
+  }
+}
+
+.premium-card-content {
+  @apply flex flex-col h-full;
+}
+
+.card-header {
+  @apply flex items-center justify-between mb-4;
+}
+
+.carrier-avatar {
+  @apply w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600;
+  @apply flex items-center justify-center text-white font-semibold text-sm;
+}
+
+.companies-count {
+  @apply text-xs font-medium text-slate-500 dark:text-slate-400;
+  @apply bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded-md;
+}
+
+.card-body {
+  @apply flex-1;
+}
+
+.carrier-name {
+  @apply text-lg font-semibold text-slate-900 dark:text-white mb-3;
+  @apply truncate;
+}
+
+.stats-grid {
+  @apply grid grid-cols-2 gap-3;
+}
+
+.stat-item {
+  @apply space-y-1;
+}
+
+.stat-label {
+  @apply block text-xs font-medium text-slate-500 dark:text-slate-400;
+  @apply uppercase tracking-wide;
+}
+
+.stat-value {
+  @apply block text-base font-bold text-slate-900 dark:text-white;
+}
+
+.card-footer {
+  @apply flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-700;
+}
+
+.view-details-hint {
+  @apply text-sm text-blue-600 dark:text-blue-400 font-medium;
+}
+
+/* ============================================================================
+   TOGGLE GROUP - Premium Toggle Controls
+   ============================================================================ */
+
+.toggle-group {
+  @apply flex bg-slate-100 dark:bg-slate-800 rounded-lg p-1;
+  @apply border border-slate-200 dark:border-slate-700;
+}
+
+.toggle-group button {
+  @apply px-3 py-1.5 text-sm font-medium rounded-md transition-all;
+  @apply text-slate-600 dark:text-slate-400;
+}
+
+.toggle-group button.active {
+  @apply bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm;
+}
+
+/* ============================================================================
+   VIEW TOGGLE - Icon + Text Toggle
+   ============================================================================ */
+
+.view-toggle-premium {
+  @apply flex bg-slate-100 dark:bg-slate-800 rounded-lg p-1;
+  @apply border border-slate-200 dark:border-slate-700;
+}
+
+.view-toggle-premium button {
+  @apply flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-all;
+  @apply text-slate-600 dark:text-slate-400;
+}
+
+.view-toggle-premium button.active {
+  @apply bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm;
+}
+
+/* ============================================================================
+   SEARCH INPUT - Premium Search Field
+   ============================================================================ */
+
+.search-input-premium {
+  @apply w-64 h-10 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700;
+  @apply rounded-lg text-sm placeholder:text-slate-400;
+  @apply focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-colors;
+  @apply px-10;
+}
+
+/* ============================================================================
+   SELECT INPUT - Premium Dropdown Select
+   ============================================================================ */
+
+.compact-select {
+  @apply h-10 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700;
+  @apply rounded-lg px-3 text-sm font-medium;
+  @apply focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-colors;
+  @apply text-slate-700 dark:text-slate-300;
+}
+
+/* ============================================================================
+   FILTER DROPDOWN - Proper Z-Index Layering System
+   CRITICAL: Ensures dropdowns render above all cards and content
+   ============================================================================ */
+
+.dropdown-container {
+  position: relative;
+  z-index: var(--z-dropdown-container);
+  isolation: isolate;
+}
+
+.filter-trigger {
+  position: relative;
+  z-index: var(--z-dropdown-trigger);
+  @apply px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700;
+  @apply rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300;
+  @apply hover:bg-slate-50 dark:hover:bg-slate-700;
+  @apply hover:border-slate-300 dark:hover:border-slate-600;
+  @apply transition-all duration-200;
+  @apply flex items-center gap-2;
+  @apply focus:ring-2 focus:ring-blue-500 focus:outline-none;
+  min-height: 44px; /* Accessibility: minimum touch target */
+}
+
+.filter-badge {
+  @apply ml-1 px-1.5 py-0.5 bg-blue-500 text-white text-xs rounded-full;
+  @apply font-semibold;
+}
+
+.filter-dropdown {
+  position: absolute;
+  top: calc(100% + 8px); /* 8px gap for visual separation */
+  left: 0;
+  z-index: var(--z-dropdown-menu);
+  min-width: 320px;
+  @apply bg-white dark:bg-slate-800;
+  @apply border border-slate-200 dark:border-slate-700;
+  @apply rounded-xl shadow-2xl;
+  @apply backdrop-blur-sm;
+  
+  /* Ensure dropdown always renders above cards */
+  transform: translateZ(0);
+  will-change: opacity, transform;
+}
+
+/* ============================================================================
+   RESPONSIVE CARD GRID - Fixed Width Cards with 4 Per Row
+   Uses auto-fill to prevent cards from stretching
+   ============================================================================ */
+
+.cards-grid-premium {
+  @apply grid;
+  
+  /* Base: 4 cards per row on large screens, cards maintain fixed width */
+  grid-template-columns: repeat(auto-fill, minmax(320px, 320px));
+  gap: 24px; /* 6 in Tailwind scale = 24px */
+  justify-content: start; /* Cards align to left, don't stretch */
+  
+  /* Mobile: Single column, full width */
+  @media (max-width: 640px) {
+    grid-template-columns: 1fr;
+    gap: 16px; /* 4 in Tailwind scale = 16px */
+  }
+  
+  /* Tablet: Two columns */
+  @media (min-width: 640px) and (max-width: 1024px) {
+    grid-template-columns: repeat(auto-fill, minmax(300px, 300px));
+    gap: 20px; /* 5 in Tailwind scale = 20px */
+  }
+  
+  /* Desktop: Up to 4 columns */
+  @media (min-width: 1024px) {
+    grid-template-columns: repeat(auto-fill, minmax(320px, 320px));
+    gap: 24px;
+  }
+  
+  /* Ultra-wide: Still max 4 cards per row with centered container */
+  @media (min-width: 1920px) {
+    max-width: 1920px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+}
+
+/* Container spacing - 8px-based system */
+.commission-page-container {
+  @apply mx-auto;
+  max-width: 1920px; /* Ultra-wide constraint */
+  padding-left: 24px; /* px-6 = 24px */
+  padding-right: 24px;
+}
+
+.commission-content {
+  padding-top: 32px; /* py-8 = 32px */
+  padding-bottom: 32px;
+  background: rgb(248 250 252); /* slate-50 */
+}
+
+.dark .commission-content {
+  background: rgb(15 23 42); /* slate-900 */
+}
+
+/* ============================================================================
+   GLASS CARD EFFECT - Premium frosted glass appearance
+   ============================================================================ */
+
+.glass-card-premium {
+  @apply bg-white/80 dark:bg-slate-900/80;
+  @apply backdrop-blur-xl;
+  @apply border border-slate-200/50 dark:border-slate-700/50;
+  @apply transition-all duration-300;
+}
+
+.glass-card-premium:hover {
+  @apply shadow-2xl;
+  @apply border-slate-300/50 dark:border-slate-600/50;
+}
+
+/* ============================================================================
+   EMPTY STATE - Premium Empty/No Results State
+   ============================================================================ */
+
+.empty-state-container {
+  @apply flex flex-col items-center justify-center py-16 px-6;
+}
+
+.empty-state-icon {
+  @apply mb-4 text-slate-300 dark:text-slate-600;
+}
+
+.empty-state-title {
+  @apply text-xl font-bold text-slate-900 dark:text-white mb-2;
+}
+
+.empty-state-description {
+  @apply text-sm text-slate-500 dark:text-slate-400 text-center max-w-md mb-4;
+}
+
+.empty-state-action {
+  @apply px-4 py-2 bg-blue-500 text-white rounded-lg text-sm font-medium;
+  @apply hover:bg-blue-600 transition-colors;
+}
+
+/* ============================================================================
+   SORT BUTTONS - Premium Sort Controls
+   ============================================================================ */
+
+.sort-button {
+  @apply px-3 py-1.5 text-sm font-medium rounded-lg transition-all;
+  @apply border border-slate-200 dark:border-slate-700;
+  @apply text-slate-600 dark:text-slate-400;
+  @apply hover:bg-slate-100 dark:hover:bg-slate-700;
+}
+
+.sort-button.active {
+  @apply bg-blue-50 dark:bg-blue-900/30;
+  @apply border-blue-200 dark:border-blue-700;
+  @apply text-blue-600 dark:text-blue-400;
+}
+
+/* ============================================================================
+   LOADING SKELETON - Premium Loading State
+   ============================================================================ */
+
+.premium-skeleton {
+  @apply animate-pulse;
+}
+
+.premium-skeleton .skeleton-item {
+  @apply bg-slate-200 dark:bg-slate-700 rounded;
+}
+
+/* ============================================================================
+   RESPONSIVE ADJUSTMENTS - Mobile, Tablet, Desktop
+   ============================================================================ */
+
+/* Mobile (< 640px) */
+@media (max-width: 640px) {
+  .commission-page-header {
+    position: static; /* Remove sticky on mobile */
+  }
+  
+  .commission-page-header .px-6 {
+    padding-left: 16px; /* px-4 = 16px */
+    padding-right: 16px;
+  }
+  
+  .search-input-premium {
+    width: 100%;
+  }
+  
+  .filter-dropdown {
+    width: calc(100vw - 32px);
+    max-width: 400px;
+    right: 0;
+    left: auto;
+  }
+  
+  .premium-card-container {
+    padding: 16px; /* p-4 = 16px on mobile */
+  }
+  
+  .commission-content {
+    padding-top: 24px; /* py-6 = 24px on mobile */
+    padding-bottom: 24px;
+    padding-left: 16px; /* px-4 = 16px */
+    padding-right: 16px;
+  }
+}
+
+/* Tablet (640px - 1024px) */
+@media (min-width: 640px) and (max-width: 1024px) {
+  .commission-page-header .px-6 {
+    padding-left: 24px; /* px-6 = 24px */
+    padding-right: 24px;
+  }
+  
+  .filter-dropdown {
+    min-width: 280px;
+  }
+}
+
+/* ============================================================================
+   PAGINATION - Premium Pagination Controls with 8px spacing
+   ============================================================================ */
+
+.pagination-container {
+  @apply flex items-center justify-between;
+  margin-top: 24px; /* mt-6 = 24px */
+  padding-top: 24px; /* pt-6 = 24px */
+  @apply border-t border-slate-200 dark:border-slate-700;
+}
+
+.pagination-info {
+  @apply text-sm text-slate-600 dark:text-slate-400;
+  @apply font-medium;
+}
+
+.pagination-buttons {
+  display: flex;
+  align-items: center;
+  gap: 8px; /* gap-2 = 8px */
+}
+
+.pagination-button {
+  padding: 8px 12px; /* py-2 px-3 = 8px 12px */
+  min-height: 44px; /* Accessibility touch target */
+  @apply text-sm font-medium rounded-lg;
+  @apply border border-slate-200 dark:border-slate-700;
+  @apply text-slate-700 dark:text-slate-300;
+  @apply hover:bg-slate-100 dark:hover:bg-slate-700;
+  @apply disabled:opacity-50 disabled:cursor-not-allowed;
+  @apply transition-all duration-200;
+  @apply focus:ring-2 focus:ring-blue-500 focus:outline-none;
+}
+
+.pagination-button.active {
+  @apply bg-blue-500 text-white border-blue-500;
+}
+
+.pagination-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  @apply shadow-sm;
+}
+
+/* ============================================================================
+   FOCUS STATES - Accessibility
+   ============================================================================ */
+
+.commission-page-header *:focus-visible,
+.premium-card-container:focus-visible,
+.filter-trigger:focus-visible,
+.sort-button:focus-visible {
+  @apply ring-2 ring-blue-500 ring-offset-2;
+  @apply outline-none;
+}
+
+/* Dark mode ring offset */
+.dark .commission-page-header *:focus-visible,
+.dark .premium-card-container:focus-visible,
+.dark .filter-trigger:focus-visible,
+.dark .sort-button:focus-visible {
+  @apply ring-offset-slate-900;
+}

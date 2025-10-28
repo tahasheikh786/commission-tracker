@@ -1752,3 +1752,362 @@
   }
 }
 
+/* ============================================
+   PREMIUM UPLOAD PAGE ANIMATIONS
+   Modern SaaS Upload Experience
+   ============================================ */
+
+/* Glassmorphism Effect for Upload Components */
+.glass-effect {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.dark .glass-effect {
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Gradient Text Animation */
+@keyframes gradient-shift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.animated-gradient-text {
+  background: linear-gradient(
+    90deg,
+    #3b82f6,
+    #8b5cf6,
+    #ec4899,
+    #3b82f6
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: gradient-shift 3s ease infinite;
+}
+
+/* Premium Button Hover Effects */
+.premium-button {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.premium-button::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.3);
+  transform: translate(-50%, -50%);
+  transition: width 0.6s, height 0.6s;
+}
+
+.premium-button:hover::before {
+  width: 300px;
+  height: 300px;
+}
+
+/* Pulse Glow Animation */
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 20px rgba(59, 130, 246, 0.5); }
+  50% { box-shadow: 0 0 40px rgba(59, 130, 246, 0.8); }
+}
+
+.pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* Floating Orb Animation */
+@keyframes float-orb {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(100px, 50px) scale(1.2);
+  }
+  66% {
+    transform: translate(-80px, -60px) scale(0.9);
+  }
+}
+
+.animate-float-orb {
+  animation: float-orb 15s ease-in-out infinite;
+}
+
+/* Orbiting Dots Animation */
+@keyframes orbit {
+  from {
+    transform: rotate(0deg) translateX(70px) rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg) translateX(70px) rotate(-360deg);
+  }
+}
+
+.animate-orbit {
+  animation: orbit 3s linear infinite;
+}
+
+/* Ripple Ring Animation */
+@keyframes ripple-ring {
+  0% {
+    transform: scale(1);
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 0.3;
+  }
+  100% {
+    transform: scale(1.2);
+    opacity: 0.2;
+  }
+}
+
+.animate-ripple-ring {
+  animation: ripple-ring 2s ease-in-out infinite;
+}
+
+/* CountUp Number Animation */
+@keyframes number-popup {
+  0% {
+    opacity: 0;
+    transform: scale(0.5) translateY(10px);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.animate-number-popup {
+  animation: number-popup 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Upload Icon Rotation on Drag */
+@keyframes icon-rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-icon-rotate {
+  animation: icon-rotate 0.5s ease-in-out;
+}
+
+/* Spotlight Effect (used in upload zone) */
+.spotlight-effect {
+  position: absolute;
+  pointer-events: none;
+  border-radius: inherit;
+  transition: opacity 0.3s ease;
+}
+
+/* Shimmer Button Effect */
+@keyframes button-shimmer {
+  0% {
+    transform: translateX(-100%) skewX(-15deg);
+  }
+  100% {
+    transform: translateX(200%) skewX(-15deg);
+  }
+}
+
+.animate-button-shimmer {
+  animation: button-shimmer 0.6s ease-in-out;
+}
+
+/* Metric Card Entrance Animation */
+@keyframes metric-card-entrance {
+  0% {
+    opacity: 0;
+    transform: translateY(30px) scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-metric-entrance {
+  animation: metric-card-entrance 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Activity Feed Item Slide-In */
+@keyframes activity-slide-in {
+  0% {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-activity-slide-in {
+  animation: activity-slide-in 0.3s ease-out;
+}
+
+/* Format Card Hover Glow */
+@keyframes format-card-glow {
+  0%, 100% {
+    opacity: 0.75;
+    filter: blur(8px);
+  }
+  50% {
+    opacity: 1;
+    filter: blur(12px);
+  }
+}
+
+.animate-format-glow {
+  animation: format-card-glow 2s ease-in-out infinite;
+}
+
+/* Carrier Badge Pop-In */
+@keyframes carrier-pop-in {
+  0% {
+    opacity: 0;
+    transform: scale(0) rotate(0deg);
+  }
+  50% {
+    transform: scale(1.2) rotate(10deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+.animate-carrier-pop-in {
+  animation: carrier-pop-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Security Badge Pulse */
+@keyframes security-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.9;
+  }
+}
+
+.animate-security-pulse {
+  animation: security-pulse 2s ease-in-out infinite;
+}
+
+/* Upload Zone Border Animation */
+@keyframes upload-border-glow {
+  0%, 100% {
+    border-color: rgba(59, 130, 246, 0.3);
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+  }
+  50% {
+    border-color: rgba(59, 130, 246, 0.8);
+    box-shadow: 0 0 20px 5px rgba(59, 130, 246, 0.2);
+  }
+}
+
+.animate-upload-border-glow {
+  animation: upload-border-glow 2s ease-in-out infinite;
+}
+
+/* Fade-In-Up Animation */
+@keyframes fade-in-up {
+  0% {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Premium Scale-In Animation */
+@keyframes premium-scale-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-premium-scale-in {
+  animation: premium-scale-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Delayed Animation Classes for Stagger Effects */
+.delay-100 { animation-delay: 0.1s; }
+.delay-200 { animation-delay: 0.2s; }
+.delay-300 { animation-delay: 0.3s; }
+.delay-400 { animation-delay: 0.4s; }
+.delay-500 { animation-delay: 0.5s; }
+.delay-600 { animation-delay: 0.6s; }
+.delay-700 { animation-delay: 0.7s; }
+.delay-800 { animation-delay: 0.8s; }
+.delay-900 { animation-delay: 0.9s; }
+.delay-1000 { animation-delay: 1s; }
+.delay-1100 { animation-delay: 1.1s; }
+.delay-1200 { animation-delay: 1.2s; }
+
+/* Responsive Adjustments for Upload Page */
+@media (max-width: 768px) {
+  .glass-effect {
+    backdrop-filter: blur(12px) saturate(150%);
+    -webkit-backdrop-filter: blur(12px) saturate(150%);
+  }
+  
+  .premium-button::before {
+    width: 200px;
+    height: 200px;
+  }
+}
+
+/* Accessibility - Reduced Motion for Upload Page */
+@media (prefers-reduced-motion: reduce) {
+  .animated-gradient-text,
+  .animate-float-orb,
+  .animate-orbit,
+  .animate-ripple-ring,
+  .pulse-glow,
+  .animate-upload-border-glow,
+  .animate-security-pulse {
+    animation: none !important;
+  }
+  
+  .premium-button,
+  .spotlight-effect {
+    transition: none !important;
+  }
+}
+

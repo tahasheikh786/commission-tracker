@@ -10,6 +10,16 @@ const compat = new FlatCompat({
 });
 
 const eslintConfig = [
+  {
+    ignores: [
+      ".next/**",
+      "node_modules/**",
+      "out/**",
+      ".cache/**",
+      "build/**",
+      "dist/**",
+    ],
+  },
   ...compat.extends("next/core-web-vitals", "next/typescript"),
   // Add a config object with your custom rule overrides:
   {
