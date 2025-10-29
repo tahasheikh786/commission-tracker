@@ -20,19 +20,21 @@ export default function AISupportedCarriers() {
 
   return (
     <motion.div
-      className="mt-16 text-center"
+      className="space-y-4"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ delay: 1 }}
     >
-      <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-3">
-        AI-Powered Carrier Detection
-      </h2>
-      <p className="text-slate-600 dark:text-slate-400 mb-8">
-        Automatically detects and processes statements from major carriers
-      </p>
+      <div>
+        <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+          Supported Carriers
+        </h3>
+        <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+          Automatically detects and processes statements from major carriers
+        </p>
+      </div>
 
-      <div className="flex flex-wrap justify-center gap-4 max-w-3xl mx-auto">
+      <div className="flex flex-wrap gap-3">
         {carriers.map((carrier, index) => (
           <motion.div
             key={carrier.name}
@@ -44,13 +46,13 @@ export default function AISupportedCarriers() {
               type: "spring",
               stiffness: 200
             }}
-            whileHover={{ scale: 1.1, rotate: 5 }}
+            whileHover={{ scale: 1.05, rotate: 2 }}
           >
-            <div className={`absolute -inset-1 bg-gradient-to-r ${carrier.color} rounded-2xl opacity-0 group-hover:opacity-100 blur transition-all duration-300`} />
+            <div className={`absolute -inset-1 bg-gradient-to-r ${carrier.color} rounded-xl opacity-0 group-hover:opacity-100 blur transition-all duration-300`} />
 
-            <div className="relative bg-white dark:bg-slate-800 rounded-2xl px-6 py-4 border border-slate-200 dark:border-slate-700">
-              <div className="text-3xl mb-2">{carrier.logo}</div>
-              <div className="font-bold text-slate-900 dark:text-white">
+            <div className="relative bg-white dark:bg-slate-800 rounded-xl px-4 py-3 border border-slate-200 dark:border-slate-700">
+              <div className="text-2xl mb-1">{carrier.logo}</div>
+              <div className="font-semibold text-sm text-slate-900 dark:text-white">
                 {carrier.name}
               </div>
             </div>

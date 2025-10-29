@@ -74,21 +74,21 @@ export default function SupportedFormatsSection() {
 
   return (
     <motion.div
-      className="mt-16 space-y-8"
+      className="space-y-4"
       initial={{ opacity: 0, y: 30 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.7 }}
     >
-      <div className="text-center">
-        <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-3">
-          Supported File Formats
-        </h2>
-        <p className="text-slate-600 dark:text-slate-400">
+      <div>
+        <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+          Supported Formats
+        </h3>
+        <p className="text-sm text-slate-600 dark:text-slate-400">
           We support all major document formats with AI-powered extraction
         </p>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+      <div className="grid grid-cols-1 gap-4">
         {formats.map((format, index) => (
           <FormatCard key={format.type} {...format} index={index} />
         ))}

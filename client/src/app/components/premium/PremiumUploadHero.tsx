@@ -44,10 +44,10 @@ export default function PremiumUploadHero() {
       </div>
 
       {/* Hero Content */}
-      <div className="relative z-10 text-center py-16 px-6">
+      <div className="relative z-10 text-center py-6 px-6">
         {/* Animated Badge */}
         <motion.div
-          className="inline-flex items-center gap-2 px-4 py-2 bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl rounded-full border border-blue-200 dark:border-blue-700 shadow-lg mb-6"
+          className="inline-flex items-center gap-2 px-4 py-2 bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl rounded-full border border-blue-200 dark:border-blue-700 shadow-lg mb-4"
           initial={{ y: -20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.2 }}
@@ -61,7 +61,7 @@ export default function PremiumUploadHero() {
 
         {/* Main Title with Letter Animation */}
         <motion.h1
-          className="text-5xl md:text-6xl lg:text-7xl font-bold mb-6"
+          className="text-4xl md:text-5xl font-bold mb-4"
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.3 }}
@@ -73,15 +73,12 @@ export default function PremiumUploadHero() {
 
         {/* Subtitle */}
         <motion.p
-          className="text-xl md:text-2xl text-slate-600 dark:text-slate-300 max-w-3xl mx-auto mb-12"
+          className="text-xl text-slate-600 dark:text-slate-300 max-w-3xl mx-auto"
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.4 }}
         >
           Upload statements, let AI extract data instantly.
-          <span className="block mt-2 text-lg text-slate-500 dark:text-slate-400">
-            Join thousands of professionals automating their workflow
-          </span>
         </motion.p>
       </div>
     </motion.div>

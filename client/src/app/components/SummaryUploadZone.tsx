@@ -13,7 +13,8 @@ import {
   Shield,
   Building2,
   ArrowRight,
-  Sparkles
+  Sparkles,
+  Zap
 } from 'lucide-react';
 import SummaryProgressLoader from './upload/SummaryProgressLoader ';
 import { useProgressWebSocket } from '../hooks/useProgressWebSocket';
@@ -22,12 +23,7 @@ import axios from 'axios';
 
 // Premium UI Components
 import PremiumUploadHero from './premium/PremiumUploadHero';
-import LiveEngagementMetrics from './premium/LiveEngagementMetrics';
 import PremiumUploadZone from './premium/PremiumUploadZone';
-import ActivityFeed from './premium/ActivityFeed';
-import SupportedFormatsSection from './premium/SupportedFormatsSection';
-import AISupportedCarriers from './premium/AISupportedCarriers';
-import SecurityBadge from './premium/SecurityBadge';
 
 interface CarrierUploadZoneProps {
   onParsed: (result: {
@@ -494,15 +490,32 @@ ${extractedPages ? `
         {/* Premium Hero Section */}
         <PremiumUploadHero />
 
-        {/* Live Engagement Metrics */}
-        <LiveEngagementMetrics />
-
-        {/* Premium Upload Zone */}
-        <div className="max-w-5xl mx-auto">
+        {/* Premium Upload Zone - BALANCED FOCAL POINT */}
+        <div className="w-full max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           <PremiumUploadZone 
             onFileUpload={handleFileUpload}
             isUploading={isUploading}
           />
+          
+          {/* Inline Trust Signals - Right Below Upload */}
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-6 text-sm text-gray-600 dark:text-gray-300">
+            <div className="flex items-center space-x-2">
+              <Shield className="w-4 h-4 text-green-600" />
+              <span className="font-medium">256-bit Encryption</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Zap className="w-4 h-4 text-blue-600" />
+              <span className="font-medium">Instant Processing</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <CheckCircle className="w-4 h-4 text-green-600" />
+              <span className="font-medium">99.9% Accuracy</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Shield className="w-4 h-4 text-purple-600" />
+              <span className="font-medium">Bank-Level Security</span>
+            </div>
+          </div>
         </div>
 
         {/* Error Display */}
@@ -528,18 +541,66 @@ ${extractedPages ? `
           </motion.div>
         )}
 
-        {/* Supported Formats Section */}
-        <SupportedFormatsSection />
-
-        {/* AI Carriers Section */}
-        <AISupportedCarriers />
-
-        {/* Security Badge */}
-        <SecurityBadge />
+        {/* Supported Formats & Security - Below Upload */}
+        <div className="w-full max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+          {/* Supported File Formats */}
+          <div className="text-center">
+            <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-6">Supported File Formats</h3>
+            <div className="flex items-center justify-center gap-12 flex-wrap">
+              {/* PDF Format */}
+              <div className="group">
+                <div className="w-20 h-20 mx-auto mb-3 rounded-2xl bg-gradient-to-br from-red-500 to-orange-500 flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all duration-300 group-hover:scale-105">
+                  <FileText className="w-10 h-10 text-white" />
+                </div>
+                <p className="text-base font-semibold text-gray-900 dark:text-white mb-1">PDF Documents</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Commission statements in PDF</p>
+                <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">Accepts: .pdf</p>
+              </div>
+              
+              {/* Excel Format */}
+              <div className="group">
+                <div className="w-20 h-20 mx-auto mb-3 rounded-2xl bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all duration-300 group-hover:scale-105">
+                  <FileSpreadsheet className="w-10 h-10 text-white" />
+                </div>
+                <p className="text-base font-semibold text-gray-900 dark:text-white mb-1">Excel Spreadsheets</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Commission data in Excel</p>
+                <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">Accepts: .xlsx, .xls, .xlsm</p>
+              </div>
+            </div>
+          </div>
+          
+          {/* Security & Compliance Card */}
+          <div className="max-w-3xl mx-auto">
+            <div className="bg-gradient-to-r from-green-50 via-emerald-50 to-teal-50 dark:from-green-900/20 dark:via-emerald-900/20 dark:to-teal-900/20 rounded-2xl border-2 border-green-200 dark:border-green-700 p-6 shadow-lg">
+              <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+                {/* Left: Security Badge */}
+                <div className="flex items-center space-x-4">
+                  <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center shadow-md">
+                    <Shield className="w-7 h-7 text-white" />
+                  </div>
+                  <div>
+                    <p className="text-lg font-bold text-gray-900 dark:text-white">Bank-Level Security</p>
+                    <p className="text-sm text-gray-700 dark:text-gray-300">SOC 2 Type II Certified • GDPR Compliant</p>
+                  </div>
+                </div>
+                
+                {/* Right: Stats */}
+                <div className="flex items-center gap-8">
+                  <div className="text-center">
+                    <p className="text-3xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">99.9%</p>
+                    <p className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">Uptime</p>
+                  </div>
+                  <div className="h-12 w-px bg-gray-300 dark:bg-gray-600"></div>
+                  <div className="text-center">
+                    <p className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">24/7</p>
+                    <p className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">Support</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
-
-      {/* Activity Feed Sidebar */}
-      <ActivityFeed />
     </div>
   );
 }

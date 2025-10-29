@@ -34,10 +34,10 @@ const PremiumUploadButton = ({ onClick }: { onClick: (e: React.MouseEvent) => vo
       />
 
       {/* Button Content */}
-      <div className="relative px-8 py-4 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 rounded-2xl shadow-xl">
+      <div className="relative px-12 py-5 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 rounded-2xl shadow-xl">
         <div className="flex items-center gap-3">
-          <FileText className="w-5 h-5 text-white" />
-          <span className="text-white font-semibold text-lg">
+          <FileText className="w-6 h-6 text-white" />
+          <span className="text-white font-semibold text-xl">
             Select Files to Upload
           </span>
           <motion.div
@@ -46,7 +46,7 @@ const PremiumUploadButton = ({ onClick }: { onClick: (e: React.MouseEvent) => vo
             }}
             transition={{ duration: 0.2 }}
           >
-            <ArrowRight className="w-5 h-5 text-white" />
+            <ArrowRight className="w-6 h-6 text-white" />
           </motion.div>
         </div>
       </div>
@@ -65,17 +65,15 @@ const PremiumUploadButton = ({ onClick }: { onClick: (e: React.MouseEvent) => vo
 };
 
 export default function PremiumUploadZone({ onFileUpload, isUploading }: PremiumUploadZoneProps) {
-  const [isDragActive, setIsDragActive] = useState(false);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     if (acceptedFiles.length > 0) {
-      setIsDragActive(false);
       onFileUpload(acceptedFiles);
     }
   }, [onFileUpload]);
 
-  const { getRootProps, getInputProps } = useDropzone({
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: {
       'application/pdf': ['.pdf'],
@@ -84,9 +82,7 @@ export default function PremiumUploadZone({ onFileUpload, isUploading }: Premium
     },
     multiple: false,
     disabled: isUploading,
-    noClick: true,
-    onDragEnter: () => setIsDragActive(true),
-    onDragLeave: () => setIsDragActive(false)
+    noClick: true
   });
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -121,24 +117,21 @@ export default function PremiumUploadZone({ onFileUpload, isUploading }: Premium
   const { ref, ...rootProps } = getRootProps();
   
   return (
-    <motion.div
-      className={`
-        relative overflow-hidden rounded-3xl p-1 transition-all duration-500
-        ${isDragActive 
-          ? 'bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500' 
-          : 'bg-gradient-to-br from-slate-200 via-blue-200 to-purple-200 dark:from-slate-700 dark:via-blue-900 dark:to-purple-900'
-        }
-      `}
-      onMouseMove={handleMouseMove}
-      onDragEnter={rootProps.onDragEnter}
-      onDragOver={rootProps.onDragOver}
-      onDragLeave={rootProps.onDragLeave}
-      onDrop={rootProps.onDrop as any}
-      initial={{ scale: 0.95, opacity: 0 }}
-      animate={{ scale: 1, opacity: 1 }}
-      transition={{ delay: 0.6 }}
-    >
-      <input {...getInputProps()} />
+    <div {...rootProps}>
+      <motion.div
+        className={`
+          relative overflow-hidden rounded-3xl p-1 transition-all duration-500
+          ${isDragActive 
+            ? 'bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500' 
+            : 'bg-gradient-to-br from-slate-200 via-blue-200 to-purple-200 dark:from-slate-700 dark:via-blue-900 dark:to-purple-900'
+          }
+        `}
+        onMouseMove={handleMouseMove}
+        initial={{ scale: 0.95, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ delay: 0.6 }}
+      >
+        <input {...getInputProps()} />
 
       {/* Spotlight Effect */}
       <div
@@ -152,8 +145,8 @@ export default function PremiumUploadZone({ onFileUpload, isUploading }: Premium
       {/* Main Upload Area */}
       <motion.div
         className={`
-          relative bg-white/90 dark:bg-slate-900/90 backdrop-blur-2xl rounded-3xl p-12 
-          border-2 border-dashed transition-all duration-300
+          relative bg-white/90 dark:bg-slate-900/90 backdrop-blur-2xl rounded-3xl py-12 px-8 min-h-[420px] flex flex-col justify-center
+          border-2 border-dashed transition-all duration-300 pointer-events-none
           ${isDragActive 
             ? 'border-blue-500 dark:border-blue-400 bg-blue-50/50 dark:bg-blue-900/30' 
             : 'border-slate-300 dark:border-slate-600'
@@ -166,7 +159,7 @@ export default function PremiumUploadZone({ onFileUpload, isUploading }: Premium
       >
         {/* Animated Icon Container */}
         <motion.div
-          className="relative w-32 h-32 mx-auto mb-8"
+          className="relative w-40 h-40 mx-auto mb-8"
           animate={{
             y: isDragActive ? -10 : 0,
             scale: isDragActive ? 1.1 : 1
@@ -211,9 +204,9 @@ export default function PremiumUploadZone({ onFileUpload, isUploading }: Premium
               transition={{ duration: 0.5 }}
             >
               {isDragActive ? (
-                <Download className="w-10 h-10 text-white" />
+                <Download className="w-16 h-16 text-white" />
               ) : (
-                <Upload className="w-10 h-10 text-white" />
+                <Upload className="w-16 h-16 text-white" />
               )}
             </motion.div>
           </div>
@@ -281,28 +274,15 @@ export default function PremiumUploadZone({ onFileUpload, isUploading }: Premium
               </div>
 
               {/* Premium Upload Button */}
-              <PremiumUploadButton onClick={handleSelectFilesClick} />
-
-              {/* Supported Features Row */}
-              <div className="flex items-center justify-center gap-8 text-sm">
-                <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400">
-                  <Shield className="w-4 h-4 text-green-500" />
-                  <span>256-bit Encryption</span>
-                </div>
-                <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400">
-                  <Zap className="w-4 h-4 text-yellow-500" />
-                  <span>Instant Processing</span>
-                </div>
-                <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400">
-                  <CheckCircle className="w-4 h-4 text-blue-500" />
-                  <span>99.9% Accuracy</span>
-                </div>
+              <div className="pointer-events-auto">
+                <PremiumUploadButton onClick={handleSelectFilesClick} />
               </div>
             </motion.div>
           )}
         </AnimatePresence>
       </motion.div>
-    </motion.div>
+      </motion.div>
+    </div>
   );
 }
 
