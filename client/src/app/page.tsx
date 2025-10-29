@@ -25,7 +25,9 @@ import {
   Sun,
   ChevronLeft,
   ChevronRight,
-  Upload
+  Upload,
+  Building2,
+  Users
 } from "lucide-react";
 import { useTheme } from "@/context/ThemeContext";
 import EnvironmentSelector from "./components/EnvironmentSelector";
@@ -36,17 +38,22 @@ function HomePageContent() {
   const { user, logout } = useAuth();
   const { theme, setTheme, actualTheme } = useTheme();
   const { activeEnvironment } = useEnvironment();
-  const [tab, setTab] = useState<"dashboard" | "carriers" | "earned-commission" | "analytics">("analytics");
+  const [tab, setTab] = useState<"dashboard" | "carriers" | "earned-commission" | "earned-commission-companies" | "earned-commission-carriers" | "analytics">("analytics");
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [expandedDropdowns, setExpandedDropdowns] = useState<Set<string>>(new Set());
 
   // Handle URL parameters for tab selection
   useEffect(() => {
     const tabParam = searchParams?.get('tab')
-    if (tabParam && ['dashboard', 'carriers', 'earned-commission', 'analytics'].includes(tabParam)) {
-      setTab(tabParam as "dashboard" | "carriers" | "earned-commission" | "analytics")
+    if (tabParam && ['dashboard', 'carriers', 'earned-commission', 'earned-commission-companies', 'earned-commission-carriers', 'analytics'].includes(tabParam)) {
+      setTab(tabParam as "dashboard" | "carriers" | "earned-commission" | "earned-commission-companies" | "earned-commission-carriers" | "analytics")
+      // Auto-expand dropdown if a sub-item is selected
+      if (tabParam.startsWith('earned-commission-')) {
+        setExpandedDropdowns(new Set(['earned-commission']))
+      }
     } else {
       // Default to analytics if no tab parameter or invalid tab
       setTab("analytics")
@@ -108,7 +115,24 @@ function HomePageContent() {
       icon: DollarSign,
       description: "Commission Tracking & Analysis",
       gradient: "from-violet-600 via-purple-600 to-fuchsia-600",
-      bgGradient: "from-violet-50 via-purple-50 to-fuchsia-50"
+      bgGradient: "from-violet-50 via-purple-50 to-fuchsia-50",
+      isDropdown: true,
+      subItems: [
+        {
+          id: "earned-commission-companies" as const,
+          label: "Companies",
+          icon: Building2,
+          description: "View by Companies",
+          path: "/earned-commission/companies"
+        },
+        {
+          id: "earned-commission-carriers" as const,
+          label: "Carriers",
+          icon: Users,
+          description: "View by Carriers",
+          path: "/earned-commission/carriers"
+        }
+      ]
     },
     {
       id: "carriers" as const,
@@ -175,56 +199,105 @@ function HomePageContent() {
         <nav className="flex-1 space-y-2 px-3 py-4 transition-all duration-300 scrollbar-none overflow-y-auto">
           {tabConfig.map((tabItem) => {
             const Icon = tabItem.icon;
-            const isActive = tab === tabItem.id;
+            const isActive = tab === tabItem.id || (tabItem.subItems && tabItem.subItems.some(sub => tab === sub.id));
+            const isExpanded = expandedDropdowns.has(tabItem.id);
             
             return (
-              <button
-                key={tabItem.id}
-                onClick={() => {
-                  if (tabItem.id === 'analytics') {
-                    router.push('/');
-                  } else {
-                    router.push(`/?tab=${tabItem.id}`);
-                  }
-                  // Close sidebar on mobile after navigation
-                  if (isMobile) {
-                    setSidebarOpen(false);
-                  }
-                }}
-                className={`w-full flex items-center justify-between px-2 py-3 rounded-lg transition-all cursor-pointer border border-transparent min-h-[48px] ${
-                  isActive && !sidebarCollapsed
-                    ? 'bg-blue-100 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300' 
-                    : 'hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300'
-                }`}
-                aria-label={`Navigate to ${tabItem.label}`}
-                title={sidebarCollapsed ? `${tabItem.label} - ${tabItem.description}` : tabItem.description}
-                aria-current={isActive ? "page" : undefined}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="relative">
-                    <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 dark:from-blue-600 dark:to-indigo-700 rounded-lg flex items-center justify-center shadow-sm">
-                      <Icon size={16} className="text-white" />
+              <div key={tabItem.id}>
+                <button
+                  onClick={() => {
+                    if (tabItem.isDropdown) {
+                      // Toggle dropdown
+                      setExpandedDropdowns(prev => {
+                        const next = new Set(prev);
+                        if (next.has(tabItem.id)) {
+                          next.delete(tabItem.id);
+                        } else {
+                          next.add(tabItem.id);
+                        }
+                        return next;
+                      });
+                    } else {
+                      // Navigate to page
+                      if (tabItem.id === 'analytics') {
+                        router.push('/');
+                      } else {
+                        router.push(`/?tab=${tabItem.id}`);
+                      }
+                      // Close sidebar on mobile after navigation
+                      if (isMobile) {
+                        setSidebarOpen(false);
+                      }
+                    }
+                  }}
+                  className={`w-full flex items-center justify-between px-2 py-3 rounded-lg transition-all cursor-pointer border border-transparent min-h-[48px] ${
+                    isActive && !sidebarCollapsed
+                      ? 'bg-blue-100 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300' 
+                      : 'hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300'
+                  }`}
+                  aria-label={`Navigate to ${tabItem.label}`}
+                  title={sidebarCollapsed ? `${tabItem.label} - ${tabItem.description}` : tabItem.description}
+                  aria-current={isActive ? "page" : undefined}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="relative">
+                      <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 dark:from-blue-600 dark:to-indigo-700 rounded-lg flex items-center justify-center shadow-sm">
+                        <Icon size={16} className="text-white" />
+                      </div>
+                      {/* Blue dot indicator for collapsed sidebar when active */}
+                      {isActive && sidebarCollapsed && (
+                        <div className="absolute -top-1 -right-1 w-2 h-2 bg-blue-500 rounded-full shadow-sm animate-pulse"></div>
+                      )}
                     </div>
-                    {/* Blue dot indicator for collapsed sidebar when active */}
-                    {isActive && sidebarCollapsed && (
-                      <div className="absolute -top-1 -right-1 w-2 h-2 bg-blue-500 rounded-full shadow-sm animate-pulse"></div>
+                    <div className={`text-left flex-1 min-w-0 transition-all duration-300 ${
+                      sidebarCollapsed ? 'opacity-0 w-0 overflow-hidden' : 'opacity-100 w-auto'
+                    }`}>
+                      <div className="font-medium text-slate-700 dark:text-slate-300 truncate">{tabItem.label}</div>
+                      <div className="text-xs text-slate-500 dark:text-slate-400 truncate">{tabItem.description}</div>
+                    </div>
+                  </div>
+                  <div className={`w-4 h-4 flex items-center justify-center transition-all duration-300 flex-shrink-0 ${
+                    sidebarCollapsed ? 'opacity-0 w-0 overflow-hidden' : 'opacity-100'
+                  }`}>
+                    {tabItem.isDropdown ? (
+                      <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
+                    ) : isActive && (
+                      <div className="w-2 h-2 bg-blue-500 rounded-full shadow-sm animate-pulse"></div>
                     )}
                   </div>
-                  <div className={`text-left flex-1 min-w-0 transition-all duration-300 ${
-                    sidebarCollapsed ? 'opacity-0 w-0 overflow-hidden' : 'opacity-100 w-auto'
-                  }`}>
-                    <div className="font-medium text-slate-700 dark:text-slate-300 truncate">{tabItem.label}</div>
-                    <div className="text-xs text-slate-500 dark:text-slate-400 truncate">{tabItem.description}</div>
+                </button>
+
+                {/* Dropdown Sub-items */}
+                {tabItem.isDropdown && isExpanded && !sidebarCollapsed && (
+                  <div className="ml-4 mt-1 space-y-1">
+                    {tabItem.subItems?.map((subItem) => {
+                      const SubIcon = subItem.icon;
+                      const isSubActive = tab === subItem.id;
+                      
+                      return (
+                        <button
+                          key={subItem.id}
+                          onClick={() => {
+                            setTab(subItem.id);
+                            router.push(`/?tab=${subItem.id}`);
+                            if (isMobile) {
+                              setSidebarOpen(false);
+                            }
+                          }}
+                          className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all ${
+                            isSubActive
+                              ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
+                              : 'hover:bg-slate-50 dark:hover:bg-slate-700/50 text-slate-600 dark:text-slate-400'
+                          }`}
+                        >
+                          <SubIcon size={14} className={isSubActive ? 'text-blue-600 dark:text-blue-400' : ''} />
+                          <span className="text-sm">{subItem.label}</span>
+                        </button>
+                      );
+                    })}
                   </div>
-                </div>
-                <div className={`w-4 h-4 flex items-center justify-center transition-all duration-300 flex-shrink-0 ${
-                  sidebarCollapsed ? 'opacity-0 w-0 overflow-hidden' : 'opacity-100'
-                }`}>
-                  {isActive && (
-                    <div className="w-2 h-2 bg-blue-500 rounded-full shadow-sm animate-pulse"></div>
-                  )}
-                </div>
-              </button>
+                )}
+              </div>
             );
           })}
         </nav>
@@ -354,7 +427,10 @@ function HomePageContent() {
           <div className="max-w-none">
             {tab === "analytics" && <PremiumAnalyticsTab environmentId={activeEnvironment?.id || null} onNavigate={(newTab) => router.push(`/?tab=${newTab}`)} />}
             {tab === "dashboard" && <DashboardTab environmentId={activeEnvironment?.id || null} />}
-            {tab === "earned-commission" && <EarnedCommissionTab environmentId={activeEnvironment?.id || null} />}
+            {(tab === "earned-commission" || tab === "earned-commission-companies" || tab === "earned-commission-carriers") && <EarnedCommissionTab environmentId={activeEnvironment?.id || null} activeView={tab === "earned-commission-carriers" ? "carriers" : "companies"} onViewChange={(view) => {
+              const newTab = view === "carriers" ? "earned-commission-carriers" : "earned-commission-companies";
+              router.push(`/?tab=${newTab}`);
+            }} />}
             {tab === "carriers" && <CarrierTab environmentId={activeEnvironment?.id || null} />}
           </div>
         </main>

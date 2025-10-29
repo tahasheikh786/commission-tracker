@@ -390,3 +390,270 @@ export const gradientIntensity = {
   }
 };
 
+// ============================================
+// TABLE-SPECIFIC ANIMATIONS
+// ============================================
+
+// Table Row Animations
+export const tableRowVariants = {
+  initial: {
+    opacity: 0,
+    y: 20
+  },
+  animate: (index: number) => ({
+    opacity: 1,
+    y: 0,
+    transition: {
+      ...premiumSpring,
+      delay: index * 0.03 // Stagger rows
+    }
+  }),
+  hover: {
+    y: -2,
+    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
+    transition: {
+      duration: 0.2
+    }
+  },
+  expanded: {
+    borderLeftWidth: 4,
+    borderLeftColor: 'rgb(59, 130, 246)',
+    transition: {
+      duration: 0.3
+    }
+  }
+};
+
+// Expanded Row Content Animation
+export const expandedRowVariants = {
+  collapsed: {
+    height: 0,
+    opacity: 0,
+    marginTop: 0,
+    marginBottom: 0,
+    overflow: 'hidden' as const,
+    transition: {
+      height: { duration: 0.4, ease: [0.32, 0.72, 0, 1] as const },
+      opacity: { duration: 0.25, ease: 'easeOut' },
+      marginTop: { duration: 0.4, ease: [0.32, 0.72, 0, 1] as const },
+      marginBottom: { duration: 0.4, ease: [0.32, 0.72, 0, 1] as const }
+    }
+  },
+  expanded: {
+    height: 'auto' as const,
+    opacity: 1,
+    marginTop: 12,
+    marginBottom: 12,
+    overflow: 'visible' as const,  // ⚡ CRITICAL: Allow dropdown content to overflow properly
+    transition: {
+      height: { duration: 0.45, ease: [0.32, 0.72, 0, 1] as const },
+      opacity: { duration: 0.3, delay: 0.15, ease: 'easeIn' },
+      marginTop: { duration: 0.45, ease: [0.32, 0.72, 0, 1] as const },
+      marginBottom: { duration: 0.45, ease: [0.32, 0.72, 0, 1] as const }
+    }
+  }
+};
+
+// Table Header Sort Icon Animation
+export const sortIconVariants = {
+  asc: {
+    rotate: 0,
+    transition: {
+      duration: 0.2
+    }
+  },
+  desc: {
+    rotate: 180,
+    transition: {
+      duration: 0.2
+    }
+  }
+};
+
+// Table Loading Skeleton Animation
+export const tableSkeletonVariants = {
+  initial: {
+    backgroundPosition: '-200% 0'
+  },
+  animate: {
+    backgroundPosition: '200% 0',
+    transition: {
+      duration: 1.5,
+      repeat: Infinity,
+      ease: 'linear'
+    }
+  }
+};
+
+// Checkbox Selection Animation
+export const checkboxVariants = {
+  unchecked: {
+    scale: 0,
+    opacity: 0
+  },
+  checked: {
+    scale: 1,
+    opacity: 1,
+    transition: {
+      type: "spring",
+      stiffness: 500,
+      damping: 25
+    }
+  }
+};
+
+// Bulk Actions Bar Slide-up Animation
+export const bulkActionsVariants = {
+  hidden: {
+    y: 100,
+    opacity: 0
+  },
+  visible: {
+    y: 0,
+    opacity: 1,
+    transition: {
+      type: "spring",
+      stiffness: 300,
+      damping: 25
+    }
+  },
+  exit: {
+    y: 100,
+    opacity: 0,
+    transition: {
+      duration: 0.2
+    }
+  }
+};
+
+// ============================================
+// PREMIUM TABLE REDESIGN ANIMATIONS
+// ============================================
+
+// Smooth row expand/collapse
+export const premiumExpandVariants = {
+  collapsed: {
+    height: 0,
+    opacity: 0,
+    marginTop: 0,
+    marginBottom: 0,
+    transition: {
+      height: { duration: 0.3, ease: [0.32, 0.72, 0, 1] },
+      opacity: { duration: 0.2, ease: 'easeOut' },
+      marginTop: { duration: 0.3, ease: [0.32, 0.72, 0, 1] },
+      marginBottom: { duration: 0.3, ease: [0.32, 0.72, 0, 1] }
+    }
+  },
+  expanded: {
+    height: 'auto',
+    opacity: 1,
+    marginTop: 8,
+    marginBottom: 8,
+    transition: {
+      height: { duration: 0.35, ease: [0.32, 0.72, 0, 1] },
+      opacity: { duration: 0.25, delay: 0.1, ease: 'easeIn' },
+      marginTop: { duration: 0.35, ease: [0.32, 0.72, 0, 1] },
+      marginBottom: { duration: 0.35, ease: [0.32, 0.72, 0, 1] }
+    }
+  }
+};
+
+// Monthly cell value animation
+export const monthlyValueVariants = {
+  initial: { scale: 0.95, opacity: 0 },
+  animate: (index: number) => ({
+    scale: 1,
+    opacity: 1,
+    transition: {
+      delay: index * 0.02,
+      duration: 0.3,
+      ease: [0.34, 1.56, 0.64, 1]
+    }
+  }),
+  hover: {
+    scale: 1.05,
+    y: -2,
+    transition: { duration: 0.2, ease: 'easeOut' }
+  }
+};
+
+// Table row interaction states
+export const premiumRowVariants = {
+  default: {
+    y: 0,
+    scale: 1,
+    boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+    transition: { duration: 0.25, ease: 'easeOut' }
+  },
+  hover: {
+    y: -2,
+    scale: 1.002,
+    boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+    transition: { duration: 0.25, ease: 'easeOut' }
+  },
+  pressed: {
+    y: 0,
+    scale: 0.998,
+    transition: { duration: 0.1, ease: 'easeInOut' }
+  },
+  expanded: {
+    y: 0,
+    scale: 1,
+    borderLeftWidth: 4,
+    borderLeftColor: '#3B82F6',
+    boxShadow: '0 8px 24px rgba(59,130,246,0.15)',
+    backgroundColor: 'rgba(59, 130, 246, 0.02)',  // ⚡ Subtle highlight when expanded
+    transition: { duration: 0.35, ease: [0.32, 0.72, 0, 1] as const }
+  }
+};
+
+// Carrier context navigation animation
+export const navigationTransitionVariants = {
+  exit: {
+    x: -50,
+    opacity: 0,
+    scale: 0.95,
+    transition: { duration: 0.25, ease: [0.4, 0, 1, 1] }
+  },
+  enter: {
+    x: 0,
+    opacity: 1,
+    scale: 1,
+    transition: { duration: 0.3, ease: [0, 0, 0.2, 1], delay: 0.1 }
+  }
+};
+
+// Dropdown stagger children
+export const dropdownContentVariants = {
+  collapsed: { 
+    opacity: 0,
+    scale: 0.98
+  },
+  expanded: {
+    opacity: 1,
+    scale: 1,
+    transition: {
+      staggerChildren: 0.08,  // ⚡ Increased stagger for premium feel
+      delayChildren: 0.12,
+      duration: 0.3
+    }
+  }
+};
+
+export const dropdownItemVariants = {
+  collapsed: {
+    opacity: 0,
+    y: -12,
+    scale: 0.96
+  },
+  expanded: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: {
+      duration: 0.35,
+      ease: [0.34, 1.56, 0.64, 1] as const  // ⚡ Spring-like easing for premium feel
+    }
+  }
+};
+

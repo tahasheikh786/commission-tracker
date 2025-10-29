@@ -1,5 +1,5 @@
 'use client'
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   AreaChart,
@@ -25,16 +25,14 @@ const CustomTooltip = ({ active, payload }: any) => {
   if (active && payload && payload.length) {
     return (
       <motion.div
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.9 }}
-        transition={{ duration: 0.2 }}
-        className="glass-card-premium p-4 rounded-lg border border-slate-200/50 dark:border-slate-700/50 shadow-xl"
+        initial={{ opacity: 0, scale: 0.9, y: 10 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        className="bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm px-4 py-3 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700"
       >
-        <p className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">
-          {payload[0].payload.month}
+        <p className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">
+          {payload[0].payload.month} 2025
         </p>
-        <p className="text-lg font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
+        <p className="text-sm font-bold text-slate-900 dark:text-slate-100">
           {formatCurrency(payload[0].value)}
         </p>
       </motion.div>
@@ -51,154 +49,149 @@ const CustomDot = (props: any) => {
   if (!payload.value || payload.value === 0) return null;
 
   return (
-    <motion.g
-      whileHover={{ scale: 1.5 }}
-      transition={{ duration: 0.2 }}
-    >
-      <defs>
-        <linearGradient id={`dotGradient-${cx}-${cy}`} x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#3b82f6" />
-          <stop offset="50%" stopColor="#8b5cf6" />
-          <stop offset="100%" stopColor="#d946ef" />
-        </linearGradient>
-      </defs>
+    <g>
       <circle
         cx={cx}
         cy={cy}
-        r="6"
-        fill="white"
-        stroke={`url(#dotGradient-${cx}-${cy})`}
-        strokeWidth="3"
-        filter="drop-shadow(0 2px 4px rgba(0,0,0,0.1))"
-        className="cursor-pointer"
+        r={4}
+        fill="#fff"
+        stroke="#8b5cf6"
+        strokeWidth={2}
+        className="transition-all duration-200 hover:r-6"
       />
-    </motion.g>
+    </g>
   );
 };
 
 export const InteractiveLineChart: React.FC<InteractiveLineChartProps> = ({ data }) => {
-  // Check if there's any data
-  const hasData = data.some((d) => d.value > 0);
+  const [isReady, setIsReady] = useState(false);
+  
+  // ⚡ Ensure chart only renders when component is mounted and data is ready
+  useEffect(() => {
+    const timer = setTimeout(() => setIsReady(true), 100);
+    return () => clearTimeout(timer);
+  }, []);
 
+  // Check if there's any data
+  const hasData = data && data.some((d) => d.value > 0);
+  
   // Calculate max value for Y-axis domain
-  const maxValue = Math.max(...data.map((d) => d.value));
-  const yAxisDomain = [0, maxValue * 1.1];
+  const maxValue = hasData ? Math.max(...data.map((d) => d.value)) : 0;
+  const yAxisDomain = [0, maxValue * 1.15];  // ⚡ 15% padding above max value
 
   if (!hasData) {
     return (
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6 }}
-        className="flex items-center justify-center h-full"
-      >
-        <div className="glass-card-premium p-8 rounded-xl text-center">
-          <div className="text-slate-400 dark:text-slate-500 text-lg font-medium">
-            No commission data available
-          </div>
+      <div className="flex items-center justify-center h-full min-h-[240px] text-slate-400">
+        <div className="text-center">
+          <p className="text-sm font-medium">No commission data available</p>
+          <p className="text-xs mt-1 text-slate-400">Data will appear once commissions are recorded</p>
         </div>
-      </motion.div>
+      </div>
+    );
+  }
+
+  if (!isReady) {
+    // ⚡ Show loading skeleton while chart prepares
+    return (
+      <div className="flex items-center justify-center h-full min-h-[240px]">
+        <div className="animate-pulse">
+          <div className="h-4 w-32 bg-slate-200 dark:bg-slate-700 rounded mb-2"></div>
+          <div className="h-3 w-24 bg-slate-200 dark:bg-slate-700 rounded"></div>
+        </div>
+      </div>
     );
   }
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.6 }}
-      className="w-full h-full"
+    <ResponsiveContainer 
+      width="100%" 
+      height={250}  // ⚡ CRITICAL: Explicit height
+      minHeight={240}
+      debounce={50}  // ⚡ Debounce resize events for smoother performance
     >
-      <ResponsiveContainer width="100%" height="100%">
-        <AreaChart
-          data={data}
-          margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
-        >
-          <defs>
-            {/* Line Gradient */}
-            <linearGradient id="lineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="#3b82f6" />
-              <stop offset="50%" stopColor="#8b5cf6" />
-              <stop offset="100%" stopColor="#d946ef" />
-            </linearGradient>
-            
-            {/* Area Gradient */}
-            <linearGradient id="areaGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stopColor="#8b5cf6" stopOpacity={0.3} />
-              <stop offset="100%" stopColor="#8b5cf6" stopOpacity={0.05} />
-            </linearGradient>
-          </defs>
-
-          {/* Grid Lines */}
-          <CartesianGrid
-            strokeDasharray="5 5"
-            className="opacity-50"
-            stroke="currentColor"
-            style={{
-              color: 'rgb(148 163 184 / 0.5)', // slate-400 with opacity
-            }}
-          />
-
-          {/* X Axis */}
-          <XAxis
-            dataKey="month"
-            tick={{ 
-              fill: 'currentColor',
-              fontSize: 12,
-              fontWeight: 500,
-            }}
-            className="text-slate-600 dark:text-slate-400"
-            axisLine={{ stroke: 'currentColor', strokeWidth: 1 }}
-            tickLine={{ stroke: 'currentColor', strokeWidth: 1 }}
-          />
-
-          {/* Y Axis */}
-          <YAxis
-            domain={yAxisDomain}
-            tick={{ 
-              fill: 'currentColor',
-              fontSize: 12,
-              fontWeight: 500,
-            }}
-            className="text-slate-600 dark:text-slate-400"
-            tickFormatter={(value) => formatCurrencyCompact(value)}
-            axisLine={{ stroke: 'currentColor', strokeWidth: 1 }}
-            tickLine={{ stroke: 'currentColor', strokeWidth: 1 }}
-          />
-
-          {/* Tooltip */}
-          <Tooltip
-            content={<CustomTooltip />}
-            cursor={{
-              stroke: '#8b5cf6',
-              strokeWidth: 2,
-              strokeDasharray: '5 5',
-            }}
-          />
-
-          {/* Area Fill */}
-          <Area
-            type="monotone"
-            dataKey="value"
-            stroke="none"
-            fill="url(#areaGradient)"
-            animationDuration={1200}
-            animationEasing="ease-in-out"
-          />
-
-          {/* Line */}
-          <Line
-            type="monotone"
-            dataKey="value"
-            stroke="url(#lineGradient)"
-            strokeWidth={3}
-            dot={<CustomDot />}
-            activeDot={{ r: 8 }}
-            animationDuration={1500}
-            animationEasing="ease-in-out"
-          />
-        </AreaChart>
-      </ResponsiveContainer>
-    </motion.div>
+      <AreaChart
+        data={data}
+        margin={{ top: 15, right: 15, left: -10, bottom: 5 }}  // ⚡ Adjusted margins
+      >
+        <defs>
+          {/* Line Gradient */}
+          <linearGradient id="lineGradient" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="#8b5cf6" />
+            <stop offset="50%" stopColor="#6366f1" />
+            <stop offset="100%" stopColor="#3b82f6" />
+          </linearGradient>
+          
+          {/* Area Gradient */}
+          <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#8b5cf6" stopOpacity={0.3} />
+            <stop offset="50%" stopColor="#6366f1" stopOpacity={0.15} />
+            <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.05} />
+          </linearGradient>
+        </defs>
+        
+        {/* Grid Lines */}
+        <CartesianGrid 
+          strokeDasharray="3 3" 
+          stroke="currentColor" 
+          opacity={0.1}
+          vertical={false}
+        />
+        
+        {/* X Axis */}
+        <XAxis
+          dataKey="month"
+          stroke="currentColor"
+          opacity={0.6}
+          tick={{ fontSize: 11, fontWeight: 500 }}
+          axisLine={{ stroke: 'currentColor', strokeWidth: 1, opacity: 0.2 }}
+          tickLine={false}
+          dy={8}
+        />
+        
+        {/* Y Axis */}
+        <YAxis
+          stroke="currentColor"
+          opacity={0.6}
+          tick={{ fontSize: 11, fontWeight: 500 }}
+          tickFormatter={(value) => formatCurrencyCompact(value)}
+          axisLine={{ stroke: 'currentColor', strokeWidth: 1, opacity: 0.2 }}
+          tickLine={false}
+          domain={yAxisDomain}
+          dx={-5}
+        />
+        
+        {/* Tooltip */}
+        <Tooltip 
+          content={<CustomTooltip />}
+          cursor={{
+            stroke: '#8b5cf6',
+            strokeWidth: 2,
+            strokeDasharray: '5 5',
+            opacity: 0.5
+          }}
+        />
+        
+        {/* Area Fill */}
+        <Area
+          type="monotone"
+          dataKey="value"
+          stroke="url(#lineGradient)"
+          fill="url(#areaGradient)"
+          strokeWidth={3}
+          dot={<CustomDot />}
+          activeDot={{ 
+            r: 6, 
+            strokeWidth: 3, 
+            stroke: '#fff',
+            fill: '#8b5cf6'
+          }}
+          animationDuration={1200}
+          animationEasing="ease-in-out"
+          isAnimationActive={true}
+          animationBegin={200}  // ⚡ Delay animation start slightly
+        />
+      </AreaChart>
+    </ResponsiveContainer>
   );
 };
 
