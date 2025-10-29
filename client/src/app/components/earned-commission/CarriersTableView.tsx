@@ -75,6 +75,7 @@ interface CarrierGroup {
 }
 
 interface EnrichedCarrier extends CarrierGroup {
+  id: string;
   avgPerCompany: number;
   commissionRate: number;
   topCompany?: CommissionData;
@@ -649,6 +650,7 @@ export default function CarriersTableView({
   const enrichedCarriers: EnrichedCarrier[] = useMemo(() => {
     return carriers.map(carrier => ({
       ...carrier,
+      id: carrier.carrierName,
       avgPerCompany: carrier.companyCount > 0 ? carrier.totalCommission / carrier.companyCount : 0,
       commissionRate: carrier.totalInvoice > 0 ? (carrier.totalCommission / carrier.totalInvoice) * 100 : 0,
       topCompany: carrier.companies.sort((a, b) => b.commission_earned - a.commission_earned)[0]

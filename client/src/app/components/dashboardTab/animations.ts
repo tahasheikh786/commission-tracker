@@ -312,7 +312,7 @@ export const rankBadgeVariants = {
     transition: {
       duration: 2,
       repeat: Infinity,
-      ease: "easeInOut"
+      ease: "easeInOut" as const
     }
   }
 };
@@ -346,7 +346,7 @@ export const cardHoverLift = {
     boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)',
     transition: {
       duration: 0.3,
-      ease: [0.4, 0, 0.2, 1]
+      ease: [0.4, 0, 0.2, 1] as const
     }
   },
   hover: {
@@ -355,7 +355,7 @@ export const cardHoverLift = {
     boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
     transition: {
       duration: 0.3,
-      ease: [0.4, 0, 0.2, 1]
+      ease: [0.4, 0, 0.2, 1] as const
     }
   }
 };
@@ -372,7 +372,7 @@ export const staggeredReveal = {
     transition: {
       duration: 0.3,
       delay: delay,
-      ease: [0.4, 0, 0.2, 1]
+      ease: [0.4, 0, 0.2, 1] as const
     }
   })
 };
@@ -433,10 +433,8 @@ export const expandedRowVariants = {
     marginBottom: 0,
     overflow: 'hidden' as const,
     transition: {
-      height: { duration: 0.4, ease: [0.32, 0.72, 0, 1] as const },
-      opacity: { duration: 0.25, ease: 'easeOut' },
-      marginTop: { duration: 0.4, ease: [0.32, 0.72, 0, 1] as const },
-      marginBottom: { duration: 0.4, ease: [0.32, 0.72, 0, 1] as const }
+      duration: 0.4,
+      ease: 'easeOut' as const
     }
   },
   expanded: {
@@ -446,10 +444,8 @@ export const expandedRowVariants = {
     marginBottom: 12,
     overflow: 'visible' as const,  // ⚡ CRITICAL: Allow dropdown content to overflow properly
     transition: {
-      height: { duration: 0.45, ease: [0.32, 0.72, 0, 1] as const },
-      opacity: { duration: 0.3, delay: 0.15, ease: 'easeIn' },
-      marginTop: { duration: 0.45, ease: [0.32, 0.72, 0, 1] as const },
-      marginBottom: { duration: 0.45, ease: [0.32, 0.72, 0, 1] as const }
+      duration: 0.45,
+      ease: 'easeIn' as const
     }
   }
 };
@@ -480,7 +476,7 @@ export const tableSkeletonVariants = {
     transition: {
       duration: 1.5,
       repeat: Infinity,
-      ease: 'linear'
+      ease: 'linear' as const
     }
   }
 };
@@ -495,7 +491,7 @@ export const checkboxVariants = {
     scale: 1,
     opacity: 1,
     transition: {
-      type: "spring",
+      type: "spring" as const,
       stiffness: 500,
       damping: 25
     }
@@ -512,7 +508,7 @@ export const bulkActionsVariants = {
     y: 0,
     opacity: 1,
     transition: {
-      type: "spring",
+      type: "spring" as const,
       stiffness: 300,
       damping: 25
     }
@@ -538,10 +534,8 @@ export const premiumExpandVariants = {
     marginTop: 0,
     marginBottom: 0,
     transition: {
-      height: { duration: 0.3, ease: [0.32, 0.72, 0, 1] },
-      opacity: { duration: 0.2, ease: 'easeOut' },
-      marginTop: { duration: 0.3, ease: [0.32, 0.72, 0, 1] },
-      marginBottom: { duration: 0.3, ease: [0.32, 0.72, 0, 1] }
+      duration: 0.3,
+      ease: 'easeOut' as const
     }
   },
   expanded: {
@@ -550,10 +544,8 @@ export const premiumExpandVariants = {
     marginTop: 8,
     marginBottom: 8,
     transition: {
-      height: { duration: 0.35, ease: [0.32, 0.72, 0, 1] },
-      opacity: { duration: 0.25, delay: 0.1, ease: 'easeIn' },
-      marginTop: { duration: 0.35, ease: [0.32, 0.72, 0, 1] },
-      marginBottom: { duration: 0.35, ease: [0.32, 0.72, 0, 1] }
+      duration: 0.35,
+      ease: 'easeIn' as const
     }
   }
 };
@@ -567,13 +559,13 @@ export const monthlyValueVariants = {
     transition: {
       delay: index * 0.02,
       duration: 0.3,
-      ease: [0.34, 1.56, 0.64, 1]
+      ease: 'easeOut' as const
     }
   }),
   hover: {
     scale: 1.05,
     y: -2,
-    transition: { duration: 0.2, ease: 'easeOut' }
+    transition: { duration: 0.2, ease: 'easeOut' as const }
   }
 };
 
@@ -583,18 +575,18 @@ export const premiumRowVariants = {
     y: 0,
     scale: 1,
     boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-    transition: { duration: 0.25, ease: 'easeOut' }
+    transition: { duration: 0.25, ease: 'easeOut' as const }
   },
   hover: {
     y: -2,
     scale: 1.002,
     boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-    transition: { duration: 0.25, ease: 'easeOut' }
+    transition: { duration: 0.25, ease: 'easeOut' as const }
   },
   pressed: {
     y: 0,
     scale: 0.998,
-    transition: { duration: 0.1, ease: 'easeInOut' }
+    transition: { duration: 0.1, ease: 'easeInOut' as const }
   },
   expanded: {
     y: 0,
@@ -613,13 +605,13 @@ export const navigationTransitionVariants = {
     x: -50,
     opacity: 0,
     scale: 0.95,
-    transition: { duration: 0.25, ease: [0.4, 0, 1, 1] }
+    transition: { duration: 0.25, ease: [0.4, 0, 1, 1] as const }
   },
   enter: {
     x: 0,
     opacity: 1,
     scale: 1,
-    transition: { duration: 0.3, ease: [0, 0, 0.2, 1], delay: 0.1 }
+    transition: { duration: 0.3, ease: [0, 0, 0.2, 1] as const, delay: 0.1 }
   }
 };
 
