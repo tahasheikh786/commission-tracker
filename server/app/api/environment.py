@@ -61,7 +61,7 @@ async def list_environments(
     current_user: User = Depends(get_current_user)
 ):
     """
-    List all environments for the current user's company.
+    List all environments created by the current user.
     If company_id is provided, filter by that company (user must belong to it).
     Auto-creates a default environment if none exists.
     """
@@ -75,12 +75,12 @@ async def list_environments(
             detail="You can only view environments for your own company"
         )
     
-    # Get environments using CRUD helper
-    environments = await get_environments_by_company(db, target_company_id)
+    # Get environments using CRUD helper - now filtered by user_id
+    environments = await get_environments_by_company(db, target_company_id, current_user.id)
     
-    # If no environments exist, create a default one
+    # If no environments exist, create a default one for this user
     if not environments:
-        logger.info(f"No environments found for company {target_company_id}, creating default environment")
+        logger.info(f"No environments found for user {current_user.id}, creating default environment")
         default_env = await get_or_create_default_environment(
             db=db,
             company_id=target_company_id,
@@ -99,14 +99,14 @@ async def get_environment(
 ):
     """
     Get a specific environment by ID.
-    User must belong to the environment's company.
+    User must be the creator of the environment.
     """
-    environment = await get_environment_by_id(db, environment_id, current_user.company_id)
+    environment = await get_environment_by_id(db, environment_id, current_user.company_id, current_user.id)
     
     if not environment:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Environment not found"
+            detail="Environment not found or you don't have access to it"
         )
     
     return environment
@@ -121,17 +121,20 @@ async def update_environment(
 ):
     """
     Update an environment's details (currently only name).
-    User must belong to the environment's company.
+    User must be the creator of the environment.
     """
     result = await db.execute(
-        select(Environment).where(Environment.id == environment_id)
+        select(Environment).where(
+            Environment.id == environment_id,
+            Environment.created_by == current_user.id
+        )
     )
     environment = result.scalar_one_or_none()
     
     if not environment:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Environment not found"
+            detail="Environment not found or you don't have access to it"
         )
     
     # Verify user belongs to the environment's company
@@ -143,11 +146,12 @@ async def update_environment(
     
     # Update fields
     if update_data.name:
-        # Check if new name conflicts with existing environment
+        # Check if new name conflicts with existing environment for this user
         result = await db.execute(
             select(Environment).where(
                 and_(
                     Environment.company_id == environment.company_id,
+                    Environment.created_by == current_user.id,
                     Environment.name == update_data.name,
                     Environment.id != environment_id
                 )
@@ -158,7 +162,7 @@ async def update_environment(
         if existing:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Environment '{update_data.name}' already exists for this company"
+                detail=f"You already have an environment named '{update_data.name}'"
             )
         
         environment.name = update_data.name
@@ -184,17 +188,20 @@ async def delete_environment(
     - All earned_commissions in this environment
     - All edited_tables in this environment
     
-    User must belong to the environment's company.
+    User must be the creator of the environment.
     """
     result = await db.execute(
-        select(Environment).where(Environment.id == environment_id)
+        select(Environment).where(
+            Environment.id == environment_id,
+            Environment.created_by == current_user.id
+        )
     )
     environment = result.scalar_one_or_none()
     
     if not environment:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Environment not found"
+            detail="Environment not found or you don't have access to it"
         )
     
     # Verify user belongs to the environment's company
@@ -202,13 +209,6 @@ async def delete_environment(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have access to this environment"
-        )
-    
-    # Verify user has admin/owner permissions (optional - adjust based on your RBAC)
-    if current_user.role not in ['admin', 'owner']:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only admins can delete environments"
         )
     
     await db.delete(environment)
@@ -233,17 +233,20 @@ async def reset_environment(
     - All edited_tables in this environment
     
     The environment record itself is preserved for re-use.
-    User must belong to the environment's company.
+    User must be the creator of the environment.
     """
     result = await db.execute(
-        select(Environment).where(Environment.id == environment_id)
+        select(Environment).where(
+            Environment.id == environment_id,
+            Environment.created_by == current_user.id
+        )
     )
     environment = result.scalar_one_or_none()
     
     if not environment:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Environment not found"
+            detail="Environment not found or you don't have access to it"
         )
     
     # Verify user belongs to the environment's company
@@ -251,13 +254,6 @@ async def reset_environment(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have access to this environment"
-        )
-    
-    # Verify user has admin/owner permissions (optional - adjust based on your RBAC)
-    if current_user.role not in ['admin', 'owner']:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only admins can reset environments"
         )
     
     # Count items before deletion for logging
@@ -312,16 +308,20 @@ async def get_environment_stats(
 ):
     """
     Get statistics for an environment (upload count, commission totals, etc.)
+    User must be the creator of the environment.
     """
     result = await db.execute(
-        select(Environment).where(Environment.id == environment_id)
+        select(Environment).where(
+            Environment.id == environment_id,
+            Environment.created_by == current_user.id
+        )
     )
     environment = result.scalar_one_or_none()
     
     if not environment:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Environment not found"
+            detail="Environment not found or you don't have access to it"
         )
     
     # Verify user belongs to the environment's company

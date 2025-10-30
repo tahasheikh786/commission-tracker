@@ -2111,3 +2111,203 @@
   }
 }
 
+/* ============================================
+   Conversational Summary Styling
+   ============================================ */
+
+/* Enhanced Gradient Shift Animation */
+@keyframes gradient-shift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+/* Conversational Summary Container */
+.conversational-summary-container {
+  background: linear-gradient(
+    135deg,
+    rgba(99, 102, 241, 0.08) 0%,
+    rgba(139, 92, 246, 0.12) 50%,
+    rgba(99, 102, 241, 0.08) 100%
+  );
+  background-size: 200% 200%;
+  animation: gradient-shift 6s ease infinite, fadeIn 0.5s ease-out;
+  border-left: 3px solid rgb(99, 102, 241);
+  padding: 1rem 1.25rem;
+  border-radius: 0.5rem;
+  margin-bottom: 0.5rem;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 
+    0 4px 6px -1px rgba(99, 102, 241, 0.1),
+    0 2px 4px -1px rgba(99, 102, 241, 0.06),
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.1);
+  transition: all 0.3s ease;
+}
+
+.conversational-summary-container:hover {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  transform: translateY(-1px);
+}
+
+/* Glow effect overlay on summary container */
+.conversational-summary-container::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 2px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.4), rgba(139, 92, 246, 0.4));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0.3;
+  animation: pulse 3s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* Shimmer effect on summary container */
+.conversational-summary-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.3),
+    transparent
+  );
+  animation: shimmer 3s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    left: -100%;
+  }
+  50%, 100% {
+    left: 100%;
+  }
+}
+
+/* Dark mode support for summary container */
+@media (prefers-color-scheme: dark) {
+  .conversational-summary-container {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(139, 92, 246, 0.15) 100%);
+    border-left-color: rgb(129, 140, 248);
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.3), 0 1px 2px 0 rgba(0, 0, 0, 0.2);
+  }
+  
+  .conversational-summary-container:hover {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
+  }
+  
+  .conversational-summary-container::before {
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.1),
+      transparent
+    );
+  }
+}
+
+/* Conversational text styling */
+.conversational-text {
+  position: relative;
+  z-index: 1;
+}
+
+.conversational-text p {
+  font-size: 0.95rem;
+  line-height: 1.65;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  margin: 0;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+/* Thinking/Loading animation for summary */
+.thinking-animation {
+  padding: 1rem;
+  border-radius: 0.5rem;
+  background: rgba(107, 114, 128, 0.1);
+  animation: fadeIn 0.3s ease-out;
+  border: 1px dashed rgba(156, 163, 175, 0.4);
+  position: relative;
+  overflow: hidden;
+}
+
+.thinking-animation::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(99, 102, 241, 0.1),
+    transparent
+  );
+  animation: thinkingShimmer 2s infinite;
+}
+
+@keyframes thinkingShimmer {
+  0% {
+    left: -100%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
+.thinking-animation .animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Smooth reveal animation for summary text */
+@keyframes summaryReveal {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.conversational-text {
+  animation: summaryReveal 0.6s ease-out;
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+  .conversational-summary-container {
+    padding: 0.875rem 1rem;
+  }
+  
+  .conversational-text p {
+    font-size: 0.9rem;
+    line-height: 1.6;
+  }
+}
+

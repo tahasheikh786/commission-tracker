@@ -21,9 +21,9 @@ class Environment(Base):
     created_at = Column(DateTime, server_default=text('now()'), nullable=False)
     created_by = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False)
     
-    # Add unique constraint for company and environment name
+    # Add unique constraint for user-specific environment names within a company
     __table_args__ = (
-        UniqueConstraint('company_id', 'name', name='uq_company_environment_name'),
+        UniqueConstraint('company_id', 'created_by', 'name', name='uq_user_environment_name'),
     )
 
 class CompanyFieldMapping(Base):

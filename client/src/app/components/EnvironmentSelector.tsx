@@ -126,7 +126,7 @@ export default function EnvironmentSelector({ collapsed }: EnvironmentSelectorPr
             <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700 z-50 max-h-80 overflow-y-auto">
               <div className="p-2">
                 <div className="text-xs text-slate-500 dark:text-slate-400 px-3 py-2 font-semibold">
-                  SWITCH ENVIRONMENT
+                  YOUR ENVIRONMENTS
                 </div>
                 {environments.map((env) => (
                   <button
@@ -200,7 +200,7 @@ export default function EnvironmentSelector({ collapsed }: EnvironmentSelectorPr
             </div>
 
             <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
-              Environments help you organize uploads and data for different carriers, states, or projects.
+              Create your own private environments to organize uploads and data for different carriers, states, or projects. Your environments are only visible to you.
             </p>
 
             <div className="mb-4">
@@ -250,7 +250,7 @@ export default function EnvironmentSelector({ collapsed }: EnvironmentSelectorPr
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100]">
           <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-2xl w-full mx-4 p-6 max-h-[80vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-slate-900 dark:text-white">Manage Environments</h3>
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white">Manage Your Environments</h3>
               <button
                 onClick={() => setShowManageModal(false)}
                 className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"

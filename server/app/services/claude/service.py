@@ -42,6 +42,8 @@ from .models import (
 )
 from .prompts import ClaudePrompts
 from .dynamic_prompts import ClaudeDynamicPrompts
+from .enhanced_prompts import EnhancedClaudePrompts
+from .semantic_extractor import SemanticExtractionService
 from .utils import (
     ClaudePDFProcessor,
     ClaudeTokenEstimator,
@@ -103,6 +105,8 @@ class ClaudeDocumentAIService:
         self.error_handler = ClaudeErrorHandler()
         self.prompts = ClaudePrompts()
         self.dynamic_prompts = ClaudeDynamicPrompts()
+        self.enhanced_prompts = EnhancedClaudePrompts()
+        self.semantic_extractor = SemanticExtractionService()
         
         # Processing statistics
         self.stats = {
@@ -235,14 +239,17 @@ class ClaudeDocumentAIService:
         self,
         carrier_name,
         file_path: str,
-        progress_tracker = None
+        progress_tracker = None,
+        use_enhanced: bool = True  # ⭐ DEFAULT TO TRUE FOR ENHANCED QUALITY
     ) -> Dict[str, Any]:
         """
-        Main entry point for commission data extraction
+        Extract commission data from PDF file.
         
         Args:
+            carrier_name: Name of the insurance carrier
             file_path: Path to PDF file
             progress_tracker: Optional WebSocket progress tracker
+            use_enhanced: If True, use enhanced 3-phase extraction pipeline (DEFAULT: True)
             
         Returns:
             Dictionary with extraction results
@@ -276,6 +283,17 @@ class ClaudeDocumentAIService:
             else:
                 logger.info(f"Standard file ({pdf_info['page_count']} pages, {pdf_info['file_size_mb']:.2f}MB)")
                 result = await self._extract_standard_file(carrier_name, file_path, pdf_info, progress_tracker)
+            
+            # Run enhanced pipeline for successful extractions (enabled by default)
+            if result.get('success') and use_enhanced:
+                logger.info("🚀 Running enhanced 3-phase extraction pipeline...")
+                logger.info(f"   Phase 1: Document Intelligence ✓ (completed)")
+                logger.info(f"   Phase 2: Semantic Extraction → Starting...")
+                logger.info(f"   Phase 3: Intelligent Summarization → Pending...")
+                result = await self._run_enhanced_pipeline(result, file_path, progress_tracker)
+            elif not use_enhanced:
+                logger.warning("⚠️ Enhanced pipeline DISABLED - using standard extraction only")
+                logger.warning("   To enable: set use_enhanced=True or USE_ENHANCED_EXTRACTION=true")
             
             # Update statistics
             processing_time = time.time() - start_time
@@ -828,6 +846,115 @@ class ClaudeDocumentAIService:
                 else 0
             )
         }
+    
+    async def _run_enhanced_pipeline(
+        self,
+        raw_extraction: Dict[str, Any],
+        file_path: str,
+        progress_tracker = None
+    ) -> Dict[str, Any]:
+        """
+        Run the enhanced 3-phase extraction pipeline.
+        
+        Phase 1: Document Intelligence (already done in raw_extraction)
+        Phase 2: Semantic Extraction & Relationship Mapping
+        Phase 3: Intelligent Summarization
+        
+        Args:
+            raw_extraction: Results from standard extraction
+            file_path: Path to PDF file
+            progress_tracker: Optional progress tracking object
+            
+        Returns:
+            Enhanced extraction results with entities, relationships, and intelligent summary
+        """
+        try:
+            # Phase 2: Semantic Extraction & Relationship Mapping
+            if progress_tracker:
+                await progress_tracker.start_stage(
+                    "semantic_analysis",
+                    "Mapping entities and relationships..."
+                )
+            
+            logger.info("📊 Phase 2: Semantic extraction and relationship mapping...")
+            semantic_result = await self.semantic_extractor.extract_entities_and_relationships(
+                raw_extraction,
+                enhanced_extraction=None
+            )
+            
+            if progress_tracker:
+                await progress_tracker.complete_stage(
+                    "semantic_analysis",
+                    "Entity relationships mapped"
+                )
+            
+            # Phase 3: Intelligent Summarization
+            if progress_tracker:
+                await progress_tracker.start_stage(
+                    "summary_generation",
+                    "Generating intelligent summary..."
+                )
+            
+            logger.info("✍️ Phase 3: Intelligent summarization...")
+            logger.info(f"📊 Semantic result keys: {list(semantic_result.keys())}")
+            logger.info(f"   - Entities: {'✅' if 'entities' in semantic_result else '❌'}")
+            logger.info(f"   - Relationships: {'✅' if 'relationships' in semantic_result else '❌'}")
+            logger.info(f"   - Business Intelligence: {'✅' if 'business_intelligence' in semantic_result else '❌'}")
+            
+            # Import conversational summary service
+            from ..conversational_summary_service import ConversationalSummaryService
+            summary_service = ConversationalSummaryService()
+            
+            logger.info(f"📝 Summary service available: {summary_service.is_available()}")
+            
+            if summary_service.is_available():
+                logger.info("🚀 Calling generate_conversational_summary with use_enhanced=True...")
+                summary_result = await summary_service.generate_conversational_summary(
+                    extraction_data=semantic_result,
+                    document_context={
+                        'file_name': os.path.basename(file_path),
+                        'extraction_method': 'claude_enhanced'
+                    },
+                    use_enhanced=True
+                )
+                logger.info(f"✅ Summary generation completed. Success: {summary_result.get('success')}")
+                if summary_result.get('summary'):
+                    logger.info(f"📄 Generated summary (first 200 chars): {summary_result.get('summary')[:200]}...")
+                
+                if progress_tracker:
+                    await progress_tracker.complete_stage(
+                        "summary_generation",
+                        "Intelligent summary generated"
+                    )
+            else:
+                logger.warning("Summary service not available, skipping Phase 3")
+                summary_result = {'summary': 'Summary generation not available'}
+            
+            # Combine all results
+            enhanced_result = {
+                **raw_extraction,  # Include all original extraction data
+                'entities': semantic_result.get('entities', {}),
+                'relationships': semantic_result.get('relationships', {}),
+                'business_intelligence': semantic_result.get('business_intelligence', {}),
+                'summary': summary_result.get('summary', ''),
+                'extraction_pipeline': '3-phase-enhanced',
+                'semantic_extraction_success': semantic_result.get('success', False)
+            }
+            
+            logger.info("✅ Enhanced 3-phase pipeline completed successfully")
+            logger.info(f"📦 Enhanced result keys: {list(enhanced_result.keys())}")
+            logger.info(f"   - Summary length: {len(enhanced_result.get('summary', ''))} characters")
+            logger.info(f"   - Summary preview: {enhanced_result.get('summary', '')[:150]}...")
+            return enhanced_result
+            
+        except Exception as e:
+            logger.error(f"❌ Enhanced pipeline failed: {e}")
+            # Return original extraction on error
+            return {
+                **raw_extraction,
+                'enhanced_pipeline_error': str(e),
+                'extraction_pipeline': 'standard'
+            }
     
     async def extract_summarize_data_via_claude(self, file_path: str) -> Dict[str, Any]:
         """

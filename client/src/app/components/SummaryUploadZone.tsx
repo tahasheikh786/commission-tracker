@@ -89,6 +89,16 @@ export default function CarrierUploadZone({
     setIsExtractionComplete(true);
     // Keep isUploading true so the progress loader stays visible
     
+    // ⭐ UPDATE: If enhanced conversational summary is in results, update n8nResponse
+    if (results.conversational_summary && n8nResponse) {
+      console.log('✨ Updating n8nResponse with enhanced conversational summary');
+      setN8nResponse({
+        ...n8nResponse,
+        summary: results.conversational_summary,  // Replace GPT summary with enhanced
+        enhanced_summary: true  // Flag to indicate this is the enhanced version
+      });
+    }
+    
     // ORIGINAL AUTOMATIC FLOW (commented out for manual control):
     // setIsUploading(false);
     // if (results && results.success) {
@@ -107,7 +117,7 @@ export default function CarrierUploadZone({
     //     ai_intelligence: results.ai_intelligence
     //   });
     // }
-  }, []);
+  }, [n8nResponse]); // Add n8nResponse as dependency for enhanced summary update
   
   const handleWebSocketError = useCallback((errorMsg: string) => {
     console.error('WebSocket error:', errorMsg);
@@ -155,7 +165,7 @@ export default function CarrierUploadZone({
       console.log('📝 Summary:', metadata.summary);
       // Store the complete metadata object, not just the summary
       setIsN8nLoading(false);
-      setN8nResponse(metadata); // Store the complete metadata object
+      setN8nResponse(metadata); // Store the complete metadata object (will be updated when enhanced summary arrives)
       setCompletionDate(new Date().toLocaleString('en-US', {
         year: 'numeric',
         month: 'long',
@@ -239,6 +249,7 @@ export default function CarrierUploadZone({
       formData.append('file', file); // Full file for table extraction
       formData.append('extraction_method', 'smart');  // Use 'smart' to default to Claude AI
       formData.append('upload_id', newUploadId);
+      formData.append('use_enhanced', 'true');  // ⭐ ENABLE enhanced 3-phase extraction for Google Gemini-quality summaries
       
       if (selectedStatementDate) {
         formData.append('statement_date', selectedStatementDate);
@@ -379,59 +390,22 @@ export default function CarrierUploadZone({
           currentStep={wsProgress.currentStep}
           progress={wsProgress.percentage || stageProgress}
           estimatedTime={wsProgress.estimatedTimeRemaining || estimatedTime}
+          conversationalSummary={wsProgress.conversationalSummary}  // ← NEW: Pass conversational summary
           isVisible={true}
           pdfUrl={localPdfUrl}
           onContinue={handleContinue}
           summaryContent={(() => {
-            // Don't show summary during loading or if no response
-            if (isN8nLoading || !n8nResponse) {
-              return null;
+            // Priority 1: Enhanced from WebSocket (CORRECT)
+            if (wsProgress.conversationalSummary) {
+              return wsProgress.conversationalSummary;
             }
             
-            // Create structured content with metadata information
-            if (n8nResponse && typeof n8nResponse === 'object') {
-              let content = ``;
-              
-              // Add carrier information
-              if (n8nResponse.carrier_name) {
-                content += `**🏢 Carrier:** ${n8nResponse.carrier_name}\n\n`;
-              }
-              
-              // Add statement date
-              if (n8nResponse.statement_date) {
-                content += `**📅 Statement Date:** ${n8nResponse.statement_date}\n\n`;
-              }
-              
-              // Add broker information
-              if (n8nResponse.broker_company) {
-                content += `**🏪 Broker:** ${n8nResponse.broker_company}\n\n`;
-              }
-              
-              // Add summary if available
-              if (n8nResponse.summary) {
-                content += `\n${n8nResponse.summary}\n`;
-              }
-            
-              
-              return content;
+            // Priority 2: Enhanced from extraction results
+            if (extractionResults?.conversational_summary) {
+              return extractionResults.conversational_summary;
             }
             
-            // Fallback to original logic for other response types
-            if (n8nResponse.content) {
-              // Look for markdown code blocks anywhere in the content
-              const markdownMatch = n8nResponse.content.match(/```markdown\n([\s\S]*?)\n```/);
-              if (markdownMatch) {
-                return markdownMatch[1]; // Return the content inside the markdown block
-              }
-              
-              // If no markdown block found, return the full content
-              return n8nResponse.content;
-            }
-            
-            if (Array.isArray(n8nResponse) && n8nResponse[0]?.choices?.[0]?.message?.content) {
-              return n8nResponse[0].choices[0].message.content;
-            }
-            
+            // Don't show GPT metadata - wait for enhanced
             return null;
           })()}
           metadataContent={(() => {

@@ -26,6 +26,7 @@ from app.services.extractor_google_docai import GoogleDocAIExtractor
 from app.services.mistral.service import MistralDocumentAIService
 from app.services.claude.service import ClaudeDocumentAIService
 from app.services.excel_extraction_service import ExcelExtractionService
+from app.services.conversational_summary_service import ConversationalSummaryService  # ⭐ ADDED
 from app.services.extraction_utils import normalize_statement_date, normalize_multi_line_headers
 
 # Import timeout configuration
@@ -45,8 +46,14 @@ class EnhancedExtractionService:
     Integrates multiple extraction methods with WebSocket progress updates and timeout handling for large files.
     """
     
-    def __init__(self):
-        """Initialize the enhanced extraction service with timeout configuration."""
+    def __init__(self, use_enhanced: bool = None):
+        """
+        Initialize the enhanced extraction service with timeout configuration.
+        
+        Args:
+            use_enhanced: If True, use enhanced 3-phase extraction pipeline.
+                         If None, check environment variable USE_ENHANCED_EXTRACTION.
+        """
         # PRIMARY: Claude Document AI (NEW - Superior accuracy)
         self.claude_service = ClaudeDocumentAIService()
         
@@ -63,6 +70,9 @@ class EnhancedExtractionService:
         # EXCEL: Specialized Excel extraction
         self.excel_service = ExcelExtractionService()
         
+        # CONVERSATIONAL SUMMARY: Enhanced summarization service
+        self.summary_service = ConversationalSummaryService()
+        
         # Configure timeouts for different processing phases
         self.phase_timeouts = {
             'metadata_extraction': timeout_settings.metadata_extraction,  # 5 minutes
@@ -72,10 +82,18 @@ class EnhancedExtractionService:
             'total_process': timeout_settings.total_extraction  # 30 minutes total
         }
         
+        # Enhanced extraction configuration - DEFAULT TO TRUE FOR BETTER QUALITY
+        if use_enhanced is None:
+            # Check environment variable (default TRUE for enhanced pipeline)
+            self.use_enhanced = os.getenv('USE_ENHANCED_EXTRACTION', 'true').lower() == 'true'
+        else:
+            self.use_enhanced = use_enhanced
+        
         logger.info(f"✅ Enhanced Extraction Service initialized")
         logger.info(f"🆕 PRIMARY: Claude Document AI (extraction) + GPT-4 (AI operations)")
         logger.info(f"📋 FALLBACK: Mistral Document AI")
         logger.info(f"⏱️  Timeout management: {self.phase_timeouts}")
+        logger.info(f"🚀 Enhanced 3-phase pipeline: {'ENABLED' if self.use_enhanced else 'DISABLED'}")
     
     async def _validate_extraction_services(self, extraction_method: str) -> Dict[str, Any]:
         """Validate that extraction services are actually functional before starting."""
@@ -819,7 +837,7 @@ class EnhancedExtractionService:
                 # En tu stage 1.5 de metadata extraction:
                 await progress_tracker.connection_manager.send_step_progress(
                     progress_tracker.upload_id,
-                    percentage=500,
+                    percentage=50,
                     estimated_time="Metadata extraction complete",
                     current_stage="metadata_extraction",
                     # Data adicional:
@@ -847,11 +865,13 @@ class EnhancedExtractionService:
             await progress_tracker.update_progress("table_detection", 20, "Analyzing document with Claude vision")
             
             # Perform actual extraction using Claude
-            logger.info(f"Starting Claude extraction for {file_path}")
+            logger.info(f"Starting Claude extraction for {file_path} (enhanced={self.use_enhanced})")
+            
             result = await self.claude_service.extract_commission_data(
                 file_path=file_path,
                 progress_tracker=progress_tracker,
-                carrier_name = gpt_metadata.get('carrier_name')
+                carrier_name=gpt_metadata.get('carrier_name'),
+                use_enhanced=self.use_enhanced  # ⭐ Enable enhanced 3-phase pipeline
             )
             
             await progress_tracker.update_progress("table_detection", 80, "Processing Claude results")
@@ -878,7 +898,91 @@ class EnhancedExtractionService:
             
             await progress_tracker.complete_stage("table_detection", "Claude extraction completed")
             
-            # Stage 3: Validation
+            # Stage 3: Generate Enhanced Conversational Summary (if enhanced mode enabled)
+            conversational_summary = None
+            
+            logger.info("=" * 80)
+            logger.info("🎯 STAGE 3: CONVERSATIONAL SUMMARY GENERATION")
+            logger.info("=" * 80)
+            logger.info(f"   - Enhanced mode enabled: {self.use_enhanced}")
+            logger.info(f"   - Result has 'summary': {result.get('summary') is not None}")
+            logger.info(f"   - Summary service available: {self.summary_service.is_available()}")
+            
+            if self.use_enhanced and result.get('success') and result.get('summary'):
+                # Enhanced pipeline already generated summary in Claude service
+                conversational_summary = result.get('summary')
+                logger.info(f"✅ Using enhanced summary from Claude pipeline")
+                logger.info(f"   Summary length: {len(conversational_summary)} characters")
+                logger.info(f"   Summary preview: {conversational_summary[:200]}...")
+                
+                # ✅ FIX: Send Claude-generated summary immediately via WebSocket
+                if upload_id_uuid and progress_tracker:
+                    logger.info("📤 Sending Claude-generated summary to frontend via WebSocket NOW")
+                    await progress_tracker.connection_manager.send_step_progress(
+                        progress_tracker.upload_id,
+                        percentage=70,  # Right after table extraction
+                        estimated_time='Enhanced summary ready',
+                        current_stage='summary_complete',
+                        conversational_summary=conversational_summary
+                    )
+                    logger.info("✅ Claude-generated summary sent to frontend successfully")
+            elif self.use_enhanced and self.summary_service.is_available():
+                # Generate enhanced summary if Claude didn't provide one
+                try:
+                    logger.info("🗣️ Generating enhanced conversational summary...")
+                    await progress_tracker.start_stage("summary_generation", "Generating intelligent summary")
+                    
+                    summary_result = await self.summary_service.generate_conversational_summary(
+                        extraction_data=result,
+                        document_context={
+                            'file_name': file_path,
+                            'extraction_method': 'claude_enhanced'
+                        },
+                        use_enhanced=True  # ⭐ Use enhanced prompts
+                    )
+                    
+                    if summary_result.get('success'):
+                        conversational_summary = summary_result.get('summary')
+                        logger.info(f"✅ Enhanced summary generated: {conversational_summary[:100]}...")
+                        
+                        # ✅ FIX: Send enhanced summary immediately via WebSocket
+                        if upload_id_uuid and progress_tracker:
+                            logger.info("📤 Sending enhanced summary to frontend via WebSocket NOW")
+                            await progress_tracker.connection_manager.send_step_progress(
+                                progress_tracker.upload_id,
+                                percentage=70,  # Right after table extraction
+                                estimated_time='Enhanced summary ready',
+                                current_stage='summary_complete',
+                                conversational_summary=conversational_summary
+                            )
+                            logger.info("✅ Enhanced summary sent to frontend successfully")
+                    
+                    await progress_tracker.complete_stage("summary_generation", "Summary complete")
+                    
+                except Exception as summary_error:
+                    logger.error(f"Enhanced summary generation failed: {summary_error}")
+                    conversational_summary = None
+            
+            # Use enhanced summary if available, otherwise fall back to GPT metadata
+            if conversational_summary:
+                logger.info("=" * 80)
+                logger.info("📝 FINAL SUMMARY SELECTION: ENHANCED CONVERSATIONAL")
+                logger.info("=" * 80)
+                logger.info(f"   Summary length: {len(conversational_summary)} characters")
+                logger.info(f"   Full summary:\n{conversational_summary}")
+                logger.info("=" * 80)
+                gpt_metadata['summary'] = conversational_summary
+                gpt_metadata['summary_type'] = 'enhanced_conversational'
+            else:
+                logger.warning("=" * 80)
+                logger.warning("⚠️ FINAL SUMMARY SELECTION: STANDARD GPT METADATA")
+                logger.warning("=" * 80)
+                logger.warning("   No enhanced summary available - using fallback")
+                logger.warning(f"   GPT metadata summary: {gpt_metadata.get('summary', 'N/A')[:200]}...")
+                logger.warning("=" * 80)
+                gpt_metadata['summary_type'] = 'standard_gpt'
+            
+            # Stage 4: Validation
             await progress_tracker.start_stage("validation", "Validating Claude results")
             await progress_tracker.update_progress("validation", 100, "Validation completed")
             
@@ -895,7 +999,8 @@ class EnhancedExtractionService:
                 'extracted_carrier': result.get('extracted_carrier'),
                 'extracted_date': result.get('extracted_date'),
                 'extraction_quality': result.get('extraction_quality', {}),
-                'gpt_metadata': gpt_metadata
+                'gpt_metadata': gpt_metadata,  # Now includes enhanced summary
+                'conversational_summary': conversational_summary  # ⭐ NEW: Enhanced summary
             })
             
             return result

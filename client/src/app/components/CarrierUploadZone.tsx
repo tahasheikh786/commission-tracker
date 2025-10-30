@@ -210,6 +210,7 @@ export default function CarrierUploadZone({
       formData.append('file', file);
       formData.append('extraction_method', 'smart');  // Use 'smart' to default to Claude AI
       formData.append('upload_id', newUploadId);
+      formData.append('use_enhanced', 'true');  // ⭐ ENABLE enhanced 3-phase extraction for Google Gemini-quality summaries
       
       if (selectedStatementDate) {
         formData.append('statement_date', selectedStatementDate);
@@ -315,6 +316,7 @@ export default function CarrierUploadZone({
           currentStep={wsProgress.currentStep}
           progress={wsProgress.percentage || stageProgress}
           estimatedTime={wsProgress.estimatedTimeRemaining || estimatedTime}
+          conversationalSummary={wsProgress.conversationalSummary}  // ← NEW: Pass conversational summary
           isVisible={true}
         />
       </div>

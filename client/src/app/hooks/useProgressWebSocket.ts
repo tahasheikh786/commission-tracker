@@ -37,6 +37,7 @@ export interface ProgressState {
   estimatedTimeRemaining: string | null;
   isConnected: boolean;
   error: string | null;
+  conversationalSummary?: string | null;  // ← NEW: Natural language summary
 }
 
 export interface ProgressMessage {
@@ -53,7 +54,8 @@ export interface ProgressMessage {
   session_id?: string;
   connection_count?: number;
   current_stage?: string;
-  stage_details?: any; 
+  stage_details?: any;
+  conversational_summary?: string;  // ← NEW: Natural language summary
 }
 
 interface UseProgressWebSocketOptions {
@@ -77,7 +79,8 @@ export function useProgressWebSocket({
     message: '',
     estimatedTimeRemaining: null,
     isConnected: false,
-    error: null
+    error: null,
+    conversationalSummary: null  // ← NEW: Initialize summary field
   });
 
   const wsRef = useRef<WebSocket | null>(null);
@@ -355,12 +358,24 @@ export function useProgressWebSocket({
         break;
 
       case 'STEP_PROGRESS':
+        // Debug logging for all data keys
+        if (data.current_stage === 'summary_complete' || data.conversational_summary) {
+          console.log('📊 [STEP_PROGRESS] Full data:', data);
+          console.log('🔑 [STEP_PROGRESS] Data keys:', Object.keys(data));
+        }
+        
         setProgress(prev => ({
           ...prev,
           percentage: data.percentage ?? prev.percentage,
           estimatedTimeRemaining: data.estimatedTime ?? prev.estimatedTimeRemaining,
-          message: data.message || prev.message
+          message: data.message || prev.message,
+          conversationalSummary: data.conversational_summary ?? prev.conversationalSummary  // ← NEW: Handle summary
         }));
+
+        // ← NEW: Log when conversational summary arrives
+        if (data.conversational_summary) {
+          console.log('✨ Conversational summary received:', data.conversational_summary);
+        }
 
         // Manejar metadata si existe
         if (data.current_stage === 'metadata_extraction' && data.stage_details) {
@@ -382,11 +397,21 @@ export function useProgressWebSocket({
         break;
 
       case 'EXTRACTION_COMPLETE':
+        // ← NEW: Log conversational summary from extraction results
+        console.log('📦 [EXTRACTION_COMPLETE] Full results:', data.results);
+        if (data.results?.conversational_summary) {
+          console.log('✨ [EXTRACTION_COMPLETE] Conversational summary found:', data.results.conversational_summary);
+        } else {
+          console.warn('⚠️ [EXTRACTION_COMPLETE] No conversational summary in results');
+          console.log('🔍 Available keys in results:', data.results ? Object.keys(data.results) : 'No results');
+        }
+        
         setProgress(prev => ({
           ...prev,
           currentStep: 4, // Final step (0-indexed, so step 5 = index 4)
           percentage: 100,
-          message: 'Extraction complete!'
+          message: 'Extraction complete!',
+          conversationalSummary: data.results?.conversational_summary ?? prev.conversationalSummary  // ← NEW: Extract summary from results
         }));
         if (onExtractionCompleteRef.current && data.results) {
           onExtractionCompleteRef.current(data.results);
@@ -424,7 +449,8 @@ export function useProgressWebSocket({
       message: '',
       estimatedTimeRemaining: null,
       isConnected: false,
-      error: null
+      error: null,
+      conversationalSummary: null  // ← NEW: Reset summary
     });
     reconnectAttemptsRef.current = 0;
   }, [disconnect]);

@@ -1,0 +1,139 @@
+✅ WebSocket connected successfully for uploadId: upload_1761857380278_6gy8hi6vc
+useProgressWebSocket.ts:261 ✅ WebSocket connection confirmed by server
+useProgressWebSocket.ts:256 🏓 Received pong from server
+VM31561 SummaryUploadZone.tsx:216 ✅ Proceeding with file upload
+VM31561 SummaryUploadZone.tsx:230 📤 Starting table extraction API call with uploadId: upload_1761857380278_6gy8hi6vc
+useProgressWebSocket.ts:265 📨 WebSocket message: 
+{type: 'STEP_STARTED', upload_id: 'upload_1761857380278_6gy8hi6vc', stepIndex: 0, stepId: 'upload', stepTitle: 'Uploading File', …}
+useProgressWebSocket.ts:265 📨 WebSocket message: 
+{type: 'progress_update', upload_id: 'upload_1761857380278_6gy8hi6vc', progress: {…}, timestamp: '2025-10-30T20:49:58.896681'}
+useProgressWebSocket.ts:440 Unknown message type: progress_update
+useProgressWebSocket.ts:265 📨 WebSocket message: 
+{type: 'progress_update', upload_id: 'upload_1761857380278_6gy8hi6vc', progress: {…}, timestamp: '2025-10-30T20:49:58.897171'}
+useProgressWebSocket.ts:440 Unknown message type: progress_update
+useProgressWebSocket.ts:265 📨 WebSocket message: 
+{type: 'progress_update', upload_id: 'upload_1761857380278_6gy8hi6vc', progress: {…}, timestamp: '2025-10-30T20:49:58.997943'}
+useProgressWebSocket.ts:440 Unknown message type: progress_update
+useProgressWebSocket.ts:265 📨 WebSocket message: 
+{type: 'progress_update', upload_id: 'upload_1761857380278_6gy8hi6vc', progress: {…}, timestamp: '2025-10-30T20:49:58.998425'}
+useProgressWebSocket.ts:440 Unknown message type: progress_update
+useProgressWebSocket.ts:265 📨 WebSocket message: 
+{type: 'progress_update', upload_id: 'upload_1761857380278_6gy8hi6vc', progress: {…}, timestamp: '2025-10-30T20:49:58.998672'}
+useProgressWebSocket.ts:440 Unknown message type: progress_update
+useProgressWebSocket.ts:265 📨 WebSocket message: 
+{type: 'STEP_STARTED', upload_id: 'upload_1761857380278_6gy8hi6vc', stepIndex: 1, stepId: 'extraction', stepTitle: 'Extracting Metadata', …}
+useProgressWebSocket.ts:220 💓 Heartbeat sent to maintain connection
+useProgressWebSocket.ts:265 📨 WebSocket message: 
+{type: 'STEP_PROGRESS', upload_id: 'upload_1761857380278_6gy8hi6vc', percentage: 500, estimatedTime: 'Metadata extraction complete', timestamp: '2025-10-30T20:50:12.599808', …}
+useProgressWebSocket.ts:384 🏷️ Extraction summary complete: undefined
+VM31561 SummaryUploadZone.tsx:141 📊 Metadata received: 
+{carrier_name: 'Allied Benefit Systems', statement_date: '2025-08-06', broker_company: 'INNOVATIVE BPS LLC', summary: 'Document name/number: G0223428\nDocument date: 8/6/…billing periods, invoice totals, and agent rates.'}
+VM31561 SummaryUploadZone.tsx:142 📅 Carrier: Allied Benefit Systems
+VM31561 SummaryUploadZone.tsx:143 📅 Statement Date: 2025-08-06
+VM31561 SummaryUploadZone.tsx:144 🏢 Broker: INNOVATIVE BPS LLC
+VM31561 SummaryUploadZone.tsx:145 📝 Summary: Document name/number: G0223428
+Document date: 8/6/2025
+Total amount: Not specified
+Currency: Not specified
+Vendor name: Allied Benefit Systems
+Customer name: INNOVATIVE BPS LLC
+Additional metadata: Payment type: EFT
+Complete summary about the document: This is a commission payment summary from Allied Benefit Systems for INNOVATIVE BPS LLC, detailing various group commissions with specific billing periods, invoice totals, and agent rates.
+VM31561 SummaryUploadZone.tsx:159 ✅ File successfully summarized 
+{carrier_name: 'Allied Benefit Systems', statement_date: '2025-08-06', broker_company: 'INNOVATIVE BPS LLC', summary: 'Document name/number: G0223428\nDocument date: 8/6/…billing periods, invoice totals, and agent rates.'}
+SummaryProgressLoader .tsx:97 ⚠️ [SummaryProgressLoader] No conversational summary yet (progress: 500 %)
+useProgressWebSocket.ts:265 📨 WebSocket message: 
+{type: 'STEP_STARTED', upload_id: 'upload_1761857380278_6gy8hi6vc', stepIndex: 2, stepId: 'table_extraction', stepTitle: 'Processing Table Data', …}
+useProgressWebSocket.ts:265 📨 WebSocket message: 
+{type: 'progress_update', upload_id: 'upload_1761857380278_6gy8hi6vc', progress: {…}, timestamp: '2025-10-30T20:50:12.601201'}
+useProgressWebSocket.ts:440 Unknown message type: progress_update
+useProgressWebSocket.ts:265 📨 WebSocket message: 
+{type: 'progress_update', upload_id: 'upload_1761857380278_6gy8hi6vc', progress: {…}, timestamp: '2025-10-30T20:50:12.602045'}
+useProgressWebSocket.ts:440 Unknown message type: progress_update
+useProgressWebSocket.ts:265 📨 WebSocket message: 
+{type: 'progress_update', upload_id: 'upload_1761857380278_6gy8hi6vc', progress: {…}, timestamp: '2025-10-30T20:50:12.602607'}
+useProgressWebSocket.ts:440 Unknown message type: progress_update
+useProgressWebSocket.ts:265 📨 WebSocket message: 
+{type: 'progress_update', upload_id: 'upload_1761857380278_6gy8hi6vc', progress: {…}, timestamp: '2025-10-30T20:50:12.606662'}
+useProgressWebSocket.ts:440 Unknown message type: progress_update
+useProgressWebSocket.ts:265 📨 WebSocket message: 
+{type: 'progress_update', upload_id: 'upload_1761857380278_6gy8hi6vc', progress: {…}, timestamp: '2025-10-30T20:50:12.608512'}
+useProgressWebSocket.ts:440 Unknown message type: progress_update
+useProgressWebSocket.ts:265 📨 WebSocket message: 
+{type: 'progress_update', upload_id: 'upload_1761857380278_6gy8hi6vc', progress: {…}, timestamp: '2025-10-30T20:50:12.608978'}
+useProgressWebSocket.ts:440 Unknown message type: progress_update
+useProgressWebSocket.ts:265 📨 WebSocket message: 
+{type: 'progress_update', upload_id: 'upload_1761857380278_6gy8hi6vc', progress: {…}, timestamp: '2025-10-30T20:50:12.609224'}
+useProgressWebSocket.ts:440 Unknown message type: progress_update
+3
+useProgressWebSocket.ts:247 🏓 Responded to server ping with pong
+useProgressWebSocket.ts:220 💓 Heartbeat sent to maintain connection
+2
+useProgressWebSocket.ts:247 🏓 Responded to server ping with pong
+useProgressWebSocket.ts:220 💓 Heartbeat sent to maintain connection
+2
+useProgressWebSocket.ts:247 🏓 Responded to server ping with pong
+useProgressWebSocket.ts:265 📨 WebSocket message: 
+{type: 'progress_update', upload_id: 'upload_1761857380278_6gy8hi6vc', progress: {…}, timestamp: '2025-10-30T20:51:30.700052'}
+useProgressWebSocket.ts:440 Unknown message type: progress_update
+useProgressWebSocket.ts:265 📨 WebSocket message: 
+{type: 'progress_update', upload_id: 'upload_1761857380278_6gy8hi6vc', progress: {…}, timestamp: '2025-10-30T20:51:30.701175'}
+useProgressWebSocket.ts:440 Unknown message type: progress_update
+useProgressWebSocket.ts:265 📨 WebSocket message: 
+{type: 'progress_update', upload_id: 'upload_1761857380278_6gy8hi6vc', progress: {…}, timestamp: '2025-10-30T20:51:30.701862'}
+useProgressWebSocket.ts:440 Unknown message type: progress_update
+useProgressWebSocket.ts:265 📨 WebSocket message: 
+{type: 'progress_update', upload_id: 'upload_1761857380278_6gy8hi6vc', progress: {…}, timestamp: '2025-10-30T20:51:30.702787'}
+useProgressWebSocket.ts:440 Unknown message type: progress_update
+useProgressWebSocket.ts:265 📨 WebSocket message: 
+{type: 'progress_update', upload_id: 'upload_1761857380278_6gy8hi6vc', progress: {…}, timestamp: '2025-10-30T20:51:30.703684'}
+useProgressWebSocket.ts:440 Unknown message type: progress_update
+useProgressWebSocket.ts:265 📨 WebSocket message: 
+{type: 'progress_update', upload_id: 'upload_1761857380278_6gy8hi6vc', progress: {…}, timestamp: '2025-10-30T20:51:30.706638'}
+useProgressWebSocket.ts:440 Unknown message type: progress_update
+useProgressWebSocket.ts:265 📨 WebSocket message: 
+{type: 'progress_update', upload_id: 'upload_1761857380278_6gy8hi6vc', progress: {…}, timestamp: '2025-10-30T20:51:30.706926'}
+useProgressWebSocket.ts:440 Unknown message type: progress_update
+hot-reloader-client.js:197 [Fast Refresh] rebuilding
+report-hmr-latency.js:14 [Fast Refresh] done in 2196ms
+useProgressWebSocket.ts:265 📨 WebSocket message: 
+{type: 'progress_update', upload_id: 'upload_1761857380278_6gy8hi6vc', progress: {…}, timestamp: '2025-10-30T20:51:40.198923'}
+useProgressWebSocket.ts:440 Unknown message type: progress_update
+useProgressWebSocket.ts:265 📨 WebSocket message: 
+{type: 'progress_update', upload_id: 'upload_1761857380278_6gy8hi6vc', progress: {…}, timestamp: '2025-10-30T20:51:40.199607'}
+useProgressWebSocket.ts:440 Unknown message type: progress_update
+useProgressWebSocket.ts:220 💓 Heartbeat sent to maintain connection
+useProgressWebSocket.ts:265 📨 WebSocket message: 
+{type: 'progress_update', upload_id: 'upload_1761857380278_6gy8hi6vc', progress: {…}, timestamp: '2025-10-30T20:51:40.499487'}
+useProgressWebSocket.ts:440 Unknown message type: progress_update
+useProgressWebSocket.ts:265 📨 WebSocket message: 
+{type: 'progress_update', upload_id: 'upload_1761857380278_6gy8hi6vc', progress: {…}, timestamp: '2025-10-30T20:51:40.500490'}
+useProgressWebSocket.ts:440 Unknown message type: progress_update
+useProgressWebSocket.ts:265 📨 WebSocket message: 
+{type: 'progress_update', upload_id: 'upload_1761857380278_6gy8hi6vc', progress: {…}, timestamp: '2025-10-30T20:51:40.500759'}
+useProgressWebSocket.ts:440 Unknown message type: progress_update
+useProgressWebSocket.ts:265 📨 WebSocket message: 
+{type: 'completion', upload_id: 'upload_1761857380278_6gy8hi6vc', result: {…}, timestamp: '2025-10-30T20:51:40.501113'}
+useProgressWebSocket.ts:440 Unknown message type: completion
+useProgressWebSocket.ts:247 🏓 Responded to server ping with pong
+useProgressWebSocket.ts:265 📨 WebSocket message: 
+{type: 'STEP_STARTED', upload_id: 'upload_1761857380278_6gy8hi6vc', stepIndex: 5, stepId: 'finalizing', stepTitle: 'Finalizing', …}
+SummaryProgressLoader .tsx:97 ⚠️ [SummaryProgressLoader] No conversational summary yet (progress: 90 %)
+useProgressWebSocket.ts:265 📨 WebSocket message: 
+{type: 'STEP_PROGRESS', upload_id: 'upload_1761857380278_6gy8hi6vc', percentage: 95, estimatedTime: 'Summary ready', timestamp: '2025-10-30T20:51:50.887302', …}
+useProgressWebSocket.ts:363 📊 [STEP_PROGRESS] Full data: 
+{type: 'STEP_PROGRESS', upload_id: 'upload_1761857380278_6gy8hi6vc', percentage: 95, estimatedTime: 'Summary ready', timestamp: '2025-10-30T20:51:50.887302', …}
+useProgressWebSocket.ts:364 🔑 [STEP_PROGRESS] Data keys: 
+(7) ['type', 'upload_id', 'percentage', 'estimatedTime', 'timestamp', 'current_stage', 'conversational_summary']
+useProgressWebSocket.ts:377 ✨ Conversational summary received: This is  an Allied Benefit Systems commission statement for INNOVATIVE BPS LLC dated August 6, 2025, covering 70 commission entries across 11 distinct logistics and transportation groups, though the total commission amount shows a net debit of $141.14 due to significant negative adjustments. PRIDE DELIVERY SERVIC emerges as the top performer with gross commissions totaling $2,318.37 (including payments of $1,256.53 and $1,194.57 offset by a $132.73 deduction), followed by LUDICROUS SPEED LOGI generating $1,389.84 across multiple entries (with the largest single payment at $925.23), and SITIJI IN showing extensive activity with 47 separate line items totaling approximately $930 in positive commissions before adjustments. The statement reveals a complex portfolio heavily weighted toward logistics companies, with notable patterns including multiple recurring monthly charges and reversals for SITIJI IN (alternating between $58.62 credits and $61.14 debits), complete forfeitures for BTK RUSH IN ($305.40 in total debits), and mixed performance across the transportation sector with several groups showing both positive earnings and subsequent chargebacks.
+SummaryProgressLoader .tsx:95 📝 [SummaryProgressLoader] Conversational summary received: This is  an Allied Benefit Systems commission statement for INNOVATIVE BPS LLC dated August 6, 2025, covering 70 commission entries across 11 distinct logistics and transportation groups, though the total commission amount shows a net debit of $141.14 due to significant negative adjustments. PRIDE DELIVERY SERVIC emerges as the top performer with gross commissions totaling $2,318.37 (including payments of $1,256.53 and $1,194.57 offset by a $132.73 deduction), followed by LUDICROUS SPEED LOGI generating $1,389.84 across multiple entries (with the largest single payment at $925.23), and SITIJI IN showing extensive activity with 47 separate line items totaling approximately $930 in positive commissions before adjustments. The statement reveals a complex portfolio heavily weighted toward logistics companies, with notable patterns including multiple recurring monthly charges and reversals for SITIJI IN (alternating between $58.62 credits and $61.14 debits), complete forfeitures for BTK RUSH IN ($305.40 in total debits), and mixed performance across the transportation sector with several groups showing both positive earnings and subsequent chargebacks.
+useProgressWebSocket.ts:265 📨 WebSocket message: 
+{type: 'EXTRACTION_COMPLETE', upload_id: 'upload_1761857380278_6gy8hi6vc', results: {…}, timestamp: '2025-10-30T20:51:50.889117'}
+useProgressWebSocket.ts:401 📦 [EXTRACTION_COMPLETE] Full results: 
+{success: true, upload_id: 'a3a66b3b-c7f2-4ec0-8714-944f5e76e81a', tables: Array(1), file_name: 'statements/22a632c3-1d14-415a-9411-7e451c18dfde/8.6.2025.pdf', gcs_url: 'https://storage.googleapis.com/pdf_extraction_file…fad17cabe984d05e9730efa959d2f8a900373fd26dcca3abf', …}
+useProgressWebSocket.ts:403 ✨ [EXTRACTION_COMPLETE] Conversational summary found: This is  an Allied Benefit Systems commission statement for INNOVATIVE BPS LLC dated August 6, 2025, covering 70 commission entries across 11 distinct logistics and transportation groups, though the total commission amount shows a net debit of $141.14 due to significant negative adjustments. PRIDE DELIVERY SERVIC emerges as the top performer with gross commissions totaling $2,318.37 (including payments of $1,256.53 and $1,194.57 offset by a $132.73 deduction), followed by LUDICROUS SPEED LOGI generating $1,389.84 across multiple entries (with the largest single payment at $925.23), and SITIJI IN showing extensive activity with 47 separate line items totaling approximately $930 in positive commissions before adjustments. The statement reveals a complex portfolio heavily weighted toward logistics companies, with notable patterns including multiple recurring monthly charges and reversals for SITIJI IN (alternating between $58.62 credits and $61.14 debits), complete forfeitures for BTK RUSH IN ($305.40 in total debits), and mixed performance across the transportation sector with several groups showing both positive earnings and subsequent chargebacks.
+VM31561 SummaryUploadZone.tsx:67 ✨ Updating n8nResponse with enhanced conversational summary
+SummaryProgressLoader .tsx:95 📝 [SummaryProgressLoader] Conversational summary received: This is  an Allied Benefit Systems commission statement for INNOVATIVE BPS LLC dated August 6, 2025, covering 70 commission entries across 11 distinct logistics and transportation groups, though the total commission amount shows a net debit of $141.14 due to significant negative adjustments. PRIDE DELIVERY SERVIC emerges as the top performer with gross commissions totaling $2,318.37 (including payments of $1,256.53 and $1,194.57 offset by a $132.73 deduction), followed by LUDICROUS SPEED LOGI generating $1,389.84 across multiple entries (with the largest single payment at $925.23), and SITIJI IN showing extensive activity with 47 separate line items totaling approximately $930 in positive commissions before adjustments. The statement reveals a complex portfolio heavily weighted toward logistics companies, with notable patterns including multiple recurring monthly charges and reversals for SITIJI IN (alternating between $58.62 credits and $61.14 debits), complete forfeitures for BTK RUSH IN ($305.40 in total debits), and mixed performance across the transportation sector with several groups showing both positive earnings and subsequent chargebacks.
+VM31561 SummaryUploadZone.tsx:244 Table extraction started, WebSocket will handle progress updates
+useProgressWebSocket.ts:304 🔌 WebSocket disconnected for uploadId: upload_1761857380278_6gy8hi6vc
+useProgressWebSocket.ts:305 Close code: 1000 Reason: Client disconnect
