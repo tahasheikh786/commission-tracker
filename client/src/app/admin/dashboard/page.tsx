@@ -21,7 +21,8 @@ import {
   Edit,
   MoreVertical,
   RotateCcw,
-  UserX
+  UserX,
+  Loader
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
@@ -80,6 +81,8 @@ export default function AdminDashboard() {
   const [showAddDomain, setShowAddDomain] = useState(false);
   const [newDomain, setNewDomain] = useState('');
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+  const [resettingUserId, setResettingUserId] = useState<string | null>(null);
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
 
   useEffect(() => {
     // Wait for authentication to complete before fetching data
@@ -196,6 +199,7 @@ export default function AdminDashboard() {
     }
 
     try {
+      setDeletingUserId(userId);
       await axios.delete(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/users/${userId}`, {
         withCredentials: true  // CRITICAL FIX: Ensure cookies are sent
       });
@@ -203,6 +207,8 @@ export default function AdminDashboard() {
       fetchAdminData();
     } catch (err) {
       toast.error('Failed to delete user');
+    } finally {
+      setDeletingUserId(null);
     }
   };
 
@@ -212,6 +218,7 @@ export default function AdminDashboard() {
     }
 
     try {
+      setResettingUserId(userId);
       await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/users/${userId}/reset-data`, {}, {
         withCredentials: true  // CRITICAL FIX: Ensure cookies are sent
       });
@@ -219,6 +226,8 @@ export default function AdminDashboard() {
       fetchAdminData();
     } catch (err) {
       toast.error('Failed to reset user data');
+    } finally {
+      setResettingUserId(null);
     }
   };
 
@@ -351,6 +360,23 @@ export default function AdminDashboard() {
   return (
     <ProtectedRoute requireAuth={true} requireAdmin={true}>
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-100/50">
+      {/* Global Loading Overlay */}
+      {(resettingUserId || deletingUserId) && (
+        <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center">
+          <div className="bg-white rounded-2xl p-8 shadow-2xl flex flex-col items-center gap-4">
+            <Loader className="w-12 h-12 text-blue-600 animate-spin" />
+            <p className="text-lg font-semibold text-slate-800">
+              {resettingUserId ? 'Resetting User Data...' : 'Deleting User...'}
+            </p>
+            <p className="text-sm text-slate-600 max-w-xs text-center">
+              {resettingUserId 
+                ? 'This will clear all uploaded data but keep the user account active.' 
+                : 'This will permanently remove the user and all their data.'}
+            </p>
+          </div>
+        </div>
+      )}
+      
       {/* Header */}
       <header className="bg-white/95 backdrop-blur-xl border-b border-slate-200 shadow-xl sticky top-0 z-50">
         <div className="w-[90%] mx-auto px-6 py-4">
@@ -558,10 +584,19 @@ export default function AdminDashboard() {
                                 resetUserData(user.id);
                                 setOpenDropdown(null);
                               }}
-                              className="w-full px-4 py-3 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors rounded-t-xl"
+                              disabled={resettingUserId === user.id || deletingUserId === user.id}
+                              className={`w-full px-4 py-3 text-left text-sm flex items-center gap-2 transition-colors rounded-t-xl ${
+                                resettingUserId === user.id || deletingUserId === user.id
+                                  ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                                  : 'text-slate-700 hover:bg-slate-50'
+                              }`}
                             >
-                              <RotateCcw className="w-4 h-4" />
-                              Reset User Data
+                              {resettingUserId === user.id ? (
+                                <Loader className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <RotateCcw className="w-4 h-4" />
+                              )}
+                              {resettingUserId === user.id ? 'Resetting...' : 'Reset User Data'}
                             </button>
                             <button
                               onClick={(e) => {
@@ -569,10 +604,19 @@ export default function AdminDashboard() {
                                 deleteUser(user.id);
                                 setOpenDropdown(null);
                               }}
-                              className="w-full px-4 py-3 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors rounded-b-xl"
+                              disabled={resettingUserId === user.id || deletingUserId === user.id}
+                              className={`w-full px-4 py-3 text-left text-sm flex items-center gap-2 transition-colors rounded-b-xl ${
+                                resettingUserId === user.id || deletingUserId === user.id
+                                  ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                                  : 'text-red-600 hover:bg-red-50'
+                              }`}
                             >
-                              <UserX className="w-4 h-4" />
-                              Delete User
+                              {deletingUserId === user.id ? (
+                                <Loader className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <UserX className="w-4 h-4" />
+                              )}
+                              {deletingUserId === user.id ? 'Deleting...' : 'Delete User'}
                             </button>
                           </div>
                         )}

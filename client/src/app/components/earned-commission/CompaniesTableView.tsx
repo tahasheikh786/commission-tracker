@@ -25,7 +25,6 @@ import {
   TablePagination,
   EmptyState,
   LoadingSkeleton,
-  BulkActionsBar,
   formatTableCurrency,
   sortTableData,
   filterTableData,
@@ -72,6 +71,8 @@ interface CommissionData {
 interface CompanyTableRow extends CommissionData {
   companyName: string;
   carrierName: string;
+  carrier_names?: string[];
+  carrier_count?: number;
   year: number;
   commission: number;
   invoice: number;
@@ -91,6 +92,9 @@ interface CompaniesTableViewProps {
     targetId: string | null;
   };
   onViewInCarrier?: (company: CommissionData) => void;
+  selectedCarrierId?: string | null;
+  onCarrierFilterChange?: (carrierId: string | null) => void;
+  availableCarriers?: { id: string; name: string }[];
 }
 
 // ============================================
@@ -199,9 +203,6 @@ const MonthlyCell: React.FC<MonthlyCellProps> = ({ value, month, maxValue, index
       )}>
         <div className={cn("text-sm font-bold text-center tabular-nums", textColor)}>
           {formatCurrencyCompact(value)}
-        </div>
-        <div className={cn("text-[10px] text-center font-semibold mt-0.5", percentageColor)}>
-          {percentage.toFixed(0)}%
         </div>
       </div>
       
@@ -392,6 +393,23 @@ const ExpandedCompanyContent: React.FC<ExpandedCompanyContentProps> = ({
               <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">Commission Rate</p>
               <CommissionRateBadge rate={company.rate} />
             </div>
+            
+            {/* Carrier Badges */}
+            {company.carrier_names && company.carrier_names.length > 0 && (
+              <div className="pt-2">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">Carriers ({company.carrier_count || company.carrier_names.length})</p>
+                <div className="flex flex-wrap gap-1">
+                  {company.carrier_names.map((carrier: string, idx: number) => (
+                    <span
+                      key={idx}
+                      className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300"
+                    >
+                      {carrier}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </motion.div>
 
@@ -524,32 +542,41 @@ export default function CompaniesTableView({
   onDelete,
   onMerge,
   navigationContext,
-  onViewInCarrier
+  onViewInCarrier,
+  selectedCarrierId,
+  onCarrierFilterChange,
+  availableCarriers = []
 }: CompaniesTableViewProps) {
   // State
   const [searchQuery, setSearchQuery] = useState('');
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' }>({
-    key: 'commission_earned',
-    direction: 'desc'
+    key: 'companyName',
+    direction: 'asc'
   });
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
-  const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [activeFilters, setActiveFilters] = useState<Record<string, any>>({});
 
   // Transform data to table rows
   const tableRows: CompanyTableRow[] = useMemo(() => {
-    return data.map(company => ({
-      ...company,
-      companyName: company.client_name,
-      carrierName: company.carrier_name || 'Unknown',
-      year: company.statement_year || new Date().getFullYear(),
-      commission: company.commission_earned,
-      invoice: company.invoice_total,
-      statements: company.statement_count,
-      rate: company.invoice_total > 0 ? (company.commission_earned / company.invoice_total) * 100 : 0
-    }));
+    return data.map(company => {
+      const carrierNames = (company as any).carrier_names;
+      const carrierCount = (company as any).carrier_count;
+      
+      return {
+        ...company,
+        companyName: company.client_name,
+        carrierName: carrierNames ? carrierNames.join(', ') : (company.carrier_name || 'Unknown'),
+        carrier_names: carrierNames,
+        carrier_count: carrierCount,
+        year: company.statement_year || new Date().getFullYear(),
+        commission: company.commission_earned,
+        invoice: company.invoice_total,
+        statements: company.statement_count,
+        rate: company.invoice_total > 0 ? (company.commission_earned / company.invoice_total) * 100 : 0
+      };
+    });
   }, [data]);
 
   // Apply filters and search
@@ -599,37 +626,12 @@ export default function CompaniesTableView({
     });
   };
 
-  const toggleRowSelection = (rowId: string) => {
-    setSelectedRows(prev => {
-      const next = new Set(prev);
-      if (next.has(rowId)) {
-        next.delete(rowId);
-      } else {
-        next.add(rowId);
-      }
-      return next;
-    });
-  };
-
-  const toggleAllSelection = () => {
-    if (selectedRows.size === paginatedData.length) {
-      setSelectedRows(new Set());
-    } else {
-      setSelectedRows(new Set(paginatedData.map(row => row.id)));
-    }
-  };
 
   const handleExport = () => {
     // TODO: Implement export functionality
-    console.log('Export selected:', Array.from(selectedRows));
+    console.log('Export data');
   };
 
-  const handleBulkDelete = () => {
-    if (onDelete) {
-      onDelete(Array.from(selectedRows));
-      setSelectedRows(new Set());
-    }
-  };
 
   // Monthly column names
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -664,12 +666,16 @@ export default function CompaniesTableView({
             {value.charAt(0).toUpperCase()}
           </div>
           <div className="flex flex-col">
-            <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-              {value}
-            </span>
-            <span className="text-xs text-slate-500 dark:text-slate-400">
-              {row.carrierName}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                {value}
+              </span>
+              {row.carrier_count && row.carrier_count > 1 && (
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-xs font-medium bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300">
+                  {row.carrier_count} carriers
+                </span>
+              )}
+            </div>
           </div>
         </div>
       )
@@ -707,14 +713,9 @@ export default function CompaniesTableView({
       width: '160px',
       className: 'px-4 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-500/20 dark:to-indigo-500/20 border-l-2 border-blue-300 dark:border-blue-500',
       format: (value, row) => (
-        <div className="flex flex-col items-end py-1">
-          <span className="text-lg font-extrabold bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-300 dark:to-indigo-300 bg-clip-text text-transparent tabular-nums">
-            {formatTableCurrency(value)}
-          </span>
-          <span className="text-xs font-semibold text-blue-600 dark:text-blue-300 mt-0.5">
-            ${Math.round(value / 12).toLocaleString()} avg/mo
-          </span>
-        </div>
+        <span className="text-lg font-extrabold bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-300 dark:to-indigo-300 bg-clip-text text-transparent tabular-nums">
+          {formatTableCurrency(value)}
+        </span>
       )
     }
   ];
@@ -735,6 +736,25 @@ export default function CompaniesTableView({
             <Filter className="w-4 h-4" />
             Filters
           </button>
+          
+          {/* Carrier Filter Dropdown */}
+          {availableCarriers.length > 0 && (
+            <div className="relative">
+              <select
+                value={selectedCarrierId || ''}
+                onChange={(e) => onCarrierFilterChange?.(e.target.value || null)}
+                className="px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors appearance-none pr-10"
+              >
+                <option value="">All Carriers</option>
+                {availableCarriers.map(carrier => (
+                  <option key={carrier.id} value={carrier.id}>
+                    {carrier.name}
+                  </option>
+                ))}
+              </select>
+              <ChevronRight className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none rotate-90" />
+            </div>
+          )}
         </div>
         <button className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-2">
           <Download className="w-4 h-4" />
@@ -775,9 +795,6 @@ export default function CompaniesTableView({
               columns={columns}
               sortConfig={sortConfig}
               onSort={handleSort}
-              selectable
-              allSelected={selectedRows.size === paginatedData.length && paginatedData.length > 0}
-              onSelectAll={toggleAllSelection}
             />
             
             {loading ? (
@@ -805,10 +822,7 @@ export default function CompaniesTableView({
                         columns={columns}
                         index={index}
                         isExpanded={expandedRows.has(row.id)}
-                        isSelected={selectedRows.has(row.id)}
                         onToggleExpand={() => toggleRow(row.id)}
-                        onToggleSelect={() => toggleRowSelection(row.id)}
-                        selectable
                         expandable
                         className={cn(
                           isHighlighted && "highlight-pulse"
@@ -850,13 +864,6 @@ export default function CompaniesTableView({
         )}
       </motion.div>
 
-      {/* Bulk Actions Bar */}
-      <BulkActionsBar
-        selectedCount={selectedRows.size}
-        onDelete={onDelete ? handleBulkDelete : undefined}
-        onExport={handleExport}
-        onClearSelection={() => setSelectedRows(new Set())}
-      />
     </div>
   );
 }

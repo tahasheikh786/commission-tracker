@@ -155,7 +155,7 @@ export function useProgressWebSocket({
     try {
       // Get auth token if available
       // First try localStorage (for legacy password auth)
-      let token = localStorage.getItem('token');
+      const token = localStorage.getItem('token');
       const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       
       // If no token in localStorage (cookie-based auth), proceed without it

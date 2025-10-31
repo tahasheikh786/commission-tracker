@@ -1,6 +1,10 @@
 export interface CommissionData {
   id: string;
+  carrier_id?: string;
   carrier_name?: string;
+  carrier_ids?: string[];
+  carrier_names?: string[];
+  carrier_count?: number;
   client_name: string;
   invoice_total: number;
   commission_earned: number;
@@ -20,6 +24,7 @@ export interface CommissionData {
 }
 
 export interface CarrierGroup {
+  carrierId: string;
   carrierName: string;
   companies: CommissionData[];
   totalCommission: number;

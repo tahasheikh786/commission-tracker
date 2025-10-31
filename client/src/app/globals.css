@@ -251,7 +251,8 @@ body,
 }
 
 /* Sticky company name column - inherits row background */
-.company-name-sticky {
+.company-name-sticky,
+.carrier-name-sticky {
   background: inherit;
   position: sticky;
   left: 0;
@@ -260,33 +261,45 @@ body,
 
 /* Ensure even/odd backgrounds work with sticky column */
 .premium-data-table tbody tr:nth-child(even) .company-name-sticky,
-.premium-table tbody tr:nth-child(even) .company-name-sticky {
+.premium-table tbody tr:nth-child(even) .company-name-sticky,
+.premium-data-table tbody tr:nth-child(even) .carrier-name-sticky,
+.premium-table tbody tr:nth-child(even) .carrier-name-sticky {
   background-color: rgb(248 250 252 / 0.5);
 }
 
 .dark .premium-data-table tbody tr:nth-child(even) .company-name-sticky,
-.dark .premium-table tbody tr:nth-child(even) .company-name-sticky {
+.dark .premium-table tbody tr:nth-child(even) .company-name-sticky,
+.dark .premium-data-table tbody tr:nth-child(even) .carrier-name-sticky,
+.dark .premium-table tbody tr:nth-child(even) .carrier-name-sticky {
   background-color: rgb(51 65 85 / 0.4);
 }
 
 .premium-data-table tbody tr:nth-child(odd) .company-name-sticky,
-.premium-table tbody tr:nth-child(odd) .company-name-sticky {
+.premium-table tbody tr:nth-child(odd) .company-name-sticky,
+.premium-data-table tbody tr:nth-child(odd) .carrier-name-sticky,
+.premium-table tbody tr:nth-child(odd) .carrier-name-sticky {
   background-color: rgb(255 255 255);
 }
 
 .dark .premium-data-table tbody tr:nth-child(odd) .company-name-sticky,
-.dark .premium-table tbody tr:nth-child(odd) .company-name-sticky {
+.dark .premium-table tbody tr:nth-child(odd) .company-name-sticky,
+.dark .premium-data-table tbody tr:nth-child(odd) .carrier-name-sticky,
+.dark .premium-table tbody tr:nth-child(odd) .carrier-name-sticky {
   background-color: rgb(30 41 59);
 }
 
 /* Hover state for sticky column */
 .premium-data-table tbody tr:hover .company-name-sticky,
-.premium-table tbody tr:hover .company-name-sticky {
+.premium-table tbody tr:hover .company-name-sticky,
+.premium-data-table tbody tr:hover .carrier-name-sticky,
+.premium-table tbody tr:hover .carrier-name-sticky {
   background: linear-gradient(to right, rgb(239 246 255 / 0.5), transparent);
 }
 
 .dark .premium-data-table tbody tr:hover .company-name-sticky,
-.dark .premium-table tbody tr:hover .company-name-sticky {
+.dark .premium-table tbody tr:hover .company-name-sticky,
+.dark .premium-data-table tbody tr:hover .carrier-name-sticky,
+.dark .premium-table tbody tr:hover .carrier-name-sticky {
   background: linear-gradient(to right, rgb(59 130 246 / 0.2), rgb(37 99 235 / 0.1));
 }
 

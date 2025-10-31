@@ -23,7 +23,6 @@ import {
   TablePagination,
   EmptyState,
   LoadingSkeleton,
-  BulkActionsBar,
   formatTableCurrency,
   sortTableData,
   filterTableData,
@@ -79,6 +78,11 @@ interface EnrichedCarrier extends CarrierGroup {
   avgPerCompany: number;
   commissionRate: number;
   topCompany?: CommissionData;
+  monthlyBreakdown: {
+    jan: number; feb: number; mar: number; apr: number;
+    may: number; jun: number; jul: number; aug: number;
+    sep: number; oct: number; nov: number; dec: number;
+  };
 }
 
 interface CarriersTableViewProps {
@@ -93,6 +97,82 @@ interface CarriersTableViewProps {
   onEditCompany?: (company: CommissionData) => void;
   onViewInCompanies?: (carrierName: string) => void;
 }
+
+// ============================================
+// MONTHLY CELL COMPONENT
+// ============================================
+
+interface MonthlyCellProps {
+  value: number;
+  month: string;
+  maxValue: number;
+  index: number;
+}
+
+const formatCurrencyCompact = (value: number): string => {
+  if (value === 0) return '$0';
+  if (value >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
+  if (value >= 1000) return `$${(value / 1000).toFixed(0)}K`;
+  return `$${value.toFixed(0)}`;
+};
+
+const MonthlyCell: React.FC<MonthlyCellProps> = ({ value, month, maxValue, index }) => {
+  const percentage = maxValue > 0 ? (value / maxValue) * 100 : 0;
+  
+  let bgColor = 'bg-white dark:bg-slate-800';
+  let borderColor = 'border-slate-300/40 dark:border-slate-600/40';
+  let textColor = 'text-slate-700 dark:text-slate-200';
+  
+  if (value > 0) {
+    if (percentage >= 80) {
+      bgColor = 'bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-500/20 dark:to-green-500/20';
+      borderColor = 'border-emerald-300 dark:border-emerald-500/50';
+      textColor = 'text-emerald-700 dark:text-emerald-300';
+    } else if (percentage >= 50) {
+      bgColor = 'bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-500/20 dark:to-indigo-500/20';
+      borderColor = 'border-blue-300 dark:border-blue-500/50';
+      textColor = 'text-blue-700 dark:text-blue-300';
+    } else if (percentage >= 20) {
+      bgColor = 'bg-gradient-to-br from-amber-50 to-yellow-50 dark:from-amber-500/20 dark:to-yellow-500/20';
+      borderColor = 'border-amber-300 dark:border-amber-500/50';
+      textColor = 'text-amber-700 dark:text-amber-300';
+    } else {
+      bgColor = 'bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-700/20 dark:to-slate-600/20';
+      borderColor = 'border-slate-300/60 dark:border-slate-500/40';
+      textColor = 'text-slate-600 dark:text-slate-300';
+    }
+  }
+
+  return (
+    <div className="relative group h-full flex items-center justify-center">
+      <div className={cn(
+        "w-full py-2 px-1 rounded-md border shadow-sm transition-all duration-200",
+        bgColor,
+        borderColor,
+        "group-hover:shadow-md group-hover:scale-105"
+      )}>
+        <div className={cn("text-sm font-bold text-center tabular-nums", textColor)}>
+          {formatCurrencyCompact(value)}
+        </div>
+      </div>
+      
+      {/* Tooltip */}
+      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-3 px-4 py-2.5 bg-gradient-to-br from-slate-900 to-slate-800 dark:from-slate-100 dark:to-slate-50 text-white dark:text-slate-900 text-xs font-medium rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none whitespace-nowrap z-50 border border-slate-700 dark:border-slate-300">
+        <div className="font-bold text-sm mb-1">{month} 2025</div>
+        <div className="text-emerald-400 dark:text-emerald-600 font-semibold text-base">{formatTableCurrency(value)}</div>
+        <div className="text-white/70 dark:text-slate-600 text-xs mt-1">{percentage.toFixed(1)}% of max</div>
+        <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-px">
+          <div className="border-[6px] border-transparent border-t-slate-800 dark:border-t-slate-100"></div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const calculateMaxMonthly = (carrier: EnrichedCarrier): number => {
+  const values = Object.values(carrier.monthlyBreakdown || {});
+  return Math.max(...values, 0);
+};
 
 // ============================================
 // HORIZONTAL BAR CHART COMPONENT
@@ -638,23 +718,41 @@ export default function CarriersTableView({
   // State
   const [searchQuery, setSearchQuery] = useState('');
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' }>({
-    key: 'totalCommission',
-    direction: 'desc'
+    key: 'carrierName',
+    direction: 'asc'
   });
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
-  const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
 
   // Enrich carrier data
   const enrichedCarriers: EnrichedCarrier[] = useMemo(() => {
-    return carriers.map(carrier => ({
-      ...carrier,
-      id: carrier.carrierName,
-      avgPerCompany: carrier.companyCount > 0 ? carrier.totalCommission / carrier.companyCount : 0,
-      commissionRate: carrier.totalInvoice > 0 ? (carrier.totalCommission / carrier.totalInvoice) * 100 : 0,
-      topCompany: carrier.companies.sort((a, b) => b.commission_earned - a.commission_earned)[0]
-    }));
+    return carriers.map(carrier => {
+      // Calculate monthly breakdown by aggregating all companies
+      const monthlyBreakdown = {
+        jan: 0, feb: 0, mar: 0, apr: 0,
+        may: 0, jun: 0, jul: 0, aug: 0,
+        sep: 0, oct: 0, nov: 0, dec: 0
+      };
+      
+      carrier.companies.forEach(company => {
+        if (company.monthly_breakdown) {
+          Object.keys(monthlyBreakdown).forEach(month => {
+            monthlyBreakdown[month as keyof typeof monthlyBreakdown] += 
+              (company.monthly_breakdown?.[month as keyof typeof company.monthly_breakdown] || 0);
+          });
+        }
+      });
+
+      return {
+        ...carrier,
+        id: carrier.carrierName,
+        avgPerCompany: carrier.companyCount > 0 ? carrier.totalCommission / carrier.companyCount : 0,
+        commissionRate: carrier.totalInvoice > 0 ? (carrier.totalCommission / carrier.totalInvoice) * 100 : 0,
+        topCompany: carrier.companies.sort((a, b) => b.commission_earned - a.commission_earned)[0],
+        monthlyBreakdown
+      };
+    });
   }, [carriers]);
 
   // Apply search
@@ -704,6 +802,9 @@ export default function CarriersTableView({
     console.log('Export carriers data');
   };
 
+  // Monthly column names
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
   // Table columns configuration
   const columns: TableColumn<EnrichedCarrier>[] = [
     {
@@ -723,89 +824,61 @@ export default function CarriersTableView({
       key: 'carrierName',
       label: 'Carrier Name',
       sortable: true,
-      width: '280px',
+      width: '220px',
       align: 'left',
-      className: 'font-medium',
+      className: 'sticky left-0 z-10 font-semibold carrier-name-sticky',
       format: (value) => (
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center text-white font-semibold flex-shrink-0">
+        <div className="flex items-center gap-3 py-2">
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-xs font-bold">
             {value.charAt(0).toUpperCase()}
           </div>
-          <div className="min-w-0">
-            <div className="font-semibold text-slate-900 dark:text-white truncate">{value}</div>
-            <div className="text-xs text-slate-500 dark:text-slate-400">Insurance Carrier</div>
+          <div className="flex flex-col">
+            <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+              {value}
+            </span>
+            <span className="text-xs text-slate-500 dark:text-slate-400">
+              Insurance Carrier
+            </span>
           </div>
         </div>
       )
     },
-    {
-      key: 'companyCount',
-      label: 'Companies',
+    // Monthly columns
+    ...monthNames.map((month, index) => ({
+      key: `monthlyBreakdown.${month.toLowerCase()}`,
+      label: month,
       sortable: true,
-      align: 'center',
-      width: '120px',
-      format: (value) => (
-        <span className="inline-flex items-center justify-center px-3 py-1 rounded-full text-sm font-semibold bg-blue-100 text-blue-700 dark:bg-blue-500/25 dark:text-blue-200">
-          {value}
-        </span>
-      )
-    },
+      align: 'center' as const,
+      width: '90px',
+      className: cn(
+        'px-2',
+        index % 3 === 0 && 'border-l-2 border-slate-300 dark:border-slate-600'
+      ),
+      format: (value: any, row: EnrichedCarrier) => {
+        const monthValue = row.monthlyBreakdown[month.toLowerCase() as keyof typeof row.monthlyBreakdown] || 0;
+        return (
+          <MonthlyCell 
+            value={monthValue}
+            month={month}
+            maxValue={calculateMaxMonthly(row)}
+            index={index}
+          />
+        );
+      }
+    })),
+    // Total YTD
     {
       key: 'totalCommission',
-      label: 'Total Commission',
+      label: 'Total YTD',
       sortable: true,
-      align: 'right',
+      align: 'right' as const,
       width: '160px',
-      className: 'font-bold',
+      className: 'px-4 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-500/20 dark:to-indigo-500/20 border-l-2 border-blue-300 dark:border-blue-500',
       format: (value) => (
-        <div className="text-base font-bold text-blue-600 dark:text-blue-300 tabular-nums">
+        <span className="text-lg font-extrabold bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-300 dark:to-indigo-300 bg-clip-text text-transparent tabular-nums">
           {formatTableCurrency(value)}
-        </div>
-      )
-    },
-    {
-      key: 'totalInvoice',
-      label: 'Total Invoice',
-      sortable: true,
-      align: 'right',
-      width: '140px',
-      format: (value) => (
-        <div className="text-sm font-semibold text-slate-700 dark:text-slate-300 tabular-nums">
-          {formatTableCurrency(value)}
-        </div>
-      )
-    },
-    {
-      key: 'statementCount',
-      label: 'Statements',
-      sortable: true,
-      align: 'center',
-      width: '110px',
-      format: (value) => (
-        <span className="inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 dark:bg-slate-600/40 dark:text-slate-200">
-          {value}
         </span>
       )
-    },
-    {
-      key: 'avgPerCompany',
-      label: 'Avg per Company',
-      sortable: true,
-      align: 'right',
-      width: '140px',
-      format: (value) => (
-        <div className="text-sm font-medium text-slate-600 dark:text-slate-300 tabular-nums">
-          {formatTableCurrency(value)}
-        </div>
-      )
-    },
-    {
-      key: 'commissionRate',
-      label: 'Rate',
-      sortable: true,
-      align: 'center',
-      width: '100px',
-      format: (value) => <CommissionRateBadge rate={value} />
     }
   ];
 

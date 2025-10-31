@@ -1625,4 +1625,152 @@ async def merge_commission_records(merge_data: dict, db: AsyncSession = Depends(
         await db.rollback()
         raise HTTPException(status_code=500, detail=f"Error merging commission records: {str(e)}")
 
+@router.get("/earned-commission/companies-aggregated")
+async def get_companies_aggregated(
+    year: Optional[int] = None,
+    carrier_id: Optional[UUID] = Query(None, description="Filter by specific carrier"),
+    environment_id: Optional[UUID] = Query(None, description="Filter by environment ID"),
+    view_mode: Optional[str] = Query("my_data", description="View mode: my_data or all_data"),
+    current_user: User = Depends(get_current_user_hybrid),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get companies with aggregated commission data across all carriers.
+    Each company appears only once with:
+    - Total commission across all carriers (or filtered carrier)
+    - List of associated carriers
+    - Monthly breakdown aggregated across carriers
+    """
+    try:
+        # Build base query conditions
+        base_conditions = []
+        
+        # Apply view mode filter
+        if view_mode == "all_data":
+            if current_user.company_id:
+                users_in_company_result = await db.execute(
+                    select(User.id).where(User.company_id == current_user.company_id)
+                )
+                user_ids_in_company = [row[0] for row in users_in_company_result.all()]
+                if user_ids_in_company:
+                    base_conditions.append(EarnedCommission.user_id.in_(user_ids_in_company))
+                else:
+                    base_conditions.append(EarnedCommission.user_id == None)
+            else:
+                base_conditions.append(EarnedCommission.user_id == current_user.id)
+        else:
+            # My Data: Show only user's own data
+            base_conditions.append(EarnedCommission.user_id == current_user.id)
+        
+        # Apply year filter
+        if year is not None:
+            base_conditions.append(EarnedCommission.statement_year == year)
+        
+        # Apply environment filter
+        if environment_id is not None:
+            base_conditions.append(EarnedCommission.environment_id == environment_id)
+        
+        # Apply carrier filter if provided
+        if carrier_id is not None:
+            base_conditions.append(EarnedCommission.carrier_id == carrier_id)
+        
+        # Get all commission records with carrier names
+        query = select(
+            EarnedCommission,
+            Company.name.label('carrier_name')
+        ).join(
+            Company, EarnedCommission.carrier_id == Company.id
+        )
+        
+        if base_conditions:
+            query = query.where(and_(*base_conditions))
+        
+        result = await db.execute(query)
+        all_records = result.all()
+        
+        # Group by company name
+        company_data = {}
+        for record, carrier_name in all_records:
+            client_name = record.client_name
+            
+            if client_name not in company_data:
+                company_data[client_name] = {
+                    'client_name': client_name,
+                    'carrier_ids': set(),
+                    'carrier_names': set(),
+                    'invoice_total': 0,
+                    'commission_earned': 0,
+                    'statement_count': 0,
+                    'upload_ids': set(),
+                    'monthly_breakdown': {
+                        'jan': 0, 'feb': 0, 'mar': 0, 'apr': 0,
+                        'may': 0, 'jun': 0, 'jul': 0, 'aug': 0,
+                        'sep': 0, 'oct': 0, 'nov': 0, 'dec': 0
+                    },
+                    'last_updated': None,
+                    'created_at': None
+                }
+            
+            # Add carrier info
+            company_data[client_name]['carrier_ids'].add(str(record.carrier_id))
+            company_data[client_name]['carrier_names'].add(carrier_name)
+            
+            # Aggregate financial data
+            company_data[client_name]['invoice_total'] += float(record.invoice_total or 0)
+            company_data[client_name]['commission_earned'] += float(record.commission_earned or 0)
+            company_data[client_name]['statement_count'] += record.statement_count or 0
+            
+            # Aggregate upload IDs
+            if record.upload_ids:
+                company_data[client_name]['upload_ids'].update(record.upload_ids)
+            
+            # Aggregate monthly data
+            month_mapping = {
+                'jan_commission': 'jan', 'feb_commission': 'feb', 'mar_commission': 'mar',
+                'apr_commission': 'apr', 'may_commission': 'may', 'jun_commission': 'jun',
+                'jul_commission': 'jul', 'aug_commission': 'aug', 'sep_commission': 'sep',
+                'oct_commission': 'oct', 'nov_commission': 'nov', 'dec_commission': 'dec'
+            }
+            
+            for db_col, month in month_mapping.items():
+                value = getattr(record, db_col) or 0
+                company_data[client_name]['monthly_breakdown'][month] += float(value)
+            
+            # Update timestamps (use most recent)
+            if record.last_updated:
+                if not company_data[client_name]['last_updated'] or record.last_updated > company_data[client_name]['last_updated']:
+                    company_data[client_name]['last_updated'] = record.last_updated
+            
+            if record.created_at:
+                if not company_data[client_name]['created_at'] or record.created_at < company_data[client_name]['created_at']:
+                    company_data[client_name]['created_at'] = record.created_at
+        
+        # Convert to list format
+        companies = []
+        for client_name, data in company_data.items():
+            companies.append({
+                'id': f"{client_name}_{list(data['carrier_ids'])[0]}",  # Composite ID for frontend
+                'client_name': client_name,
+                'carrier_ids': list(data['carrier_ids']),
+                'carrier_names': list(data['carrier_names']),
+                'carrier_count': len(data['carrier_ids']),
+                'invoice_total': data['invoice_total'],
+                'commission_earned': data['commission_earned'],
+                'statement_count': data['statement_count'],
+                'upload_ids': list(data['upload_ids']),
+                'monthly_breakdown': data['monthly_breakdown'],
+                'last_updated': data['last_updated'].isoformat() if data['last_updated'] else None,
+                'created_at': data['created_at'].isoformat() if data['created_at'] else None,
+                'statement_year': year,
+                'approved_statement_count': data['statement_count']  # For compatibility
+            })
+        
+        # Sort by commission earned (descending)
+        companies.sort(key=lambda x: x['commission_earned'], reverse=True)
+        
+        return companies
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching aggregated companies data: {str(e)}")
+
  

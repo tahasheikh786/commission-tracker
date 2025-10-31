@@ -139,7 +139,7 @@ export default function UnifiedTableEditor({
       fieldMapping?.confidence >= 0.85 &&
       acceptedMappings.length === 0
     ) {
-      const tableHeaders = tables?.[0]?.header || tables?.[0]?.headers || [];
+      const tableHeaders = tables?.[currentTableIdx]?.header || tables?.[currentTableIdx]?.headers || [];
       
       // Auto-accept all high-confidence mappings from learned format
       const autoAcceptedMappings = aiMappings
@@ -148,8 +148,8 @@ export default function UnifiedTableEditor({
           const colIndex = tableHeaders.findIndex((h: string) => 
             h.toLowerCase() === mapping.extracted_field.toLowerCase()
           );
-          const sampleData = colIndex >= 0 && tables?.[0]?.rows?.[0] 
-            ? tables[0].rows[0][colIndex] 
+          const sampleData = colIndex >= 0 && tables?.[currentTableIdx]?.rows?.[0] 
+            ? tables[currentTableIdx].rows[0][colIndex] 
             : 'N/A';
 
           return {
@@ -663,10 +663,10 @@ export default function UnifiedTableEditor({
             (pt: any) => pt.plan_type
           ) || []);
 
-      // CRITICAL FIX: Use the snapshot for consistency
-      const firstTable = currentTablesSnapshot[0] || {};
-      const tableData = firstTable.rows || [];
-      const headers = firstTable.header || [];
+      // CRITICAL FIX: Use the snapshot for consistency and the selected table index
+      const selectedTable = currentTablesSnapshot[currentTableIdx] || currentTablesSnapshot[0] || {};
+      const tableData = selectedTable.rows || [];
+      const headers = selectedTable.header || [];
 
       // Build the payload matching backend MappingConfig schema
       const mappingPayload = {
@@ -800,12 +800,12 @@ export default function UnifiedTableEditor({
 
   // Handle accepting a single mapping
   const handleAcceptMapping = (mapping: FieldMapping) => {
-    const tableHeaders = tables?.[0]?.header || tables?.[0]?.headers || [];
+    const tableHeaders = tables?.[currentTableIdx]?.header || tables?.[currentTableIdx]?.headers || [];
     const colIndex = tableHeaders.findIndex((h: string) => 
       h.toLowerCase() === mapping.extracted_field.toLowerCase()
     );
-    const sampleData = colIndex >= 0 && tables?.[0]?.rows?.[0] 
-      ? tables[0].rows[0][colIndex] 
+    const sampleData = colIndex >= 0 && tables?.[currentTableIdx]?.rows?.[0] 
+      ? tables[currentTableIdx].rows[0][colIndex] 
       : 'N/A';
 
     // Check if already accepted
@@ -831,12 +831,12 @@ export default function UnifiedTableEditor({
   };
 
   const handleSkipMapping = (mapping: FieldMapping) => {
-    const tableHeaders = tables?.[0]?.header || tables?.[0]?.headers || [];
+    const tableHeaders = tables?.[currentTableIdx]?.header || tables?.[currentTableIdx]?.headers || [];
     const colIndex = tableHeaders.findIndex((h: string) => 
       h.toLowerCase() === mapping.extracted_field.toLowerCase()
     );
-    const sampleData = colIndex >= 0 && tables?.[0]?.rows?.[0] 
-      ? tables[0].rows[0][colIndex] 
+    const sampleData = colIndex >= 0 && tables?.[currentTableIdx]?.rows?.[0] 
+      ? tables[currentTableIdx].rows[0][colIndex] 
       : 'N/A';
 
     // Check if already skipped
@@ -877,7 +877,7 @@ export default function UnifiedTableEditor({
   // Handle accepting all high confidence mappings
   const handleAcceptAllMappings = () => {
     const highConfidenceMappings = aiMappings.filter(m => m.confidence >= 0.8);
-    const tableHeaders = tables?.[0]?.header || tables?.[0]?.headers || [];
+    const tableHeaders = tables?.[currentTableIdx]?.header || tables?.[currentTableIdx]?.headers || [];
     
     const newMappings = highConfidenceMappings
       .filter(mapping => !acceptedMappings.some(m => m.field === mapping.extracted_field))
@@ -885,8 +885,8 @@ export default function UnifiedTableEditor({
         const colIndex = tableHeaders.findIndex((h: string) => 
           h.toLowerCase() === mapping.extracted_field.toLowerCase()
         );
-        const sampleData = colIndex >= 0 && tables?.[0]?.rows?.[0] 
-          ? tables[0].rows[0][colIndex] 
+        const sampleData = colIndex >= 0 && tables?.[currentTableIdx]?.rows?.[0] 
+          ? tables[currentTableIdx].rows[0][colIndex] 
           : 'N/A';
 
         return {
@@ -917,13 +917,13 @@ export default function UnifiedTableEditor({
 
   // Handle custom mapping selection
   const handleCustomMapping = (extractedField: string, selectedHeader: string, databaseField?: string) => {
-    const tableHeaders = tables?.[0]?.header || tables?.[0]?.headers || [];
+    const tableHeaders = tables?.[currentTableIdx]?.header || tables?.[currentTableIdx]?.headers || [];
     // Get sample data from the EXTRACTED field (the column in the table), not the database field
     const colIndex = tableHeaders.findIndex((h: string) => 
       h.toLowerCase() === extractedField.toLowerCase()
     );
-    const sampleData = colIndex >= 0 && tables?.[0]?.rows?.[0] 
-      ? tables[0].rows[0][colIndex] 
+    const sampleData = colIndex >= 0 && tables?.[currentTableIdx]?.rows?.[0] 
+      ? tables[currentTableIdx].rows[0][colIndex] 
       : 'N/A';
 
     // Use the databaseField if provided, otherwise fall back to selectedHeader

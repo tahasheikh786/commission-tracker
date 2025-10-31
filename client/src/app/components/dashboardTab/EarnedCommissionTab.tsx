@@ -21,8 +21,10 @@ export default function EarnedCommissionTab({ environmentId, activeView, onViewC
   const [selectedYear, setSelectedYear] = useState<number | null>(2025);
   const [viewAllData, setViewAllData] = useState(false);
   const [commissionData, setCommissionData] = useState<any[]>([]);
+  const [aggregatedCompaniesData, setAggregatedCompaniesData] = useState<any[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
   const [carrierFilter, setCarrierFilter] = useState<string | null>(null);
+  const [selectedCarrierId, setSelectedCarrierId] = useState<string | null>(null);
   const [viewType, setViewType] = useState<'companies' | 'carriers'>(activeView);
   
   const { refetch: refetchCarriers } = useCarriersWithCommission();
@@ -70,19 +72,68 @@ export default function EarnedCommissionTab({ environmentId, activeView, onViewC
     }
   }, [viewMode, selectedYear, environmentId]);
 
+  const fetchAggregatedCompaniesData = useCallback(async () => {
+    setDataLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.append('view_mode', viewMode);
+      if (selectedYear) params.append('year', selectedYear.toString());
+      if (selectedCarrierId) params.append('carrier_id', selectedCarrierId);
+      if (viewMode === 'my_data' && environmentId) {
+        params.append('environment_id', environmentId);
+      }
+      const queryString = params.toString();
+      
+      const dataResponse = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/earned-commission/companies-aggregated?${queryString}`,
+        { credentials: 'include' }
+      );
+      
+      if (!dataResponse.ok) {
+        if (dataResponse.status === 401) {
+          setAggregatedCompaniesData([]);
+          return;
+        }
+        throw new Error(`Data fetch failed: ${dataResponse.status}`);
+      }
+      
+      const data = await dataResponse.json();
+      
+      if (Array.isArray(data)) {
+        setAggregatedCompaniesData(data);
+      } else {
+        console.warn('⚠️ API returned non-array data:', typeof data, data);
+        setAggregatedCompaniesData([]);
+      }
+    } catch (error) {
+      console.error('❌ Error fetching aggregated companies data:', error);
+      setAggregatedCompaniesData([]);
+    } finally {
+      setDataLoading(false);
+    }
+  }, [viewMode, selectedYear, selectedCarrierId, environmentId]);
+
   useEffect(() => {
     if (!environmentsLoading) {
       fetchCommissionData();
+      fetchAggregatedCompaniesData();
     }
-  }, [fetchCommissionData, environmentsLoading]);
+  }, [fetchCommissionData, fetchAggregatedCompaniesData, environmentsLoading]);
+
+  useEffect(() => {
+    if (!environmentsLoading && (viewType === 'companies' || selectedCarrierId)) {
+      fetchAggregatedCompaniesData();
+    }
+  }, [selectedCarrierId, fetchAggregatedCompaniesData, environmentsLoading, viewType]);
 
   useEffect(() => {
     if (refreshTrigger) {
       fetchCommissionData();
+      fetchAggregatedCompaniesData();
       refetchCarriers();
       refetchYears();
     }
-  }, [refreshTrigger, fetchCommissionData, refetchCarriers, refetchYears]);
+  }, [refreshTrigger, fetchCommissionData, fetchAggregatedCompaniesData, refetchCarriers, refetchYears]);
 
   // Transform data into carrier groups for carriers view
   const carrierGroups = useMemo(() => {
@@ -110,8 +161,10 @@ export default function EarnedCommissionTab({ environmentId, activeView, onViewC
         const typedCompanies = companies as CommissionData[];
         const uniqueCompanies = new Set(typedCompanies.map(c => c.client_name?.toLowerCase()?.trim() || 'unknown'));
         const totalStatementCount = typedCompanies[0]?.approved_statement_count || 0;
+        const carrierId = typedCompanies[0]?.carrier_id || '';
         
         return {
+          carrierId,
           carrierName,
           companies: typedCompanies,
           totalCommission: typedCompanies.reduce((sum: number, company: CommissionData) => sum + (company.commission_earned || 0), 0),
@@ -146,7 +199,7 @@ export default function EarnedCommissionTab({ environmentId, activeView, onViewC
   }, [carrierGroups, carrierFilter]);
   
   // Navigation handler from Carriers to Companies
-  const handleViewInCompanies = useCallback((carrierName: string) => {
+  const handleViewInCompanies = useCallback((carrierName: string, carrierId?: string) => {
     // Switch to companies view
     setViewType('companies');
     
@@ -157,6 +210,7 @@ export default function EarnedCommissionTab({ environmentId, activeView, onViewC
     
     // Set carrier filter
     setCarrierFilter(carrierName);
+    setSelectedCarrierId(carrierId || null);
     
     // Optional: Scroll to top
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -165,6 +219,7 @@ export default function EarnedCommissionTab({ environmentId, activeView, onViewC
   // Clear filter handler
   const handleClearCarrierFilter = useCallback(() => {
     setCarrierFilter(null);
+    setSelectedCarrierId(null);
   }, []);
   
   // Update viewType when activeView changes
@@ -243,8 +298,11 @@ export default function EarnedCommissionTab({ environmentId, activeView, onViewC
       {/* Table View */}
       {viewType === 'companies' ? (
         <CompaniesTableView
-          data={allCompaniesData}
+          data={aggregatedCompaniesData}
           loading={dataLoading}
+          selectedCarrierId={selectedCarrierId}
+          onCarrierFilterChange={setSelectedCarrierId}
+          availableCarriers={carrierGroups.map(g => ({ id: g.carrierId, name: g.carrierName }))}
         />
       ) : (
         <CarriersTableView
