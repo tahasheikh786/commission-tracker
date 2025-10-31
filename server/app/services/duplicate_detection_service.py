@@ -91,7 +91,9 @@ class DuplicateDetectionService:
             .where(
                 and_(
                     StatementUpload.file_hash == file_hash,
-                    StatementUpload.user_id == user_id
+                    StatementUpload.user_id == user_id,
+                    # Exclude failed/cancelled uploads from duplicate check
+                    StatementUpload.status.in_(['pending', 'approved', 'rejected', 'extracted', 'completed'])
                 )
             )
             .order_by(StatementUpload.uploaded_at.desc())
@@ -105,7 +107,9 @@ class DuplicateDetectionService:
             .where(
                 and_(
                     StatementUpload.file_hash == file_hash,
-                    StatementUpload.user_id != user_id
+                    StatementUpload.user_id != user_id,
+                    # Exclude failed/cancelled uploads from duplicate check
+                    StatementUpload.status.in_(['pending', 'approved', 'rejected', 'extracted', 'completed'])
                 )
             )
             .order_by(StatementUpload.uploaded_at.desc())

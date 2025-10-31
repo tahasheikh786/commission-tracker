@@ -75,6 +75,7 @@ export default function CarrierUploadZone({
   const [isResending, setIsResending] = useState(false);
   const [n8nResponse, setN8nResponse] = useState<any>(null);
   const [isN8nLoading, setIsN8nLoading] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
   
   // 🚫 PAUSE POINT: Store extraction results for manual continuation
   // TODO: Remove these states when reverting to automatic flow
@@ -308,47 +309,102 @@ export default function CarrierUploadZone({
   };
 
   const handleCancel = async () => {
-    // Cancel the extraction on the backend if we have an upload ID
-    if (uploadId) {
-      try {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/cancel-extraction/${uploadId}`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-            'Content-Type': 'application/json',
-          },
+    // Don't proceed if no upload ID
+    if (!uploadId) {
+      console.warn('No upload ID available for cancellation');
+      return;
+    }
+
+    // Set cancelling state to keep loader visible
+    setIsCancelling(true);
+
+    // Show cancelling message
+    toast.loading('Cancelling extraction...', { id: 'cancel-extraction' });
+    
+    try {
+      // Cancel the extraction on the backend using axios with proper auth
+      const response = await axios.post(
+        `/api/cancel-extraction/${uploadId}`,
+        {},
+        {
+          withCredentials: true, // This ensures cookies are sent
+        }
+      );
+      
+      if (response.data.success) {
+        // Dismiss loading toast and show success
+        toast.dismiss('cancel-extraction');
+        toast.success('✅ Extraction cancelled successfully', {
+          duration: 4000,
+          icon: '🛑',
         });
         
-        if (response.ok) {
-          toast.success('Extraction cancelled successfully');
-        } else {
-          console.warn('Failed to cancel extraction on backend:', response.statusText);
+        // Now reset all state after successful cancellation
+        setIsUploading(false);
+        setUploadProgress(0);
+        setCurrentStage('');
+        setStageProgress(0);
+        setError(null);
+        setUploadedFile(null);
+        setExtractionResults(null);
+        setIsExtractionComplete(false);
+        setExtractedPages(null);
+        setTotalPages(null);
+        setUploadDate(null);
+        setCompletionDate(null);
+        setIsResending(false);
+        setN8nResponse(null);
+        setUploadId(null); // Clear upload ID
+        setIsCancelling(false); // Reset cancelling state
+        
+        // Cleanup local PDF URL
+        if (localPdfUrl) {
+          URL.revokeObjectURL(localPdfUrl);
+          setLocalPdfUrl(null);
         }
-      } catch (error) {
-        console.error('Error cancelling extraction:', error);
-        // Don't show error toast for cancellation failures as user is already cancelling
+      } else {
+        throw new Error(response.data.message || 'Failed to cancel extraction');
       }
-    }
-    
-    setIsUploading(false);
-    setUploadProgress(0);
-    setCurrentStage('');
-    setStageProgress(0);
-    setError(null);
-    setUploadedFile(null);
-    setExtractionResults(null);
-    setIsExtractionComplete(false);
-    setExtractedPages(null);
-    setTotalPages(null);
-    setUploadDate(null);
-    setCompletionDate(null);
-    setIsResending(false);
-    setN8nResponse(null);
-    
-    // Cleanup local PDF URL
-    if (localPdfUrl) {
-      URL.revokeObjectURL(localPdfUrl);
-      setLocalPdfUrl(null);
+    } catch (error: any) {
+      // Dismiss loading toast
+      toast.dismiss('cancel-extraction');
+      
+      // Handle 404 - extraction might have already completed
+      if (error.response?.status === 404) {
+        toast.error('Extraction process not found - it may have already completed', {
+          duration: 4000,
+        });
+        // Still reset UI since extraction is not running
+        setIsUploading(false);
+        setUploadProgress(0);
+        setCurrentStage('');
+        setStageProgress(0);
+        setError(null);
+        setUploadedFile(null);
+        setExtractionResults(null);
+        setIsExtractionComplete(false);
+        setExtractedPages(null);
+        setTotalPages(null);
+        setUploadDate(null);
+        setCompletionDate(null);
+        setIsResending(false);
+        setN8nResponse(null);
+        setUploadId(null);
+        setIsCancelling(false); // Reset cancelling state
+        
+        if (localPdfUrl) {
+          URL.revokeObjectURL(localPdfUrl);
+          setLocalPdfUrl(null);
+        }
+      } else {
+        // Show error but keep loader visible
+        console.error('Error cancelling extraction:', error);
+        toast.error(`Failed to cancel extraction: ${error.response?.data?.detail || error.message}`, {
+          duration: 5000,
+        });
+        // Reset cancelling state on error
+        setIsCancelling(false);
+      }
     }
   };
 
@@ -372,6 +428,7 @@ export default function CarrierUploadZone({
     setCompletionDate(null);
     setIsResending(false);
     setN8nResponse(null);
+    setIsCancelling(false);
     
     // Cleanup local PDF URL
     if (localPdfUrl) {
@@ -383,7 +440,7 @@ export default function CarrierUploadZone({
   // PREMIUM: Show premium loader with step-by-step progress when processing
   // 🚫 PAUSE POINT: Added isExtractionComplete to keep loader visible after completion
   // TODO: Remove || isExtractionComplete when reverting to automatic flow
-  if (isUploading || isExtractionComplete) {
+  if (isUploading || isExtractionComplete || isCancelling) {
     return (
       <div className="w-full h-full">
         <SummaryProgressLoader
@@ -394,6 +451,7 @@ export default function CarrierUploadZone({
           isVisible={true}
           pdfUrl={localPdfUrl}
           onContinue={handleContinue}
+          onCancel={handleCancel}
           summaryContent={(() => {
             // Priority 1: Enhanced from WebSocket (CORRECT)
             if (wsProgress.conversationalSummary) {

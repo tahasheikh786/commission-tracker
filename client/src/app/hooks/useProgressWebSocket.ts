@@ -154,16 +154,30 @@ export function useProgressWebSocket({
 
     try {
       // Get auth token if available
-      const token = localStorage.getItem('token');
+      // First try localStorage (for legacy password auth)
+      let token = localStorage.getItem('token');
       const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
+      // If no token in localStorage (cookie-based auth), proceed without it
+      // The backend allows unauthenticated WebSocket connections for progress tracking
+      if (!token && typeof window !== 'undefined') {
+        console.log('🍪 Using cookie-based auth - WebSocket will connect without explicit token');
+        console.log('📊 Progress tracking is still functional with anonymous WebSocket connections');
+      }
       
       // Get WebSocket base URL dynamically
       const wsBaseUrl = getWebSocketBaseUrl();
       
       // Build WebSocket URL with optional auth params
       let wsUrl = `${wsBaseUrl}/api/ws/progress/${uploadId}?session_id=${sessionId}`;
+      
+      // Add token to URL if available
       if (token) {
         wsUrl += `&token=${token}`;
+        console.log('🔐 WebSocket connection with authentication token');
+      } else {
+        // WebSocket will connect anonymously for progress tracking
+        console.log('📊 WebSocket connecting for progress tracking (anonymous mode)');
       }
       
       console.log('🔌 Connecting to WebSocket:', wsUrl.replace(/token=[^&]+/, 'token=***'));
@@ -426,13 +440,26 @@ export function useProgressWebSocket({
 
       case 'ERROR':
         const errorMessage = data.error || 'An error occurred during processing';
+        // Check if this is a cancellation
+        const isCancelled = data.stage_details?.cancelled || errorMessage.includes('cancelled');
+        
         setProgress(prev => ({
           ...prev,
           error: errorMessage,
           isConnected: false
         }));
-        if (onErrorRef.current) {
+        
+        if (onErrorRef.current && !isCancelled) {
+          // Don't call onError for cancellations - they're handled differently
           onErrorRef.current(errorMessage);
+        }
+        
+        // Close connection immediately for cancellations
+        if (isCancelled) {
+          console.log('📛 Extraction cancelled, closing WebSocket connection');
+          if (disconnectRef.current) {
+            disconnectRef.current();
+          }
         }
         break;
 

@@ -64,6 +64,7 @@ interface PremiumProgressLoaderProps {
   isVisible?: boolean;
   pdfUrl?: string | null;
   onContinue?: () => void; // 🚫 PAUSE POINT: Manual continue button - remove when reverting to automatic
+  onCancel?: () => void; // Cancel extraction button
   summaryContent?: string; // Summary content (technical/markdown format)
   metadataContent?: string; // Metadata content
   conversationalSummary?: string | null; // ← NEW: Natural language summary
@@ -77,6 +78,7 @@ export default function PremiumProgressLoader({
   isVisible = true,
   pdfUrl,
   onContinue,
+  onCancel,
   summaryContent,
   metadataContent,
   conversationalSummary  // ← NEW: Natural language summary
@@ -84,6 +86,7 @@ export default function PremiumProgressLoader({
   const [animatedProgress, setAnimatedProgress] = useState(0);
   const [countdown, setCountdown] = useState(10);
   const [isCountdownActive, setIsCountdownActive] = useState(false);
+  const [isCancellingLocal, setIsCancellingLocal] = useState(false);
 
   // Check if step 5 (Finalizing) is completed for continue button
   const isStep5Completed = currentStep >= 5 || progress >= 100;
@@ -173,9 +176,46 @@ export default function PremiumProgressLoader({
           </div>
         )}
 
-        {/* Continue Button - Always visible, enabled when step 5 is completed */}
-        {onContinue && (
-          <div className="mt-8 flex justify-center">
+        {/* Action Buttons - Continue and Cancel */}
+        <div className="mt-8 flex justify-center gap-3">
+          {/* Cancel Button - Always visible during processing */}
+          {onCancel && !isCompleted && (
+            <button
+              onClick={async () => {
+                setIsCancellingLocal(true);
+                await onCancel();
+                setIsCancellingLocal(false);
+              }}
+              disabled={isCancellingLocal}
+              className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                isCancellingLocal 
+                  ? 'bg-gray-400 cursor-not-allowed' 
+                  : 'bg-red-500 text-white hover:bg-red-600 hover:shadow-lg hover:scale-105 focus:ring-red-500'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                {isCancellingLocal ? (
+                  <>
+                    <svg className="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>Cancelling...</span>
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                    <span>Cancel</span>
+                  </>
+                )}
+              </div>
+            </button>
+          )}
+          
+          {/* Continue Button - Always visible, enabled when step 5 is completed */}
+          {onContinue && (
             <button
               onClick={isStep5Completed ? onContinue : undefined}
               disabled={!isStep5Completed}
@@ -201,8 +241,8 @@ export default function PremiumProgressLoader({
                 }
               </div>
             </button>
-          </div>
-        )}
+          )}
+        </div>
           </div>
           
           {/* Center Column - PDF Viewer (3/5) */}

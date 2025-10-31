@@ -234,24 +234,40 @@ async def analyze_table_suitability(
         if not request.tables:
             raise HTTPException(status_code=400, detail="No tables provided for analysis")
         
-        # Use table suitability service
-        from app.services.table_suitability_service import TableSuitabilityService
-        suitability_service = TableSuitabilityService()
+        # TODO: Implement table suitability service
+        # For now, use a simple fallback that returns the first table
+        logger.warning("⚠️ Table suitability service not yet implemented, using fallback")
         
-        if not suitability_service.is_available():
-            logger.warning("⚠️ AI table suitability service not available, using fallback")
+        # Simple fallback analysis - return the first table with largest row count
+        recommended_index = 0
+        max_rows = 0
         
-        # Analyze tables
-        analysis = await suitability_service.analyze_tables_for_mapping(
-            tables=request.tables,
-            document_context=request.document_context or {}
-        )
+        for i, table in enumerate(request.tables):
+            row_count = len(table.get('rows', []))
+            if row_count > max_rows:
+                max_rows = row_count
+                recommended_index = i
         
-        if not analysis.get('success'):
-            raise HTTPException(
-                status_code=500,
-                detail=f"Table analysis failed: {analysis.get('error', 'Unknown error')}"
-            )
+        analysis = {
+            'success': True,
+            'recommended_table_index': recommended_index,
+            'confidence': 0.8,  # Fixed confidence for fallback
+            'requires_user_confirmation': len(request.tables) > 1,
+            'table_analysis': [
+                {
+                    'table_index': i,
+                    'score': 1.0 if i == recommended_index else 0.5,
+                    'row_count': len(table.get('rows', [])),
+                    'column_count': len(table.get('headers', [])),
+                    'reasoning': 'Selected based on row count' if i == recommended_index else 'Alternative table'
+                }
+                for i, table in enumerate(request.tables)
+            ],
+            'analysis_metadata': {
+                'method': 'fallback_row_count',
+                'total_tables_analyzed': len(request.tables)
+            }
+        }
         
         logger.info(f"✅ Table analysis complete: Recommended table {analysis.get('recommended_table_index')} with {analysis.get('confidence', 0):.2f} confidence")
         

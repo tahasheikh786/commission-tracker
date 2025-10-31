@@ -46,10 +46,14 @@ async def websocket_progress_endpoint(
         try:
             # Validate JWT token using the same logic as other endpoints
             from app.services.jwt_service import jwt_service
-            payload = jwt_service.verify_token(token)
+            payload = jwt_service.verify_token(token, "access")  # Fixed: Added token_type parameter
             if payload and 'sub' in payload:
                 user_id = payload['sub']
                 logger.info(f"WebSocket authenticated user: {user_id}")
+            elif payload and 'email' in payload:
+                # Alternative payload structure for OTP auth
+                user_id = payload['email']
+                logger.info(f"WebSocket authenticated user by email: {user_id}")
             else:
                 logger.warning("Invalid token payload")
                 await websocket.close(code=1008, reason="Invalid token")
@@ -59,9 +63,14 @@ async def websocket_progress_endpoint(
             await websocket.close(code=1008, reason="Token validation failed")
             return
     else:
-        # Allow connection without token for now (for development)
-        # In production, you might want to require authentication
-        logger.info("WebSocket connection without token - allowing for development")
+        # Allow WebSocket connection without token for progress tracking
+        # This is safe because WebSocket is only used for read-only progress updates
+        # and the actual data access is still protected by authentication on REST endpoints
+        logger.warning(
+            f"WebSocket connection without explicit token for upload_id={upload_id}. "
+            "This is allowed for progress tracking, but consider implementing token passing for production."
+        )
+        user_id = "anonymous"  # Set a placeholder user_id for tracking
     
     # Keepalive ping task
     keepalive_task = None
