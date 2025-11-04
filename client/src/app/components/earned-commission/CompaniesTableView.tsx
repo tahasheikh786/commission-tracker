@@ -1,5 +1,5 @@
 'use client'
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Building2, 
@@ -95,6 +95,8 @@ interface CompaniesTableViewProps {
   selectedCarrierId?: string | null;
   onCarrierFilterChange?: (carrierId: string | null) => void;
   availableCarriers?: { id: string; name: string }[];
+  initialSearchQuery?: string | null;
+  autoExpandRow?: boolean;
 }
 
 // ============================================
@@ -545,10 +547,12 @@ export default function CompaniesTableView({
   onViewInCarrier,
   selectedCarrierId,
   onCarrierFilterChange,
-  availableCarriers = []
+  availableCarriers = [],
+  initialSearchQuery,
+  autoExpandRow
 }: CompaniesTableViewProps) {
   // State
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(initialSearchQuery || '');
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' }>({
     key: 'companyName',
     direction: 'asc'
@@ -557,6 +561,13 @@ export default function CompaniesTableView({
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [activeFilters, setActiveFilters] = useState<Record<string, any>>({});
+
+  // Update search query when initialSearchQuery changes
+  useEffect(() => {
+    if (initialSearchQuery) {
+      setSearchQuery(initialSearchQuery);
+    }
+  }, [initialSearchQuery]);
 
   // Transform data to table rows
   const tableRows: CompanyTableRow[] = useMemo(() => {
@@ -605,6 +616,21 @@ export default function CompaniesTableView({
   }, [sortedData, currentPage, pageSize]);
 
   const totalPages = Math.ceil(sortedData.length / pageSize);
+
+  // Auto-expand first filtered row when coming from dashboard
+  useEffect(() => {
+    if (autoExpandRow && filteredData.length > 0 && initialSearchQuery) {
+      // Auto-expand the first filtered row
+      const firstRowId = filteredData[0].id;
+      setExpandedRows(prev => {
+        // Only update if not already expanded
+        if (!prev.has(firstRowId)) {
+          return new Set([firstRowId]);
+        }
+        return prev;
+      });
+    }
+  }, [autoExpandRow, initialSearchQuery, filteredData]);
 
   // Handlers
   const handleSort = (key: string) => {

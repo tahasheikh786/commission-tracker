@@ -38,6 +38,7 @@ import {
   dropdownItemVariants 
 } from '../dashboardTab/animations';
 import { cn } from '@/lib/utils';
+import type { CarrierGroup as ImportedCarrierGroup } from './types';
 
 // ============================================
 // TYPES & INTERFACES
@@ -64,14 +65,7 @@ interface CommissionData {
   created_at?: string;
 }
 
-interface CarrierGroup {
-  carrierName: string;
-  companies: CommissionData[];
-  totalCommission: number;
-  totalInvoice: number;
-  companyCount: number;
-  statementCount: number;
-}
+type CarrierGroup = ImportedCarrierGroup;
 
 interface EnrichedCarrier extends CarrierGroup {
   id: string;
@@ -95,7 +89,7 @@ interface CarriersTableViewProps {
   };
   onViewCompany?: (company: CommissionData) => void;
   onEditCompany?: (company: CommissionData) => void;
-  onViewInCompanies?: (carrierName: string) => void;
+  onViewInCompanies?: (carrierName: string, carrierId?: string) => void;
 }
 
 // ============================================
@@ -960,7 +954,7 @@ export default function CarriersTableView({
                         onViewInCompanies={() => {
                           // Navigate to Companies view with this carrier pre-filtered
                           if (onViewInCompanies) {
-                            onViewInCompanies(carrier.carrierName);
+                            onViewInCompanies(carrier.carrierName, carrier.carrierId);
                           }
                         }}
                       />

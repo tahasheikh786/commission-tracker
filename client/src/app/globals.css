@@ -636,3 +636,120 @@ body,
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ============================================
+   DASHBOARD STYLES
+   ============================================ */
+.dashboard-container {
+  @apply min-h-screen;
+  position: relative;
+}
+
+.dashboard-grid {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 768px) {
+  .dashboard-grid {
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  }
+}
+
+/* Dashboard KPI Cards */
+.dashboard-kpi-card {
+  @apply bg-white dark:bg-slate-800 rounded-xl p-6 shadow-lg;
+  @apply hover:shadow-2xl transition-all duration-300 cursor-pointer;
+  position: relative;
+  overflow: hidden;
+}
+
+.dashboard-kpi-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.05) 0%, rgba(147, 51, 234, 0.05) 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.dashboard-kpi-card:hover::before {
+  opacity: 1;
+}
+
+/* Dashboard Chart Containers */
+.dashboard-chart {
+  @apply bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6;
+  min-height: 24rem;
+}
+
+/* Dashboard Activity Feed */
+.dashboard-activity-item {
+  @apply p-3 rounded-lg;
+  @apply hover:bg-slate-50 dark:hover:bg-slate-700/50;
+  @apply transition-colors cursor-pointer;
+}
+
+/* Dashboard Insights */
+.dashboard-insight {
+  @apply p-4 rounded-lg border;
+  @apply transition-all duration-200;
+}
+
+.dashboard-insight:hover {
+  @apply border-blue-200 dark:border-blue-700;
+  @apply bg-blue-50/50 dark:bg-blue-900/10;
+}
+
+/* Dashboard Navigation Cards */
+.dashboard-nav-card {
+  @apply relative bg-white dark:bg-slate-800 rounded-xl shadow-lg;
+  @apply overflow-hidden cursor-pointer h-full;
+  @apply transition-all duration-300;
+}
+
+.dashboard-nav-card:hover {
+  @apply shadow-2xl;
+  transform: translateY(-4px) scale(1.02);
+}
+
+/* IMPROVED KPI CARD STYLES - Fix card visibility & contrast */
+.kpi-card {
+  background: white;
+  border: 1px solid #e2e8f0; /* slate-200 */
+  box-shadow: 
+    0 1px 3px 0 rgba(0, 0, 0, 0.1),
+    0 1px 2px -1px rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  transition: all 200ms ease;
+}
+
+.kpi-card:hover {
+  box-shadow: 
+    0 10px 15px -3px rgba(0, 0, 0, 0.1),
+    0 4px 6px -4px rgba(0, 0, 0, 0.1);
+  border-color: #cbd5e1; /* slate-300 */
+  transform: translateY(-2px);
+}
+
+/* Dark mode */
+.dark .kpi-card {
+  background: #1e293b; /* slate-800 */
+  border-color: #334155; /* slate-700 */
+}
+
+.dark .kpi-card:hover {
+  border-color: #475569; /* slate-600 */
+}
+
+/* Alternative: Use subtle gradient background for cards */
+.kpi-card-premium {
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  border: 1px solid #e2e8f0;
+}
+
+.dark .kpi-card-premium {
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  border: 1px solid #334155;
+}

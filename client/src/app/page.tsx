@@ -8,6 +8,7 @@ import DashboardTab from "./components/dashboardTab/DashboardTab";
 import CarrierTab from "./components/carrierTab/CarrierTab";
 import EarnedCommissionTab from "./components/dashboardTab/EarnedCommissionTab";
 import PremiumAnalyticsTab from "./components/dashboardTab/PremiumAnalyticsTab";
+import DashboardOverview from "./components/dashboard/DashboardOverview";
 
 import { 
   Database, 
@@ -27,7 +28,8 @@ import {
   ChevronRight,
   Upload,
   Building2,
-  Users
+  Users,
+  TrendingUp
 } from "lucide-react";
 import { useTheme } from "@/context/ThemeContext";
 import EnvironmentSelector from "./components/EnvironmentSelector";
@@ -38,7 +40,7 @@ function HomePageContent() {
   const { user, logout } = useAuth();
   const { theme, setTheme, actualTheme } = useTheme();
   const { activeEnvironment } = useEnvironment();
-  const [tab, setTab] = useState<"dashboard" | "carriers" | "earned-commission" | "earned-commission-companies" | "earned-commission-carriers" | "analytics">("analytics");
+  const [tab, setTab] = useState<"overview" | "upload" | "carriers" | "earned-commission" | "earned-commission-companies" | "earned-commission-carriers" | "analytics">("overview");
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
@@ -48,15 +50,15 @@ function HomePageContent() {
   // Handle URL parameters for tab selection
   useEffect(() => {
     const tabParam = searchParams?.get('tab')
-    if (tabParam && ['dashboard', 'carriers', 'earned-commission', 'earned-commission-companies', 'earned-commission-carriers', 'analytics'].includes(tabParam)) {
-      setTab(tabParam as "dashboard" | "carriers" | "earned-commission" | "earned-commission-companies" | "earned-commission-carriers" | "analytics")
+    if (tabParam && ['overview', 'upload', 'carriers', 'earned-commission', 'earned-commission-companies', 'earned-commission-carriers', 'analytics'].includes(tabParam)) {
+      setTab(tabParam as "overview" | "upload" | "carriers" | "earned-commission" | "earned-commission-companies" | "earned-commission-carriers" | "analytics")
       // Auto-expand dropdown if a sub-item is selected
       if (tabParam.startsWith('earned-commission-')) {
         setExpandedDropdowns(new Set(['earned-commission']))
       }
     } else {
-      // Default to analytics if no tab parameter or invalid tab
-      setTab("analytics")
+      // Default to overview (dashboard) if no tab parameter or invalid tab
+      setTab("overview")
     }
   }, [searchParams])
 
@@ -94,20 +96,28 @@ function HomePageContent() {
 
   const tabConfig = [
     {
+      id: "overview" as const,
+      label: "Dashboard",
+      icon: BarChart3,
+      description: "Commission Overview & Insights",
+      gradient: "from-blue-600 via-indigo-600 to-purple-600",
+      bgGradient: "from-blue-50 via-indigo-50 to-purple-50"
+    },
+    {
       id: "analytics" as const,
       label: "Analytics",
-      icon: BarChart3,
-      description: "Commission Analytics & Insights",
+      icon: TrendingUp,
+      description: "Detailed Analytics & Reports",
       gradient: "from-emerald-600 via-teal-600 to-cyan-600",
       bgGradient: "from-emerald-50 via-teal-50 to-cyan-50"
     },
     {
-      id: "dashboard" as const,
+      id: "upload" as const,
       label: "Upload",
       icon: Upload,
       description: "Upload & Process Documents",
-      gradient: "from-blue-600 via-indigo-600 to-purple-600",
-      bgGradient: "from-blue-50 via-indigo-50 to-purple-50"
+      gradient: "from-violet-600 via-purple-600 to-fuchsia-600",
+      bgGradient: "from-violet-50 via-purple-50 to-fuchsia-50"
     },
     {
       id: "earned-commission" as const,
@@ -219,7 +229,7 @@ function HomePageContent() {
                       });
                     } else {
                       // Navigate to page
-                      if (tabItem.id === 'analytics') {
+                      if (tabItem.id === 'overview') {
                         router.push('/');
                       } else {
                         router.push(`/?tab=${tabItem.id}`);
@@ -391,7 +401,7 @@ function HomePageContent() {
 
       {/* Main Content Area */}
       <div className={`flex-1 flex flex-col min-w-0 ${sidebarCollapsed ? 'ml-20' : 'ml-80'} transition-all duration-300`}>
-        {/* Top Header */}
+        {/* Top Header - Show for all tabs including dashboard */}
         <header className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-6 py-4 shadow-sm">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -425,12 +435,19 @@ function HomePageContent() {
         {/* Main Content */}
         <main className="flex-1 p-6 bg-slate-50 dark:bg-slate-900 overflow-y-auto main-content-scroll">
           <div className="max-w-none">
+            {tab === "overview" && <DashboardOverview environmentId={activeEnvironment?.id || null} />}
             {tab === "analytics" && <PremiumAnalyticsTab environmentId={activeEnvironment?.id || null} onNavigate={(newTab) => router.push(`/?tab=${newTab}`)} />}
-            {tab === "dashboard" && <DashboardTab environmentId={activeEnvironment?.id || null} />}
-            {(tab === "earned-commission" || tab === "earned-commission-companies" || tab === "earned-commission-carriers") && <EarnedCommissionTab environmentId={activeEnvironment?.id || null} activeView={tab === "earned-commission-carriers" ? "carriers" : "companies"} onViewChange={(view) => {
-              const newTab = view === "carriers" ? "earned-commission-carriers" : "earned-commission-companies";
-              router.push(`/?tab=${newTab}`);
-            }} />}
+            {tab === "upload" && <DashboardTab environmentId={activeEnvironment?.id || null} />}
+            {(tab === "earned-commission" || tab === "earned-commission-companies" || tab === "earned-commission-carriers") && <EarnedCommissionTab 
+              environmentId={activeEnvironment?.id || null} 
+              activeView={tab === "earned-commission-carriers" ? "carriers" : "companies"} 
+              onViewChange={(view) => {
+                const newTab = view === "carriers" ? "earned-commission-carriers" : "earned-commission-companies";
+                router.push(`/?tab=${newTab}`);
+              }} 
+              companyFilter={searchParams?.get('company') || null}
+              autoExpandCompany={searchParams?.get('autoExpand') === 'true'}
+            />}
             {tab === "carriers" && <CarrierTab environmentId={activeEnvironment?.id || null} />}
           </div>
         </main>

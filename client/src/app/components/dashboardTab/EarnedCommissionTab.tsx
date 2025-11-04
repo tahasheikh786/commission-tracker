@@ -1,6 +1,6 @@
 'use client'
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { Users, X } from 'lucide-react';
+import { Users, X, Building2 } from 'lucide-react';
 import { useSubmission } from '@/context/SubmissionContext';
 import { useEnvironment } from '@/context/EnvironmentContext';
 import { useCarriersWithCommission, useAvailableYears } from '../../hooks/useDashboard';
@@ -12,9 +12,11 @@ interface EarnedCommissionTabProps {
   environmentId?: string | null;
   activeView: 'companies' | 'carriers';
   onViewChange?: (view: 'companies' | 'carriers') => void;
+  companyFilter?: string | null;
+  autoExpandCompany?: boolean;
 }
 
-export default function EarnedCommissionTab({ environmentId, activeView, onViewChange }: EarnedCommissionTabProps) {
+export default function EarnedCommissionTab({ environmentId, activeView, onViewChange, companyFilter, autoExpandCompany }: EarnedCommissionTabProps) {
   const { refreshTrigger } = useSubmission();
   const { loading: environmentsLoading } = useEnvironment();
 
@@ -26,6 +28,7 @@ export default function EarnedCommissionTab({ environmentId, activeView, onViewC
   const [carrierFilter, setCarrierFilter] = useState<string | null>(null);
   const [selectedCarrierId, setSelectedCarrierId] = useState<string | null>(null);
   const [viewType, setViewType] = useState<'companies' | 'carriers'>(activeView);
+  const [companyFilterState, setCompanyFilterState] = useState<string | null>(companyFilter || null);
   
   const { refetch: refetchCarriers } = useCarriersWithCommission();
   const { years: availableYears, refetch: refetchYears } = useAvailableYears();
@@ -227,6 +230,14 @@ export default function EarnedCommissionTab({ environmentId, activeView, onViewC
     setViewType(activeView);
   }, [activeView]);
 
+  // Handle companyFilter prop change
+  useEffect(() => {
+    if (companyFilter) {
+      setViewType('companies');
+      setCompanyFilterState(companyFilter);
+    }
+  }, [companyFilter]);
+
   return (
     <div className="p-6 bg-slate-50 dark:bg-slate-900 min-h-screen">
       {/* Header */}
@@ -294,6 +305,24 @@ export default function EarnedCommissionTab({ environmentId, activeView, onViewC
           </div>
         </div>
       )}
+      
+      {/* Company Filter Badge */}
+      {companyFilterState && viewType === 'companies' && (
+        <div className="mb-4">
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-lg">
+            <Building2 className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+            <span className="text-sm font-medium text-purple-900 dark:text-purple-100">
+              Filtered by Company: {companyFilterState}
+            </span>
+            <button
+              onClick={() => setCompanyFilterState(null)}
+              className="ml-2 p-1 hover:bg-purple-100 dark:hover:bg-purple-800 rounded transition-colors"
+            >
+              <X className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Table View */}
       {viewType === 'companies' ? (
@@ -303,6 +332,8 @@ export default function EarnedCommissionTab({ environmentId, activeView, onViewC
           selectedCarrierId={selectedCarrierId}
           onCarrierFilterChange={setSelectedCarrierId}
           availableCarriers={carrierGroups.map(g => ({ id: g.carrierId, name: g.carrierName }))}
+          initialSearchQuery={companyFilterState}
+          autoExpandRow={autoExpandCompany}
         />
       ) : (
         <CarriersTableView
