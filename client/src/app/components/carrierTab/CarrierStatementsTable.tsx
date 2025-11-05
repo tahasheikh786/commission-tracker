@@ -15,6 +15,11 @@ type Statement = {
   final_data?: any;
   uploaded_by_email?: string;
   uploaded_by_name?: string;
+  // NEW: Automation metadata
+  automated_approval?: boolean;
+  automation_timestamp?: string;
+  total_amount_match?: boolean | null;
+  extracted_total?: number;
 };
 
 type Props = {
@@ -365,10 +370,40 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
               const statusInfo = getStatusInfo(statement.status);
               const StatusIcon = statusInfo.icon;
               
+              // Add function to determine row styling
+              function getRowBackgroundStyle(statement: Statement) {
+                // Only apply styling to approved statements with automation metadata
+                if (statement.status.toLowerCase() !== 'approved') {
+                  return '';
+                }
+                
+                // Check if this was auto-approved and has total validation info
+                const automatedApproval = statement.automated_approval === true;
+                const totalMatch = statement.total_amount_match;
+                
+                if (!automatedApproval) {
+                  return ''; // Normal styling for manually approved statements
+                }
+                
+                // Green background for matched totals
+                if (totalMatch === true) {
+                  return 'bg-green-50 dark:bg-green-900/10 border-l-4 border-green-500';
+                }
+                
+                // Yellow background for mismatched totals
+                if (totalMatch === false) {
+                  return 'bg-yellow-50 dark:bg-yellow-900/10 border-l-4 border-yellow-500';
+                }
+                
+                return '';
+              }
+              
+              const rowStyle = getRowBackgroundStyle(statement);
+              
               return (
                 <tr 
                   key={statement.id} 
-                  className="hover:bg-slate-50/50 dark:hover:bg-slate-700/50 transition-colors duration-200 animate-fade-in"
+                  className={`hover:bg-slate-50/50 dark:hover:bg-slate-700/50 transition-colors duration-200 animate-fade-in ${rowStyle}`}
                   style={{ animationDelay: `${idx * 50}ms` }}
                 >
                   <td className="px-6 py-4">
@@ -431,9 +466,22 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium border ${statusInfo.bgColor} ${statusInfo.textColor} ${statusInfo.borderColor}`}>
-                      <StatusIcon size={14} />
-                      {statusInfo.label}
+                    <div className="flex flex-col gap-1">
+                      {/* Main status badge */}
+                      <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium border ${statusInfo.bgColor} ${statusInfo.textColor} ${statusInfo.borderColor}`}>
+                        <StatusIcon size={14} />
+                        {statusInfo.label}
+                      </div>
+                      
+                      {/* Needs Review indicator */}
+                      {statement.total_amount_match === false && statement.automated_approval === true && (
+                        <div className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-800">
+                          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                          </svg>
+                          Needs Review
+                        </div>
+                      )}
                     </div>
                   </td>
                   <td className="px-6 py-4">

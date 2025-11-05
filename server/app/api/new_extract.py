@@ -28,6 +28,7 @@ import logging
 from typing import Optional, Dict, Any
 from fastapi.responses import JSONResponse
 import uuid
+import re
 import hashlib
 from app.services.cancellation_manager import cancellation_manager
 
@@ -664,6 +665,100 @@ async def extract_tables_smart(
                                 logger.info(f"🎯 Format Learning: Auto-applying row deletions: {len(deleted_rows)} rows")
                                 # Store deletion info for frontend to apply
                                 format_learning_data['auto_delete_rows'] = deleted_rows
+                        
+                        # CRITICAL: Check if automation is eligible
+                        can_automate = False
+                        automation_reason = None
+                        
+                        # Requirement 1: Statement date must be present
+                        has_statement_date = extracted_date is not None and extracted_date.strip() != ""
+                        
+                        # Requirement 2: Carrier name must be present  
+                        has_carrier_name = carrier is not None and carrier.name is not None
+                        
+                        # Requirement 3: Format must have been successfully learned (high confidence)
+                        has_high_confidence = learned_format.get("confidence_score", 0) >= 70
+                        
+                        # Requirement 4: Has been used successfully at least once before
+                        has_usage_history = learned_format.get("usage_count", 0) >= 1
+                        
+                        if not has_statement_date:
+                            automation_reason = "Statement date not detected - manual review required"
+                        elif not has_carrier_name:
+                            automation_reason = "Carrier name not detected - manual review required"
+                        elif not has_high_confidence:
+                            automation_reason = "Format confidence too low for automation"
+                        elif not has_usage_history:
+                            automation_reason = "First-time format - manual review required"
+                        else:
+                            can_automate = True
+                            automation_reason = "All criteria met - automation eligible"
+                        
+                        # Extract total amount from current file for validation
+                        current_total_amount = None
+                        
+                        # First try to extract from GPT metadata summary
+                        if document_metadata and document_metadata.get('summary'):
+                            summary_text = document_metadata['summary']
+                            # Extract total amount from summary using regex
+                            # Look for patterns like "Total amount: $1,027.20" or "total of $1,027.20"
+                            total_matches = re.findall(r'[Tt]otal(?:\s+amount)?[:]*\s*\$?([\d,]+\.?\d*)', summary_text)
+                            if total_matches:
+                                # Take the first match and parse it
+                                total_str = total_matches[0].replace(',', '')
+                                try:
+                                    current_total_amount = float(total_str)
+                                    logger.info(f"🎯 Format Learning: Extracted total from GPT summary: ${current_total_amount:.2f}")
+                                except ValueError:
+                                    pass
+                        
+                        # Fallback to table extraction if not found in GPT summary
+                        total_field_name = table_editor_settings.get("total_amount_field_name")
+                        learned_total_amount = table_editor_settings.get("statement_total_amount")
+                        
+                        if total_field_name and selected_table:
+                            # Find the total amount in the current extraction
+                            try:
+                                headers = selected_table.get("header", [])
+                                rows = selected_table.get("rows", [])
+                                
+                                # Find the field index
+                                total_idx = None
+                                for idx, header in enumerate(headers):
+                                    if header.lower() == total_field_name.lower():
+                                        total_idx = idx
+                                        break
+                                
+                                if total_idx is not None:
+                                    # Try to find in last few rows or summary rows
+                                    for row in reversed(rows[-5:]):  # Check last 5 rows
+                                        if total_idx < len(row):
+                                            current_total_amount = format_learning_service.parse_currency_value(str(row[total_idx]))
+                                            if current_total_amount:
+                                                logger.info(f"🎯 Format Learning: Extracted current total amount: ${current_total_amount:.2f}")
+                                                break
+                            except Exception as e:
+                                logger.warning(f"Failed to extract current total amount: {e}")
+                        
+                        # Validate total amount if we have both values
+                        total_validation = None
+                        if can_automate and current_total_amount is not None:
+                            total_validation = format_learning_service.validate_total_amount(
+                                extracted_amount=current_total_amount,
+                                learned_amount=learned_total_amount,
+                                tolerance_percent=5.0  # 5% tolerance
+                            )
+                            logger.info(f"🎯 Format Learning: Total validation result: {total_validation}")
+                        
+                        # Add automation eligibility to format learning data
+                        format_learning_data.update({
+                            "can_automate": can_automate,
+                            "automation_reason": automation_reason,
+                            "requires_review": not can_automate,
+                            "current_total_amount": current_total_amount,
+                            "learned_total_amount": learned_total_amount,
+                            "total_validation": total_validation,
+                        })
                     else:
                         logger.info(f"🎯 Format Learning: No matching format found (score: {match_score})")
                         

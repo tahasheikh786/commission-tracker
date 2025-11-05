@@ -178,6 +178,11 @@ class StatementUploadUpdate(BaseModel):
     ai_intelligence: Optional[Dict[str, Any]] = None  # AI intelligence data (table selection, field mapping, plan detection)
     session_id: Optional[str] = None
     auto_save_enabled: Optional[bool] = None
+    # Automation metadata
+    automated_approval: Optional[bool] = None
+    automation_timestamp: Optional[datetime] = None
+    total_amount_match: Optional[bool] = None
+    extracted_total: Optional[float] = None
 
 class ExtractionCreate(BaseModel):
     company_id: str

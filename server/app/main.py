@@ -10,7 +10,7 @@ import time
 import os
 import signal
 import logging
-from app.api import company, mapping, review, statements, database_fields, plan_types, table_editor, improve_extraction, pending, dashboard, format_learning, new_extract, summary_rows, date_extraction, excel_extract, user_management, admin, otp_auth, auth, websocket, ai_intelligent_mapping, ai_table_mapping, pdf_proxy, environment, admin_utils
+from app.api import company, mapping, review, statements, database_fields, plan_types, table_editor, improve_extraction, pending, dashboard, format_learning, new_extract, summary_rows, date_extraction, excel_extract, user_management, admin, otp_auth, auth, websocket, ai_intelligent_mapping, ai_table_mapping, pdf_proxy, environment, admin_utils, auto_approval
 from app.utils.auth_utils import cleanup_expired_sessions
 from app.db.database import get_db
 from app.security_config import (
@@ -267,6 +267,7 @@ app.include_router(date_extraction.router)
 app.include_router(excel_extract.router)
 app.include_router(ai_intelligent_mapping.router)
 app.include_router(ai_table_mapping.router)
+app.include_router(auto_approval.router)
 app.include_router(websocket.router, tags=["WebSocket"])
 app.include_router(pdf_proxy.router, tags=["PDF"], prefix="/api")
 

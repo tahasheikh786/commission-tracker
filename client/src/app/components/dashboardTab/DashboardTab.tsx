@@ -43,6 +43,9 @@ export default function DashboardTab({ showAnalytics = false, environmentId }: D
   const [planTypes, setPlanTypes] = useState<string[]>([]);
   const [selectedStatementDate, setSelectedStatementDate] = useState<any>(null);
   const [extractionMethod, setExtractionMethod] = useState('smart');
+  
+  // NOTE: Automation is now handled entirely by SummaryUploadZone
+  // No need for automation states here
 
   // Refresh earned commission stats when component mounts (only if analytics are shown)
   useEffect(() => {
@@ -149,9 +152,13 @@ export default function DashboardTab({ showAnalytics = false, environmentId }: D
     }
   }, [databaseFields.length]);
 
-  // Handle upload result - NEW 2-STEP FLOW
-  function handleUploadResult({ tables, upload_id, extraction_id, file_name, file, plan_types, extracted_carrier, extracted_date, gcs_url, gcs_key, document_metadata, ai_intelligence, carrier_id, company_id }: any) {
+
+  // Handle upload result - MANUAL FLOW ONLY (automation is handled by SummaryUploadZone)
+  function handleUploadResult({ tables, upload_id, extraction_id, file_name, file, plan_types, extracted_carrier, extracted_date, gcs_url, gcs_key, document_metadata, ai_intelligence, carrier_id, company_id, format_learning, can_automate }: any) {
     
+    // NOTE: Automation is now handled entirely by SummaryUploadZone
+    // This function only handles the manual review flow
+    console.log("📋 Opening manual editor for review...");
     
     // Set uploaded data with AI intelligence and carrier information
     setUploaded({ 
@@ -168,7 +175,8 @@ export default function DashboardTab({ showAnalytics = false, environmentId }: D
       document_metadata,
       ai_intelligence,
       carrier_id,  // CRITICAL: Include carrier_id for AI field mapping
-      company_id   // CRITICAL: Include company_id as fallback
+      company_id,  // CRITICAL: Include company_id as fallback
+      format_learning  // IMPORTANT: Include format learning for field mappings
     });
     
     // Handle carrier detection and auto-creation
@@ -291,6 +299,8 @@ export default function DashboardTab({ showAnalytics = false, environmentId }: D
     },
   ];
 
+
+
   // Render UnifiedTableEditor - NEW 2-STEP FLOW
   if (showUnifiedEditor && uploaded) {
 
@@ -314,7 +324,8 @@ export default function DashboardTab({ showAnalytics = false, environmentId }: D
             company_id: uploaded.carrier_id || uploaded.company_id || (company?.id !== 'auto-detected' ? company?.id : undefined),
             carrier_id: uploaded.carrier_id || uploaded.company_id,
             document_metadata: uploaded.document_metadata,
-            ai_intelligence: uploaded.ai_intelligence
+            ai_intelligence: uploaded.ai_intelligence,
+            format_learning: uploaded.format_learning  // Pass format learning data
           }}
           uploadData={uploaded}
           databaseFields={databaseFields}

@@ -499,64 +499,72 @@ def extract_field_mappings_once(field_config):
     if not field_config:
         return mappings
     
+    print(f"🔍 Extracting field mappings from: {field_config}")
+    
     # Look for these specific database fields in the field_config
     for field in field_config:
         if isinstance(field, dict):
-            # Support both old format (field/label) and new format (display_name/source_field)
-            field_name = field.get('field', '') or field.get('display_name', '')
-            field_label = field.get('label', '') or field.get('source_field', '')
-            display_name = field.get('display_name', '') or field.get('label', '')
+            # Support multiple formats:
+            # 1. Auto-approval format: {'field': 'Group Name', 'mapping': 'Client Name'}
+            # 2. Old format: {'field': 'field_name', 'label': 'mapped_name'}
+            # 3. New format: {'display_name': 'field_name', 'source_field': 'mapped_name'}
             
-            # Use display_name as the target field name (what we'll look for in row data)
-            # Use source_field/label as the source field name (what maps to display_name)
-            target_field = display_name
+            # The SOURCE field is what appears in the table header
+            source_field = field.get('field', '') or field.get('display_name', '') or field.get('source_field', '')
+            
+            # The TARGET is what it's mapped to in our database
+            target_mapping = field.get('mapping', '') or field.get('label', '') or field.get('display_name', '')
+            
+            # Check what the field is MAPPED TO, not what it's called in the source
+            target_lower = target_mapping.lower()
             
             # Check for company/client name fields
-            if (field_name.lower() in ['company name', 'client name', 'companyname', 'clientname'] or 
-                display_name.lower() in ['company name', 'client name', 'companyname', 'clientname'] or
-                'company' in field_name.lower() or 'company' in display_name.lower() or
-                'client' in field_name.lower() or 'client' in display_name.lower()):
-                mappings['client_name_field'] = field_label or target_field
+            if (target_lower in ['client name', 'company name', 'clientname', 'companyname'] or 
+                'client' in target_lower and 'name' in target_lower or
+                'company' in target_lower and 'name' in target_lower):
+                mappings['client_name_field'] = source_field
+                print(f"✅ Found client name field: {source_field} -> {target_mapping}")
             
             # Check for commission earned fields
-            elif (field_name.lower() in ['commission earned', 'commissionearned', 'commission_earned', 'commission paid', 'total commission paid'] or 
-                  display_name.lower() in ['commission earned', 'commissionearned', 'commission_earned', 'commission paid', 'total commission paid'] or
-                  'commission' in field_name.lower() and ('earned' in field_name.lower() or 'paid' in field_name.lower()) or
-                  'commission' in display_name.lower() and ('earned' in display_name.lower() or 'paid' in display_name.lower())):
-                mappings['commission_earned_field'] = field_label or target_field
+            elif (target_lower in ['commission earned', 'commissionearned', 'commission_earned', 
+                                 'commission paid', 'total commission paid', 'paid amount'] or 
+                  'commission' in target_lower and ('earned' in target_lower or 'paid' in target_lower or 'amount' in target_lower)):
+                mappings['commission_earned_field'] = source_field
+                print(f"✅ Found commission field: {source_field} -> {target_mapping}")
             
             # Check for invoice total fields
-            elif (field_name.lower() in ['invoice total', 'invoicetotal', 'invoice_total', 'premium amount', 'premiumamount'] or 
-                  display_name.lower() in ['invoice total', 'invoicetotal', 'invoice_total', 'premium amount', 'premiumamount'] or
-                  'invoice' in field_name.lower() and 'total' in field_name.lower() or
-                  'invoice' in display_name.lower() and 'total' in display_name.lower() or
-                  'premium' in field_name.lower() and 'amount' in field_name.lower() or
-                  'premium' in display_name.lower() and 'amount' in display_name.lower()):
-                mappings['invoice_total_field'] = field_label or target_field
+            elif (target_lower in ['invoice total', 'invoicetotal', 'invoice_total', 
+                                 'premium amount', 'premiumamount', 'premium total'] or 
+                  'invoice' in target_lower and 'total' in target_lower or
+                  'premium' in target_lower and ('amount' in target_lower or 'total' in target_lower)):
+                mappings['invoice_total_field'] = source_field
+                print(f"✅ Found invoice total field: {source_field} -> {target_mapping}")
     
     # If we didn't find the fields, try alternative field names
     if not mappings['client_name_field']:
+        print("⚠️  Client name field not found, trying alternative patterns...")
         for field in field_config:
             if isinstance(field, dict):
-                field_name = (field.get('field', '') or field.get('display_name', '')).lower()
-                field_label = (field.get('label', '') or field.get('source_field', '')).lower()
-                display_name = (field.get('display_name', '') or field.get('label', '')).lower()
+                source_field = field.get('field', '') or field.get('display_name', '') or field.get('source_field', '')
+                target_mapping = field.get('mapping', '') or field.get('label', '') or field.get('display_name', '')
                 
-                # Try alternative client name patterns
-                if any(keyword in field_name or keyword in field_label or keyword in display_name for keyword in ['group', 'employer', 'organization']):
-                    mappings['client_name_field'] = field.get('source_field', '') or field.get('label', '')
+                # Check source field for alternative client name patterns
+                if any(keyword in source_field.lower() for keyword in ['group name', 'group', 'employer', 'organization', 'customer']):
+                    mappings['client_name_field'] = source_field
+                    print(f"✅ Found alternative client name field: {source_field} -> {target_mapping}")
                     break
     
     if not mappings['commission_earned_field']:
+        print("⚠️  Commission field not found, trying alternative patterns...")
         for field in field_config:
             if isinstance(field, dict):
-                field_name = (field.get('field', '') or field.get('display_name', '')).lower()
-                field_label = (field.get('label', '') or field.get('source_field', '')).lower()
-                display_name = (field.get('display_name', '') or field.get('label', '')).lower()
+                source_field = field.get('field', '') or field.get('display_name', '') or field.get('source_field', '')
+                target_mapping = field.get('mapping', '') or field.get('label', '') or field.get('display_name', '')
                 
-                # Try alternative commission patterns
-                if any(keyword in field_name or keyword in field_label or keyword in display_name for keyword in ['commission', 'earned', 'paid', 'amount']):
-                    mappings['commission_earned_field'] = field.get('source_field', '') or field.get('label', '')
+                # Check source field for alternative commission patterns
+                if any(keyword in source_field.lower() for keyword in ['paid amount', 'commission', 'earned', 'paid', 'amount']):
+                    mappings['commission_earned_field'] = source_field
+                    print(f"✅ Found alternative commission field: {source_field} -> {target_mapping}")
                     break
     
     # Debug logging to help troubleshoot field mapping issues
@@ -1129,64 +1137,93 @@ async def process_commission_data_from_statement(db: AsyncSession, statement_upl
         if not isinstance(table, dict) or 'rows' not in table:
             continue
             
+        # Get headers from table to map field names to indices
+        headers = table.get('header', []) or table.get('headers', [])
+        if not headers:
+            print(f"⚠️  No headers found in table, skipping")
+            continue
+            
+        # Create field-to-index mapping
+        field_indices = {}
+        for idx, header in enumerate(headers):
+            field_indices[header] = idx
+            
+        # Check if required fields exist in headers
+        if client_name_field not in field_indices:
+            print(f"⚠️  Client field '{client_name_field}' not found in headers: {headers}")
+            continue
+        if commission_earned_field not in field_indices:
+            print(f"⚠️  Commission field '{commission_earned_field}' not found in headers: {headers}")
+            continue
+            
+        # Get field indices
+        client_idx = field_indices[client_name_field]
+        commission_idx = field_indices[commission_earned_field]
+        invoice_idx = field_indices.get(invoice_total_field) if invoice_total_field else None
+            
         for row in table['rows']:
+            # Handle both dict and list row formats
             if isinstance(row, dict):
                 client_name = row.get(client_name_field, '').strip()
-                # Clean company name to remove state codes and numbers
-                client_name = company_name_service.clean_company_name(client_name)
                 commission_earned_str = str(row.get(commission_earned_field, '0')).strip()
-                # Handle case where invoice_total_field is None (no invoice total field in statement)
-                if invoice_total_field:
-                    invoice_total_str = str(row.get(invoice_total_field, '0')).strip()
-                else:
-                    invoice_total_str = '0'  # Default to 0 when no invoice total field exists
+                invoice_total_str = str(row.get(invoice_total_field, '0')).strip() if invoice_total_field else '0'
+            elif isinstance(row, list):
+                # Row is a list - use indices
+                client_name = str(row[client_idx]).strip() if client_idx < len(row) else ''
+                commission_earned_str = str(row[commission_idx]).strip() if commission_idx < len(row) else '0'
+                invoice_total_str = str(row[invoice_idx]).strip() if invoice_idx and invoice_idx < len(row) else '0'
+            else:
+                continue
                 
-                if not client_name:
-                    continue
-                
-                print(f"Processing row: client={client_name}, commission={commission_earned_str}, invoice={invoice_total_str}")
-                
-                # ✅ OPTIMIZED: Use the optimized currency parsing function
-                commission_earned = parse_currency_amount(commission_earned_str)
-                invoice_total = parse_currency_amount(invoice_total_str)
-                
-                # Process commission data if it has a value (including negative adjustments)
-                if commission_earned != 0:
-                    print(f"Upserting commission data: client={client_name}, commission={commission_earned}, invoice={invoice_total}")
-                    # Upsert the commission data
-                    # CRITICAL FIX: Use carrier_id (insurance carrier) not company_id (user's company)
-                    carrier_id_to_use = statement_upload.carrier_id if statement_upload.carrier_id else statement_upload.company_id
-                    await upsert_earned_commission(
-                        db, 
-                        carrier_id_to_use, 
-                        client_name, 
-                        invoice_total, 
-                        commission_earned,
-                        statement_date,
-                        statement_month,
-                        statement_year,
-                        str(statement_upload.id),
-                        statement_upload.user_id,  # CRITICAL: Pass user_id for proper data isolation
-                        statement_upload.environment_id  # CRITICAL: Pass environment_id for environment isolation
-                    )
-                elif commission_earned == 0 and invoice_total != 0:
-                    # If commission is 0 but invoice has a value, still process it
-                    print(f"Upserting invoice-only data: client={client_name}, commission={commission_earned}, invoice={invoice_total}")
-                    # CRITICAL FIX: Use carrier_id (insurance carrier) not company_id (user's company)
-                    carrier_id_to_use = statement_upload.carrier_id if statement_upload.carrier_id else statement_upload.company_id
-                    await upsert_earned_commission(
-                        db, 
-                        carrier_id_to_use, 
-                        client_name, 
-                        invoice_total, 
-                        commission_earned,
-                        statement_date,
-                        statement_month,
-                        statement_year,
-                        str(statement_upload.id),
-                        statement_upload.user_id,  # CRITICAL: Pass user_id for proper data isolation
-                        statement_upload.environment_id  # CRITICAL: Pass environment_id for environment isolation
-                    )
+            # Clean company name to remove state codes and numbers
+            client_name = company_name_service.clean_company_name(client_name)
+            
+            if not client_name:
+                continue
+            
+            print(f"Processing row: client={client_name}, commission={commission_earned_str}, invoice={invoice_total_str}")
+            
+            # ✅ OPTIMIZED: Use the optimized currency parsing function
+            commission_earned = parse_currency_amount(commission_earned_str)
+            invoice_total = parse_currency_amount(invoice_total_str)
+            
+            # Process commission data if it has a value (including negative adjustments)
+            if commission_earned != 0:
+                print(f"Upserting commission data: client={client_name}, commission={commission_earned}, invoice={invoice_total}")
+                # Upsert the commission data
+                # CRITICAL FIX: Use carrier_id (insurance carrier) not company_id (user's company)
+                carrier_id_to_use = statement_upload.carrier_id if statement_upload.carrier_id else statement_upload.company_id
+                await upsert_earned_commission(
+                    db, 
+                    carrier_id_to_use, 
+                    client_name, 
+                    invoice_total, 
+                    commission_earned,
+                    statement_date,
+                    statement_month,
+                    statement_year,
+                    str(statement_upload.id),
+                    statement_upload.user_id,  # CRITICAL: Pass user_id for proper data isolation
+                    statement_upload.environment_id  # CRITICAL: Pass environment_id for environment isolation
+                )
+            elif commission_earned == 0 and invoice_total != 0:
+                # If commission is 0 but invoice has a value, still process it
+                print(f"Upserting invoice-only data: client={client_name}, commission={commission_earned}, invoice={invoice_total}")
+                # CRITICAL FIX: Use carrier_id (insurance carrier) not company_id (user's company)
+                carrier_id_to_use = statement_upload.carrier_id if statement_upload.carrier_id else statement_upload.company_id
+                await upsert_earned_commission(
+                    db, 
+                    carrier_id_to_use, 
+                    client_name, 
+                    invoice_total, 
+                    commission_earned,
+                    statement_date,
+                    statement_month,
+                    statement_year,
+                    str(statement_upload.id),
+                    statement_upload.user_id,  # CRITICAL: Pass user_id for proper data isolation
+                    statement_upload.environment_id  # CRITICAL: Pass environment_id for environment isolation
+                )
     
     print("Commission data processing completed successfully")
     return True
@@ -1250,6 +1287,32 @@ async def bulk_process_commissions(db: AsyncSession, statement_upload: Statement
         if not isinstance(table, dict) or 'rows' not in table:
             continue
         
+        # Get headers from table to map field names to indices
+        headers = table.get('header', []) or table.get('headers', [])
+        if not headers:
+            print(f"⚠️  Table {table_index}: No headers found, skipping table")
+            continue
+            
+        # Create field-to-index mapping
+        field_indices = {}
+        for idx, header in enumerate(headers):
+            field_indices[header] = idx
+            
+        # Check if required fields exist in headers
+        if client_name_field not in field_indices:
+            print(f"⚠️  Table {table_index}: Client field '{client_name_field}' not found in headers: {headers}")
+            continue
+        if commission_earned_field not in field_indices:
+            print(f"⚠️  Table {table_index}: Commission field '{commission_earned_field}' not found in headers: {headers}")
+            continue
+            
+        # Get field indices
+        client_idx = field_indices[client_name_field]
+        commission_idx = field_indices[commission_earned_field]
+        invoice_idx = field_indices.get(invoice_total_field) if invoice_total_field else None
+        
+        print(f"📊 Table {table_index}: Mapped fields - client[{client_idx}]={client_name_field}, commission[{commission_idx}]={commission_earned_field}, invoice[{invoice_idx}]={invoice_total_field}")
+        
         # CRITICAL FIX: Get summary rows to exclude from commission calculations
         summary_rows_set = set(table.get('summaryRows', []))
         if summary_rows_set:
@@ -1261,35 +1324,45 @@ async def bulk_process_commissions(db: AsyncSession, statement_upload: Statement
                 print(f"⏭️ Skipping summary row {row_index} in table {table_index}")
                 continue
                 
+            # Handle both dict and list row formats
             if isinstance(row, dict):
+                # Row is a dictionary - use field names directly
                 client_name = row.get(client_name_field, '').strip()
-                # Clean company name to remove state codes and numbers
-                client_name = company_name_service.clean_company_name(client_name)
-                if not client_name:
-                    continue
-                
                 commission_str = str(row.get(commission_earned_field, '0')).strip()
                 invoice_str = str(row.get(invoice_total_field, '0')).strip() if invoice_total_field else '0'
+            elif isinstance(row, list):
+                # Row is a list - use indices
+                client_name = str(row[client_idx]).strip() if client_idx < len(row) else ''
+                commission_str = str(row[commission_idx]).strip() if commission_idx < len(row) else '0'
+                invoice_str = str(row[invoice_idx]).strip() if invoice_idx and invoice_idx < len(row) else '0'
+            else:
+                print(f"⚠️  Skipping invalid row type: {type(row)}")
+                continue
                 
-                commission_earned = parse_currency_amount(commission_str)
-                invoice_total = parse_currency_amount(invoice_str)
-                
-                # Only process records with commission or invoice data
-                if commission_earned != 0 or invoice_total != 0:
-                    # ✅ FIX: Use carrier_id if available (new flow), otherwise fall back to company_id (old flow)
-                    effective_carrier_id = statement_upload.carrier_id if statement_upload.carrier_id else statement_upload.company_id
-                    commission_records.append({
-                        'carrier_id': effective_carrier_id,
-                        'client_name': client_name,
-                        'commission_earned': commission_earned,
-                        'invoice_total': invoice_total,
-                        'statement_month': statement_month,
-                        'statement_year': statement_year,
-                        'statement_date': statement_date,
-                        'upload_id': str(statement_upload.id),
-                        'user_id': user_id,  # CRITICAL: Include user_id for proper data isolation
-                        'environment_id': environment_id  # CRITICAL: Include environment_id for environment isolation
-                    })
+            # Clean company name to remove state codes and numbers
+            client_name = company_name_service.clean_company_name(client_name)
+            if not client_name:
+                continue
+            
+            commission_earned = parse_currency_amount(commission_str)
+            invoice_total = parse_currency_amount(invoice_str)
+            
+            # Only process records with commission or invoice data
+            if commission_earned != 0 or invoice_total != 0:
+                # ✅ FIX: Use carrier_id if available (new flow), otherwise fall back to company_id (old flow)
+                effective_carrier_id = statement_upload.carrier_id if statement_upload.carrier_id else statement_upload.company_id
+                commission_records.append({
+                    'carrier_id': effective_carrier_id,
+                    'client_name': client_name,
+                    'commission_earned': commission_earned,
+                    'invoice_total': invoice_total,
+                    'statement_month': statement_month,
+                    'statement_year': statement_year,
+                    'statement_date': statement_date,
+                    'upload_id': str(statement_upload.id),
+                    'user_id': user_id,  # CRITICAL: Include user_id for proper data isolation
+                    'environment_id': environment_id  # CRITICAL: Include environment_id for environment isolation
+                })
     
     if not commission_records:
         print("ℹ️ No commission records to process")

@@ -1,5 +1,5 @@
 from sqlalchemy import (
-    Column, String, Integer, Text, TIMESTAMP, JSON, ForeignKey, DateTime, text, UniqueConstraint, Numeric
+    Column, String, Integer, Text, TIMESTAMP, JSON, ForeignKey, DateTime, text, UniqueConstraint, Numeric, Boolean
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.declarative import declarative_base
@@ -80,6 +80,14 @@ class CarrierFormatLearning(Base):
     created_at = Column(DateTime, server_default=text('now()'), nullable=False)
     updated_at = Column(DateTime, server_default=text('now()'), onupdate=text('now()'), nullable=False)
     
+    # NEW: Total amount tracking
+    statement_total_amount = Column(Numeric(15, 2), nullable=True)  # The total amount from the statement
+    total_amount_field_name = Column(String, nullable=True)  # Which field contained the total
+    
+    # NEW: Automation tracking
+    auto_approved_count = Column(Integer, default=0)  # How many files were auto-approved
+    last_auto_approved_at = Column(DateTime, nullable=True)  # When last auto-approval happened
+    
     # Add unique constraint for company and format signature
     __table_args__ = (
         UniqueConstraint('company_id', 'format_signature', name='uq_carrier_format'),
@@ -123,6 +131,12 @@ class StatementUpload(Base):
     # User session tracking (optional)
     session_id = Column(String)  # Track user session for auto-save
     auto_save_enabled = Column(Integer, default=1)  # 1 for enabled, 0 for disabled
+    
+    # NEW: Automation metadata
+    automated_approval = Column(Boolean, default=False)  # True if auto-approved, False if manual
+    automation_timestamp = Column(DateTime, nullable=True)  # When automation occurred
+    total_amount_match = Column(Boolean, nullable=True)  # True if totals match, False if mismatch, NULL if not checked
+    extracted_total = Column(Numeric(15, 2), nullable=True)  # The total amount extracted
 
 class Extraction(Base):
     __tablename__ = 'extractions'

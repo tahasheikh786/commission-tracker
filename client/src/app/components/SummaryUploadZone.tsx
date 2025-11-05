@@ -3,6 +3,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useRouter } from 'next/navigation';
 import {
   Upload,
   FileText,
@@ -41,13 +42,41 @@ interface SummaryUploadZoneProps {
     document_metadata?: any,
     ai_intelligence?: any,
     carrier_id?: string,
-    company_id?: string
+    company_id?: string,
+    can_automate?: boolean,
+    plan_types?: string[],
+    extraction_id?: string
   }) => void;
   selectedStatementDate?: any;
   extractionMethod?: string;
   onExtractionMethodChange?: (method: string) => void;
   onContinue?: () => void;
   environmentId?: string | null;
+}
+
+// AutomationStep component for automation UI
+function AutomationStep({ icon, label, active }: { 
+  icon: string; 
+  label: string; 
+  active: boolean 
+}) {
+  return (
+    <div className={`flex items-center gap-3 transition-all duration-300 
+                    ${active ? 'opacity-100' : 'opacity-40'}`}>
+      <div className={`w-8 h-8 rounded-full flex items-center justify-center 
+                      text-sm font-semibold
+                      ${active 
+                        ? 'bg-green-500 text-white' 
+                        : 'bg-gray-200 dark:bg-gray-700 text-gray-500'}`}>
+        {active ? icon : '○'}
+      </div>
+      <span className={`text-sm ${active 
+                        ? 'text-gray-900 dark:text-white font-medium' 
+                        : 'text-gray-500 dark:text-gray-400'}`}>
+        {label}
+      </span>
+    </div>
+  );
 }
 
 export default function SummaryUploadZone({
@@ -58,6 +87,7 @@ export default function SummaryUploadZone({
   onContinue,
   environmentId
 }: SummaryUploadZoneProps) {
+  const router = useRouter();
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [currentStage, setCurrentStage] = useState('');
@@ -76,17 +106,96 @@ export default function SummaryUploadZone({
   const [n8nResponse, setN8nResponse] = useState<any>(null);
   const [isN8nLoading, setIsN8nLoading] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [automating, setAutomating] = useState(false);
+  const [automationProgress, setAutomationProgress] = useState(0);
+  const [automationError, setAutomationError] = useState<string | null>(null);
 
-  // Memoize callbacks to prevent unnecessary re-renders
-  const handleExtractionComplete = useCallback((results: any) => {
-    // ✅ AUTOMATIC FLOW: Close loader and proceed with results
-    setIsUploading(false);
-    if (results && results.success) {
+  // Automation function to trigger auto-approval
+  async function triggerAutoApproval(params: {
+    uploadId: string;
+    carrierId: string;
+    learnedFormat: any;
+    extractedTotal: number;
+    statementDate: string;
+    fullResults: any; // Add this for fallback
+  }) {
+    try {
+      setAutomating(true);
+      setAutomationProgress(0);
+      
+      // Simulate progress updates
+      const progressInterval = setInterval(() => {
+        setAutomationProgress(prev => Math.min(prev + 20, 90));
+      }, 500);
+      
+      // Call auto-approval API
+      const response = await axios.post(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/auto-approve/process`,
+        {
+          upload_id: params.uploadId,
+          carrier_id: params.carrierId,
+          learned_format: params.learnedFormat,
+          extracted_total: params.extractedTotal,
+          statement_date: params.statementDate
+        },
+        { withCredentials: true }
+      );
+      
+      clearInterval(progressInterval);
+      setAutomationProgress(100);
+      
+      if (response.data.success) {
+        const needsReview = response.data.needs_review;
+        
+        // Show toast
+        if (needsReview) {
+          toast(
+            `⚠️ Statement processed automatically but totals don't match. Please review.`,
+            { 
+              duration: 6000,
+              icon: '⚠️',
+              style: {
+                background: '#FEF3C7',
+                color: '#92400E',
+              }
+            }
+          );
+        } else {
+          toast.success(
+            `Statement automatically approved! ✨`,
+            { duration: 4000 }
+          );
+        }
+        
+        // Wait a moment for user to see the success
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // Navigate to Carrier Statements
+        const carrierName = response.data.carrier_name;
+        router.push(`/?tab=carriers&carrier=${encodeURIComponent(carrierName)}`);
+      }
+    } catch (error: any) {
+      console.error("Auto-approval failed:", error);
+      setAutomationError(error.response?.data?.detail || error.message);
+      toast.error(`Automation failed. Opening manual editor...`);
+      
+      // Wait a moment before fallback
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Fallback to manual flow
+      setAutomating(false);
+      const results = params.fullResults;
+      
+      // Create a dummy file object if uploadedFile is null
+      const fileToUse = uploadedFile || new File([], results.file_name || 'statement.pdf', {
+        type: 'application/pdf'
+      });
+      
       onParsed({
         tables: results.tables || [],
         upload_id: results.upload_id,
-        file_name: results.file_name || uploadedFile?.name || '',
-        file: uploadedFile!,
+        file_name: results.file_name || fileToUse.name || '',
+        file: fileToUse,
         quality_summary: results.quality_summary,
         extraction_config: results.extraction_config,
         gcs_url: results.gcs_url,
@@ -96,8 +205,67 @@ export default function SummaryUploadZone({
         document_metadata: results.document_metadata,
         ai_intelligence: results.ai_intelligence,
         carrier_id: results.carrier_id,
-        company_id: results.company_id
+        company_id: results.company_id,
+        format_learning: results.format_learning,
+        plan_types: results.plan_types || [],
+        extraction_id: results.extraction_id,
+        can_automate: false  // Force manual due to error
       });
+    } finally {
+      setAutomating(false);
+    }
+  }
+
+  // Memoize callbacks to prevent unnecessary re-renders
+  const handleExtractionComplete = useCallback((results: any) => {
+    // ✅ AUTOMATIC FLOW: Close loader and proceed with results
+    setIsUploading(false);
+    if (results && results.success) {
+      // Check for format learning and automation eligibility
+      const formatLearning = results.format_learning || results.formatlearning;
+      const canAutomate = formatLearning?.can_automate || formatLearning?.canAutomate;
+      const documentMetadata = results.document_metadata || results.documentmetadata;
+      
+      // Check if we can automate
+      if (canAutomate && 
+          documentMetadata?.statement_date && 
+          results.carrier_id &&
+          formatLearning?.learned_format) {
+        // AUTOMATION PATH
+        console.log("🤖 Automation eligible - processing automatically...");
+        
+        triggerAutoApproval({
+          uploadId: results.upload_id,
+          carrierId: results.carrier_id,
+          learnedFormat: formatLearning.learned_format,
+          extractedTotal: formatLearning.current_total_amount || 0,
+          statementDate: documentMetadata.statement_date,
+          fullResults: results
+        });
+      } else {
+        // MANUAL PATH
+        console.log("👤 Manual review required:", formatLearning?.automation_reason);
+        
+        // Pass all results including format learning data
+        onParsed({
+          tables: results.tables || [],
+          upload_id: results.upload_id,
+          file_name: results.file_name || uploadedFile?.name || '',
+          file: uploadedFile!,
+          quality_summary: results.quality_summary,
+          extraction_config: results.extraction_config,
+          gcs_url: results.gcs_url,
+          gcs_key: results.gcs_key,
+          extracted_carrier: results.extracted_carrier,
+          extracted_date: results.extracted_date,
+          document_metadata: results.document_metadata,
+          ai_intelligence: results.ai_intelligence,
+          carrier_id: results.carrier_id,
+          company_id: results.company_id,
+          format_learning: formatLearning,  // Include format learning data
+          can_automate: canAutomate  // Include automation flag
+        });
+      }
     }
   }, [uploadedFile, onParsed]);
   
@@ -320,6 +488,9 @@ export default function SummaryUploadZone({
     setN8nResponse(null);
     setUploadId(null);
     setIsCancelling(false);
+    setAutomating(false);
+    setAutomationProgress(0);
+    setAutomationError(null);
     
     if (localPdfUrl) {
       URL.revokeObjectURL(localPdfUrl);
@@ -353,6 +524,109 @@ export default function SummaryUploadZone({
       setLocalPdfUrl(null);
     }
   };
+
+  // Show custom automation UI when automating
+  if (automating) {
+    return (
+      <div className="fixed inset-0 bg-white dark:bg-gray-900 z-50 
+                      flex items-center justify-center">
+        <div className="max-w-2xl w-full px-6">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-8">
+            {/* Header with Robot Icon */}
+            <div className="flex items-center gap-4 mb-6">
+              <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-600 
+                              rounded-2xl flex items-center justify-center">
+                <svg 
+                  className="w-8 h-8 text-white animate-pulse" 
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  <path 
+                    strokeLinecap="round" 
+                    strokeLinejoin="round" 
+                    strokeWidth="2" 
+                    d="M13 10V3L4 14h7v7l9-11h-7z" 
+                  />
+                </svg>
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                  🤖 Automating Your Upload
+                </h2>
+                <p className="text-gray-600 dark:text-gray-400">
+                  Applying learned format and validating data...
+                </p>
+              </div>
+            </div>
+            
+            {/* Progress Bar */}
+            <div className="mb-6">
+              <div className="flex justify-between text-sm text-gray-600 mb-2">
+                <span>Progress</span>
+                <span>{automationProgress}%</span>
+              </div>
+              <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-gradient-to-r from-blue-500 to-purple-600 
+                             transition-all duration-500"
+                  style={{ width: `${automationProgress}%` }}
+                />
+              </div>
+            </div>
+            
+            {/* Steps */}
+            <div className="space-y-3">
+              <AutomationStep 
+                icon="✓" 
+                label="Applying learned field mappings" 
+                active={automationProgress >= 20} 
+              />
+              <AutomationStep 
+                icon="✓" 
+                label="Applying table corrections" 
+                active={automationProgress >= 40} 
+              />
+              <AutomationStep 
+                icon="✓" 
+                label="Validating total amount" 
+                active={automationProgress >= 60} 
+              />
+              <AutomationStep 
+                icon="✓" 
+                label="Calculating commissions" 
+                active={automationProgress >= 80} 
+              />
+              <AutomationStep 
+                icon="✓" 
+                label="Finalizing approval" 
+                active={automationProgress >= 100} 
+              />
+            </div>
+            
+            {/* Info */}
+            <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg 
+                            border border-blue-200 dark:border-blue-800">
+              <p className="text-sm text-blue-800 dark:text-blue-200">
+                💡 <strong>Smart Automation:</strong> This file matches a previously 
+                learned format. We&apos;re applying the saved settings to speed up your workflow!
+              </p>
+            </div>
+            
+            {/* Error display */}
+            {automationError && (
+              <div className="mt-4 p-4 bg-red-50 dark:bg-red-900/20 rounded-lg 
+                              border border-red-200 dark:border-red-800">
+                <p className="text-sm text-red-800 dark:text-red-200">
+                  <strong>Error:</strong> {automationError}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // PREMIUM: Show premium loader with step-by-step progress when processing
   if (isUploading || isCancelling) {

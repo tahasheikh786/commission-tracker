@@ -287,3 +287,30 @@ def calculate_structure_similarity(structure1: dict, structure2: dict) -> float:
         comparisons += 1
     
     return score / comparisons if comparisons > 0 else 0.0
+
+
+async def update_carrier_format_learning(
+    db: AsyncSession,
+    company_id: str,
+    format_signature: str,
+    updates: dict
+) -> Optional[CarrierFormatLearning]:
+    """
+    Update format learning record with new usage statistics or other fields.
+    """
+    result = await db.execute(
+        select(CarrierFormatLearning).where(
+            CarrierFormatLearning.company_id == company_id,
+            CarrierFormatLearning.format_signature == format_signature
+        )
+    )
+    record = result.scalar_one_or_none()
+    
+    if record:
+        for key, value in updates.items():
+            if hasattr(record, key):
+                setattr(record, key, value)
+        await db.commit()
+        await db.refresh(record)
+    
+    return record

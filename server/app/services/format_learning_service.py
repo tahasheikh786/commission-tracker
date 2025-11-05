@@ -310,6 +310,71 @@ class FormatLearningService:
         
         return sample_values
     
+    def parse_currency_value(self, value_str: str) -> Optional[float]:
+        """
+        Parse a currency value from a string, handling various formats.
+        Examples: "$1,234.56", "1234.56", "(123.45)" (negative)
+        """
+        if not value_str:
+            return None
+        
+        try:
+            # Remove currency symbols, spaces, commas
+            cleaned = re.sub(r'[$€£¥,\s]', '', str(value_str))
+            
+            # Handle parentheses as negative
+            is_negative = cleaned.startswith('(') and cleaned.endswith(')')
+            if is_negative:
+                cleaned = cleaned[1:-1]
+            
+            # Parse as float
+            amount = float(cleaned)
+            
+            return -amount if is_negative else amount
+        except (ValueError, AttributeError):
+            return None
+    
+    def validate_total_amount(
+        self,
+        extracted_amount: float,
+        learned_amount: Optional[float],
+        tolerance_percent: float = 5.0
+    ) -> Dict[str, Any]:
+        """
+        Validate if extracted total matches learned total within tolerance.
+        
+        Args:
+            extracted_amount: Total extracted from current file
+            learned_amount: Total from learned format (if any)
+            tolerance_percent: Allowable percentage difference (default 5%)
+        
+        Returns:
+            Dict with 'matches', 'difference', 'difference_percent', 'status'
+        """
+        if learned_amount is None or extracted_amount is None:
+            return {
+                "matches": False,
+                "difference": None,
+                "difference_percent": None,
+                "status": "no_comparison",
+                "reason": "Missing total amount for comparison"
+            }
+        
+        difference = abs(extracted_amount - learned_amount)
+        difference_percent = (difference / abs(learned_amount)) * 100 if learned_amount != 0 else 0
+        
+        matches = difference_percent <= tolerance_percent
+        
+        return {
+            "matches": matches,
+            "extracted_amount": extracted_amount,
+            "learned_amount": learned_amount,
+            "difference": difference,
+            "difference_percent": round(difference_percent, 2),
+            "status": "match" if matches else "mismatch",
+            "tolerance_percent": tolerance_percent
+        }
+    
     async def learn_from_processed_file(
         self, 
         db: AsyncSession, 
@@ -320,7 +385,9 @@ class FormatLearningService:
         confidence_score: int = 80,
         table_editor_settings: Optional[Dict[str, Any]] = None,
         carrier_name: Optional[str] = None,
-        statement_date: Optional[str] = None
+        statement_date: Optional[str] = None,
+        extracted_total_amount: Optional[float] = None,  # NEW
+        total_amount_field_name: Optional[str] = None,   # NEW
     ) -> bool:
         """
         Learn from a processed file and save the format information.
@@ -350,6 +417,55 @@ class FormatLearningService:
             data_quality_metrics = self._convert_numpy_types(data_quality_metrics)
             field_mapping = self._convert_numpy_types(field_mapping)
             
+            # CRITICAL: Extract and store the total amount from the statement
+            if not extracted_total_amount:
+                # Smart detection: Look for common total amount fields
+                total_amount_candidates = [
+                    "Total Commission", "Total Amount", "Total Due", "Net Total", 
+                    "Grand Total", "Amount", "Total", "Commission Total", "Total Earned",
+                    "Net Commission", "Commission Amount", "Total Commissions"
+                ]
+                
+                # Search in headers (case-insensitive)
+                total_field_idx = None
+                for idx, header in enumerate(headers):
+                    header_lower = header.lower().strip()
+                    if any(candidate.lower() in header_lower for candidate in total_amount_candidates):
+                        total_field_idx = idx
+                        total_amount_field_name = header
+                        print(f"🎯 FormatLearningService: Found potential total field: {header} at index {idx}")
+                        break
+                
+                # If found in headers, extract from last row or summary row
+                if total_field_idx is not None and table_data:
+                    # Try summary rows first (if marked)
+                    summary_rows = table_editor_settings.get("summaryRows", []) if table_editor_settings else []
+                    
+                    # Look in summary rows
+                    for row_idx in summary_rows:
+                        if row_idx < len(table_data) and total_field_idx < len(table_data[row_idx]):
+                            value_str = str(table_data[row_idx][total_field_idx]).strip()
+                            extracted_total_amount = self.parse_currency_value(value_str)
+                            if extracted_total_amount:
+                                print(f"🎯 FormatLearningService: Extracted total from summary row {row_idx}: {extracted_total_amount}")
+                                break
+                    
+                    # Fallback: Check last few rows
+                    if not extracted_total_amount:
+                        for row in reversed(table_data[-5:]):  # Last 5 rows
+                            if total_field_idx < len(row):
+                                value_str = str(row[total_field_idx]).strip()
+                                extracted_total_amount = self.parse_currency_value(value_str)
+                                if extracted_total_amount and extracted_total_amount > 0:  # Must be positive
+                                    print(f"🎯 FormatLearningService: Extracted total from data row: {extracted_total_amount}")
+                                    break
+            
+            # Log the extracted total
+            if extracted_total_amount:
+                print(f"🎯 FormatLearningService: Total amount extracted: ${extracted_total_amount:.2f} from field '{total_amount_field_name}'")
+            else:
+                print(f"🎯 FormatLearningService: No total amount could be extracted")
+            
             # Enhanced table editor settings with carrier, date, and deletion info
             # CRITICAL: This stores ALL user corrections and edits so format learning remembers them
             enhanced_table_editor_settings = table_editor_settings or {}
@@ -365,6 +481,12 @@ class FormatLearningService:
                 enhanced_table_editor_settings['statement_date'] = statement_date
                 enhanced_table_editor_settings['corrected_statement_date'] = statement_date  # Explicitly mark as corrected
                 print(f"🎯 FormatLearningService: Saving corrected statement date: {statement_date}")
+            
+            # Save total amount information
+            if extracted_total_amount is not None:
+                enhanced_table_editor_settings['statement_total_amount'] = extracted_total_amount
+                enhanced_table_editor_settings['total_amount_field_name'] = total_amount_field_name
+                print(f"🎯 FormatLearningService: Saving total amount: ${extracted_total_amount:.2f}")
             
             # Save table editor deletions and edits
             # These include deleted tables, deleted rows, and any manual adjustments

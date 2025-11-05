@@ -61,6 +61,20 @@ export interface ExtractedData {
     };
     overall_confidence: number;
   };
+  format_learning?: {
+    found_match: boolean;
+    match_score: number;
+    learned_format: any;
+    suggested_mapping?: Record<string, string>;
+    table_editor_settings?: any;
+    auto_delete_tables?: number[];
+    auto_delete_rows?: number[];
+    can_automate?: boolean;
+    automation_reason?: string;
+    current_total_amount?: number;
+    learned_total_amount?: number;
+    total_validation?: any;
+  };
 }
 
 interface UnifiedTableEditorProps {
@@ -86,9 +100,27 @@ export default function UnifiedTableEditor({
   const [acceptedMappings, setAcceptedMappings] = useState<Array<{field: string, mapsTo: string, confidence: number, sample: string}>>([]);
   const [skippedFields, setSkippedFields] = useState<Array<{field: string, mapsTo: string, confidence: number, sample: string}>>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  // Normalize tables: ensure summaryRows is a Set
+  // Normalize tables: ensure summaryRows is a Set and apply format learning deletions
   const [tables, setTables] = useState(() => {
-    const initialTables = extractedData.tables || [];
+    let initialTables = extractedData.tables || [];
+    
+    // Apply format learning table deletions if available
+    if (extractedData.format_learning?.auto_delete_tables) {
+      const tablesToDelete = extractedData.format_learning.auto_delete_tables;
+      console.log("📋 Applying format learning table deletions:", tablesToDelete);
+      initialTables = initialTables.filter((_, index) => !tablesToDelete.includes(index));
+    }
+    
+    // Apply format learning row deletions if available
+    if (extractedData.format_learning?.auto_delete_rows) {
+      const rowsToDelete = extractedData.format_learning.auto_delete_rows;
+      console.log("📋 Applying format learning row deletions:", rowsToDelete);
+      initialTables = initialTables.map(table => ({
+        ...table,
+        rows: table.rows?.filter((_: any, index: number) => !rowsToDelete.includes(index)) || []
+      }));
+    }
+    
     return initialTables.map(table => ({
       ...table,
       summaryRows: table.summaryRows instanceof Set 
@@ -169,8 +201,30 @@ export default function UnifiedTableEditor({
 
   // Initialize AI mapping results from extraction data
   useEffect(() => {
-    if (extractedData?.ai_intelligence?.field_mapping && !aiMappingResults) {
-      setAIMappingResults(extractedData.ai_intelligence.field_mapping);
+    if (!aiMappingResults) {
+      // Check for format learning suggested mappings first
+      if (extractedData?.format_learning?.suggested_mapping && extractedData?.format_learning?.found_match) {
+        // Convert format learning suggested mappings to AI mapping format
+        const suggestedMappings = extractedData.format_learning.suggested_mapping;
+        const mappings = Object.entries(suggestedMappings).map(([field, dbField]) => ({
+          statement_field: field,
+          database_field: dbField as string,
+          confidence_score: extractedData.format_learning?.match_score || 0.9,
+          sample_value: '',  // Will be populated from table data
+          is_from_learned_format: true
+        }));
+        
+        setAIMappingResults({
+          ai_enabled: true,
+          mappings: mappings,
+          unmapped_fields: [],
+          confidence: extractedData.format_learning?.match_score || 0.9,
+          learned_format_used: true
+        });
+      } else if (extractedData?.ai_intelligence?.field_mapping) {
+        // Fall back to AI intelligence mappings
+        setAIMappingResults(extractedData.ai_intelligence.field_mapping);
+      }
     }
   }, [extractedData]);
 
