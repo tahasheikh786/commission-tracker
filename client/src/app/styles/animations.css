@@ -2311,3 +2311,89 @@
   }
 }
 
+/* ============================================
+   AI Field Mapper Premium Animations
+   ============================================ */
+
+/* Fade in and scale animation for dropdown */
+@keyframes fadeInScale {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-fadeInScale {
+  animation: fadeInScale 0.15s ease-out;
+}
+
+/* Premium fadeInUp animation for table rows */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeInUp {
+  animation: fadeInUp 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Custom scrollbar for dropdowns - thin premium version */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(203 213 225) transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgb(203 213 225);
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgb(148 163 184);
+}
+
+.dark .custom-scrollbar {
+  scrollbar-color: rgb(51 65 85) transparent;
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgb(51 65 85);
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgb(71 85 105);
+}
+
+/* Pulse animation for pending status */
+@keyframes pulseGlowSoft {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+.animate-pulse-glow-soft {
+  animation: pulseGlowSoft 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+

@@ -62,32 +62,32 @@ export function useDashboardData({ environmentId, year, dateRange }: DashboardDa
   const transformedData = {
     metrics: {
       totalCommission: {
-        value: commissionStats?.total_commission ? commissionStats.total_commission / 1000 : 77,
-        change: commissionStats?.year_over_year_growth || 18.2,
-        trend: (commissionStats?.year_over_year_growth || 0) > 0 ? 'up' as const : 'down' as const,
+        value: commissionStats?.total_commission ? commissionStats.total_commission / 1000 : 0,
+        change: commissionStats?.year_over_year_growth || 0,
+        trend: (commissionStats?.year_over_year_growth || 0) > 0 ? 'up' as const : 'neutral' as const,
         sparkline: allCommissionData?.map((d: any) => (d.total_commission || 0) / 1000).slice(0, 7) || []
       },
       activeCarriers: {
-        value: dashboardData?.total_carriers || carrierData?.length || 2,
-        change: 8.3,
-        trend: 'up' as const
+        value: dashboardData?.total_carriers || carrierData?.length || 0,
+        change: 0,
+        trend: 'neutral' as const
       },
       statementsProcessed: {
-        value: dashboardData?.total_statements || 3,
-        change: 12.8,
-        trend: 'up' as const
+        value: dashboardData?.total_statements || 0,
+        change: 0,
+        trend: 'neutral' as const
       },
       successRate: {
         value: dashboardData?.approved_statements && dashboardData?.total_statements 
           ? Math.round((dashboardData.approved_statements / dashboardData.total_statements) * 100)
-          : 100,
-        change: 2.1,
-        trend: 'up' as const
+          : 0,
+        change: 0,
+        trend: 'neutral' as const
       },
       avgCommissionRate: {
-        value: commissionStats?.average_commission_rate || 11.1,
-        change: 0.5,
-        trend: 'up' as const
+        value: commissionStats?.average_commission_rate || 0,
+        change: 0,
+        trend: 'neutral' as const
       }
     },
     trends: allCommissionData && allCommissionData.length > 0 ? (() => {
@@ -100,13 +100,34 @@ export function useDashboardData({ environmentId, year, dateRange }: DashboardDa
         return undefined;
       }
       
+      // Count months with actual data (non-zero values)
+      const monthsWithData = commissionValues.filter(val => val > 0).length;
+      
       return {
         labels: monthlyData.map(d => d.month),
         commission: commissionValues,
         growth: commissionValues.map((curr, i) => {
           if (i === 0) return 0;
           const prev = commissionValues[i - 1];
-          return prev > 0 ? ((curr - prev) / prev) * 100 : 0;
+          
+          // FIXED: Better handling of sparse data
+          // If previous month was 0, we can't calculate meaningful growth
+          if (prev === 0) return 0;
+          
+          // Calculate growth rate
+          const growthRate = ((curr - prev) / prev) * 100;
+          
+          // FIXED: Normalize to 1 decimal place and cap extreme values
+          // With only 2 statements, month-to-month can be extreme
+          // Cap at ±100% to avoid misleading percentages like -80.287671142515885%
+          if (monthsWithData < 3) {
+            // Not enough data for meaningful trends, return 0
+            return 0;
+          }
+          
+          // Cap extreme values and normalize
+          const cappedGrowth = Math.max(-100, Math.min(100, growthRate));
+          return parseFloat(cappedGrowth.toFixed(1));
         })
       };
     })() : undefined,
@@ -116,15 +137,19 @@ export function useDashboardData({ environmentId, year, dateRange }: DashboardDa
       percentages: (() => {
         const total = carrierData.reduce((sum: number, carrier: any) => sum + (carrier.total_commission || 0), 0);
         return carrierData.map((c: any) => {
-          return total > 0 ? ((c.total_commission || 0) / total) * 100 : 0;
+          return total > 0 ? parseFloat((((c.total_commission || 0) / total) * 100).toFixed(1)) : 0;
         });
       })(),
-      growth: carrierData.map((c: any, index: number) => {
-        // Use a fixed growth value based on carrier data to prevent random changes
-        const baseGrowth = c.total_commission || 0;
-        // Create stable growth value based on carrier index and commission
-        return ((baseGrowth / 1000 + index * 5) % 30) - 10;
-      })
+      growth: carrierData.map((c: any) => {
+        // FIXED: Only show growth if we have actual historical data
+        // Otherwise, don't show any growth indicator (return 0)
+        if (c.growth !== undefined && c.growth !== null) {
+          return parseFloat(c.growth.toFixed(1));
+        }
+        // If no historical data available, return null to indicate no growth data
+        return 0;
+      }),
+      statements: carrierData.map((c: any) => c.statement_count || 0)
     } : undefined,
     distribution: pieChartData && pieChartData.length > 0 ? {
       labels: pieChartData.map((d: any) => d.carrier_name),
@@ -137,45 +162,40 @@ export function useDashboardData({ environmentId, year, dateRange }: DashboardDa
         'rgba(163, 163, 163, 0.8)'
       ]
     } : undefined,
-    recentActivity: [
-      {
-        id: '1',
-        type: 'approved' as const,
-        title: 'Statement Approved',
-        description: 'Allied Benefit Systems',
-        timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000),
-        status: 'success' as const
-      },
-      {
-        id: '2',
-        type: 'uploaded' as const,
-        title: 'New Upload',
-        description: 'Adrem Administrators, LLC',
-        timestamp: new Date(Date.now() - 5 * 60 * 60 * 1000),
-        status: 'info' as const
+    recentActivity: [], // TODO: Implement actual recent activity from backend
+    insights: (() => {
+      const insights = [];
+      
+      // Only show growth insight if there's actual growth data
+      if (commissionStats?.year_over_year_growth && commissionStats.year_over_year_growth !== 0) {
+        insights.push({
+          id: '1',
+          type: 'growth' as const,
+          title: `Your commission ${commissionStats.year_over_year_growth > 0 ? 'grew' : 'decreased'} ${Math.abs(commissionStats.year_over_year_growth)}% this year`,
+          description: commissionStats.year_over_year_growth > 0 ? 'Keep up the great work!' : 'Let\'s improve next year',
+          dismissible: true
+        });
       }
-    ],
-    insights: [
-      {
-        id: '1',
-        type: 'growth' as const,
-        title: `Your commission grew ${commissionStats?.year_over_year_growth || 18.2}% this year`,
-        description: 'Outperforming industry average',
-        dismissible: true
-      },
-      {
-        id: '2',
-        type: 'achievement' as const,
-        title: `Top performer: ${carrierData?.[0]?.name || 'Allied Benefit Systems'}`,
-        description: `Contributing ${carrierData && carrierData.length > 0 && carrierData[0]?.total_commission ? 
-          Math.round((carrierData[0].total_commission / carrierData.reduce((sum: number, c: any) => sum + (c.total_commission || 0), 0)) * 100) : 55.1
-        }% of total commission`,
-        action: {
-          label: 'View Details',
-          onClick: () => console.log('View carrier details')
+      
+      // Only show top performer if we have carriers with commission
+      if (carrierData && carrierData.length > 0 && carrierData[0]?.total_commission > 0) {
+        const totalCommission = carrierData.reduce((sum: number, c: any) => sum + (c.total_commission || 0), 0);
+        if (totalCommission > 0) {
+          insights.push({
+            id: '2',
+            type: 'achievement' as const,
+            title: `Top performer: ${carrierData[0].name}`,
+            description: `Contributing ${Math.round((carrierData[0].total_commission / totalCommission) * 100)}% of total commission`,
+            action: {
+              label: 'View Details',
+              onClick: () => console.log('View carrier details')
+            }
+          });
         }
       }
-    ],
+      
+      return insights;
+    })(),
     topCompanies: companiesData && companiesData.length > 0 
       ? companiesData.map((company: any) => ({
           name: company.client_name || 'Unknown',

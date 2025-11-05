@@ -14,9 +14,11 @@ interface EarnedCommissionTabProps {
   onViewChange?: (view: 'companies' | 'carriers') => void;
   companyFilter?: string | null;
   autoExpandCompany?: boolean;
+  initialCarrierFilter?: string | null;
+  autoExpandCarrier?: boolean;
 }
 
-export default function EarnedCommissionTab({ environmentId, activeView, onViewChange, companyFilter, autoExpandCompany }: EarnedCommissionTabProps) {
+export default function EarnedCommissionTab({ environmentId, activeView, onViewChange, companyFilter, autoExpandCompany, initialCarrierFilter, autoExpandCarrier }: EarnedCommissionTabProps) {
   const { refreshTrigger } = useSubmission();
   const { loading: environmentsLoading } = useEnvironment();
 
@@ -25,7 +27,7 @@ export default function EarnedCommissionTab({ environmentId, activeView, onViewC
   const [commissionData, setCommissionData] = useState<any[]>([]);
   const [aggregatedCompaniesData, setAggregatedCompaniesData] = useState<any[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
-  const [carrierFilter, setCarrierFilter] = useState<string | null>(null);
+  const [carrierFilter, setCarrierFilter] = useState<string | null>(initialCarrierFilter || null);
   const [selectedCarrierId, setSelectedCarrierId] = useState<string | null>(null);
   const [viewType, setViewType] = useState<'companies' | 'carriers'>(activeView);
   const [companyFilterState, setCompanyFilterState] = useState<string | null>(companyFilter || null);
@@ -340,6 +342,8 @@ export default function EarnedCommissionTab({ environmentId, activeView, onViewC
           carriers={carrierGroups}
           loading={dataLoading}
           onViewInCompanies={handleViewInCompanies}
+          carrierFilter={carrierFilter}
+          autoExpandRow={autoExpandCarrier}
         />
       )}
     </div>

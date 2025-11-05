@@ -61,6 +61,24 @@ export default function ActionBar({
   const isCarrierNameMissing = !carrierName || carrierName.trim() === '' || carrierName === 'Unknown';
   const isStatementDateMissing = !statementDate || statementDate.trim() === '' || statementDate === 'Not detected';
   const canContinueToMapping = !isCarrierNameMissing && !isStatementDateMissing;
+
+  // Debug logging for button state (only in table_review mode)
+  React.useEffect(() => {
+    if (viewMode === 'table_review') {
+      console.log('🔍 ActionBar Button State Debug:');
+      console.log('  - hasReviewRequired:', hasReviewRequired);
+      console.log('  - canProceed:', canProceed);
+      console.log('  - isSubmitting:', isSubmitting);
+      console.log('  - canSubmit:', canSubmit);
+      console.log('  - isCarrierNameMissing:', isCarrierNameMissing, '(carrier:', carrierName, ')');
+      console.log('  - isStatementDateMissing:', isStatementDateMissing, '(date:', statementDate, ')');
+      console.log('  - canContinueToMapping:', canContinueToMapping);
+      console.log('  - BUTTON DISABLED:', !canSubmit || !canContinueToMapping);
+      if (mappingStats) {
+        console.log('  - mappingStats:', mappingStats);
+      }
+    }
+  }, [viewMode, hasReviewRequired, canProceed, isSubmitting, canSubmit, canContinueToMapping, carrierName, statementDate, mappingStats]);
   
   // Generate validation message
   const getValidationMessage = () => {
@@ -128,46 +146,10 @@ export default function ActionBar({
         <div className="flex items-center space-x-4">
           
           {viewMode === 'table_review' ? (
-            // Table Review Mode - Single Continue Button with validation
-            <div className="relative group">
-              <button
-                onClick={() => canContinueToMapping && handleModeChange('field_mapping')}
-                disabled={isTransitioning || !canContinueToMapping}
-                className={`px-8 py-3 rounded-lg font-medium transition-colors flex items-center shadow-sm ${
-                  isTransitioning || !canContinueToMapping
-                    ? 'bg-gray-400 dark:bg-slate-600 text-gray-200 dark:text-slate-400 cursor-not-allowed'
-                    : 'bg-blue-600 dark:bg-blue-700 text-white hover:bg-blue-700 dark:hover:bg-blue-600'
-                }`}
-              >
-                {isTransitioning ? (
-                  <>
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                    Transitioning...
-                  </>
-                ) : (
-                  <>
-                    Continue to Field Mapping
-                    <ArrowRight className="w-5 h-5 ml-2" />
-                  </>
-                )}
-              </button>
-              {/* Tooltip on hover when disabled */}
-              {!canContinueToMapping && !isTransitioning && (
-                <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 hidden group-hover:block z-50">
-                  <div className="bg-gray-900 dark:bg-slate-700 text-white text-sm rounded-lg px-4 py-2 whitespace-nowrap shadow-lg">
-                    {getValidationMessage()}
-                    <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1">
-                      <div className="border-8 border-transparent border-t-gray-900 dark:border-t-slate-700"></div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          ) : (
-            // Field Mapping Mode - Back and Submit Buttons
+            // Table Review Mode - Back to Field Mapping and Save buttons
             <div className="flex space-x-3">
               <button
-                onClick={() => handleModeChange('table_review')}
+                onClick={() => handleModeChange('field_mapping')}
                 disabled={isTransitioning}
                 className={`px-6 py-3 border border-gray-300 dark:border-slate-600 rounded-lg font-medium transition-colors flex items-center ${
                   isTransitioning
@@ -176,15 +158,15 @@ export default function ActionBar({
                 }`}
               >
                 <ArrowLeft className="w-4 h-4 mr-2" />
-                Back to Review
+                Back to Field Mapping
               </button>
               
               <button
                 onClick={handleSubmit}
-                disabled={!canSubmit}
+                disabled={!canSubmit || !canContinueToMapping}
                 className={`
                   px-8 py-3 rounded-lg font-medium flex items-center transition-colors shadow-sm
-                  ${!canSubmit 
+                  ${!canSubmit || !canContinueToMapping
                     ? 'bg-gray-300 dark:bg-slate-600 text-gray-500 dark:text-slate-400 cursor-not-allowed'
                     : 'bg-green-600 dark:bg-green-700 text-white hover:bg-green-700 dark:hover:bg-green-600'}
                 `}
@@ -196,12 +178,15 @@ export default function ActionBar({
                   </>
                 ) : (
                   <>
-                    Save & Approve
+                    Save and Approve
                     <Check className="w-5 h-5 ml-2" />
                   </>
                 )}
               </button>
             </div>
+          ) : (
+            // Field Mapping Mode - Review Table Button (moved to AIFieldMapperTable component)
+            <div></div>
           )}
         </div>
       </div>

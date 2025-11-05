@@ -86,19 +86,44 @@ class DuplicateDetectionService:
     
     async def _check_user_duplicate(self, file_hash: str, user_id: UUID) -> Optional[StatementUpload]:
         """Check for duplicates in user's own uploads."""
+        logger.info(f"🔍 Checking for user duplicates - Hash: {file_hash}, User: {user_id}")
+        
+        # First, let's see all uploads for this user with their hashes
+        all_user_uploads = await self.db.execute(
+            select(StatementUpload.file_name, StatementUpload.file_hash, StatementUpload.status, StatementUpload.uploaded_at)
+            .where(StatementUpload.user_id == user_id)
+            .order_by(StatementUpload.uploaded_at.desc())
+            .limit(10)
+        )
+        uploads_list = all_user_uploads.fetchall()
+        logger.info(f"📚 Recent uploads for user:")
+        for upload in uploads_list:
+            if upload.file_hash:
+                logger.info(f"  - {upload.file_name}: hash={upload.file_hash[:16]}..., status={upload.status}")
+            else:
+                logger.info(f"  - {upload.file_name}: hash=NULL, status={upload.status}")
+        
         result = await self.db.execute(
             select(StatementUpload)
             .where(
                 and_(
                     StatementUpload.file_hash == file_hash,
+                    StatementUpload.file_hash.isnot(None),  # Exclude NULL hashes
                     StatementUpload.user_id == user_id,
-                    # Exclude failed/cancelled uploads from duplicate check
-                    StatementUpload.status.in_(['pending', 'approved', 'rejected', 'extracted', 'completed'])
+                    # Only include valid uploads in duplicate check (exclude cancelled/failed)
+                    StatementUpload.status.in_(['pending', 'approved', 'rejected', 'processing'])
                 )
             )
             .order_by(StatementUpload.uploaded_at.desc())
         )
-        return result.scalar_one_or_none()
+        duplicate = result.scalar_one_or_none()
+        
+        if duplicate:
+            logger.info(f"✅ Found duplicate: {duplicate.file_name} (status: {duplicate.status})")
+        else:
+            logger.info(f"❌ No duplicate found for hash: {file_hash}")
+        
+        return duplicate
     
     async def _check_global_duplicate(self, file_hash: str, user_id: UUID) -> Optional[StatementUpload]:
         """Check for duplicates across all users (excluding current user)."""
@@ -107,9 +132,10 @@ class DuplicateDetectionService:
             .where(
                 and_(
                     StatementUpload.file_hash == file_hash,
+                    StatementUpload.file_hash.isnot(None),  # Exclude NULL hashes
                     StatementUpload.user_id != user_id,
-                    # Exclude failed/cancelled uploads from duplicate check
-                    StatementUpload.status.in_(['pending', 'approved', 'rejected', 'extracted', 'completed'])
+                    # Only include valid uploads in duplicate check (exclude cancelled/failed)
+                    StatementUpload.status.in_(['pending', 'approved', 'rejected', 'processing'])
                 )
             )
             .order_by(StatementUpload.uploaded_at.desc())

@@ -447,6 +447,8 @@ function HomePageContent() {
               }} 
               companyFilter={searchParams?.get('company') || null}
               autoExpandCompany={searchParams?.get('autoExpand') === 'true'}
+              initialCarrierFilter={searchParams?.get('carrier') || null}
+              autoExpandCarrier={searchParams?.get('autoExpand') === 'true'}
             />}
             {tab === "carriers" && <CarrierTab environmentId={activeEnvironment?.id || null} />}
           </div>

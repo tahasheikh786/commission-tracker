@@ -122,46 +122,58 @@ class AIFieldMappingService:
                 direct_mappings = []
                 unmapped = []
                 
-                for header in extracted_headers:
-                    # Check if this header has a learned mapping
-                    mapped_field = learned_field_mapping.get(header)
+                # CRITICAL FIX: Check if learned_field_mapping is empty
+                if not learned_field_mapping:
+                    logger.warning(f"⚠️ Learned mapping found but field_mapping is EMPTY ({len(learned_field_mapping)} mappings)")
+                    logger.warning(f"⚠️ Falling through to AI generation instead of returning 0 mappings")
+                else:
+                    logger.info(f"✅ Learned field_mapping contains {len(learned_field_mapping)} mappings")
                     
-                    if mapped_field:
-                        # Find the database field details
-                        db_field = next((f for f in database_fields if f['display_name'] == mapped_field), None)
-                        if db_field:
-                            direct_mappings.append({
-                                "extracted_field": header,
-                                "mapped_to": mapped_field,
-                                "mapped_to_column": db_field.get('column_name', mapped_field.lower().replace(' ', '_')),
-                                "database_field_id": db_field['id'],
-                                "confidence": 0.95,  # High confidence for learned mappings
-                                "reasoning": f"Learned from previous mapping (match score: {learned_mapping.get('match_score'):.2f})",
-                                "alternatives": [],
-                                "requires_review": False
-                            })
+                    for header in extracted_headers:
+                        # Check if this header has a learned mapping
+                        mapped_field = learned_field_mapping.get(header)
+                        
+                        if mapped_field:
+                            # Find the database field details
+                            db_field = next((f for f in database_fields if f['display_name'] == mapped_field), None)
+                            if db_field:
+                                direct_mappings.append({
+                                    "extracted_field": header,
+                                    "mapped_to": mapped_field,
+                                    "mapped_to_column": db_field.get('column_name', mapped_field.lower().replace(' ', '_')),
+                                    "database_field_id": db_field['id'],
+                                    "confidence": 0.95,  # High confidence for learned mappings
+                                    "reasoning": f"Learned from previous mapping (match score: {learned_mapping.get('match_score'):.2f})",
+                                    "alternatives": [],
+                                    "requires_review": False
+                                })
+                            else:
+                                unmapped.append(header)
                         else:
                             unmapped.append(header)
+                    
+                    # CRITICAL FIX: Only return early if we actually found mappings
+                    if direct_mappings:
+                        response = {
+                            "success": True,
+                            "mappings": direct_mappings,
+                            "overall_confidence": 0.95,
+                            "unmapped_fields": unmapped,
+                            "reasoning": {
+                                "learned_mappings_applied": len(direct_mappings),
+                                "match_score": learned_mapping.get('match_score'),
+                                "usage_count": learned_mapping.get('usage_count', 1)
+                            },
+                            "suggestions_count": len(direct_mappings),
+                            "learned_format_used": True,
+                            "timestamp": datetime.now().isoformat()
+                        }
+                        
+                        logger.info(f"✅ Applied {len(direct_mappings)} learned mappings directly - returning early")
+                        return response
                     else:
-                        unmapped.append(header)
-                
-                response = {
-                    "success": True,
-                    "mappings": direct_mappings,
-                    "overall_confidence": 0.95 if direct_mappings else 0.0,
-                    "unmapped_fields": unmapped,
-                    "reasoning": {
-                        "learned_mappings_applied": len(direct_mappings),
-                        "match_score": learned_mapping.get('match_score'),
-                        "usage_count": learned_mapping.get('usage_count', 1)
-                    },
-                    "suggestions_count": len(direct_mappings),
-                    "learned_format_used": True,
-                    "timestamp": datetime.now().isoformat()
-                }
-                
-                logger.info(f"✅ Applied {len(direct_mappings)} learned mappings directly")
-                return response
+                        logger.warning(f"⚠️ Learned mapping produced 0 actual mappings - falling through to AI generation")
+                        logger.warning(f"⚠️ All {len(unmapped)} headers will be mapped by AI instead")
             
             # Step 4: Use AI to understand fields and suggest mappings (when no learned mapping or low confidence)
             ai_mappings = await self._generate_ai_mappings(
@@ -458,12 +470,22 @@ Return ONLY valid JSON with no additional text."""
         
         return f"""Analyze these extracted table headers and map them to the appropriate database fields.
 
+CRITICAL PRIORITY FIELDS:
+The following database fields are ESSENTIAL for calculation and MUST be mapped with highest priority:
+1. "Company Name" or "Client Name" - Maps to client/company identifier
+2. "Commission Earned" or "Commission Amount" - Maps to commission values
+
 EXTRACTED HEADERS:
 {json.dumps(extracted_headers, indent=2)}
 {sample_data_str}
 
 AVAILABLE DATABASE FIELDS:
 {db_fields_str}
+
+⭐ PRIORITY MAPPINGS (MUST MAP IF POSSIBLE):
+- "Company Name" / "Client Name": Look for headers like "Group Name", "Company", "Client", "Insured", "Account Name"
+- "Commission Earned": Look for headers like "Commission", "Earned", "Amount", "Total Commission", "Pmt Amount"
+
 {learned_str}{context_str}
 
 TASK:
@@ -471,6 +493,11 @@ For each extracted header, suggest the best matching database field(s) with:
 1. Confidence score (0.0-1.0) based on semantic similarity and context
 2. Reasoning explaining why this mapping makes sense
 3. Alternative suggestions if confidence is low
+
+SPECIAL INSTRUCTIONS:
+- Give HIGHEST PRIORITY to mapping "Company Name" and "Commission Earned" fields
+- These two fields should receive confidence scores of 0.95+ if any reasonable match exists
+- Even partial matches for these fields should be suggested with detailed reasoning
 
 Consider:
 - Semantic meaning (e.g., "Group Name" → "Company Name")
@@ -482,27 +509,21 @@ RESPONSE FORMAT (JSON only, no additional text):
 {{
   "mappings": [
     {{
-      "extracted_field": "Policy_Num",
-      "mapped_to": "Policy Number",
-      "mapped_to_column": "policy_number",
+      "extracted_field": "Group Name",
+      "mapped_to": "Company Name",
+      "mapped_to_column": "company_name",
+      "database_field_id": "uuid-here",
       "confidence": 0.95,
-      "reasoning": "Direct semantic match, common policy identifier field",
-      "alternatives": [
-        {{
-          "field": "Group Id",
-          "confidence": 0.3,
-          "reasoning": "Could be a group identifier but less likely"
-        }}
-      ]
+      "reasoning": "Direct semantic match for client identifier - PRIORITY FIELD",
+      "alternatives": []
     }}
   ],
-  "unmapped_fields": ["Field1", "Field2"],
-  "overall_confidence": 0.85,
+  "unmapped_fields": [],
+  "overall_confidence": 0.90,
   "reasoning": {{
-    "high_confidence_mappings": 5,
-    "low_confidence_mappings": 2,
-    "unmapped_count": 2,
-    "notes": "Most fields have clear semantic matches"
+    "high_confidence_mappings": 2,
+    "priority_fields_mapped": ["Company Name", "Commission Earned"],
+    "notes": "All priority fields successfully mapped"
   }}
 }}
 
@@ -536,6 +557,7 @@ Provide ONLY the JSON response with no additional explanation or text."""
                     processed_mapping = {
                         **mapping,
                         "database_field_id": db_field["id"],
+                        "mapped_to_column": db_field["column_name"],
                         "column_name": db_field["column_name"],
                         "requires_review": mapping["confidence"] < 0.7
                     }

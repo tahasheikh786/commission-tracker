@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Building2, TrendingUp, TrendingDown, ExternalLink } from 'lucide-react';
+import { Building2, TrendingUp, TrendingDown, ExternalLink, Truck } from 'lucide-react';
 
 interface Company {
   name: string;
@@ -12,20 +12,44 @@ interface Company {
   lastUpdated: string;
 }
 
+interface Carrier {
+  carriers: string[];
+  amounts: number[];
+  percentages: number[];
+  growth: number[];
+  statements: number[];
+}
+
 interface TopCompaniesTableProps {
   data?: Company[];
+  carriersData?: Carrier;
   limit?: number;
 }
 
-export default function TopCompaniesTable({ data, limit = 10 }: TopCompaniesTableProps) {
+export default function TopCompaniesTable({ data, carriersData, limit = 10 }: TopCompaniesTableProps) {
   const router = useRouter();
   const [sortBy, setSortBy] = useState<'commission' | 'growth'>('commission');
+  const [viewMode, setViewMode] = useState<'companies' | 'carriers'>('companies');
+
+  // Transform carriers data to match company format
+  const carriersAsCompanies = useMemo(() => {
+    if (!carriersData || !carriersData.carriers || carriersData.carriers.length === 0) return [];
+    
+    return carriersData.carriers.map((name, index) => ({
+      name,
+      commission: carriersData.amounts[index] || 0,
+      growth: carriersData.growth[index] || 0,
+      statements: carriersData.statements[index] || 0,
+      lastUpdated: new Date().toISOString()
+    }));
+  }, [carriersData]);
 
   // Sort and limit to top 10
-  const topCompanies = useMemo(() => {
-    if (!data || data.length === 0) return [];
+  const topItems = useMemo(() => {
+    const sourceData = viewMode === 'companies' ? data : carriersAsCompanies;
+    if (!sourceData || sourceData.length === 0) return [];
     
-    const sorted = [...data].sort((a, b) => {
+    const sorted = [...sourceData].sort((a, b) => {
       if (sortBy === 'commission') {
         return b.commission - a.commission;
       }
@@ -33,7 +57,7 @@ export default function TopCompaniesTable({ data, limit = 10 }: TopCompaniesTabl
     });
     
     return sorted.slice(0, limit);
-  }, [data, sortBy, limit]);
+  }, [data, carriersAsCompanies, sortBy, limit, viewMode]);
 
   return (
     <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-6">
@@ -41,35 +65,63 @@ export default function TopCompaniesTable({ data, limit = 10 }: TopCompaniesTabl
       <div className="flex items-center justify-between mb-6">
         <div>
           <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
-            Top {limit} Companies
+            Top {limit} {viewMode === 'companies' ? 'Companies' : 'Carriers'}
           </h3>
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            Highest earning companies by commission
+            Highest earning {viewMode === 'companies' ? 'companies' : 'carriers'} by commission
           </p>
         </div>
 
-        {/* Sort Toggle */}
-        <div className="flex gap-2">
-          <button
-            onClick={() => setSortBy('commission')}
-            className={`px-3 py-1 text-sm rounded transition ${
-              sortBy === 'commission'
-                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
-            }`}
-          >
-            By Commission
-          </button>
-          <button
-            onClick={() => setSortBy('growth')}
-            className={`px-3 py-1 text-sm rounded transition ${
-              sortBy === 'growth'
-                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
-            }`}
-          >
-            By Growth
-          </button>
+        <div className="flex gap-4">
+          {/* View Mode Toggle */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => setViewMode('companies')}
+              className={`px-3 py-1 text-sm rounded transition flex items-center gap-1.5 ${
+                viewMode === 'companies'
+                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
+              }`}
+            >
+              <Building2 className="w-3.5 h-3.5" />
+              Companies
+            </button>
+            <button
+              onClick={() => setViewMode('carriers')}
+              className={`px-3 py-1 text-sm rounded transition flex items-center gap-1.5 ${
+                viewMode === 'carriers'
+                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
+              }`}
+            >
+              <Truck className="w-3.5 h-3.5" />
+              Carriers
+            </button>
+          </div>
+
+          {/* Sort Toggle */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => setSortBy('commission')}
+              className={`px-3 py-1 text-sm rounded transition ${
+                sortBy === 'commission'
+                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
+              }`}
+            >
+              By Commission
+            </button>
+            <button
+              onClick={() => setSortBy('growth')}
+              className={`px-3 py-1 text-sm rounded transition ${
+                sortBy === 'growth'
+                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
+              }`}
+            >
+              By Growth
+            </button>
+          </div>
         </div>
       </div>
 
@@ -82,7 +134,7 @@ export default function TopCompaniesTable({ data, limit = 10 }: TopCompaniesTabl
                 Rank
               </th>
               <th className="text-left text-sm font-medium text-slate-500 dark:text-slate-400 pb-3">
-                Company
+                {viewMode === 'companies' ? 'Company' : 'Carrier'}
               </th>
               <th className="text-right text-sm font-medium text-slate-500 dark:text-slate-400 pb-3">
                 Commission
@@ -99,10 +151,18 @@ export default function TopCompaniesTable({ data, limit = 10 }: TopCompaniesTabl
             </tr>
           </thead>
           <tbody>
-            {topCompanies.map((company, index) => {
+            {topItems.map((item, index) => {
+              const handleRowClick = () => {
+                if (viewMode === 'companies') {
+                  router.push(`/?tab=earned-commission-companies&company=${encodeURIComponent(item.name)}&autoExpand=true`);
+                } else {
+                  router.push(`/?tab=earned-commission-carriers&carrier=${encodeURIComponent(item.name)}&autoExpand=true`);
+                }
+              };
+
               return (
                 <tr 
-                  key={company.name}
+                  key={item.name}
                   className={`border-b border-slate-100 dark:border-slate-700/50 transition-all duration-200 cursor-pointer ${
                     // Gold - 1st place
                     index === 0 ? 'bg-yellow-50 dark:bg-yellow-900/20 hover:!bg-yellow-100 dark:hover:!bg-yellow-900/30' :
@@ -113,10 +173,7 @@ export default function TopCompaniesTable({ data, limit = 10 }: TopCompaniesTabl
                     // All other rows - let premium-table global CSS handle it
                     ''
                   }`}
-                  onClick={() => {
-                    // Navigate to earned commission companies tab with company filter and auto-expand
-                    router.push(`/?tab=earned-commission-companies&company=${encodeURIComponent(company.name)}&autoExpand=true`);
-                  }}
+                  onClick={handleRowClick}
                 >
                 {/* Rank */}
                 <td className="py-4 text-sm">
@@ -130,12 +187,16 @@ export default function TopCompaniesTable({ data, limit = 10 }: TopCompaniesTabl
                   </span>
                 </td>
 
-                {/* Company Name */}
+                {/* Name */}
                 <td className="py-4">
                   <div className="flex items-center gap-2">
-                    <Building2 className="w-4 h-4 text-slate-400" />
+                    {viewMode === 'companies' ? (
+                      <Building2 className="w-4 h-4 text-slate-400" />
+                    ) : (
+                      <Truck className="w-4 h-4 text-slate-400" />
+                    )}
                     <span className="font-medium text-slate-900 dark:text-white">
-                      {company.name}
+                      {item.name}
                     </span>
                   </div>
                 </td>
@@ -143,29 +204,35 @@ export default function TopCompaniesTable({ data, limit = 10 }: TopCompaniesTabl
                 {/* Commission */}
                 <td className="py-4 text-right">
                   <span className="text-lg font-semibold text-slate-900 dark:text-white">
-                    ${(company.commission / 1000).toFixed(1)}K
+                    ${(item.commission / 1000).toFixed(1)}K
                   </span>
                 </td>
 
                 {/* Growth */}
                 <td className="py-4 text-right">
-                  <span className={`inline-flex items-center gap-1 text-sm font-medium ${
-                    company.growth > 0
-                      ? 'text-emerald-600 dark:text-emerald-400'
-                      : 'text-red-600 dark:text-red-400'
-                  }`}>
-                    {company.growth > 0 ? (
-                      <TrendingUp className="w-4 h-4" />
-                    ) : (
-                      <TrendingDown className="w-4 h-4" />
-                    )}
-                    {company.growth > 0 ? '+' : ''}{company.growth}%
-                  </span>
+                  {item.growth !== 0 ? (
+                    <span className={`inline-flex items-center gap-1 text-sm font-medium ${
+                      item.growth > 0
+                        ? 'text-emerald-600 dark:text-emerald-400'
+                        : 'text-red-600 dark:text-red-400'
+                    }`}>
+                      {item.growth > 0 ? (
+                        <TrendingUp className="w-4 h-4" />
+                      ) : (
+                        <TrendingDown className="w-4 h-4" />
+                      )}
+                      {item.growth > 0 ? '+' : ''}{parseFloat(item.growth.toFixed(1))}%
+                    </span>
+                  ) : (
+                    <span className="text-sm font-medium text-slate-400">
+                      N/A
+                    </span>
+                  )}
                 </td>
 
                 {/* Statements */}
                 <td className="py-4 text-right text-sm text-slate-600 dark:text-slate-400">
-                  {company.statements}
+                  {item.statements}
                 </td>
 
                 {/* Action */}
@@ -173,7 +240,7 @@ export default function TopCompaniesTable({ data, limit = 10 }: TopCompaniesTabl
                   <button 
                     onClick={(e) => {
                       e.stopPropagation();
-                      router.push(`/?tab=earned-commission-companies&company=${encodeURIComponent(company.name)}&autoExpand=true`);
+                      handleRowClick();
                     }}
                     className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
                   >
@@ -190,10 +257,19 @@ export default function TopCompaniesTable({ data, limit = 10 }: TopCompaniesTabl
       {/* Footer */}
       <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between">
         <span className="text-sm text-slate-500 dark:text-slate-400">
-          Showing top {topCompanies.length} of {data?.length || 0} companies
+          Showing top {topItems.length} of {viewMode === 'companies' ? (data?.length || 0) : (carriersAsCompanies.length || 0)} {viewMode === 'companies' ? 'companies' : 'carriers'}
         </span>
-        <button className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium">
-          View All Companies →
+        <button 
+          onClick={() => {
+            if (viewMode === 'companies') {
+              router.push('/?tab=earned-commission-companies');
+            } else {
+              router.push('/?tab=earned-commission-carriers');
+            }
+          }}
+          className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium"
+        >
+          View All {viewMode === 'companies' ? 'Companies' : 'Carriers'} →
         </button>
       </div>
     </div>

@@ -352,13 +352,14 @@ class ConnectionManager:
         logger.info(f"Extraction complete for upload_id {upload_id}")
     
     # Helper method for step-based workflow
+    # ✅ CRITICAL: Step order must match frontend UPLOAD_STEPS in SummaryProgressLoader.tsx
     UPLOAD_STEPS = [
-        {'id': 'upload', 'title': 'Uploading File', 'description': 'Securing your document...'},
-        {'id': 'extraction', 'title': 'Extracting Metadata', 'description': 'AI is analyzing document structure...'},
-        {'id': 'table_extraction', 'title': 'Processing Table Data', 'description': 'Extracting commission data...'},
-        {'id': 'ai_mapping', 'title': 'AI Field Mapping', 'description': 'Intelligently mapping database fields...'},
-        {'id': 'plan_detection', 'title': 'Detecting Plan Type', 'description': 'Identifying insurance plan category...'},
-        {'id': 'finalizing', 'title': 'Finalizing', 'description': 'Preparing your data for review...'}
+        {'id': 'upload', 'title': 'Uploading Document', 'description': 'Securing your file in the cloud'},
+        {'id': 'extraction', 'title': 'Analyzing Document', 'description': 'AI is reading your commission statement'},
+        {'id': 'table_extraction', 'title': 'Reading Commission Data', 'description': 'Extracting payment details'},
+        {'id': 'plan_detection', 'title': 'Understanding Structure', 'description': 'Identifying document format'},
+        {'id': 'ai_field_mapping', 'title': 'AI Field Mapping', 'description': 'Mapping fields intelligently'},
+        {'id': 'preparing_results', 'title': 'Preparing Results', 'description': 'Finalizing your data'}
     ]
     
     async def emit_upload_step(self, upload_id: str, step_name: str, progress_percentage: int = None):

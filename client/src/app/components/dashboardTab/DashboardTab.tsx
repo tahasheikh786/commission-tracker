@@ -36,7 +36,7 @@ export default function DashboardTab({ showAnalytics = false, environmentId }: D
   // Upload and processing states - NEW 2-STEP FLOW ONLY
   const [company, setCompany] = useState<{ id: string, name: string } | null>(null);
   const [uploaded, setUploaded] = useState<any>(null);
-  const [databaseFields, setDatabaseFields] = useState<FieldConfig[]>([]);
+  const [databaseFields, setDatabaseFields] = useState<Array<{ id: string; display_name: string; description?: string }>>([]);
   const [loadingFields, setLoadingFields] = useState(false);
   const [showUnifiedEditor, setShowUnifiedEditor] = useState(false);
   const [savingMapping, setSavingMapping] = useState(false);
@@ -131,8 +131,9 @@ export default function DashboardTab({ showAnalytics = false, environmentId }: D
           { withCredentials: true }
         );
         const fieldsFromBackend = response.data.map((field: any) => ({
-          field: field.field_key,
-          label: field.display_name
+          id: String(field.id),  // CRITICAL FIX: Use 'id' (not field_key) and ensure it's a string
+          display_name: field.display_name,
+          description: field.description || ''
         }));
         setDatabaseFields(fieldsFromBackend);
       } catch (error) {
@@ -316,11 +317,7 @@ export default function DashboardTab({ showAnalytics = false, environmentId }: D
             ai_intelligence: uploaded.ai_intelligence
           }}
           uploadData={uploaded}
-          databaseFields={databaseFields.map(f => ({
-            id: f.field,
-            display_name: f.label,
-            description: f.label
-          }))}
+          databaseFields={databaseFields}
           selectedStatementDate={selectedStatementDate}
           onDataUpdate={(data) => {
             setUploaded((prev: any) => ({ ...prev, tables: data.tables }));

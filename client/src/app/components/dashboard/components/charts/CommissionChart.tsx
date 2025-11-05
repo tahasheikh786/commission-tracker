@@ -49,17 +49,35 @@ export default function CommissionChart({ data }: CommissionChartProps) {
   const [chartType, setChartType] = useState<'bar' | 'line' | 'combo'>('combo');
   const [timeRange, setTimeRange] = useState('12M');
 
-  // Use real data or fallback to demo data
-  const defaultData = {
-    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
-    commission: [5800, 6200, 5900, 6800, 7200, 7500, 7800, 8200, 8500, 8800, 9200, 9500],
-    growth: [2.1, 6.9, -4.8, 15.3, 5.9, 4.2, 4.0, 5.1, 3.7, 3.5, 4.5, 3.3]
-  };
+  // Use real data only - no fallback to demo data
+  const chartData = useMemo(() => data, [data]);
 
-  const chartData = useMemo(() => data || defaultData, [data]);
+  // Check if we have meaningful growth data (at least one non-zero value)
+  const hasGrowthData = useMemo(() => {
+    if (!chartData || !chartData.growth) return false;
+    return chartData.growth.some(val => val !== 0);
+  }, [chartData]);
+
+  // Calculate dynamic Y-axis range for growth rate based on actual data
+  const growthYAxisRange = useMemo(() => {
+    if (!chartData || !hasGrowthData || !chartData.growth) return { min: -10, max: 10 };
+    
+    const nonZeroGrowth = chartData.growth.filter(val => val !== 0);
+    if (nonZeroGrowth.length === 0) return { min: -10, max: 10 };
+    
+    const maxGrowth = Math.max(...nonZeroGrowth);
+    const minGrowth = Math.min(...nonZeroGrowth);
+    
+    // Add 20% padding to the range
+    const padding = Math.max(Math.abs(maxGrowth), Math.abs(minGrowth)) * 0.2;
+    return {
+      min: Math.floor(minGrowth - padding),
+      max: Math.ceil(maxGrowth + padding)
+    };
+  }, [hasGrowthData, chartData]);
 
   // ADD DATA VALIDATION
-  if (!chartData.commission || chartData.commission.length === 0) {
+  if (!chartData || !chartData.commission || chartData.commission.length === 0) {
     return (
       <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-6">
         <h3 className="text-lg font-semibold mb-2 text-slate-900 dark:text-white">Commission Trends</h3>
@@ -151,10 +169,10 @@ export default function CommissionChart({ data }: CommissionChartProps) {
       },
       y1: {
         type: 'linear' as const,
-        display: true,
+        display: hasGrowthData,
         position: 'right' as const,
-        min: -100,
-        max: 100,
+        min: growthYAxisRange.min,
+        max: growthYAxisRange.max,
         grid: {
           drawOnChartArea: false
         },
@@ -183,7 +201,8 @@ export default function CommissionChart({ data }: CommissionChartProps) {
         borderRadius: 6,
         yAxisID: 'y'
       },
-      {
+      // Only include growth rate dataset if we have meaningful data
+      ...(hasGrowthData ? [{
         type: 'line' as const,
         label: 'Growth Rate',
         data: chartData.growth,
@@ -198,7 +217,7 @@ export default function CommissionChart({ data }: CommissionChartProps) {
         pointBorderWidth: 2,
         pointRadius: 4,
         pointHoverRadius: 6
-      }
+      }] : [])
     ]
   };
 

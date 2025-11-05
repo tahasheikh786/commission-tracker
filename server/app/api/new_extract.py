@@ -29,6 +29,7 @@ from typing import Optional, Dict, Any
 from fastapi.responses import JSONResponse
 import uuid
 import hashlib
+from app.services.cancellation_manager import cancellation_manager
 
 router = APIRouter(prefix="/api", tags=["new-extract"])
 logger = logging.getLogger(__name__)
@@ -208,6 +209,11 @@ async def extract_tables_smart(
     file_size = len(file_content)
     file_hash = hashlib.sha256(file_content).hexdigest()
     
+    logger.info(f"📁 File: {file.filename}")
+    logger.info(f"🔑 Hash: {file_hash}")
+    logger.info(f"📏 Size: {file_size} bytes")
+    logger.info(f"👤 User: {current_user.id}")
+    
     # Check for duplicates
     duplicate_service = DuplicateDetectionService(db)
     duplicate_check = await duplicate_service.check_duplicate(
@@ -316,7 +322,7 @@ async def extract_tables_smart(
             # Fallback to public URL if signed URL generation fails
             gcs_url = get_gcs_file_url(gcs_key)
 
-        # Emit WebSocket: Step 1 - Upload started
+        # Emit WebSocket: Step 1 - Upload started (10% progress)
         if upload_id:
             await connection_manager.emit_upload_step(upload_id, 'upload', 10)
         
@@ -415,26 +421,38 @@ async def extract_tables_smart(
         except asyncio.CancelledError:
             logger.info(f"Extraction cancelled for upload {upload_id_str}")
             
-            # Send WebSocket notification about cancellation
+            # Send WebSocket notification about cancellation (not as error, but as completion)
             try:
-                await connection_manager.send_error(
+                await connection_manager.send_upload_complete(
                     upload_id_str, 
-                    "Extraction cancelled by user",
-                    error_code="CANCELLED"
+                    {"status": "cancelled", "message": "Upload cancelled by user"}
                 )
             except Exception as e:
                 logger.warning(f"Failed to send WebSocket cancellation notification: {e}")
             
-            # Delete cancelled upload record (only 3 valid statuses: pending, approved, rejected)
+            # Update the upload status to 'cancelled' instead of deleting
             try:
-                await with_db_retry(db, crud.delete_statement, statement_id=str(upload_id_uuid))
-                logger.info(f"🗑️  Deleted cancelled upload record: {upload_id_uuid}")
-            except Exception as delete_error:
-                logger.error(f"Failed to delete cancelled upload: {delete_error}")
+                update_data = schemas.StatementUploadUpdate(
+                    status="rejected",  # Use 'rejected' for cancelled uploads
+                    rejection_reason="Cancelled by user",  # Distinguish from actual rejections
+                    progress_data={
+                        'extraction_method': extraction_method,
+                        'file_type': file_ext,
+                        'start_time': start_time.isoformat(),
+                        'cancelled_at': datetime.utcnow().isoformat(),
+                        'cancellation_reason': 'User cancelled'
+                    }
+                )
+                await with_db_retry(db, crud.update_statement, statement_id=str(upload_id_uuid), statement_update=update_data)
+                logger.info(f"✅ Updated cancelled upload status: {upload_id_uuid}")
+            except Exception as update_error:
+                logger.error(f"Failed to update cancelled upload status: {update_error}")
             raise HTTPException(status_code=499, detail="Extraction cancelled by user")
         finally:
             # Clean up the task from running extractions
             running_extractions.pop(upload_id_str, None)
+            # Clear from cancellation manager
+            await cancellation_manager.clear_cancelled(upload_id_str)
         
         # Update upload record with results - set to 'pending' for review
         logger.info("💾 Updating upload record with results...")
@@ -471,6 +489,7 @@ async def extract_tables_smart(
         
         # Initialize AI data and variables (CRITICAL: Initialize outside carrier block to avoid scope errors)
         ai_plan_type_data = None
+        ai_field_mapping_data = None
         table_selection_data = None  # FIX: Initialize here to avoid UnboundLocalError
         
         # Look up learned formats if carrier was detected
@@ -650,6 +669,10 @@ async def extract_tables_smart(
                         
                     # ===== AI PLAN TYPE DETECTION (DURING EXTRACTION) =====
                     # Plan type detection happens here, but field mapping happens after table editing
+                    # Emit WebSocket: Step 4 - Plan Detection started (65% progress)
+                    if upload_id:
+                        await connection_manager.emit_upload_step(upload_id, 'plan_detection', 65)
+                    
                     try:
                         from app.services.ai_plan_type_detection_service import AIPlanTypeDetectionService
                         
@@ -689,15 +712,79 @@ async def extract_tables_smart(
                         logger.warning(f"AI plan type detection failed (non-critical): {str(ai_error)}")
                         ai_plan_type_data = None
                     
-                    # Field mapping will be triggered after table review and editing
-                    logger.info("⏭️  AI field mapping will be triggered after table review and editing")
+                    # Perform AI field mapping during extraction
+                    # Emit WebSocket: Step 5 - AI Field Mapping started (80% progress)
+                    if upload_id:
+                        await connection_manager.emit_upload_step(upload_id, 'ai_field_mapping', 80)
+                    
+                    try:
+                        logger.info("🧠 AI Field Mapping: Starting field mapping during extraction")
+                        
+                        # Call the enhanced extraction analysis endpoint for both field mapping and plan detection
+                        from app.api.ai_intelligent_mapping import enhanced_extraction_analysis
+                        from fastapi import Body
+                        
+                        # Prepare request data
+                        analysis_request = {
+                            "extracted_headers": selected_table['header'],
+                            "table_sample_data": selected_table.get('rows', [])[:5],
+                            "document_context": {
+                                'carrier_name': carrier.name if carrier else None,
+                                'document_type': 'commission_statement',
+                                'statement_date': extracted_date
+                            },
+                            "carrier_id": str(carrier.id) if carrier else None,
+                            "extracted_carrier": carrier.name if carrier else extracted_carrier,
+                            "timestamp": datetime.now().isoformat()
+                        }
+                        
+                        # Get both field mapping and plan type detection
+                        ai_analysis_result = await enhanced_extraction_analysis(
+                            request=analysis_request,
+                            current_user=current_user,
+                            db=db
+                        )
+                        
+                        if ai_analysis_result.get('success'):
+                            # Extract field mapping data
+                            field_mapping = ai_analysis_result.get('field_mapping', {})
+                            if field_mapping.get('success'):
+                                ai_field_mapping_data = {
+                                    "ai_enabled": True,
+                                    "mappings": field_mapping.get('mappings', []),
+                                    "unmapped_fields": field_mapping.get('unmapped_fields', []),
+                                    "confidence": field_mapping.get('confidence', 0.0),
+                                    "learned_format_used": field_mapping.get('learned_format_used', False),
+                                    "timestamp": ai_analysis_result.get('timestamp')
+                                }
+                                logger.info(f"✅ AI Field Mapping: {len(ai_field_mapping_data.get('mappings', []))} mappings with {ai_field_mapping_data.get('confidence', 0):.2f} confidence")
+                            else:
+                                ai_field_mapping_data = {"ai_enabled": False, "error": "Field mapping failed"}
+                            
+                            # Update plan type detection data if available
+                            plan_detection = ai_analysis_result.get('plan_type_detection', {})
+                            if plan_detection.get('success'):
+                                ai_plan_type_data = {
+                                    "ai_enabled": True,
+                                    "detected_plan_types": plan_detection.get('detected_plan_types', []),
+                                    "confidence": plan_detection.get('confidence', 0.0),
+                                    "multi_plan_document": plan_detection.get('multi_plan_document', False),
+                                    "statistics": plan_detection.get('detection_statistics', {})
+                                }
+                        else:
+                            logger.warning("AI enhanced extraction analysis failed")
+                            ai_field_mapping_data = {"ai_enabled": False}
+                            
+                    except Exception as ai_error:
+                        logger.warning(f"AI field mapping failed (non-critical): {str(ai_error)}")
+                        ai_field_mapping_data = {"ai_enabled": False, "error": str(ai_error)}
                     
             except Exception as e:
                 logger.warning(f"Format learning lookup failed: {str(e)}")
         
-        # Emit WebSocket step: Finalizing
+        # Emit WebSocket: Step 6 - Preparing Results (95% progress)
         if upload_id:
-            await connection_manager.emit_upload_step(upload_id, 'finalizing', 90)
+            await connection_manager.emit_upload_step(upload_id, 'preparing_results', 95)
         
         # ===== CONVERSATIONAL SUMMARY GENERATION =====
         # Generate natural language summary in parallel (non-blocking)
@@ -789,18 +876,20 @@ async def extract_tables_smart(
             "extracted_date": extracted_date,
             "document_metadata": document_metadata,
             
-            # ===== AI INTELLIGENCE - PLAN TYPE DETECTED, FIELD MAPPING AFTER EDITING =====
-            # Plan type detection happens during extraction
-            # Field mapping will be triggered when user clicks "Continue to Field Mapping"
+            # ===== AI INTELLIGENCE - BOTH PLAN TYPE AND FIELD MAPPING DURING EXTRACTION =====
+            # Both plan type detection and field mapping happen during extraction
             "ai_intelligence": {
-                "enabled": ai_plan_type_data is not None,
-                "field_mapping": {"ai_enabled": False},  # Will be generated after table editing
+                "enabled": (ai_plan_type_data is not None) or (ai_field_mapping_data is not None),
+                "field_mapping": ai_field_mapping_data or {"ai_enabled": False},
                 "plan_type_detection": ai_plan_type_data or {"ai_enabled": False},
                 "table_selection": table_selection_data or {"enabled": False},
-                "overall_confidence": ai_plan_type_data.get('confidence', 0.0) if ai_plan_type_data else 0.0
+                "overall_confidence": max(
+                    ai_plan_type_data.get('confidence', 0.0) if ai_plan_type_data else 0.0,
+                    ai_field_mapping_data.get('confidence', 0.0) if ai_field_mapping_data else 0.0
+                )
             },
             
-            "message": f"Successfully extracted {len(extraction_result.get('tables', []))} tables using {extraction_method} method. AI field mapping will be performed after table review."
+            "message": f"Successfully extracted {len(extraction_result.get('tables', []))} tables using {extraction_method} method."
         }
         
         # Record user contribution
@@ -918,14 +1007,24 @@ async def extract_tables_smart(
         
         return client_response
         
-    except HTTPException:
-        # Delete failed upload record (only 3 valid statuses: pending, approved, rejected)
+    except HTTPException as he:
+        # Update failed upload status instead of deleting
         try:
             if upload_id_uuid:
-                await with_db_retry(db, crud.delete_statement, statement_id=str(upload_id_uuid))
-                logger.info(f"🗑️  Deleted failed upload record: {upload_id_uuid}")
-        except Exception as delete_error:
-            logger.error(f"Failed to delete upload record after error: {delete_error}")
+                update_data = schemas.StatementUploadUpdate(
+                    status="failed",
+                    progress_data={
+                        'extraction_method': extraction_method,
+                        'file_type': file_ext,
+                        'start_time': start_time.isoformat(),
+                        'failed_at': datetime.utcnow().isoformat(),
+                        'error': str(he.detail)
+                    }
+                )
+                await with_db_retry(db, crud.update_statement, statement_id=str(upload_id_uuid), statement_update=update_data)
+                logger.info(f"✅ Updated failed upload status: {upload_id_uuid}")
+        except Exception as update_error:
+            logger.error(f"Failed to update upload record after error: {update_error}")
         
         # Clean up file on error
         if os.path.exists(file_path):
@@ -934,13 +1033,23 @@ async def extract_tables_smart(
     except Exception as e:
         logger.error(f"Smart extraction error: {str(e)}")
         
-        # Delete failed upload record (only 3 valid statuses: pending, approved, rejected)
+        # Update failed upload status instead of deleting
         try:
             if upload_id_uuid:
-                await with_db_retry(db, crud.delete_statement, statement_id=str(upload_id_uuid))
-                logger.info(f"🗑️  Deleted failed upload record: {upload_id_uuid}")
-        except Exception as delete_error:
-            logger.error(f"Failed to delete upload record after error: {delete_error}")
+                update_data = schemas.StatementUploadUpdate(
+                    status="failed",
+                    progress_data={
+                        'extraction_method': extraction_method,
+                        'file_type': file_ext,
+                        'start_time': start_time.isoformat(),
+                        'failed_at': datetime.utcnow().isoformat(),
+                        'error': str(e)
+                    }
+                )
+                await with_db_retry(db, crud.update_statement, statement_id=str(upload_id_uuid), statement_update=update_data)
+                logger.info(f"✅ Updated failed upload status: {upload_id_uuid}")
+        except Exception as update_error:
+            logger.error(f"Failed to update upload record after error: {update_error}")
         
         # Clean up file on error
         if os.path.exists(file_path):
@@ -955,7 +1064,13 @@ async def cancel_extraction(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Cancel a running extraction process.
+    Cancel a running extraction process with immediate effect and cleanup.
+    
+    - Marks extraction as cancelled immediately
+    - Cancels running task
+    - Cleans up database records
+    - Deletes GCS and local files
+    - Sends WebSocket notification
     
     Args:
         upload_id: The upload ID to cancel
@@ -965,64 +1080,103 @@ async def cancel_extraction(
     Returns:
         Success message if cancellation was successful
     """
-    logger.info(f"Cancellation requested for upload {upload_id}")
+    logger.info(f"🛑 Cancellation requested for upload {upload_id}")
     
-    # Check if extraction is running
-    if upload_id not in running_extractions:
-        raise HTTPException(
-            status_code=404, 
-            detail="No running extraction found for this upload ID"
-        )
-    
-    # Get the running task
-    task = running_extractions[upload_id]
-    
-    # Cancel the task
-    task.cancel()
+    # Define cleanup callback
+    async def cleanup_cancelled_upload():
+        """Cleanup database and files for cancelled upload."""
+        try:
+            from sqlalchemy import select, delete
+            from app.db.models import StatementUpload
+            from app.services.gcs_utils import delete_gcs_file
+            
+            # Find the upload record
+            try:
+                upload_uuid = UUID(upload_id)
+            except ValueError:
+                logger.error(f"Invalid upload ID format: {upload_id}")
+                return
+            
+            # Delete from database (or mark as cancelled)
+            delete_result = await db.execute(
+                select(StatementUpload).where(StatementUpload.id == upload_uuid)
+            )
+            upload_record = delete_result.scalar_one_or_none()
+            
+            if upload_record:
+                # Delete GCS file
+                if upload_record.gcs_key:
+                    try:
+                        delete_gcs_file(upload_record.gcs_key)
+                        logger.info(f"🗑️ Deleted GCS file: {upload_record.gcs_key}")
+                    except Exception as gcs_error:
+                        logger.error(f"Failed to delete GCS file: {gcs_error}")
+                
+                # Delete database record
+                await db.delete(upload_record)
+                await db.commit()
+                logger.info(f"✅ Deleted database record for upload {upload_id}")
+            
+            # Delete local file if exists
+            if upload_record and upload_record.filename:
+                local_path = os.path.join("pdfs", upload_record.filename)
+                if os.path.exists(local_path):
+                    os.remove(local_path)
+                    logger.info(f"🗑️ Deleted local file: {local_path}")
+                    
+        except Exception as cleanup_error:
+            logger.error(f"Cleanup failed for {upload_id}: {cleanup_error}")
+            await db.rollback()
     
     try:
-        # Wait for the task to be cancelled
-        await task
-    except asyncio.CancelledError:
-        logger.info(f"Successfully cancelled extraction for upload {upload_id}")
-    
-    # Clean up the task from running extractions
-    running_extractions.pop(upload_id, None)
-    
-    # Send WebSocket notification about successful cancellation
-    try:
-        await connection_manager.send_error(
-            upload_id,  # Use the tracking ID for WebSocket 
-            "Extraction cancelled successfully",
-            error_code="CANCELLED"
-        )
-    except Exception as e:
-        logger.warning(f"Failed to send WebSocket cancellation notification: {e}")
-        # Don't fail the API call if WebSocket notification fails
-    
-    # Delete the cancelled upload record instead of updating status
-    # Since only 'pending', 'approved', 'rejected', 'processing' are valid statuses
-    try:
-        # The upload_id here is the tracking string, need to find the actual UUID
-        # Check if it's in the running_extractions first to get the UUID
-        # Note: The actual UUID is stored when creating the upload, not the tracking ID
+        # Mark as cancelled immediately with cleanup callback
+        await cancellation_manager.mark_cancelled(upload_id, cleanup_callback=cleanup_cancelled_upload)
         
-        # For now, log a warning - in production, you'd need to maintain a mapping
-        logger.warning(f"Cancellation endpoint called with tracking ID: {upload_id}")
-        logger.info(f"Upload successfully cancelled, database cleanup may be handled elsewhere")
+        # If task is running, cancel it
+        if upload_id in running_extractions:
+            task = running_extractions[upload_id]
+            task.cancel()
+            
+            try:
+                await task
+            except asyncio.CancelledError:
+                logger.info(f"✅ Successfully cancelled extraction task for {upload_id}")
+            
+            # Remove from running extractions
+            running_extractions.pop(upload_id, None)
+        else:
+            logger.warning(f"⚠️ No running extraction found for {upload_id}, but still proceeding with cleanup")
+        
+        # Execute cleanup immediately
+        await cancellation_manager.execute_cleanup(upload_id)
+        
+        # Send WebSocket notification
+        try:
+            await connection_manager.send_upload_complete(
+                upload_id,
+                {
+                    "status": "cancelled",
+                    "message": "Upload cancelled successfully"
+                }
+            )
+        except Exception as ws_error:
+            logger.warning(f"Failed to send WebSocket notification: {ws_error}")
+        
+        return JSONResponse(
+            status_code=200,
+            content={
+                "success": True,
+                "message": f"Extraction cancelled successfully for upload {upload_id}",
+                "upload_id": upload_id
+            }
+        )
         
     except Exception as e:
-        logger.error(f"Error during cancellation cleanup: {e}")
-        # Don't fail the cancellation if cleanup fails
-    
-    return JSONResponse(
-        status_code=200,
-        content={
-            "success": True,
-            "message": f"Extraction cancelled successfully for upload {upload_id}",
-            "upload_id": upload_id
-        }
-    )
+        logger.error(f"Error cancelling extraction: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        # Clear from cancellation manager
+        await cancellation_manager.clear_cancelled(upload_id)
 
 
 @router.post("/extract-tables-gpt/")

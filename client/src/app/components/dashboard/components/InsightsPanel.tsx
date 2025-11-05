@@ -64,47 +64,10 @@ function getInsightColor(type: Insight['type']) {
 
 export default function InsightsPanel({ insights }: InsightsPanelProps) {
   const router = useRouter();
-  const defaultInsights: Insight[] = [
-    {
-      id: '1',
-      type: 'growth',
-      title: 'Your commission grew 18.2% this year',
-      description: 'Outperforming industry average by 8.5%',
-      dismissible: true
-    },
-    {
-      id: '2',
-      type: 'achievement',
-      title: 'Top performer: Allied Benefit Systems',
-      description: 'Contributing 55.1% of total commission',
-      action: {
-        label: 'View Details',
-        onClick: () => router.push('/?tab=earned-commission-carriers')
-      }
-    },
-    {
-      id: '3',
-      type: 'alert',
-      title: '1 statement pending approval',
-      description: 'Submitted 3 days ago',
-      action: {
-        label: 'Review Now',
-        onClick: () => router.push('/pending')
-      }
-    },
-    {
-      id: '4',
-      type: 'opportunity',
-      title: 'Avg commission rate increased to 11.1%',
-      description: 'Up from 10.6% last year',
-      dismissible: true
-    }
-  ];
-
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  const activeInsights = (insights || defaultInsights).filter(
+  const activeInsights = (insights || []).filter(
     insight => !dismissedIds.has(insight.id)
   );
 
@@ -132,98 +95,116 @@ export default function InsightsPanel({ insights }: InsightsPanelProps) {
 
       {/* Insights List */}
       <div className="flex-1 space-y-3 overflow-y-auto">
-        <AnimatePresence>
-          {activeInsights.map((insight, index) => (
-            <motion.div
-              key={insight.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, x: -100 }}
-              transition={{ delay: index * 0.05 }}
-              className="relative group"
-            >
-              <div 
-                className={`p-4 rounded-lg border transition-all duration-200 ${
-                  expandedId === insight.id 
-                    ? 'border-blue-200 dark:border-blue-700 bg-blue-50/50 dark:bg-blue-900/10' 
-                    : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
-                } cursor-pointer`}
-                onClick={() => setExpandedId(expandedId === insight.id ? null : insight.id)}
+        {activeInsights.length === 0 ? (
+          <div className="flex items-center justify-center h-48 text-slate-500">
+            <div className="text-center">
+              <Lightbulb className="w-12 h-12 mx-auto mb-2 opacity-50" />
+              <p>No insights available</p>
+              <p className="text-sm">Insights will be generated based on your data</p>
+            </div>
+          </div>
+        ) : (
+          <AnimatePresence>
+            {activeInsights.map((insight, index) => (
+              <motion.div
+                key={insight.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, x: -100 }}
+                transition={{ delay: index * 0.05 }}
+                className="relative group"
               >
-                {/* Main Content */}
-                <div className="flex items-start gap-3">
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                    getInsightColor(insight.type)
-                  }`}>
-                    {getInsightIcon(insight.type)}
-                  </div>
-                  
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-slate-800 dark:text-slate-100 pr-6">
-                      {insight.title}
-                    </p>
+                <div 
+                  className={`p-4 rounded-lg border transition-all duration-200 ${
+                    expandedId === insight.id 
+                      ? 'border-blue-200 dark:border-blue-700 bg-blue-50/50 dark:bg-blue-900/10' 
+                      : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+                  } cursor-pointer`}
+                  onClick={() => setExpandedId(expandedId === insight.id ? null : insight.id)}
+                >
+                  {/* Main Content */}
+                  <div className="flex items-start gap-3">
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                      getInsightColor(insight.type)
+                    }`}>
+                      {getInsightIcon(insight.type)}
+                    </div>
                     
-                    <AnimatePresence>
-                      {(expandedId === insight.id || !insight.description) && insight.description && (
-                        <motion.p
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          exit={{ opacity: 0, height: 0 }}
-                          className="text-xs text-slate-600 dark:text-slate-400 mt-1"
-                        >
-                          {insight.description}
-                        </motion.p>
-                      )}
-                    </AnimatePresence>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-slate-800 dark:text-slate-100 pr-6">
+                        {insight.title}
+                      </p>
+                      
+                      <AnimatePresence>
+                        {(expandedId === insight.id || !insight.description) && insight.description && (
+                          <motion.p
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            exit={{ opacity: 0, height: 0 }}
+                            className="text-xs text-slate-600 dark:text-slate-400 mt-1"
+                          >
+                            {insight.description}
+                          </motion.p>
+                        )}
+                      </AnimatePresence>
 
-                    {insight.action && (
+                      {insight.action && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            insight.action?.onClick();
+                          }}
+                          className="mt-2 text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+                        >
+                          {insight.action.label}
+                          <ChevronRight className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Dismiss Button */}
+                    {insight.dismissible && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          insight.action?.onClick();
+                          handleDismiss(insight.id);
                         }}
-                        className="mt-2 text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+                        className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded"
                       >
-                        {insight.action.label}
-                        <ChevronRight className="w-3 h-3" />
+                        <X className="w-3 h-3 text-slate-400" />
                       </button>
                     )}
                   </div>
-
-                  {/* Dismiss Button */}
-                  {insight.dismissible && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDismiss(insight.id);
-                      }}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded"
-                    >
-                      <X className="w-3 h-3 text-slate-400" />
-                    </button>
-                  )}
                 </div>
-              </div>
-            </motion.div>
-          ))}
-        </AnimatePresence>
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        )}
       </div>
 
-      {/* Footer Stats */}
-      <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700 grid grid-cols-3 gap-4 text-center">
-        <div>
-          <p className="text-xs text-slate-500 dark:text-slate-400">Growth</p>
-          <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">+18.2%</p>
+      {/* Footer Stats - Only show if we have insights */}
+      {activeInsights.length > 0 && (
+        <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700 grid grid-cols-3 gap-4 text-center">
+          <div>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Growth</p>
+            <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+              {activeInsights.filter(i => i.type === 'growth').length}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Alerts</p>
+            <p className="text-sm font-semibold text-amber-600 dark:text-amber-400">
+              {activeInsights.filter(i => i.type === 'alert').length}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Opportunities</p>
+            <p className="text-sm font-semibold text-blue-600 dark:text-blue-400">
+              {activeInsights.filter(i => i.type === 'opportunity').length}
+            </p>
+          </div>
         </div>
-        <div>
-          <p className="text-xs text-slate-500 dark:text-slate-400">Alerts</p>
-          <p className="text-sm font-semibold text-amber-600 dark:text-amber-400">1</p>
-        </div>
-        <div>
-          <p className="text-xs text-slate-500 dark:text-slate-400">Opportunities</p>
-          <p className="text-sm font-semibold text-blue-600 dark:text-blue-400">3</p>
-        </div>
-      </div>
+      )}
     </motion.div>
   );
 }

@@ -28,6 +28,7 @@ from app.services.claude.service import ClaudeDocumentAIService
 from app.services.excel_extraction_service import ExcelExtractionService
 from app.services.conversational_summary_service import ConversationalSummaryService  # ⭐ ADDED
 from app.services.extraction_utils import normalize_statement_date, normalize_multi_line_headers
+from app.services.cancellation_manager import cancellation_manager
 
 # Import timeout configuration
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
@@ -157,6 +158,9 @@ class EnhancedExtractionService:
         progress_tracker = create_progress_tracker(upload_id)
         
         try:
+            # Check if already cancelled before starting
+            await cancellation_manager.check_cancellation(upload_id)
+            
             # ✅ CRITICAL: Validate services BEFORE starting progress tracking
             service_health = await self._validate_extraction_services(extraction_method)
             if not service_health['healthy']:
@@ -814,6 +818,10 @@ class EnhancedExtractionService:
             # Stage 1: Document processing
             await progress_tracker.update_progress("document_processing", 30, "Validating document for Claude")
             await asyncio.sleep(0.1)
+            
+            # Check for cancellation after document processing
+            await cancellation_manager.check_cancellation(progress_tracker.upload_id)
+            
             await progress_tracker.complete_stage("document_processing", "Claude AI ready")
 
             try:
@@ -821,10 +829,14 @@ class EnhancedExtractionService:
                 logger.info("🔍 Starting GPT metadata extraction...")
                 await progress_tracker.start_stage("gpt_metadata_extraction", "Extracting metadata with GPT")
                 await progress_tracker.update_progress("gpt_metadata_extraction", 10, "Extracting metadata with GPT")
-                 # Emit WebSocket: Step 2 - Extraction started
+                 # Emit WebSocket: Step 2 - Extraction started (25% progress)
                 logger.info("📡 Emitting extraction step...")
                 logger.info(f"📄 Calling _extract_metadata_with_gpt for file: {file_path}")
-                await progress_tracker.connection_manager.emit_upload_step(progress_tracker.upload_id, 'extraction', 20)
+                await progress_tracker.connection_manager.emit_upload_step(progress_tracker.upload_id, 'extraction', 25)
+                
+                # Check for cancellation before GPT metadata extraction
+                await cancellation_manager.check_cancellation(progress_tracker.upload_id)
+                
                 gpt_metadata = await self._extract_metadata_with_gpt(file_path)
                 
                 if gpt_metadata.get('success'):
@@ -858,11 +870,14 @@ class EnhancedExtractionService:
                 raise e
             
             # Stage 2: Claude AI Extraction
-            # Emit WebSocket: Step 3 - Table extraction started
+            # Emit WebSocket: Step 3 - Table extraction started (45% progress)
             logger.info("📡 Emitting table_extraction step...")
-            await progress_tracker.connection_manager.emit_upload_step(progress_tracker.upload_id, 'table_extraction', 40)
+            await progress_tracker.connection_manager.emit_upload_step(progress_tracker.upload_id, 'table_extraction', 45)
             await progress_tracker.start_stage("table_detection", "Processing with Claude AI")
             await progress_tracker.update_progress("table_detection", 20, "Analyzing document with Claude vision")
+            
+            # Check for cancellation before Claude extraction
+            await cancellation_manager.check_cancellation(progress_tracker.upload_id)
             
             # Perform actual extraction using Claude
             logger.info(f"Starting Claude extraction for {file_path} (enhanced={self.use_enhanced})")
@@ -897,6 +912,9 @@ class EnhancedExtractionService:
                 logger.info(f"Claude: Processed {len(original_tables)} tables into {len(merged_tables)} tables")
             
             await progress_tracker.complete_stage("table_detection", "Claude extraction completed")
+            
+            # Check for cancellation before summary generation
+            await cancellation_manager.check_cancellation(progress_tracker.upload_id)
             
             # Stage 3: Generate Enhanced Conversational Summary (if enhanced mode enabled)
             conversational_summary = None

@@ -1280,10 +1280,25 @@ async def get_carriers_with_commission_data(
         
         carriers = []
         for row in result.all():
+            carrier_id = row.id
+            
+            # Count statements for this carrier
+            statement_count_query = select(func.count(StatementUpload.id)).where(
+                func.coalesce(StatementUpload.carrier_id, StatementUpload.company_id) == carrier_id
+            )
+            
+            # Add user filter for non-admin users
+            if not is_admin:
+                statement_count_query = statement_count_query.where(StatementUpload.user_id == current_user.id)
+            
+            statement_count_result = await db.execute(statement_count_query)
+            statement_count = statement_count_result.scalar() or 0
+            
             carriers.append({
                 "id": str(row.id),
                 "name": row.name,
-                "total_commission": float(row.total_commission or 0)
+                "total_commission": float(row.total_commission or 0),
+                "statement_count": int(statement_count)
             })
         
         return carriers

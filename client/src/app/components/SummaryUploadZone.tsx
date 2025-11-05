@@ -25,7 +25,7 @@ import axios from 'axios';
 import PremiumUploadHero from './premium/PremiumUploadHero';
 import PremiumUploadZone from './premium/PremiumUploadZone';
 
-interface CarrierUploadZoneProps {
+interface SummaryUploadZoneProps {
   onParsed: (result: {
     tables: any[],
     upload_id?: string,
@@ -50,14 +50,14 @@ interface CarrierUploadZoneProps {
   environmentId?: string | null;
 }
 
-export default function CarrierUploadZone({
+export default function SummaryUploadZone({
   onParsed,
   selectedStatementDate,
   extractionMethod,
   onExtractionMethodChange,
   onContinue,
   environmentId
-}: CarrierUploadZoneProps) {
+}: SummaryUploadZoneProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [currentStage, setCurrentStage] = useState('');
@@ -76,82 +76,38 @@ export default function CarrierUploadZone({
   const [n8nResponse, setN8nResponse] = useState<any>(null);
   const [isN8nLoading, setIsN8nLoading] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
-  
-  // 🚫 PAUSE POINT: Store extraction results for manual continuation
-  // TODO: Remove these states when reverting to automatic flow
-  const [extractionResults, setExtractionResults] = useState<any>(null);
-  const [isExtractionComplete, setIsExtractionComplete] = useState(false);
 
   // Memoize callbacks to prevent unnecessary re-renders
   const handleExtractionComplete = useCallback((results: any) => {
-    // 🚫 PAUSE POINT: Don't automatically proceed - store results and wait for Continue button
-    // TODO: Remove this pause - uncomment the original automatic flow below
-    setExtractionResults(results);
-    setIsExtractionComplete(true);
-    // Keep isUploading true so the progress loader stays visible
-    
-    // ⭐ UPDATE: If enhanced conversational summary is in results, update n8nResponse
-    if (results.conversational_summary && n8nResponse) {
-      console.log('✨ Updating n8nResponse with enhanced conversational summary');
-      setN8nResponse({
-        ...n8nResponse,
-        summary: results.conversational_summary,  // Replace GPT summary with enhanced
-        enhanced_summary: true  // Flag to indicate this is the enhanced version
+    // ✅ AUTOMATIC FLOW: Close loader and proceed with results
+    setIsUploading(false);
+    if (results && results.success) {
+      onParsed({
+        tables: results.tables || [],
+        upload_id: results.upload_id,
+        file_name: results.file_name || uploadedFile?.name || '',
+        file: uploadedFile!,
+        quality_summary: results.quality_summary,
+        extraction_config: results.extraction_config,
+        gcs_url: results.gcs_url,
+        gcs_key: results.gcs_key,
+        extracted_carrier: results.extracted_carrier,
+        extracted_date: results.extracted_date,
+        document_metadata: results.document_metadata,
+        ai_intelligence: results.ai_intelligence,
+        carrier_id: results.carrier_id,
+        company_id: results.company_id
       });
     }
-    
-    // ORIGINAL AUTOMATIC FLOW (commented out for manual control):
-    // setIsUploading(false);
-    // if (results && results.success) {
-    //   onParsed({
-    //     tables: results.tables || [],
-    //     upload_id: results.upload_id,
-    //     file_name: results.file_name || uploadedFile?.name || '',
-    //     file: uploadedFile!,
-    //     quality_summary: results.quality_summary,
-    //     extraction_config: results.extraction_config,
-    //     gcs_url: results.gcs_url,
-    //     gcs_key: results.gcs_key,
-    //     extracted_carrier: results.extracted_carrier,
-    //     extracted_date: results.extracted_date,
-    //     document_metadata: results.document_metadata,
-    //     ai_intelligence: results.ai_intelligence
-    //   });
-    // }
-  }, [n8nResponse]); // Add n8nResponse as dependency for enhanced summary update
+  }, [uploadedFile, onParsed]);
   
   const handleWebSocketError = useCallback((errorMsg: string) => {
-    console.error('WebSocket error:', errorMsg);
     setError(errorMsg);
     setIsUploading(false);
   }, []);
 
 
-  // Handle Continue button click
-  const handleContinue = useCallback(() => {
-    // 🚫 PAUSE POINT: Manual continuation - this function can be removed when reverting to automatic
-    // TODO: Remove this function and the manual Continue button when reverting to automatic flow
-    if (extractionResults && extractionResults.success) {
-      // Now proceed with the results
-      setIsUploading(false);
-      onParsed({
-        tables: extractionResults.tables || [],
-        upload_id: extractionResults.upload_id,
-        file_name: extractionResults.file_name || uploadedFile?.name || '',
-        file: uploadedFile!,
-        quality_summary: extractionResults.quality_summary,
-        extraction_config: extractionResults.extraction_config,
-        gcs_url: extractionResults.gcs_url,
-        gcs_key: extractionResults.gcs_key,
-        extracted_carrier: extractionResults.extracted_carrier,
-        extracted_date: extractionResults.extracted_date,
-        document_metadata: extractionResults.document_metadata,
-        ai_intelligence: extractionResults.ai_intelligence,
-        carrier_id: extractionResults.carrier_id,  // ✅ CRITICAL: Pass carrier_id for AI field mapping
-        company_id: extractionResults.company_id   // ✅ CRITICAL: Pass company_id as fallback
-      });
-    }
-  }, [extractionResults, uploadedFile, onParsed]);
+  // No manual continue needed - extraction completes automatically
   
   // Use new WebSocket hook for premium progress tracking
   const { progress: wsProgress } = useProgressWebSocket({
@@ -159,11 +115,7 @@ export default function CarrierUploadZone({
     autoConnect: true,  // ✅ Auto-connect when uploadId changes
     onExtractionComplete: handleExtractionComplete,
     onSummarizeComplete: (metadata) => {
-      console.log('📊 Metadata received:', metadata);
-      console.log('📅 Carrier:', metadata.carrier_name);
-      console.log('📅 Statement Date:', metadata.statement_date);
-      console.log('🏢 Broker:', metadata.broker_company);
-      console.log('📝 Summary:', metadata.summary);
+    
       // Store the complete metadata object, not just the summary
       setIsN8nLoading(false);
       setN8nResponse(metadata); // Store the complete metadata object (will be updated when enhanced summary arrives)
@@ -177,7 +129,6 @@ export default function CarrierUploadZone({
         timeZoneName: 'short'
       }));
       toast.success('File successfully summarized!');
-      console.log('✅ File successfully summarized', metadata);
     },
     onError: handleWebSocketError
   });
@@ -237,13 +188,10 @@ export default function CarrierUploadZone({
     
     try {
       const newUploadId = `upload_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      console.log('🆔 Generated uploadId:', newUploadId);
       setUploadId(newUploadId);
 
       // Small delay to allow WebSocket to connect before API call
-      console.log('⏱️ Waiting 500ms for WebSocket to connect...');
       await new Promise(resolve => setTimeout(resolve, 500));
-      console.log('✅ Proceeding with file upload');
 
       // Start table extraction in parallel (full file)
       const formData = new FormData();
@@ -261,7 +209,6 @@ export default function CarrierUploadZone({
         formData.append('environment_id', environmentId);
       }
 
-      console.log('📤 Starting table extraction API call with uploadId:', newUploadId);
       const response = await axios.post('/api/extract-tables-smart/', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
@@ -276,7 +223,6 @@ export default function CarrierUploadZone({
       });
 
       // WebSocket will handle the progress updates automatically via useProgressWebSocket hook
-      console.log('Table extraction started, WebSocket will handle progress updates');
 
     } catch (error: any) {
       setIsUploading(false);
@@ -310,101 +256,74 @@ export default function CarrierUploadZone({
 
   const handleCancel = async () => {
     // Don't proceed if no upload ID
-    if (!uploadId) {
-      console.warn('No upload ID available for cancellation');
+    if (!uploadId) {  
       return;
     }
 
-    // Set cancelling state to keep loader visible
+    // Set cancelling state immediately for instant feedback
     setIsCancelling(true);
 
-    // Show cancelling message
-    toast.loading('Cancelling extraction...', { id: 'cancel-extraction' });
+    // Show instant feedback
+    toast.loading('Cancelling...', { id: 'cancel-extraction', duration: 1000 });
     
     try {
-      // Cancel the extraction on the backend using axios with proper auth
+      // Call cancel API with timeout
       const response = await axios.post(
         `/api/cancel-extraction/${uploadId}`,
         {},
         {
-          withCredentials: true, // This ensures cookies are sent
+          withCredentials: true,
+          timeout: 5000  // 5 second timeout for instant response
         }
       );
       
       if (response.data.success) {
-        // Dismiss loading toast and show success
+        // Immediate success feedback
         toast.dismiss('cancel-extraction');
-        toast.success('✅ Extraction cancelled successfully', {
-          duration: 4000,
-          icon: '🛑',
-        });
+        toast.success('✅ Cancelled successfully', { duration: 3000 });
         
-        // Now reset all state after successful cancellation
-        setIsUploading(false);
-        setUploadProgress(0);
-        setCurrentStage('');
-        setStageProgress(0);
-        setError(null);
-        setUploadedFile(null);
-        setExtractionResults(null);
-        setIsExtractionComplete(false);
-        setExtractedPages(null);
-        setTotalPages(null);
-        setUploadDate(null);
-        setCompletionDate(null);
-        setIsResending(false);
-        setN8nResponse(null);
-        setUploadId(null); // Clear upload ID
-        setIsCancelling(false); // Reset cancelling state
-        
-        // Cleanup local PDF URL
-        if (localPdfUrl) {
-          URL.revokeObjectURL(localPdfUrl);
-          setLocalPdfUrl(null);
-        }
-      } else {
-        throw new Error(response.data.message || 'Failed to cancel extraction');
+        // Reset UI immediately - don't wait
+        resetUploadState();
       }
+      
     } catch (error: any) {
-      // Dismiss loading toast
       toast.dismiss('cancel-extraction');
       
-      // Handle 404 - extraction might have already completed
-      if (error.response?.status === 404) {
-        toast.error('Extraction process not found - it may have already completed', {
-          duration: 4000,
-        });
-        // Still reset UI since extraction is not running
-        setIsUploading(false);
-        setUploadProgress(0);
-        setCurrentStage('');
-        setStageProgress(0);
-        setError(null);
-        setUploadedFile(null);
-        setExtractionResults(null);
-        setIsExtractionComplete(false);
-        setExtractedPages(null);
-        setTotalPages(null);
-        setUploadDate(null);
-        setCompletionDate(null);
-        setIsResending(false);
-        setN8nResponse(null);
-        setUploadId(null);
-        setIsCancelling(false); // Reset cancelling state
-        
-        if (localPdfUrl) {
-          URL.revokeObjectURL(localPdfUrl);
-          setLocalPdfUrl(null);
-        }
+      if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+        // Timeout - assume cancellation worked
+        toast.success('Cancellation in progress', { duration: 3000 });
+        resetUploadState();
+      } else if (error.response?.status === 404) {
+        // Already completed
+        toast('Process already completed', { duration: 3000, icon: 'ℹ️' });
+        resetUploadState();
       } else {
-        // Show error but keep loader visible
-        console.error('Error cancelling extraction:', error);
-        toast.error(`Failed to cancel extraction: ${error.response?.data?.detail || error.message}`, {
-          duration: 5000,
-        });
-        // Reset cancelling state on error
-        setIsCancelling(false);
+        toast.error(`Failed: ${error.response?.data?.detail || error.message}`);
       }
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
+  const resetUploadState = () => {
+    setIsUploading(false);
+    setUploadProgress(0);
+    setCurrentStage('');
+    setStageProgress(0);
+    setError(null);
+    setUploadedFile(null);
+    setExtractedPages(null);
+    setTotalPages(null);
+    setUploadDate(null);
+    setCompletionDate(null);
+    setIsResending(false);
+    setN8nResponse(null);
+    setUploadId(null);
+    setIsCancelling(false);
+    
+    if (localPdfUrl) {
+      URL.revokeObjectURL(localPdfUrl);
+      setLocalPdfUrl(null);
     }
   };
 
@@ -420,8 +339,6 @@ export default function CarrierUploadZone({
     setUploadProgress(0);
     setCurrentStage('');
     setStageProgress(0);
-    setExtractionResults(null);
-    setIsExtractionComplete(false);
     setExtractedPages(null);
     setTotalPages(null);
     setUploadDate(null);
@@ -438,34 +355,19 @@ export default function CarrierUploadZone({
   };
 
   // PREMIUM: Show premium loader with step-by-step progress when processing
-  // 🚫 PAUSE POINT: Added isExtractionComplete to keep loader visible after completion
-  // TODO: Remove || isExtractionComplete when reverting to automatic flow
-  if (isUploading || isExtractionComplete || isCancelling) {
+  if (isUploading || isCancelling) {
     return (
       <div className="w-full h-full">
         <SummaryProgressLoader
           currentStep={wsProgress.currentStep}
           progress={wsProgress.percentage || stageProgress}
           estimatedTime={wsProgress.estimatedTimeRemaining || estimatedTime}
-          conversationalSummary={wsProgress.conversationalSummary}  // ← NEW: Pass conversational summary
+          conversationalSummary={wsProgress.conversationalSummary}
           isVisible={true}
           pdfUrl={localPdfUrl}
-          onContinue={handleContinue}
           onCancel={handleCancel}
-          summaryContent={(() => {
-            // Priority 1: Enhanced from WebSocket (CORRECT)
-            if (wsProgress.conversationalSummary) {
-              return wsProgress.conversationalSummary;
-            }
-            
-            // Priority 2: Enhanced from extraction results
-            if (extractionResults?.conversational_summary) {
-              return extractionResults.conversational_summary;
-            }
-            
-            // Don't show GPT metadata - wait for enhanced
-            return null;
-          })()}
+          uploadedFile={uploadedFile ? { name: uploadedFile.name, size: uploadedFile.size } : null}
+          summaryContent={wsProgress.conversationalSummary || null}
           metadataContent={(() => {
             return `
 ### File Information

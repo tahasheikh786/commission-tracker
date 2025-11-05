@@ -74,7 +74,7 @@ export function useProgressWebSocket({
   autoConnect = true
 }: UseProgressWebSocketOptions = {}) {
   const [progress, setProgress] = useState<ProgressState>({
-    currentStep: 0,
+    currentStep: 1, // ✅ Start at step 1 (1-indexed for loader component)
     percentage: 0,
     message: '',
     estimatedTimeRemaining: null,
@@ -364,7 +364,8 @@ export function useProgressWebSocket({
       case 'STEP_STARTED':
         setProgress(prev => ({
           ...prev,
-          currentStep: data.stepIndex ?? prev.currentStep,
+          // ✅ Convert 0-indexed stepIndex to 1-indexed currentStep for loader component
+          currentStep: data.stepIndex !== undefined ? data.stepIndex + 1 : prev.currentStep,
           message: data.message || '',
           percentage: data.percentage ?? prev.percentage,
           estimatedTimeRemaining: data.estimatedTime ?? prev.estimatedTimeRemaining
@@ -411,24 +412,37 @@ export function useProgressWebSocket({
         break;
 
       case 'EXTRACTION_COMPLETE':
-        // ← NEW: Log conversational summary from extraction results
-        console.log('📦 [EXTRACTION_COMPLETE] Full results:', data.results);
-        if (data.results?.conversational_summary) {
-          console.log('✨ [EXTRACTION_COMPLETE] Conversational summary found:', data.results.conversational_summary);
+        // Check if this is a cancellation
+        if (data.results?.status === 'cancelled') {
+          console.log('📛 Extraction cancelled:', data.results.message);
+          // For cancellations, just reset state without calling completion handler
+          setProgress(prev => ({
+            ...prev,
+            isConnected: false,
+            error: null,
+            message: data.results.message || 'Upload cancelled'
+          }));
         } else {
-          console.warn('⚠️ [EXTRACTION_COMPLETE] No conversational summary in results');
-          console.log('🔍 Available keys in results:', data.results ? Object.keys(data.results) : 'No results');
-        }
-        
-        setProgress(prev => ({
-          ...prev,
-          currentStep: 4, // Final step (0-indexed, so step 5 = index 4)
-          percentage: 100,
-          message: 'Extraction complete!',
-          conversationalSummary: data.results?.conversational_summary ?? prev.conversationalSummary  // ← NEW: Extract summary from results
-        }));
-        if (onExtractionCompleteRef.current && data.results) {
-          onExtractionCompleteRef.current(data.results);
+          // Normal extraction completion
+          // ← NEW: Log conversational summary from extraction results
+          console.log('📦 [EXTRACTION_COMPLETE] Full results:', data.results);
+          if (data.results?.conversational_summary) {
+            console.log('✨ [EXTRACTION_COMPLETE] Conversational summary found:', data.results.conversational_summary);
+          } else {
+            console.warn('⚠️ [EXTRACTION_COMPLETE] No conversational summary in results');
+            console.log('🔍 Available keys in results:', data.results ? Object.keys(data.results) : 'No results');
+          }
+          
+          setProgress(prev => ({
+            ...prev,
+            currentStep: 6, // Final step (1-indexed, step 6)
+            percentage: 100,
+            message: 'Extraction complete!',
+            conversationalSummary: data.results?.conversational_summary ?? prev.conversationalSummary  // ← NEW: Extract summary from results
+          }));
+          if (onExtractionCompleteRef.current && data.results) {
+            onExtractionCompleteRef.current(data.results);
+          }
         }
         // Close connection after completion
         setTimeout(() => {
@@ -443,19 +457,23 @@ export function useProgressWebSocket({
         // Check if this is a cancellation
         const isCancelled = data.stage_details?.cancelled || errorMessage.includes('cancelled');
         
-        setProgress(prev => ({
-          ...prev,
-          error: errorMessage,
-          isConnected: false
-        }));
-        
-        if (onErrorRef.current && !isCancelled) {
-          // Don't call onError for cancellations - they're handled differently
-          onErrorRef.current(errorMessage);
-        }
-        
-        // Close connection immediately for cancellations
-        if (isCancelled) {
+        // Don't set error for cancellations - just disconnect
+        if (!isCancelled) {
+          setProgress(prev => ({
+            ...prev,
+            error: errorMessage,
+            isConnected: false
+          }));
+          
+          if (onErrorRef.current) {
+            onErrorRef.current(errorMessage);
+          }
+        } else {
+          // For cancellations, just disconnect without setting error
+          setProgress(prev => ({
+            ...prev,
+            isConnected: false
+          }));
           console.log('📛 Extraction cancelled, closing WebSocket connection');
           if (disconnectRef.current) {
             disconnectRef.current();
@@ -471,7 +489,7 @@ export function useProgressWebSocket({
   const reset = useCallback(() => {
     disconnect();
     setProgress({
-      currentStep: 0,
+      currentStep: 1, // ✅ Reset to step 1 (1-indexed)
       percentage: 0,
       message: '',
       estimatedTimeRemaining: null,
@@ -508,7 +526,7 @@ export function useProgressWebSocket({
  */
 export function useSimulatedProgress(duration: number = 20000) {
   const [progress, setProgress] = useState({
-    currentStep: 0,
+    currentStep: 1, // ✅ Start at step 1 (1-indexed)
     percentage: 0,
     message: ''
   });
@@ -542,7 +560,7 @@ export function useSimulatedProgress(duration: number = 20000) {
 
   const reset = useCallback(() => {
     setProgress({
-      currentStep: 0,
+      currentStep: 1, // ✅ Reset to step 1 (1-indexed)
       percentage: 0,
       message: ''
     });

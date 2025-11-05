@@ -55,50 +55,7 @@ function getRelativeTime(date: Date): string {
 }
 
 export default function ActivityFeed({ activities }: ActivityFeedProps) {
-  const defaultActivities: Activity[] = [
-    {
-      id: '1',
-      type: 'approved',
-      title: 'Statement Approved',
-      description: 'Allied Benefit Systems',
-      timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000),
-      status: 'success'
-    },
-    {
-      id: '2',
-      type: 'uploaded',
-      title: 'New Upload',
-      description: 'Adrem Administrators, LLC',
-      timestamp: new Date(Date.now() - 5 * 60 * 60 * 1000),
-      status: 'info'
-    },
-    {
-      id: '3',
-      type: 'calculated',
-      title: 'Commission Calculated',
-      description: '14 companies processed',
-      timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000),
-      status: 'success'
-    },
-    {
-      id: '4',
-      type: 'pending',
-      title: 'Pending Review',
-      description: '2 statements awaiting approval',
-      timestamp: new Date(Date.now() - 36 * 60 * 60 * 1000),
-      status: 'warning'
-    },
-    {
-      id: '5',
-      type: 'processed',
-      title: 'Batch Processed',
-      description: 'December statements complete',
-      timestamp: new Date(Date.now() - 48 * 60 * 60 * 1000),
-      status: 'info'
-    }
-  ];
-
-  const recentActivities = activities || defaultActivities;
+  const recentActivities = activities || [];
 
   return (
     <motion.div
@@ -121,51 +78,61 @@ export default function ActivityFeed({ activities }: ActivityFeedProps) {
 
       {/* Activity List */}
       <div className="flex-1 space-y-3 overflow-y-auto">
-        <AnimatePresence>
-          {recentActivities.map((activity, index) => (
-            <motion.div
-              key={activity.id}
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 20 }}
-              transition={{ delay: index * 0.05 }}
-              className="group relative flex gap-3 p-3 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors cursor-pointer"
-            >
-              {/* Icon */}
-              <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
-                activity.status === 'success' ? 'bg-emerald-100 dark:bg-emerald-900/30' :
-                activity.status === 'warning' ? 'bg-amber-100 dark:bg-amber-900/30' :
-                'bg-blue-100 dark:bg-blue-900/30'
-              }`}>
-                {getActivityIcon(activity.type)}
-              </div>
+        {recentActivities.length === 0 ? (
+          <div className="flex items-center justify-center h-48 text-slate-500">
+            <div className="text-center">
+              <Clock className="w-12 h-12 mx-auto mb-2 opacity-50" />
+              <p>No recent activity</p>
+              <p className="text-sm">Activity will appear here as you upload statements</p>
+            </div>
+          </div>
+        ) : (
+          <AnimatePresence>
+            {recentActivities.map((activity, index) => (
+              <motion.div
+                key={activity.id}
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+                transition={{ delay: index * 0.05 }}
+                className="group relative flex gap-3 p-3 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors cursor-pointer"
+              >
+                {/* Icon */}
+                <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
+                  activity.status === 'success' ? 'bg-emerald-100 dark:bg-emerald-900/30' :
+                  activity.status === 'warning' ? 'bg-amber-100 dark:bg-amber-900/30' :
+                  'bg-blue-100 dark:bg-blue-900/30'
+                }`}>
+                  {getActivityIcon(activity.type)}
+                </div>
 
-              {/* Content */}
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-slate-800 dark:text-slate-100">
-                  {activity.title}
-                </p>
-                <p className="text-xs text-slate-600 dark:text-slate-400 truncate">
-                  {activity.description}
-                </p>
-              </div>
+                {/* Content */}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100">
+                    {activity.title}
+                  </p>
+                  <p className="text-xs text-slate-600 dark:text-slate-400 truncate">
+                    {activity.description}
+                  </p>
+                </div>
 
-              {/* Timestamp */}
-              <div className="flex-shrink-0 text-xs text-slate-500 dark:text-slate-400">
-                {getRelativeTime(activity.timestamp)}
-              </div>
+                {/* Timestamp */}
+                <div className="flex-shrink-0 text-xs text-slate-500 dark:text-slate-400">
+                  {getRelativeTime(activity.timestamp)}
+                </div>
 
-              {/* New indicator for recent items */}
-              {index === 0 && (
-                <motion.div
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  className="absolute top-3 right-3 w-2 h-2 bg-blue-500 rounded-full"
-                />
-              )}
-            </motion.div>
-          ))}
-        </AnimatePresence>
+                {/* New indicator for recent items */}
+                {index === 0 && (
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    className="absolute top-3 right-3 w-2 h-2 bg-blue-500 rounded-full"
+                  />
+                )}
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        )}
       </div>
 
       {/* Footer */}

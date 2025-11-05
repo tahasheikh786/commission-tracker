@@ -77,7 +77,7 @@ export default function KPICards({ data }: KPICardsProps) {
   const cards = [
     {
       title: 'Total Commission',
-      value: data?.totalCommission?.value || 77000,
+      value: data?.totalCommission?.value || 0,
       icon: <DollarSign className="w-5 h-5" />,
       prefix: '$',
       suffix: 'K',
@@ -86,26 +86,26 @@ export default function KPICards({ data }: KPICardsProps) {
     },
     {
       title: 'Active Carriers',
-      value: data?.activeCarriers?.value || 2,
+      value: data?.activeCarriers?.value || 0,
       icon: <Building2 className="w-5 h-5" />,
       onClick: () => console.log('Navigate to carriers')
     },
     {
       title: 'Statements Processed',
-      value: data?.statementsProcessed?.value || 3,
+      value: data?.statementsProcessed?.value || 0,
       icon: <FileText className="w-5 h-5" />,
       onClick: () => console.log('Navigate to statements')
     },
     {
       title: 'Success Rate',
-      value: data?.successRate?.value || 100,
+      value: data?.successRate?.value || 0,
       icon: <CheckCircle className="w-5 h-5" />,
       suffix: '%',
       onClick: () => console.log('Navigate to processing stats')
     },
     {
       title: 'Avg Commission Rate',
-      value: data?.avgCommissionRate?.value || 11.1,
+      value: data?.avgCommissionRate?.value || 0,
       icon: <Percent className="w-5 h-5" />,
       suffix: '%',
       decimals: 1,

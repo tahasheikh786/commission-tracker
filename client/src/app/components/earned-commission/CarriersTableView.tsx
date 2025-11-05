@@ -1,5 +1,5 @@
 'use client'
-import React, { useState, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Users, 
@@ -90,6 +90,8 @@ interface CarriersTableViewProps {
   onViewCompany?: (company: CommissionData) => void;
   onEditCompany?: (company: CommissionData) => void;
   onViewInCompanies?: (carrierName: string, carrierId?: string) => void;
+  carrierFilter?: string | null;
+  autoExpandRow?: boolean;
 }
 
 // ============================================
@@ -707,10 +709,12 @@ export default function CarriersTableView({
   navigationContext,
   onViewCompany,
   onEditCompany,
-  onViewInCompanies
+  onViewInCompanies,
+  carrierFilter,
+  autoExpandRow
 }: CarriersTableViewProps) {
   // State
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(carrierFilter || '');
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' }>({
     key: 'carrierName',
     direction: 'asc'
@@ -718,6 +722,18 @@ export default function CarriersTableView({
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
+
+  // Auto-expand row when carrierFilter and autoExpandRow are provided
+  useEffect(() => {
+    if (carrierFilter && autoExpandRow && carriers.length > 0) {
+      const matchingCarrier = carriers.find(
+        c => c.carrierName.toLowerCase() === carrierFilter.toLowerCase()
+      );
+      if (matchingCarrier) {
+        setExpandedRows(new Set([matchingCarrier.carrierName]));
+      }
+    }
+  }, [carrierFilter, autoExpandRow, carriers]);
 
   // Enrich carrier data
   const enrichedCarriers: EnrichedCarrier[] = useMemo(() => {

@@ -72,6 +72,7 @@ export default function DashboardOverview({ environmentId }: { environmentId: st
             <Suspense fallback={<div className="animate-pulse h-96 bg-slate-200 dark:bg-slate-700 rounded-lg" />}>
               <TopCompaniesTable 
                 data={data?.topCompanies || []} 
+                carriersData={data?.carriers}
                 limit={10} 
               />
             </Suspense>
