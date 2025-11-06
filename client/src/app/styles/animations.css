@@ -2315,7 +2315,7 @@
    AI Field Mapper Premium Animations
    ============================================ */
 
-/* Fade in and scale animation for dropdown */
+/* Fade in and scale animation for dropdown (downward) */
 @keyframes fadeInScale {
   from {
     opacity: 0;
@@ -2329,6 +2329,22 @@
 
 .animate-fadeInScale {
   animation: fadeInScale 0.15s ease-out;
+}
+
+/* Fade in and scale animation for dropdown (upward) */
+@keyframes fadeInScaleUp {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-fadeInScaleUp {
+  animation: fadeInScaleUp 0.15s ease-out;
 }
 
 /* Premium fadeInUp animation for table rows */

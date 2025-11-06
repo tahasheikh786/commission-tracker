@@ -86,6 +86,68 @@ IMPORTANT EXTRACTION RULES:
 5. If a table spans multiple pages, extract each page separately
 6. Include confidence scores based on text clarity and structure completeness
 
+**CRITICAL: COMPANY NAME COLUMN HANDLING**
+
+When extracting data from commission statements, pay special attention to how company names are presented:
+
+**Case 1: Company Names as Table Column**
+- If company names appear as a regular column header (e.g., "Customer Name", "Company Name", "Group Name"), extract them normally within the existing table structure.
+
+**Case 2: Company Names in Summary Rows or Non-Column Format**
+- If company names do NOT appear as a column but instead appear in:
+  * Summary section rows (e.g., "Customer: 1653402" followed by "Customer Name: B & B Lightning Protection")
+  * Header rows above data groups
+  * Merged cells spanning multiple columns
+  * Section dividers or grouping labels
+  * Any other non-columnar format
+
+**CRITICAL EXTRACTION RULE FOR NON-COLUMN COMPANY NAMES:**
+
+When company names are NOT in a column format, you MUST:
+
+1. **Add a "Company Name" column** to your extracted table response (as the FIRST column)
+2. **Populate this column** with the appropriate company name for each data row
+3. **Ensure each row** has its corresponding company name in this added column
+4. **Maintain alignment** so that each company name appears next to its respective data rows
+5. **Preserve the existing structure** - do not modify or remove any existing columns, only ADD the company name column
+
+**Example:**
+
+If the document shows company names in summary rows like:
+```
+Customer: 1653402
+Customer Name: B & B Lightning Protection
+Med 10/01/2024 ($3,844.84) ($3,221.78) -3 Q NJ PEPM $56.00 100% Comm Comm ($168.00)
+Med 10/01/2024 $3,844.84 $623.06 3 V NJ PEPM $56.00 100% Comm Comm $168.00
+
+Customer: 1674097
+Customer Name: MAMMOTH DELIVERY LLC
+Med 12/01/2024 $55.58 $55.58 3 V WI PEPM $30.00 100% Fee Leve $90.00
+```
+
+Your extracted table should include:
+```json
+{
+  "headers": ["Company Name", "Cov Type", "Bill Eff Date", "Billed Premium", "Paid Premium", ...],
+  "rows": [
+    ["B & B Lightning Protection", "Med", "10/01/2024", "($3,844.84)", "($3,221.78)", ...],
+    ["B & B Lightning Protection", "Med", "10/01/2024", "$3,844.84", "$623.06", ...],
+    ["MAMMOTH DELIVERY LLC", "Med", "12/01/2024", "$55.58", "$55.58", ...],
+    ...
+  ]
+}
+```
+
+Key Points for Company Name Extraction:
+
+• The "Company Name" column should be the FIRST column (leftmost position)
+• Every data row must have its associated company name populated
+• Do NOT skip rows or leave company names empty
+• If a company has multiple data rows, repeat the company name for each row
+• Maintain data integrity - ensure the company name matches the correct data rows based on document structure
+
+This ensures extracted data maintains full context without losing company-to-data relationships
+
 Analyze the document thoroughly and extract all tabular data with precision."""
 
     @staticmethod

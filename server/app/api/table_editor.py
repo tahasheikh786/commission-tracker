@@ -41,6 +41,7 @@ class SaveTablesRequest(BaseModel):
     selected_statement_date: Optional[Dict[str, Any]] = None
     extracted_carrier: Optional[str] = None
     extracted_date: Optional[str] = None
+    field_config: Optional[List[Dict[str, str]]] = None  # Add field_config for format learning
 
 class UpdateExtractionMetadataRequest(BaseModel):
     upload_id: str
@@ -62,6 +63,7 @@ async def save_tables(request: SaveTablesRequest, db: AsyncSession = Depends(get
         logger.info(f"🎯 Table Editor API: Tables count: {len(request.tables)}")
         logger.info(f"🎯 Table Editor API: Selected statement date: {request.selected_statement_date}")
         logger.info(f"🎯 Table Editor API: Company ID: {request.company_id}")
+        logger.info(f"🎯 Table Editor API: Field config received: {request.field_config}")
         
         # Convert tables to the format expected by the database
         tables_data = []
@@ -79,6 +81,7 @@ async def save_tables(request: SaveTablesRequest, db: AsyncSession = Depends(get
                 "name": table.name or "Unnamed Table",
                 "header": table.header,
                 "rows": table.rows,
+                "summaryRows": table.summaryRows if table.summaryRows else [],  # CRITICAL FIX: Include summary rows to exclude them from commission calculations
                 "upload_id": request.upload_id,
                 "company_id": request.company_id,
                 "created_at": datetime.now().isoformat(),
@@ -151,6 +154,7 @@ async def save_tables(request: SaveTablesRequest, db: AsyncSession = Depends(get
                     'headers': main_table.header,
                     'table_structure': table_editor_settings['table_structure'],
                     'table_editor_settings': table_editor_settings,
+                    'field_config': request.field_config,  # Pass field_config for format learning
                     'confidence_score': 90,  # High confidence for manually edited tables
                     'usage_count': 1
                 }
@@ -193,10 +197,20 @@ async def save_tables(request: SaveTablesRequest, db: AsyncSession = Depends(get
 
 async def save_table_editor_format_learning(db: AsyncSession, format_data: Dict[str, Any]):
     """
-    Save table editor format learning data.
+    Save table editor format learning data with field mappings.
     """
     try:
         from app.db import crud, schemas
+        
+        # Convert field_config list to field_mapping dict
+        field_mapping = {}
+        field_config = format_data.get('field_config', [])
+        if field_config and isinstance(field_config, list):
+            for config in field_config:
+                if isinstance(config, dict) and 'field' in config and 'mapping' in config:
+                    field_mapping[config['field']] = config['mapping']
+        
+        logger.info(f"🎯 Table Editor Format Learning: Saving {len(field_mapping)} field mappings")
         
         # Create format learning record
         format_learning = schemas.CarrierFormatLearningCreate(
@@ -204,7 +218,7 @@ async def save_table_editor_format_learning(db: AsyncSession, format_data: Dict[
             format_signature=format_data['format_signature'],
             headers=format_data['headers'],
             table_structure=format_data['table_structure'],
-            field_mapping={},  # Empty for table editor settings
+            field_mapping=field_mapping,  # Save actual field mappings from field_config
             table_editor_settings=format_data['table_editor_settings'],
             confidence_score=format_data['confidence_score'],
             usage_count=format_data['usage_count']

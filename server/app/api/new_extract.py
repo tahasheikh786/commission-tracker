@@ -457,10 +457,21 @@ async def extract_tables_smart(
         
         # Update upload record with results - set to 'pending' for review
         logger.info("💾 Updating upload record with results...")
+        
+        # Get format learning data from extraction result
+        format_learning_info = extraction_result.get('format_learning', {})
+        
+        # Include field_mapping if format learning found a match
+        field_mapping = None
+        if format_learning_info and format_learning_info.get('found_match'):
+            field_mapping = format_learning_info.get('suggested_mapping', {})
+            logger.info(f"💾 Saving field_mapping from format learning: {field_mapping}")
+        
         update_data = schemas.StatementUploadUpdate(
             status="pending",  # Changed from "extracted" to "pending" for review workflow
             current_step="extracted",
             raw_data=extraction_result.get('tables', []),
+            field_mapping=field_mapping,  # Save field mapping from format learning
             progress_data={
                 **db_upload.progress_data,
                 'extraction_completed': True,

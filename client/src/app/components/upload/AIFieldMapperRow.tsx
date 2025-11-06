@@ -146,7 +146,8 @@ export default function AIFieldMapperRow({
           label: field.display_name,
           description: field.description || ''
         }));
-  
+      
+     
       return options;
     }
     
@@ -173,7 +174,7 @@ export default function AIFieldMapperRow({
       }}
     >
       {/* Statement Field Column - Inline Editable */}
-      <td className="px-4 py-3 relative z-10">
+      <td className="px-4 py-3">
         <div className="flex items-center gap-2 min-w-[180px]">
           {isEditingStatementField ? (
             <input
@@ -220,7 +221,7 @@ export default function AIFieldMapperRow({
       </td>
 
       {/* Database Field Column */}
-      <td className="px-4 py-3 relative z-10">
+      <td className="px-4 py-3">
         <CustomDropdown
           value={dbFieldValue}
           onChange={(value) => {
@@ -229,15 +230,15 @@ export default function AIFieldMapperRow({
           }}
           options={databaseOptions}
           placeholder="Select database field..."
-          searchable={databaseOptions.length > 5}
-          disabled={status === 'skipped'}
+          searchable={true}
+          disabled={status === 'skipped' || status === 'approved'}
           showConfidence={databaseFields.length === 0}
           className="min-w-[200px]"
         />
       </td>
 
       {/* Confidence Column */}
-      <td className="px-4 py-3 relative">
+      <td className="px-4 py-3">
         <div className="flex items-center gap-2">
           {/* AI Indicator */}
           <Sparkles className={`w-3.5 h-3.5 ${confidenceColor.text}`} />
@@ -258,7 +259,7 @@ export default function AIFieldMapperRow({
       </td>
 
       {/* Sample Data Column */}
-      <td className="px-4 py-3 relative">
+      <td className="px-4 py-3">
         <div className="max-w-[160px]">
           {sampleData ? (
             <div 
@@ -274,7 +275,7 @@ export default function AIFieldMapperRow({
       </td>
 
       {/* Actions Column */}
-      <td className="px-4 py-3 relative">
+      <td className="px-4 py-3">
         <div className="flex items-center gap-2">
           {status === 'approved' ? (
             <>
@@ -381,12 +382,23 @@ export default function AIFieldMapperRow({
       </td>
 
       {/* Status Column */}
-      <td className="px-4 py-3 text-center relative">
+      <td className="px-4 py-3 text-center">
         {status === 'approved' && (
-          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800">
-            <CheckCircle2 className="w-3 h-3" />
-            Approved
-          </span>
+          <div className="flex flex-col items-center gap-1">
+            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800">
+              <CheckCircle2 className="w-3 h-3" />
+              Mapped
+            </span>
+            {(() => {
+              // Get the selected database field name
+              const selectedField = databaseFields.find(f => String(f.id) === dbFieldValue);
+              return selectedField ? (
+                <span className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate max-w-[150px]" title={selectedField.display_name}>
+                  → {selectedField.display_name}
+                </span>
+              ) : null;
+            })()}
+          </div>
         )}
         {status === 'skipped' && (
           <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">

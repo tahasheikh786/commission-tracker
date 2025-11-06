@@ -60,6 +60,7 @@ async def get_statements_for_company(
         formatted_statements.append({
             "id": statement.id,
             "company_id": statement.company_id,
+            "carrier_id": statement.carrier_id,  # Include carrier_id
             "file_name": statement.file_name,
             "gcs_key": statement.file_name,  # file_name IS the gcs_key
             "uploaded_at": statement.uploaded_at,
@@ -74,7 +75,8 @@ async def get_statements_for_company(
             "selected_statement_date": statement.selected_statement_date,
             "last_updated": statement.last_updated,
             "uploaded_by_email": user.email,
-            "uploaded_by_name": user_display_name
+            "uploaded_by_name": user_display_name,
+            "field_mapping": statement.field_mapping  # Include field mapping for review
         })
     
     return formatted_statements

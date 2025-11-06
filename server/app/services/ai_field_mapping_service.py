@@ -162,14 +162,16 @@ class AIFieldMappingService:
                             "reasoning": {
                                 "learned_mappings_applied": len(direct_mappings),
                                 "match_score": learned_mapping.get('match_score'),
-                                "usage_count": learned_mapping.get('usage_count', 1)
+                                "usage_count": learned_mapping.get('usage_count', 1),
+                                "source": "learned_format"
                             },
                             "suggestions_count": len(direct_mappings),
-                            "learned_format_used": True,
+                            "learned_format_used": True,  # CRITICAL: Flag that learned format was used
                             "timestamp": datetime.now().isoformat()
                         }
                         
                         logger.info(f"✅ Applied {len(direct_mappings)} learned mappings directly - returning early")
+                        logger.info(f"✅ Response includes learned_format_used=True flag")
                         return response
                     else:
                         logger.warning(f"⚠️ Learned mapping produced 0 actual mappings - falling through to AI generation")

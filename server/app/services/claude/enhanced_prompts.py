@@ -174,6 +174,88 @@ Extract all tables with:
 • Column Semantics: Understand what each column means
 • Relationships: Parent-child connections in hierarchical tables
 
+**CRITICAL: COMPANY NAME COLUMN HANDLING**
+
+<company_name_extraction>
+When extracting data from commission statements, pay special attention to how company names are presented:
+
+**Case 1: Company Names as Table Column**
+- If company names appear as a regular column header (e.g., "Customer Name", "Company Name", "Group Name"), extract them normally within the existing table structure.
+
+**Case 2: Company Names in Summary Rows or Non-Column Format**
+- If company names do NOT appear as a column but instead appear in:
+  * Summary section rows (e.g., "Customer: 1653402" followed by "Customer Name: B & B Lightning Protection")
+  * Header rows above data groups
+  * Merged cells spanning multiple columns
+  * Section dividers or grouping labels
+  * Writing Agent grouping sections
+  * Any other non-columnar format
+
+**CRITICAL EXTRACTION RULE FOR NON-COLUMN COMPANY NAMES:**
+
+When company names are NOT in a column format, you MUST:
+
+1. **Detect the pattern**: Identify where company/group names appear (summary rows, headers, section dividers)
+2. **Add a "Company Name" or "Group Name" column** to your extracted table response (as the FIRST column in the headers array)
+3. **Populate this column** with the appropriate company/group name for each data row
+4. **Ensure each row** has its corresponding company name in this added column
+5. **Maintain alignment** so that each company name appears aligned with its respective data rows
+6. **Preserve the existing structure** - do not modify or remove any existing columns, only ADD the company name column
+7. **Track context**: As you process rows, keep track of which company/group section you're in
+
+**Example Extraction:**
+
+If the document shows company names in summary/grouping rows like:
+```
+Writing Agent: 271004-02 GOLDSTEIN, ANAT
+Customer: 1653402
+Customer Name: B & B Lightning Protection
+Med 10/01/2024 ($3,844.84) ($3,221.78) -3 Q NJ PEPM $56.00 100% Comm Comm ($168.00)
+Med 10/01/2024 $3,844.84 $623.06 3 V NJ PEPM $56.00 100% Comm Comm $168.00
+
+Customer: 1674097
+Customer Name: MAMMOTH DELIVERY LLC
+Med 12/01/2024 $55.58 $55.58 3 V WI PEPM $30.00 100% Fee Leve $90.00 $90.00 $90.00
+```
+
+Your extracted JSON should include:
+```json
+{
+  "headers": ["Company Name", "Cov Type", "Bill Eff Date", "Billed Premium", "Paid Premium", "Sub Adj count", "Typ", "Iss St", "Method", "Rate", "Split %", "Comp Typ", "Bus Type", "Billed Fee Amount", "Customer Paid Fee", "Paid Amount"],
+  "rows": [
+    ["B & B Lightning Protection", "Med", "10/01/2024", "($3,844.84)", "($3,221.78)", "-3", "Q", "NJ", "PEPM", "$56.00", "100%", "Comm", "Comm", "", "", "($168.00)"],
+    ["B & B Lightning Protection", "Med", "10/01/2024", "$3,844.84", "$623.06", "3", "V", "NJ", "PEPM", "$56.00", "100%", "Comm", "Comm", "", "", "$168.00"],
+    ["MAMMOTH DELIVERY LLC", "Med", "12/01/2024", "$55.58", "$55.58", "3", "V", "WI", "PEPM", "$30.00", "100%", "Fee", "Leve", "$90.00", "$90.00", "$90.00"]
+  ],
+  "groups_and_companies": [
+    {
+      "group_number": "1653402",
+      "group_name": "B & B Lightning Protection",
+      "writing_agent": "GOLDSTEIN, ANAT",
+      "total_paid": "0.00"
+    },
+    {
+      "group_number": "1674097",
+      "group_name": "MAMMOTH DELIVERY LLC",
+      "writing_agent": "GOLDSTEIN, ANAT",
+      "total_paid": "$667.15"
+    }
+  ]
+}
+```
+
+Key Points for Company Name Extraction:
+
+• The "Company Name" or "Group Name" column should be the FIRST column (leftmost position)
+• Every data row must have its associated company/group name populated
+• Do NOT skip rows or leave company names empty
+• If a company has multiple data rows, repeat the company name for each row
+• Track the current company context as you process the document sequentially
+• Maintain data integrity - ensure the company name matches the correct data rows based on document structure and visual grouping
+• This ensures extracted data maintains full context without losing company-to-data relationships
+• For hierarchical documents with Writing Agents → Companies → Data rows, maintain all levels of the hierarchy
+</company_name_extraction>
+
 **OUTPUT FORMAT**
 Return your analysis in this JSON structure:
 

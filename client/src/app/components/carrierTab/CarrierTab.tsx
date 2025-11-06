@@ -141,6 +141,30 @@ export default function CarrierTab({ environmentId }: CarrierTabProps) {
     }
   }, [searchParams, carriers, loadingCarriers]);
 
+  // Function to refresh statements
+  const handleStatementsRefresh = async () => {
+    if (!selected) return;
+    
+    setLoadingStatements(true);
+    
+    const endpoint = viewAllData 
+      ? `${process.env.NEXT_PUBLIC_API_URL}/api/companies/${selected.id}/statements/`
+      : `${process.env.NEXT_PUBLIC_API_URL}/api/companies/user-specific/${selected.id}/statements`;
+    
+    try {
+      const response = await axios.get(endpoint, {
+        withCredentials: true  // CRITICAL FIX: Ensure cookies are sent
+      });
+      const data = response.data;
+      setStatements(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('Error fetching statements:', error);
+      setStatements([]);
+    } finally {
+      setLoadingStatements(false);
+    }
+  };
+
   // Fetch statements for selected carrier
   useEffect(() => {
     if (!selected) {
@@ -148,28 +172,11 @@ export default function CarrierTab({ environmentId }: CarrierTabProps) {
       setCommissionStats(null);
       return;
     }
-    setLoadingStatements(true);
-    
-    const endpoint = viewAllData 
-      ? `${process.env.NEXT_PUBLIC_API_URL}/api/companies/${selected.id}/statements/`
-      : `${process.env.NEXT_PUBLIC_API_URL}/api/companies/user-specific/${selected.id}/statements`;
-    
-    axios.get(endpoint, {
-      withCredentials: true  // CRITICAL FIX: Ensure cookies are sent
-    })
-      .then(response => {
-        const data = response.data;
-        setStatements(Array.isArray(data) ? data : []);
-      })
-      .catch(error => {
-        console.error('Error fetching statements:', error);
-        setStatements([]);
-      })
-      .finally(() => setLoadingStatements(false));
+    handleStatementsRefresh();
   }, [selected, viewAllData]);
 
-  // Fetch commission data for selected carrier
-  useEffect(() => {
+  // Function to fetch commission stats
+  const fetchCommissionStats = async () => {
     if (!selected) {
       setCommissionStats(null);
       return;
@@ -191,18 +198,22 @@ export default function CarrierTab({ environmentId }: CarrierTabProps) {
       ? `${process.env.NEXT_PUBLIC_API_URL}/api/earned-commission/carrier/${selected.id}/stats${queryString ? `?${queryString}` : ''}`
       : `${process.env.NEXT_PUBLIC_API_URL}/api/earned-commission/carrier/user-specific/${selected.id}/stats${queryString ? `?${queryString}` : ''}`;
     
-    axios.get(endpoint, {
-      withCredentials: true  // CRITICAL FIX: Ensure cookies are sent
-    })
-      .then(response => {
-        const data = response.data;
-        setCommissionStats(data);
-      })
-      .catch((error) => {
-        console.error('Error fetching commission stats:', error);
-        setCommissionStats(null);
-      })
-      .finally(() => setLoadingCommission(false));
+    try {
+      const response = await axios.get(endpoint, {
+        withCredentials: true  // CRITICAL FIX: Ensure cookies are sent
+      });
+      setCommissionStats(response.data);
+    } catch (error) {
+      console.error('Error fetching commission stats:', error);
+      setCommissionStats(null);
+    } finally {
+      setLoadingCommission(false);
+    }
+  };
+
+  // Fetch commission data for selected carrier
+  useEffect(() => {
+    fetchCommissionStats();
   }, [selected, viewAllData, filterYear, filterMonth]);
 
   const formatCurrency = (amount: number) => {
@@ -224,6 +235,8 @@ export default function CarrierTab({ environmentId }: CarrierTabProps) {
       .then(() => {
         setStatements(statements.filter(statement => !ids.includes(statement.id)));
         toast.success('Statements deleted successfully!');
+        // Refresh commission stats immediately to update totals
+        fetchCommissionStats();
         // Trigger global dashboard refresh after successful deletion
         triggerDashboardRefresh();
       })
@@ -565,6 +578,7 @@ export default function CarrierTab({ environmentId }: CarrierTabProps) {
                     canSelectFiles={canSelectFiles}
                     canDeleteFiles={canDeleteFiles}
                     showUploadedByColumn={viewAllData}
+                    onRefresh={handleStatementsRefresh}
                   />
                 ) : (
                   <div className="flex flex-col items-center justify-center py-16 text-center">

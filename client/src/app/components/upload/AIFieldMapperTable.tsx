@@ -21,13 +21,36 @@ interface AIFieldMapperTableProps {
     editedStatementFields: Record<string, string>;
     duplicateFields: string[];
   }) => void;
+  hideActionButtons?: boolean; // Hide "Accept All" and "Review Table" buttons (for modals)
 }
 
-export default function AIFieldMapperTable({ mappingResults, onReviewTable, tableData, tableHeaders, isLoading, databaseFields = [], onStateChange }: AIFieldMapperTableProps) {
+export default function AIFieldMapperTable({ mappingResults, onReviewTable, tableData, tableHeaders, isLoading, databaseFields = [], onStateChange, hideActionButtons = false }: AIFieldMapperTableProps) {
  
+  // Debug logging
+  useEffect(() => {
+   
+  }, [mappingResults, isLoading, databaseFields]);
   
-  // State for each row's status
-  const [rowStatuses, setRowStatuses] = useState<Record<string, 'pending' | 'approved' | 'skipped'>>({});
+  // State for each row's status - AUTO-APPROVE high-confidence learned mappings
+  const [rowStatuses, setRowStatuses] = useState<Record<string, 'pending' | 'approved' | 'skipped'>>(() => {
+    const initialStatuses: Record<string, 'pending' | 'approved' | 'skipped'> = {};
+    
+    // CRITICAL FIX: Auto-approve high-confidence learned mappings
+    if (mappingResults?.mappings && mappingResults.learned_format_used) {
+      mappingResults.mappings.forEach(mapping => {
+        // Auto-approve if:
+        // 1. Learned format was used, AND
+        // 2. Confidence is >= 0.9 (90%)
+        if (mapping.confidence >= 0.9) {
+          initialStatuses[mapping.extracted_field] = 'approved';
+        } else {
+          initialStatuses[mapping.extracted_field] = 'pending';
+        }
+      });
+    }
+    
+    return initialStatuses;
+  });
   
   // State for edited statement fields (user corrections)
   const [editedStatementFields, setEditedStatementFields] = useState<Record<string, string>>({});
@@ -42,6 +65,40 @@ export default function AIFieldMapperTable({ mappingResults, onReviewTable, tabl
     }
     return initialSelections;
   });
+
+  // Update row statuses when mappingResults changes (for learned formats)
+  // CRITICAL: This useEffect runs ONCE when mappingResults first loads
+  // It should NOT override existing statuses from parent components
+  useEffect(() => {
+    if (!mappingResults?.mappings || !mappingResults.learned_format_used) return;
+    
+    // Check if row statuses are already initialized
+    const hasExistingStatuses = Object.keys(rowStatuses).length > 0;
+    if (hasExistingStatuses) {
+      return;
+    }
+    
+    const newStatuses: Record<string, 'pending' | 'approved' | 'skipped'> = {};
+    let autoApprovedCount = 0;
+    
+    mappingResults.mappings.forEach(mapping => {
+      // Auto-approve high-confidence learned mappings
+      if (mapping.confidence >= 0.9) {
+        newStatuses[mapping.extracted_field] = 'approved';
+        autoApprovedCount++;
+      } else {
+        newStatuses[mapping.extracted_field] = 'pending';
+      }
+    });
+    
+    if (autoApprovedCount > 0) { 
+      setRowStatuses(newStatuses);
+      
+      // Notify parent component of the auto-approval
+      checkAndNotifyStateChange({ rowStatuses: newStatuses });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mappingResults?.learned_format_used, mappingResults?.mappings]);
 
   // Update database field selections when mappingResults changes
   useEffect(() => {
@@ -82,6 +139,7 @@ export default function AIFieldMapperTable({ mappingResults, onReviewTable, tabl
       }
     });
     
+   
     onStateChange({
       rowStatuses: currentRowStatuses,
       editedStatementFields: currentEditedFields,
@@ -89,10 +147,17 @@ export default function AIFieldMapperTable({ mappingResults, onReviewTable, tabl
     });
   };
 
+  // Notify parent whenever rowStatuses changes
+  useEffect(() => {
+    if (Object.keys(rowStatuses).length > 0) {
+      checkAndNotifyStateChange({ rowStatuses });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rowStatuses]);
+
   const handleApprove = (fieldId: string) => {
     setRowStatuses(prev => {
       const updated = { ...prev, [fieldId]: 'approved' as const };
-      checkAndNotifyStateChange({ rowStatuses: updated });
       return updated;
     });
   };
@@ -100,7 +165,6 @@ export default function AIFieldMapperTable({ mappingResults, onReviewTable, tabl
   const handleSkip = (fieldId: string) => {
     setRowStatuses(prev => {
       const updated = { ...prev, [fieldId]: 'skipped' as const };
-      checkAndNotifyStateChange({ rowStatuses: updated });
       return updated;
     });
   };
@@ -162,10 +226,30 @@ export default function AIFieldMapperTable({ mappingResults, onReviewTable, tabl
         <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
           Review and approve AI-suggested field mappings
         </p>
+        
+        {/* Learned Format Notification */}
+        {mappingResults?.learned_format_used && mappingResults?.overall_confidence >= 0.9 && (
+          <div className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg">
+            <div className="flex items-start gap-3">
+              <svg className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-green-800 dark:text-green-200">
+                  ✨ Using Format Learned Mappings
+                </p>
+                <p className="text-xs text-green-700 dark:text-green-300 mt-1">
+                  These mappings were learned from your previous approval of this carrier&apos;s format. 
+                  High-confidence fields have been auto-approved. You can review or modify any field before proceeding.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Table Container - overflow-x for horizontal scroll, overflow-y-visible for dropdowns */}
-      <div className="flex-1 custom-scrollbar" style={{ overflowX: 'auto', overflowY: 'visible' }}>
+      {/* Table Container - scrollable with fixed height */}
+      <div className="flex-1 overflow-auto custom-scrollbar" style={{ position: 'relative' }}>
         {isLoading ? (
           // Loading State
           <div className="flex items-center justify-center h-full">
@@ -199,7 +283,7 @@ export default function AIFieldMapperTable({ mappingResults, onReviewTable, tabl
           </div>
         ) : (
           // Mappings Table
-          <table className="premium-data-table w-full" style={{ position: 'relative', zIndex: 1 }}>
+          <table className="premium-data-table w-full">
             <thead className="sticky top-0 z-10 bg-slate-50 dark:bg-slate-900 border-b-2 border-slate-200 dark:border-slate-700">
               <tr>
                 <th className="text-left px-4 py-3.5 font-semibold text-slate-700 dark:text-slate-200 text-sm">
@@ -240,7 +324,7 @@ export default function AIFieldMapperTable({ mappingResults, onReviewTable, tabl
                 </th>
               </tr>
             </thead>
-            <tbody style={{ position: 'relative', zIndex: 1 }}>
+            <tbody>
             {mappingResults?.mappings?.map((mapping: FieldMapping, index: number) => {
               // Get sample data for this field
               let sampleData = '';
@@ -282,11 +366,12 @@ export default function AIFieldMapperTable({ mappingResults, onReviewTable, tabl
         )}
       </div>
 
-      {/* Bottom Action Bar */}
-      <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
-        <div className="space-y-3">
-          {/* Accept All Button */}
-          {mappingResults?.mappings && mappingResults.mappings.length > 0 && (
+      {/* Bottom Action Bar - Hidden in modals */}
+      {!hideActionButtons && (
+        <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+          <div className="space-y-3">
+            {/* Accept All Button */}
+            {mappingResults?.mappings && mappingResults.mappings.length > 0 && (
             <button
               onClick={() => {
                 const allApproved: Record<string, 'approved'> = {};
@@ -408,6 +493,7 @@ export default function AIFieldMapperTable({ mappingResults, onReviewTable, tabl
           })()}
         </div>
       </div>
+      )}
     </div>
   );
 }

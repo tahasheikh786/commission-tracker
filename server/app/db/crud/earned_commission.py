@@ -507,13 +507,15 @@ def extract_field_mappings_once(field_config):
             # Support multiple formats:
             # 1. Auto-approval format: {'field': 'Group Name', 'mapping': 'Client Name'}
             # 2. Old format: {'field': 'field_name', 'label': 'mapped_name'}
-            # 3. New format: {'display_name': 'field_name', 'source_field': 'mapped_name'}
+            # 3. New format: {'display_name': 'Client Name', 'source_field': 'Group Name'} <- MOST COMMON
             
-            # The SOURCE field is what appears in the table header
-            source_field = field.get('field', '') or field.get('display_name', '') or field.get('source_field', '')
+            # The SOURCE field is what appears in the table header (e.g., "Group Name")
+            # Check source_field FIRST, then field, then display_name as fallback
+            source_field = field.get('source_field', '') or field.get('field', '') or field.get('display_name', '')
             
-            # The TARGET is what it's mapped to in our database
-            target_mapping = field.get('mapping', '') or field.get('label', '') or field.get('display_name', '')
+            # The TARGET is what it's mapped to in our database (e.g., "Client Name")
+            # Check display_name FIRST (most common), then mapping, then label
+            target_mapping = field.get('display_name', '') or field.get('mapping', '') or field.get('label', '')
             
             # Check what the field is MAPPED TO, not what it's called in the source
             target_lower = target_mapping.lower()
@@ -545,8 +547,8 @@ def extract_field_mappings_once(field_config):
         print("⚠️  Client name field not found, trying alternative patterns...")
         for field in field_config:
             if isinstance(field, dict):
-                source_field = field.get('field', '') or field.get('display_name', '') or field.get('source_field', '')
-                target_mapping = field.get('mapping', '') or field.get('label', '') or field.get('display_name', '')
+                source_field = field.get('source_field', '') or field.get('field', '') or field.get('display_name', '')
+                target_mapping = field.get('display_name', '') or field.get('mapping', '') or field.get('label', '')
                 
                 # Check source field for alternative client name patterns
                 if any(keyword in source_field.lower() for keyword in ['group name', 'group', 'employer', 'organization', 'customer']):
@@ -558,8 +560,8 @@ def extract_field_mappings_once(field_config):
         print("⚠️  Commission field not found, trying alternative patterns...")
         for field in field_config:
             if isinstance(field, dict):
-                source_field = field.get('field', '') or field.get('display_name', '') or field.get('source_field', '')
-                target_mapping = field.get('mapping', '') or field.get('label', '') or field.get('display_name', '')
+                source_field = field.get('source_field', '') or field.get('field', '') or field.get('display_name', '')
+                target_mapping = field.get('display_name', '') or field.get('mapping', '') or field.get('label', '')
                 
                 # Check source field for alternative commission patterns
                 if any(keyword in source_field.lower() for keyword in ['paid amount', 'commission', 'earned', 'paid', 'amount']):

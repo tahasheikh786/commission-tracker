@@ -2,12 +2,15 @@ import React, { useState } from 'react';
 import { Eye, LayoutList, Trash2, CheckCircle, XCircle, Clock, FileText, ExternalLink, ChevronLeft, ChevronRight, Table, User } from "lucide-react";
 import { useRouter } from 'next/navigation';
 import TableViewerModal from './TableViewerModal';
+import EditableCompareModal from './EditableCompareModal';
+import toast from 'react-hot-toast';
 
 type Statement = {
   id: string;
   file_name: string;
   uploaded_at: string;
   status: string;
+  carrier_id?: string;  // Insurance carrier ID
   rejection_reason?: string;
   selected_statement_date?: any;
   raw_data?: any;
@@ -20,6 +23,10 @@ type Statement = {
   automation_timestamp?: string;
   total_amount_match?: boolean | null;
   extracted_total?: number;
+  gcs_key?: string;
+  gcs_url?: string;
+  // ✅ FIX: Correct property name to match API response
+  fieldmapping?: Record<string, string> | null;  // Field mappings from format learning (no underscore!)
 };
 
 type Props = {
@@ -32,15 +39,18 @@ type Props = {
   canSelectFiles?: boolean;
   canDeleteFiles?: boolean;
   showUploadedByColumn?: boolean;
+  onRefresh?: () => void;
 };
 
-export default function CarrierStatementsTable({ statements, setStatements, onPreview, onCompare, onDelete, deleting, canSelectFiles = true, canDeleteFiles = true, showUploadedByColumn = false }: Props) {
+export default function CarrierStatementsTable({ statements, setStatements, onPreview, onCompare, onDelete, deleting, canSelectFiles = true, canDeleteFiles = true, showUploadedByColumn = false, onRefresh }: Props) {
   const [selectedStatements, setSelectedStatements] = useState<Set<string>>(new Set());
   const [selectAll, setSelectAll] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [tableViewerOpen, setTableViewerOpen] = useState(false);
   const [selectedStatementId, setSelectedStatementId] = useState<string>('');
   const [activeStatusTab, setActiveStatusTab] = useState<'all' | 'approved' | 'pending' | 'rejected'>('all');
+  const [reviewModalOpen, setReviewModalOpen] = useState(false);
+  const [reviewStatement, setReviewStatement] = useState<Statement | null>(null);
   const itemsPerPage = 10;
   const router = useRouter();
 
@@ -84,7 +94,6 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
     
     // Only block if user cannot select files, not based on deleting state
     if (!canSelectFiles) {
-      console.log('Checkbox interaction blocked - user cannot select files');
       return;
     }
     
@@ -92,12 +101,9 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
       const newSelectedStatements = new Set(prevSelected);
       if (newSelectedStatements.has(id)) {
         newSelectedStatements.delete(id);
-        console.log('Removed statement from selection:', id);
       } else {
         newSelectedStatements.add(id);
-        console.log('Added statement to selection:', id);
       }
-      console.log('Updated selectedStatements:', Array.from(newSelectedStatements));
       return newSelectedStatements;
     });
   };
@@ -123,6 +129,29 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
   const handleViewFormattedTables = (statementId: string) => {
     setSelectedStatementId(statementId);
     setTableViewerOpen(true);
+  };
+
+  const handleReviewStatement = (statement: Statement) => {
+    setReviewStatement(statement);
+    setReviewModalOpen(true);
+  };
+
+  const handleReviewModalClose = () => {
+    setReviewModalOpen(false);
+    setReviewStatement(null);
+  };
+
+  const handleReviewComplete = () => {
+    // Refresh statement list to show updated status
+    setReviewModalOpen(false);
+    setReviewStatement(null);
+    
+    // Trigger parent refresh if callback provided
+    if (onRefresh) {
+      onRefresh();
+    }
+    
+    toast.success("Statement recalculated successfully!");
   };
 
   const normalizeFileName = (fileName: string) => {
@@ -327,14 +356,11 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
                     type="checkbox"
                     checked={selectAll}
                     onChange={(e) => {
-                      console.log('Select All checkbox onChange triggered');
                       e.stopPropagation();
                       handleSelectAllChange();
                     }}
                     onClick={(e) => {
-                      console.log('Select All checkbox onClick triggered', 'current selectAll state:', selectAll);
                       e.stopPropagation();
-                      // Since onChange might not be working, handle the toggle directly in onClick
                       handleSelectAllChange();
                     }}
                     className="w-4 h-4 text-blue-500 border-slate-300 dark:border-slate-600 rounded focus:ring-blue-500 cursor-pointer"
@@ -412,14 +438,11 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
                         type="checkbox"
                         checked={selectedStatements.has(statement.id)}
                         onChange={(e) => {
-                          console.log('Checkbox onChange triggered for:', statement.id, 'checked:', e.target.checked);
                           e.stopPropagation();
                           handleCheckboxChange(statement.id);
                         }}
                         onClick={(e) => {
-                          console.log('Checkbox onClick triggered for:', statement.id, 'current checked state:', selectedStatements.has(statement.id));
                           e.stopPropagation();
-                          // Since onChange might not be working, handle the toggle directly in onClick
                           handleCheckboxChange(statement.id);
                         }}
                         className="w-4 h-4 text-blue-500 border-slate-300 dark:border-slate-600 rounded focus:ring-blue-500 cursor-pointer"
@@ -525,6 +548,34 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
                         <Table size={16} />
                       </button>
                       
+                      {/* Review button for approved statements */}
+                      {(statement.status.toLowerCase() === 'approved' || 
+                        statement.status.toLowerCase() === 'completed') && (
+                        <button
+                          title="Review and Edit"
+                          className={`p-2 rounded-lg transition-colors ${
+                            statement.total_amount_match === false && statement.automated_approval === true
+                              ? 'text-yellow-600 dark:text-yellow-400 hover:bg-yellow-50 dark:hover:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700'
+                              : 'text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30'
+                          }`}
+                          onClick={() => handleReviewStatement(statement)}
+                        >
+                          <svg 
+                            className="w-5 h-5" 
+                            fill="none" 
+                            stroke="currentColor" 
+                            viewBox="0 0 24 24"
+                          >
+                            <path 
+                              strokeLinecap="round" 
+                              strokeLinejoin="round" 
+                              strokeWidth={2} 
+                              d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" 
+                            />
+                          </svg>
+                        </button>
+                      )}
+                      
                       {(statement.status === "Pending" || statement.status === "pending" || statement.status === "extracted" || statement.status === "success") && (
                         <button
                           onClick={() => router.push(`/upload?resume=${statement.id}`)}
@@ -615,6 +666,15 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
         title="Formatted Tables"
         statement={(statements || []).find(s => s.id === selectedStatementId)}
       />
+
+      {/* Review Modal */}
+      {reviewModalOpen && reviewStatement && (
+        <EditableCompareModal
+          statement={reviewStatement}
+          onClose={handleReviewModalClose}
+          onComplete={handleReviewComplete}
+        />
+      )}
     </div>
   );
 }

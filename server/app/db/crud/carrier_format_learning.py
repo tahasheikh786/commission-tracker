@@ -314,3 +314,37 @@ async def update_carrier_format_learning(
         await db.refresh(record)
     
     return record
+
+
+async def delete_all_carrier_format_learnings(db: AsyncSession) -> int:
+    """
+    Delete all carrier format learning records from the database.
+    Returns the number of records deleted.
+    """
+    result = await db.execute(select(CarrierFormatLearning))
+    records = result.scalars().all()
+    count = len(records)
+    
+    for record in records:
+        await db.delete(record)
+    
+    await db.commit()
+    return count
+
+
+async def delete_carrier_format_learnings_by_company(db: AsyncSession, company_id: UUID) -> int:
+    """
+    Delete all carrier format learning records for a specific company.
+    Returns the number of records deleted.
+    """
+    result = await db.execute(
+        select(CarrierFormatLearning).where(CarrierFormatLearning.company_id == company_id)
+    )
+    records = result.scalars().all()
+    count = len(records)
+    
+    for record in records:
+        await db.delete(record)
+    
+    await db.commit()
+    return count

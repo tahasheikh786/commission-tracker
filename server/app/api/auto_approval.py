@@ -104,12 +104,35 @@ async def auto_approve_statement(
             "💾 Saving processed tables..."
         )
         
+        # CRITICAL FIX: Filter out summary tables BEFORE saving to prevent duplicate calculations
+        summary_table_types = ['summary_table', 'total_summary', 'vendor_total', 'grand_total', 'summary']
+        
+        commission_tables = []
+        for i, t in enumerate(tables):
+            table_type = t.get("table_type", "").lower()
+            
+            # Skip summary tables
+            if table_type in summary_table_types:
+                logger.info(f"🔍 Auto-approval: Skipping summary table {i} (type: {table_type}) during save")
+                continue
+            
+            # Also skip tables where ALL rows are marked as summary rows
+            summary_rows = set(t.get("summaryRows", []))
+            total_rows = len(t.get("rows", []))
+            if total_rows > 0 and len(summary_rows) == total_rows:
+                logger.info(f"🔍 Auto-approval: Skipping table {i} - all {total_rows} rows are summary rows during save")
+                continue
+            
+            commission_tables.append(t)
+        
+        logger.info(f"🔍 Auto-approval: Filtered {len(tables)} tables to {len(commission_tables)} commission tables for saving")
+        
         # Step 1: Save tables (same as manual flow)
         from app.api.table_editor import save_tables, SaveTablesRequest, TableData
         
-        # Convert raw tables to TableData objects
+        # Convert filtered commission tables to TableData objects
         table_data_list = []
-        for table in tables:
+        for table in commission_tables:
             table_data = TableData(
                 header=table.get("headers", table.get("header", [])),
                 rows=table.get("rows", []),
@@ -120,6 +143,19 @@ async def auto_approve_statement(
             )
             table_data_list.append(table_data)
         
+        # Get field_mapping from learned format and convert to field_config list
+        field_mapping = request.learned_format.get("field_mapping", {})
+        logger.info(f"🤖 Auto-approval: Raw field_mapping from learned format: {field_mapping}")
+        
+        field_config_list = []
+        if isinstance(field_mapping, dict):
+            field_config_list = [{"field": k, "mapping": v} for k, v in field_mapping.items()]
+        elif isinstance(field_mapping, list):
+            field_config_list = field_mapping
+        
+        logger.info(f"🤖 Auto-approval: Using {len(field_config_list)} field mappings from learned format")
+        logger.info(f"🤖 Auto-approval: Field config list: {field_config_list}")
+        
         # Create SaveTablesRequest object
         save_request = SaveTablesRequest(
             upload_id=request.upload_id,
@@ -127,7 +163,8 @@ async def auto_approve_statement(
             company_id=request.carrier_id,
             selected_statement_date={"date": request.statement_date},
             extracted_carrier=request.learned_format.get("carrier_name"),
-            extracted_date=request.statement_date
+            extracted_date=request.statement_date,
+            field_config=field_config_list  # Include field_config for format learning
         )
         
         # Call save_tables with the request object
@@ -174,26 +211,20 @@ async def auto_approve_statement(
         )
         
         # Step 3: Apply field mappings and approve
-        field_mapping = request.learned_format.get("field_mapping", {})
+        # Note: field_config_list is already created above from learned format
+        # Note: commission_tables was already filtered above in Step 1
         
-        # Build approval payload
-        selected_table = tables[0] if tables else {}
+        # Build approval payload using filtered commission tables from Step 1
+        selected_table = commission_tables[0] if commission_tables else {}
         final_data = [{
             "name": t.get("name", f"Table {i+1}"),
             "header": t.get("header", []),
             "rows": t.get("rows", []),
             "summaryRows": t.get("summaryRows", [])
-        } for i, t in enumerate(tables)]
+        } for i, t in enumerate(commission_tables)]
         
         # Call approve endpoint (reuse existing logic)
         from app.api.review import approve_statement, ApprovePayload
-        
-        # Convert field_mapping dict to list of dicts (if it's a dict)
-        field_config_list = []
-        if isinstance(field_mapping, dict):
-            field_config_list = [{"field": k, "mapping": v} for k, v in field_mapping.items()]
-        else:
-            field_config_list = field_mapping
         
         # Create ApprovePayload object
         approve_payload = ApprovePayload(
@@ -210,9 +241,12 @@ async def auto_approve_statement(
         # Step 4: Calculate total from tables if not provided
         actual_extracted_total = request.extracted_total
         
-        # If extracted_total is 0, try to calculate from tables
-        if actual_extracted_total == 0 and tables:
-            logger.info("Extracted total is 0, attempting to calculate from tables...")
+        # Convert field_config_list to dict for easier lookup (needed for total calculation and saving)
+        field_mapping = {item['field']: item['mapping'] for item in field_config_list if 'field' in item and 'mapping' in item}
+        
+        # If extracted_total is 0, try to calculate from commission_tables (NOT all tables)
+        if actual_extracted_total == 0 and commission_tables:
+            logger.info("Extracted total is 0, attempting to calculate from commission tables...")
             try:
                 # Get field mapping to find commission field
                 commission_field = None
@@ -223,11 +257,15 @@ async def auto_approve_statement(
                 
                 if commission_field:
                     total_amount = 0.0
-                    for table in tables:
+                    for table in commission_tables:
                         headers = table.get("header", [])
                         if commission_field in headers:
                             idx = headers.index(commission_field)
-                            for row in table.get("rows", []):
+                            # CRITICAL: Also exclude summary rows within the table
+                            summary_rows = set(table.get("summaryRows", []))
+                            for row_idx, row in enumerate(table.get("rows", [])):
+                                if row_idx in summary_rows:
+                                    continue  # Skip summary rows
                                 if idx < len(row):
                                     value = str(row[idx]).replace('$', '').replace(',', '').strip()
                                     try:
@@ -238,9 +276,9 @@ async def auto_approve_statement(
                     
                     if total_amount > 0:
                         actual_extracted_total = total_amount
-                        logger.info(f"Calculated total from tables: ${actual_extracted_total:.2f}")
+                        logger.info(f"Calculated total from commission tables: ${actual_extracted_total:.2f}")
             except Exception as e:
-                logger.warning(f"Failed to calculate total from tables: {e}")
+                logger.warning(f"Failed to calculate total from commission tables: {e}")
         
         # Validate total amount
         learned_format = request.learned_format
@@ -285,6 +323,7 @@ async def auto_approve_statement(
             automation_timestamp=datetime.utcnow(),
             total_amount_match=True if total_validation.get("matches", False) else False,
             extracted_total=round(actual_extracted_total, 2) if actual_extracted_total else 0,
+            field_mapping=field_mapping  # Save the field mapping for review
         )
         
         await with_db_retry(

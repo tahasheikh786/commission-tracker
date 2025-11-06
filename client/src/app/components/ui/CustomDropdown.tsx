@@ -43,26 +43,74 @@ export default function CustomDropdown({
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [highlightedIndex, setHighlightedIndex] = useState(0);
-  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0, openUpward: false });
+  const containerRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Update dropdown position when opened or on scroll/resize
   useEffect(() => {
     const updatePosition = () => {
-      if (triggerRef.current) {
-        const rect = triggerRef.current.getBoundingClientRect();
-        setDropdownPosition({
-          top: rect.bottom + 6, // Don't add scrollY since we're using fixed positioning
-          left: rect.left,
-          width: rect.width
-        });
+      if (!triggerRef.current) return;
+      
+      const rect = triggerRef.current.getBoundingClientRect();
+      const dropdownHeight = 280; // max-h-[280px]
+      const viewportHeight = window.innerHeight;
+      const viewportWidth = window.innerWidth;
+      const spaceBelow = viewportHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      
+      // Decide whether to open upward or downward
+      const shouldOpenUpward = spaceBelow < dropdownHeight && spaceAbove > spaceBelow;
+      
+      // Calculate vertical position
+      let topPosition: number;
+      if (shouldOpenUpward) {
+        // Open upward - position above the trigger
+        topPosition = Math.max(10, rect.top - dropdownHeight - 4);
+      } else {
+        // Open downward - position below the trigger
+        topPosition = rect.bottom + 4;
+        // Make sure it doesn't go off bottom of screen
+        if (topPosition + dropdownHeight > viewportHeight - 10) {
+          topPosition = Math.max(10, viewportHeight - dropdownHeight - 10);
+        }
       }
+      
+      // Calculate horizontal position - align with trigger button
+      let leftPosition = rect.left;
+      const dropdownWidth = rect.width;
+      
+      // Ensure dropdown doesn't go off-screen horizontally
+      if (leftPosition + dropdownWidth > viewportWidth - 10) {
+        leftPosition = Math.max(10, viewportWidth - dropdownWidth - 10);
+      }
+      if (leftPosition < 10) {
+        leftPosition = 10;
+      }
+      
+      const position = {
+        top: topPosition,
+        left: leftPosition,
+        width: rect.width,
+        openUpward: shouldOpenUpward
+      };
+      
+      
+      
+      setDropdownPosition(position);
     };
 
     if (isOpen) {
+      // Update immediately
       updatePosition();
+      // Update again after a frame to ensure DOM is ready
+      requestAnimationFrame(() => {
+        requestAnimationFrame(updatePosition);
+      });
+      
+      // Listen for scroll and resize
       window.addEventListener('scroll', updatePosition, true);
       window.addEventListener('resize', updatePosition);
     }
@@ -77,8 +125,8 @@ export default function CustomDropdown({
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
-        dropdownRef.current && 
-        !dropdownRef.current.contains(event.target as Node) &&
+        menuRef.current && 
+        !menuRef.current.contains(event.target as Node) &&
         triggerRef.current &&
         !triggerRef.current.contains(event.target as Node)
       ) {
@@ -107,6 +155,8 @@ export default function CustomDropdown({
 
   // Get selected option
   const selectedOption = options.find(opt => opt.id === value);
+  
+ 
 
   // Keyboard navigation
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -145,7 +195,7 @@ export default function CustomDropdown({
   };
 
   return (
-    <div className={`relative ${className}`} ref={dropdownRef}>
+    <div className={`relative ${className}`} ref={containerRef}>
       {label && (
         <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
           {label}
@@ -182,7 +232,7 @@ export default function CustomDropdown({
         </span>
         <ChevronDown 
           className={`w-4 h-4 text-slate-400 transition-transform duration-200 flex-shrink-0 ${
-            isOpen ? 'rotate-180' : ''
+            isOpen ? (dropdownPosition.openUpward ? 'rotate-0' : 'rotate-180') : ''
           }`} 
         />
       </button>
@@ -194,20 +244,21 @@ export default function CustomDropdown({
       {/* Dropdown Menu - Rendered via Portal to avoid z-index/overflow issues */}
       {isOpen && createPortal(
         <div 
-          ref={dropdownRef}
-          className="
+          ref={menuRef}
+          className={`
             fixed
             bg-white dark:bg-slate-800
             border border-slate-200 dark:border-slate-700
             rounded-lg shadow-2xl
             max-h-[280px] overflow-hidden
-            animate-fadeInScale
-          "
+            ${dropdownPosition.openUpward ? 'animate-fadeInScaleUp' : 'animate-fadeInScale'}
+          `}
           style={{ 
             top: `${dropdownPosition.top}px`,
             left: `${dropdownPosition.left}px`,
             width: `${dropdownPosition.width}px`,
-            zIndex: 99999
+            zIndex: 99999,
+            transformOrigin: dropdownPosition.openUpward ? 'bottom' : 'top'
           }}
         >
           {/* Search Input */}

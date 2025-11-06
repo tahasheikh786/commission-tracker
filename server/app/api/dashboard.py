@@ -543,12 +543,14 @@ async def get_user_specific_company_statements(
                 "gcs_key": statement.file_name,  # file_name IS the gcs_key
                 "uploaded_at": statement.uploaded_at.isoformat() if statement.uploaded_at else None,
                 "status": statement.status,
+                "carrier_id": str(statement.carrier_id) if statement.carrier_id else None,  # Include carrier_id
                 "rejection_reason": statement.rejection_reason,
                 "selected_statement_date": statement.selected_statement_date,
                 "final_data": statement.final_data,
                 "edited_tables": statement.edited_tables,  # Include edited tables for preview
                 "field_config": statement.field_config,
-                "raw_data": statement.raw_data
+                "raw_data": statement.raw_data,
+                "field_mapping": statement.field_mapping  # Include field mapping for review
             })
         
         return formatted_statements

@@ -463,6 +463,13 @@ export default function UnifiedTableEditor({
       
       // Tables snapshot created
       
+      // CRITICAL FIX: Convert field mappings to field_config format for format learning
+      // This ensures field mappings are saved to format learning for future auto-approval
+      const fieldConfigForLearning = Object.entries(finalMappings).map(([field, mapping]) => ({
+        field: field,           // Source field from extracted data
+        mapping: mapping        // Target field in database
+      }));
+      
       // Log the exact payload being sent to backend (use edited values)
       const saveTablesPayload = {
         upload_id: upload_id,
@@ -470,10 +477,12 @@ export default function UnifiedTableEditor({
         company_id: carrier_id || company_id,
         selected_statement_date: statementDateObj,
         extracted_carrier: editedCarrierName || extractedData?.carrierName || extractedData?.extracted_carrier,
-        extracted_date: editedStatementDate || extractedData?.extracted_date
+        extracted_date: editedStatementDate || extractedData?.extracted_date,
+        field_config: fieldConfigForLearning  // CRITICAL: Include field_config for format learning
       };
       
-      // Sending save-tables request
+      // Sending save-tables request with field mappings
+      console.log('🔍 Save-tables payload includes field_config:', fieldConfigForLearning.length, 'mappings');
       
       const saveTablesResponse = await axios.post(
         `${process.env.NEXT_PUBLIC_API_URL}/api/table-editor/save-tables/`,
@@ -602,9 +611,33 @@ export default function UnifiedTableEditor({
       // STEP 4: Process Commission Data (Final Approval)
       setApprovalStep(3);
       
-      // CRITICAL FIX: Use the SAME snapshot from Step 1 to ensure consistency
-      // This guarantees deleted rows are NOT included in commission calculations
-      const finalData = currentTablesSnapshot.map(table => {
+      // CRITICAL FIX: Filter out summary tables to prevent duplicate calculations
+      // Summary tables contain aggregated data that would cause double-counting
+      const summaryTableTypes = ['summary_table', 'total_summary', 'vendor_total', 'grand_total', 'summary'];
+      
+      const commissionTables = currentTablesSnapshot.filter(table => {
+        const tableType = (table.metadata?.table_type || (table as any).table_type || '').toLowerCase();
+        
+        // Skip summary tables
+        if (summaryTableTypes.includes(tableType)) {
+          console.log(`🔍 Skipping summary table: ${table.name} (type: ${tableType})`);
+          return false;
+        }
+        
+        // Also skip tables where ALL rows are summary rows
+        const summaryRowsArray = Array.from(table.summaryRows || []);
+        if (table.rows && summaryRowsArray.length > 0 && summaryRowsArray.length === table.rows.length) {
+          console.log(`🔍 Skipping table ${table.name} - all ${table.rows.length} rows are summary rows`);
+          return false;
+        }
+        
+        return true;
+      });
+      
+      console.log(`🔍 Filtered ${currentTablesSnapshot.length} tables down to ${commissionTables.length} commission tables for approval`);
+      
+      // Use filtered commission tables for final data
+      const finalData = commissionTables.map(table => {
         const tableHeaders = table.header;
         const tableRows = table.rows;
         
