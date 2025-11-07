@@ -34,8 +34,9 @@ interface Statement {
   automation_timestamp?: string;
   total_amount_match?: boolean | null;
   extracted_total?: number;
-  // ✅ FIX: Correct property name to match API response
-  fieldmapping?: Record<string, string> | null;  // Field mappings from format learning (no underscore!)
+  // ✅ FIX: Correct property name to match API response (field_mapping with underscore)
+  field_mapping?: Record<string, string> | null;  // Field mappings from format learning
+  field_config?: Array<Record<string, any>> | null;  // Field config for fallback reconstruction
 }
 
 interface Props {
@@ -76,7 +77,8 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
   const [aiMapperState, setAiMapperState] = useState({
     rowStatuses: {} as Record<string, 'pending' | 'approved' | 'skipped'>,
     editedStatementFields: {} as Record<string, string>,
-    duplicateFields: [] as string[]
+    duplicateFields: [] as string[],
+    databaseFieldSelections: {} as Record<string, string>  // CRITICAL FIX: Track dropdown selections
   });
 
   // Database fields (fetch from API or pass as prop)
@@ -127,6 +129,16 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
   useEffect(() => {
     const tableData = statement.edited_tables || statement.raw_data;
     if (Array.isArray(tableData) && tableData.length > 0) {
+      console.log('🔍 EditableCompareModal: Loading tables from statement:', 
+        tableData.map((t, i) => ({ 
+          index: i, 
+          name: t.name, 
+          rowCount: t.rows?.length || 0, 
+          summaryRowsType: t.summaryRows?.constructor?.name,
+          summaryRowsCount: t.summaryRows instanceof Set ? t.summaryRows.size : (Array.isArray(t.summaryRows) ? t.summaryRows.length : 0),
+          summaryRowsValue: t.summaryRows instanceof Set ? Array.from(t.summaryRows) : t.summaryRows
+        }))
+      );
       setTables(tableData);
       setCurrentTableIndex(0);
     }
@@ -200,8 +212,28 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
       try {
         setIsLoadingAI(true);
 
-        // ✅ FIX: Use correct property name (fieldmapping, not field_mapping)
-        const formatLearnedMappings = (statement as any).fieldmapping;
+        // ✅ FIX: Use correct property name from API (field_mapping with underscore)
+        let formatLearnedMappings = (statement as any).field_mapping;
+        
+        // FALLBACK: If field_mapping is null, try to extract from field_config
+        // This handles statements approved before the field_mapping save fix
+        if (!formatLearnedMappings && statement.field_config && Array.isArray(statement.field_config)) {
+          console.log('🔄 EditableCompareModal: field_mapping is null, extracting from field_config');
+          const extractedMappings: Record<string, string> = {};
+          statement.field_config.forEach((item: any) => {
+            const sourceField = item.field || item.source_field;
+            const targetField = item.label || item.mapping || item.display_name;
+            if (sourceField && targetField) {
+              extractedMappings[sourceField] = targetField;
+            }
+          });
+          if (Object.keys(extractedMappings).length > 0) {
+            formatLearnedMappings = extractedMappings;
+            console.log('✅ EditableCompareModal: Reconstructed field_mapping from field_config:', formatLearnedMappings);
+          }
+        }
+        
+        console.log('🔍 EditableCompareModal: Final format learned mappings:', formatLearnedMappings);
         
         // Check if we have format learned mappings
         if (formatLearnedMappings && 
@@ -232,18 +264,30 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
           
           // ✅ Pre-approve all learned format mappings since they were already used
           const preApprovedStatuses: Record<string, 'approved'> = {};
+          const initialDatabaseFieldSelections: Record<string, string> = {};
+          
           mappings.forEach(mapping => {
             preApprovedStatuses[mapping.extracted_field] = 'approved';
+            
+            // CRITICAL FIX: Also build databaseFieldSelections by finding matching field IDs
+            const dbField = databaseFields.find(f => 
+              f.display_name.toLowerCase() === mapping.mapped_to.toLowerCase()
+            );
+            if (dbField) {
+              initialDatabaseFieldSelections[mapping.extracted_field] = String(dbField.id);
+            }
           });
           
           setAiMapperState(prev => ({
             ...prev,
-            rowStatuses: preApprovedStatuses
+            rowStatuses: preApprovedStatuses,
+            databaseFieldSelections: initialDatabaseFieldSelections  // Include dropdown selections
           }));
           
           setIsLoadingAI(false);
           
           // Show toast to inform user
+          console.log('✅ EditableCompareModal: Successfully loaded format learned mappings, skipping AI call');
           toast.success(
             `Loaded ${mappings.length} format learned field mappings (already approved)`,
             { duration: 3000 }
@@ -254,6 +298,10 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
 
         // ⚠️ No format learned mappings - should not happen for auto-approved statements
         // But provide fallback for edge cases
+        console.log('⚠️ EditableCompareModal: No format learned mappings found, calling AI field mapping API');
+        console.log('   - statement.field_mapping:', formatLearnedMappings);
+        console.log('   - statement.field_config:', statement.field_config);
+        console.log('   - statement.carrier_id:', statement.carrier_id);
         
         // Fallback: Try to get mappings from company field mappings
         const selectedTable = tables[currentTableIndex] || tables;
@@ -336,6 +384,11 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
 
   // Handle Save & Recalculate
   const handleSaveAndRecalculate = async () => {
+    console.log('🚀 ==================== SAVE & RECALCULATE STARTED ====================');
+    console.log('📊 Current aiMapperState:', aiMapperState);
+    console.log('📊 databaseFieldSelections:', aiMapperState.databaseFieldSelections);
+    console.log('📊 databaseFields available:', databaseFields.length);
+    
     setIsSaving(true);
     setSaveProgress(0);
 
@@ -351,25 +404,89 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
 
 
       // Step 1: Prepare field mappings FIRST (needed for format learning)
-      // Merge mappings
-      const finalMappings = { ...userMappings };
-      acceptedMappings.forEach(mapping => {
-        if (!finalMappings[mapping.field]) {
-          finalMappings[mapping.field] = mapping.mapsTo;
-        }
+      // CRITICAL FIX: Build from aiMappingResults and current row statuses to capture ALL changes
+      console.log('🔍 Building final mappings:');
+      console.log('  - userMappings:', userMappings);
+      console.log('  - acceptedMappings:', acceptedMappings);
+      console.log('  - aiMapperState.rowStatuses:', aiMapperState.rowStatuses);
+      console.log('  - aiMapperState.editedStatementFields:', aiMapperState.editedStatementFields);
+      console.log('  - aiMapperState.databaseFieldSelections:', aiMapperState.databaseFieldSelections);
+      console.log('  - aiMappingResults:', aiMappingResults);
+      
+      // CRITICAL FIX: Build finalMappings from CURRENT state including dropdown changes
+      console.log('╔═══════════════════════════════════════════════════════════════');
+      console.log('║ 🔧 EDITABLE COMPARE MODAL: Building Final Mappings');
+      console.log('╠═══════════════════════════════════════════════════════════════');
+      console.log('║ Source 1 - User Manual Mappings:', Object.keys(userMappings).length, userMappings);
+      console.log('║ Source 2 - AI Mapper State:');
+      console.log('║   - databaseFieldSelections:', Object.keys(aiMapperState.databaseFieldSelections || {}).length);
+      console.log('║   - Database fields available:', databaseFields.length);
+      
+      const finalMappings: Record<string, string> = {};
+      
+      // STEP 1: Start with approved AI mappings (base)
+      if (aiMappingResults?.mappings) {
+        aiMappingResults.mappings.forEach((mapping: any) => {
+          const status = aiMapperState.rowStatuses[mapping.extracted_field];
+          if (status === 'approved') {
+            finalMappings[mapping.extracted_field] = mapping.mapped_to;
+            console.log(`║ ✓ AI Base: "${mapping.extracted_field}" → "${mapping.mapped_to}"`);
+          }
+        });
+      }
+      
+      // STEP 2: Override with user dropdown selections (user changed AI mapping via dropdown)
+      if (aiMapperState.databaseFieldSelections) {
+        Object.entries(aiMapperState.databaseFieldSelections).forEach(([field, dbFieldId]) => {
+          // Only include if the field is approved
+          const status = aiMapperState.rowStatuses[field];
+          if (status === 'approved') {
+            const dbField = databaseFields.find(f => String(f.id) === String(dbFieldId));
+            if (dbField) {
+              const previousValue = finalMappings[field];
+              finalMappings[field] = dbField.display_name;
+              console.log(`║ 🔄 User Dropdown: "${field}" → "${dbField.display_name}" (was: "${previousValue}")`);
+            }
+          }
+        });
+      }
+      
+      // STEP 3: Override with user manual mappings (highest priority)
+      Object.entries(userMappings).forEach(([field, mapping]) => {
+        const previousValue = finalMappings[field];
+        finalMappings[field] = mapping;
+        console.log(`║ 🎯 User Manual: "${field}" → "${mapping}" (was: "${previousValue || 'unmapped'}")`);
       });
+      
+      console.log('╠═══════════════════════════════════════════════════════════════');
+      console.log('║ ✅ Final mappings to save:', Object.keys(finalMappings).length, 'fields');
+      console.log('╚═══════════════════════════════════════════════════════════════');
 
-      // CRITICAL FIX: Create field_config in the correct format for format learning
+      // CRITICAL FIX: Create field_config in the correct format for ALL endpoints
+      // Format: {field: source_field, mapping: target_field} - consistent across all APIs
+      // This ensures format learning, calculations, and display all use the same mapping
       const fieldConfigForLearning = Object.entries(finalMappings).map(([field, mapping]) => ({
-        field: field,           // Source field from extracted data
-        mapping: mapping        // Target field in database
+        field: field,           // Source field from extracted data (e.g., "Company Name")
+        mapping: mapping        // Target field in database (e.g., "Client Name")
       }));
       
-      // Also create field_config for approve endpoint (different format)
+      // ✅ Use the same format for all endpoints to ensure consistency
+      // Previously used {field, label} format which caused confusion
       const fieldConfig = Object.entries(finalMappings).map(([extractedField, mappedTo]) => ({
         field: extractedField,  // Source field from table header
-        label: mappedTo  // Target database field name
+        mapping: mappedTo       // Target database field name - CHANGED from 'label' to 'mapping'
       }));
+      
+      console.log('📋 ==================== FIELD CONFIGS TO BE SAVED ====================');
+      console.log('📋 fieldConfigForLearning (for save-tables & learn-format-patterns):');
+      fieldConfigForLearning.forEach((config, idx) => {
+        console.log(`   ${idx + 1}. ${config.field} → ${config.mapping}`);
+      });
+      console.log('📋 fieldConfig (for approve endpoint):');
+      fieldConfig.forEach((config, idx) => {
+        console.log(`   ${idx + 1}. ${config.field} → ${config.mapping}`);
+      });
+      console.log('=' .repeat(70));
       
       // Step 2: Save Tables (20%) - NOW includes field_config for format learning
       setSaveProgress(20);
@@ -385,7 +502,7 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
         field_config: fieldConfigForLearning  // CRITICAL: Include field_config for format learning
       };
 
-      console.log('🔍 EditableCompareModal: Save-tables payload includes field_config:', fieldConfigForLearning.length, 'mappings');
+      console.log('📤 Sending save-tables payload with', fieldConfigForLearning.length, 'field mappings');
 
       const saveTablesResponse = await axios.post(
         `${process.env.NEXT_PUBLIC_API_URL}/api/table-editor/save-tables`,
@@ -399,7 +516,7 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
       setSaveProgress(40);
       toast('Learning format patterns...');
       
-      
+      // CRITICAL FIX: Include field_config so format learning saves user's field mappings
       await axios.post(
         `${process.env.NEXT_PUBLIC_API_URL}/api/table-editor/learn-format-patterns`,
         {
@@ -408,7 +525,8 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
           company_id: updatedCarrierId,
           selected_statement_date: statement.selected_statement_date,
           extracted_carrier: editedCarrierName,
-          extracted_date: editedStatementDate
+          extracted_date: editedStatementDate,
+          field_config: fieldConfigForLearning  // CRITICAL: Include user's field mapping selections
         },
         { withCredentials: true }
       );
@@ -480,13 +598,24 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
           return rowDict;
         });
 
+        // CRITICAL FIX: Convert summaryRows Set to Array for JSON serialization
+        // Sets serialize as empty objects {} in JSON, which breaks backend summary row exclusion
+        const summaryRowsArray = table.summaryRows 
+          ? (table.summaryRows instanceof Set ? Array.from(table.summaryRows) : table.summaryRows)
+          : [];
+
+        console.log(`🔍 Table "${table.name}": summaryRows type=${table.summaryRows?.constructor?.name}, count=${summaryRowsArray.length}, values=${JSON.stringify(summaryRowsArray)}`);
+
         return {
           name: table.name,
           header: tableHeaders,
           rows: transformedRows,
-          summaryRows: table.summaryRows
+          summaryRows: summaryRowsArray
         };
       });
+
+      console.log(`📤 Sending ${finalData.length} tables to approve endpoint with summaryRows:`, 
+        finalData.map(t => ({ name: t.name, rowCount: t.rows.length, summaryRowCount: t.summaryRows?.length || 0 })));
 
 
       await axios.post(
@@ -742,7 +871,15 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
                     tableHeaders={currentTable?.header || []}
                     isLoading={isLoadingAI}
                     databaseFields={databaseFields}
-                    onStateChange={setAiMapperState}
+                    onStateChange={(newState) => {
+                      console.log('📥 EditableCompareModal: Received state update from AIFieldMapperTable:', {
+                        databaseFieldSelections: Object.keys(newState.databaseFieldSelections || {}).length,
+                        rowStatuses: Object.keys(newState.rowStatuses || {}).length,
+                        editedStatementFields: Object.keys(newState.editedStatementFields || {}).length,
+                        selections: newState.databaseFieldSelections
+                      });
+                      setAiMapperState(newState);
+                    }}
                     hideActionButtons={true}
                   />
                 </div>

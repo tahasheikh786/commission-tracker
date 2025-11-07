@@ -148,7 +148,8 @@ export default function UnifiedTableEditor({
     rowStatuses: Record<string, 'pending' | 'approved' | 'skipped'>;
     editedStatementFields: Record<string, string>;
     duplicateFields: string[];
-  }>({ rowStatuses: {}, editedStatementFields: {}, duplicateFields: [] });
+    databaseFieldSelections: Record<string, string>;
+  }>({ rowStatuses: {}, editedStatementFields: {}, duplicateFields: [], databaseFieldSelections: {} });
 
   // CRITICAL FIX: Sync acceptedMappings and skippedFields from AI mapper state changes
   useEffect(() => {
@@ -183,6 +184,18 @@ export default function UnifiedTableEditor({
     console.log('✅ Updated acceptedMappings:', newAcceptedMappings.length, 'fields');
     console.log('✅ Updated skippedFields:', newSkippedFields.length, 'fields');
   }, [aiMapperState.rowStatuses, aiMappingResults]);
+  
+  // ✅ Track user dropdown selections in real-time
+  useEffect(() => {
+    if (aiMapperState?.databaseFieldSelections && Object.keys(aiMapperState.databaseFieldSelections).length > 0) {
+      console.log('🔄 UnifiedTableEditor: Current dropdown selections:');
+      console.log('   Total selections:', Object.keys(aiMapperState.databaseFieldSelections).length);
+      Object.entries(aiMapperState.databaseFieldSelections).forEach(([field, dbFieldId]) => {
+        const dbField = databaseFields.find(f => String(f.id) === String(dbFieldId));
+        console.log(`   📌 "${field}" → "${dbField?.display_name || dbFieldId}" (ID: ${dbFieldId})`);
+      });
+    }
+  }, [aiMapperState.databaseFieldSelections, databaseFields]);
   
   // ===== EDITABLE METADATA STATE =====
   const [editedCarrierName, setEditedCarrierName] = useState(
@@ -350,15 +363,16 @@ export default function UnifiedTableEditor({
 
     const stats = { mapped, needsReview, unmapped, total };
     
-    // Debug logging for mapping stats
+    // Debug logging for mapping stats with databaseFieldSelections
     console.log('📊 Mapping Stats Calculated:', stats);
     console.log('  - aiMappings:', aiMappings.length);
     console.log('  - acceptedMappings:', acceptedMappings.length);
     console.log('  - skippedFields:', skippedFields.length);
     console.log('  - userMappings:', Object.keys(userMappings).length);
+    console.log('  - databaseFieldSelections:', Object.keys(aiMapperState?.databaseFieldSelections || {}).length, aiMapperState?.databaseFieldSelections);
     
     return stats;
-  }, [aiMappings, userMappings, acceptedMappings, skippedFields]);
+  }, [aiMappings, userMappings, acceptedMappings, skippedFields, aiMapperState.databaseFieldSelections]);
 
   const handleModeTransition = async (newMode: ViewMode) => {
     if (isTransitioning) return;
@@ -369,6 +383,89 @@ export default function UnifiedTableEditor({
     setViewMode(newMode);
     await new Promise(resolve => setTimeout(resolve, 300));
     setIsTransitioning(false);
+  };
+
+  // ✅ NEW: Build available tables array for AI Field Mapper table selector
+  const availableTables = useMemo(() => {
+    if (!tables || tables.length === 0) return [];
+    
+    return tables.map((table, index) => ({
+      index,
+      name: table.name || `Table ${index + 1}`,
+      rowCount: table.rows?.length || 0,
+      headers: table.header || table.headers || [],
+      type: table.table_type || table.metadata?.table_type || undefined
+    }));
+  }, [tables]);
+
+  // ✅ NEW: Handler to re-run AI field mapping when user switches tables
+  const handleAIMappingTableChange = async (newTableIndex: number) => {
+    console.log(`╔═══════════════════════════════════════════════════════════`);
+    console.log(`║ 🔄 RE-RUNNING AI FIELD MAPPING FOR NEW TABLE`);
+    console.log(`╠═══════════════════════════════════════════════════════════`);
+    console.log(`║ Previous table index: ${currentTableIdx}`);
+    console.log(`║ New table index: ${newTableIndex}`);
+    console.log(`║ New table:`, availableTables[newTableIndex]);
+    
+    // ✅ Update BOTH currentTableIdx (so review table syncs) AND trigger AI re-mapping
+    setCurrentTableIdx(newTableIndex);
+    setIsLoadingAIMapping(true);
+    setAiMappingStep(1);
+    
+    try {
+      const selectedTable = tables[newTableIndex];
+      if (!selectedTable) {
+        toast.error('Selected table not found');
+        return;
+      }
+      
+      console.log(`║ Running AI analysis for table with ${selectedTable.rows?.length} rows`);
+      console.log(`╚═══════════════════════════════════════════════════════════`);
+      
+      // Call AI field mapping service
+      const result = await getEnhancedExtractionAnalysis(
+        selectedTable.header || selectedTable.headers || [],
+        selectedTable.rows || [],
+        {
+          upload_id: extractedData.upload_id,
+          carrier_id: extractedData.carrier_id || extractedData.company_id,
+          extracted_carrier: extractedData.extracted_carrier || extractedData.carrierName,
+          extracted_date: extractedData.extracted_date || extractedData.statementDate
+        },
+        extractedData.carrier_id || extractedData.company_id,
+        extractedData.extracted_carrier || extractedData.carrierName
+      );
+      
+      console.log(`✅ AI Mapping Complete for table ${newTableIndex}:`, result);
+      
+      if (result.success) {
+        setAIMappingResults({
+          ai_enabled: true,
+          mappings: result.field_mapping.mappings,
+          unmapped_fields: result.field_mapping.unmapped_fields || [],
+          confidence: result.field_mapping.confidence,
+          learned_format_used: result.field_mapping.learned_format_used || false
+        });
+        
+        // Reset AI mapper state when table changes
+        setAiMapperState({
+          rowStatuses: {},
+          editedStatementFields: {},
+          duplicateFields: [],
+          databaseFieldSelections: {}
+        });
+        
+        toast.success(`✅ Mapped ${result.field_mapping.mappings.length} fields for table ${newTableIndex + 1}`);
+      } else {
+        toast.error('AI mapping failed for selected table');
+      }
+    } catch (error) {
+      console.error('Error running AI mapping:', error);
+      toast.error('Failed to run AI mapping for selected table');
+    } finally {
+      setIsLoadingAIMapping(false);
+      setAiMappingStep(0);
+    }
   };
 
   const handleFinalSubmission = async () => {
@@ -426,15 +523,43 @@ export default function UnifiedTableEditor({
       
       // Final statementDateObj determined
 
-      // Merge AI mappings with user mappings (including accepted mappings)
-      const finalMappings = { ...userMappings };
+      // ✅ CRITICAL: Build unified mapping state from ALL sources
+      console.log('🔧 ========== BUILDING FINAL MAPPINGS ==========');
+      console.log('📊 Source 1 - User Manual Mappings:', Object.keys(userMappings).length, userMappings);
+      console.log('📊 Source 2 - Accepted AI Mappings:', acceptedMappings.length);
+      console.log('📊 Source 3 - User Dropdown Selections:', Object.keys(aiMapperState?.databaseFieldSelections || {}).length, aiMapperState?.databaseFieldSelections);
       
-      // Add accepted mappings
+      const finalMappings: Record<string, string> = {};
+      
+      // STEP 1: Start with AI accepted mappings (base)
       acceptedMappings.forEach(mapping => {
-        if (!finalMappings[mapping.field]) {
-          finalMappings[mapping.field] = mapping.mapsTo;
-        }
+        finalMappings[mapping.field] = mapping.mapsTo;
+        console.log(`   ✓ AI Base: "${mapping.field}" → "${mapping.mapsTo}"`);
       });
+      
+      // STEP 2: Override with user dropdown selections (user changed AI mapping via dropdown)
+      if (aiMapperState?.databaseFieldSelections) {
+        Object.entries(aiMapperState.databaseFieldSelections).forEach(([field, dbFieldId]) => {
+          // Convert database field ID to display name
+          const dbField = databaseFields.find(f => String(f.id) === String(dbFieldId));
+          if (dbField) {
+            const previousValue = finalMappings[field];
+            finalMappings[field] = dbField.display_name;
+            console.log(`   🔄 User Dropdown: "${field}" → "${dbField.display_name}" (was: "${previousValue || 'unmapped'}")`);
+          }
+        });
+      }
+      
+      // STEP 3: Override with user manual mappings (highest priority - manual edits)
+      Object.entries(userMappings).forEach(([field, mapping]) => {
+        const previousValue = finalMappings[field];
+        finalMappings[field] = mapping;
+        console.log(`   🎯 User Manual: "${field}" → "${mapping}" (was: "${previousValue || 'unmapped'}")`);
+      });
+      
+      console.log('✅ Final mappings to save:', Object.keys(finalMappings).length, 'fields');
+      console.log('📋 Complete final mappings:', finalMappings);
+      console.log('============================================');
 
    
 
@@ -470,6 +595,10 @@ export default function UnifiedTableEditor({
         mapping: mapping        // Target field in database
       }));
       
+      // ✅ Ensure fieldconfig is NEVER undefined
+      console.log("✅ Saving with field mappings:", fieldConfigForLearning.length, "mappings");
+      console.log("Field config:", fieldConfigForLearning);
+      
       // Log the exact payload being sent to backend (use edited values)
       const saveTablesPayload = {
         upload_id: upload_id,
@@ -503,6 +632,7 @@ export default function UnifiedTableEditor({
       
       try {
         // CRITICAL FIX: Use the same snapshot to ensure format learning uses edited data
+        // CRITICAL FIX: Include field_config so format learning saves user's field mappings
         await axios.post(
           `${process.env.NEXT_PUBLIC_API_URL}/api/table-editor/learn-format-patterns`,
           {
@@ -511,7 +641,8 @@ export default function UnifiedTableEditor({
             company_id: updatedCarrierId, // Use updated carrier_id from save response
             selected_statement_date: statementDateObj,
             extracted_carrier: updatedCarrierName, // Already uses edited value
-            extracted_date: editedStatementDate || extractedData?.extracted_date
+            extracted_date: editedStatementDate || extractedData?.extracted_date,
+            field_config: fieldConfigForLearning  // CRITICAL: Include user's field mapping selections
           },
           { withCredentials: true }
         );
@@ -563,48 +694,9 @@ export default function UnifiedTableEditor({
         { withCredentials: true }
       );
 
-      // Save user corrections for AI learning
-      try {
-        // Build original mappings from AI suggestions
-        const originalMappings: Record<string, string> = {};
-        const correctedMappings: Record<string, string> = {};
-        
-        // Get AI mappings from aiMappingResults
-        if (aiMappingResults?.mappings) {
-          aiMappingResults.mappings.forEach((mapping: FieldMapping) => {
-            originalMappings[mapping.extracted_field] = mapping.mapped_to_column;
-            // Include user edits and selections
-            const editedField = editedStatementFields[mapping.extracted_field] || mapping.extracted_field;
-            const selectedDbField = databaseFieldSelections[mapping.extracted_field] || mapping.mapped_to_column;
-            correctedMappings[editedField] = selectedDbField;
-          });
-        }
-        
-        // Also include any manual mappings not from AI
-        Object.entries(finalMappings).forEach(([field, mappedTo]) => {
-          if (!correctedMappings[field]) {
-            correctedMappings[field] = mappedTo as string;
-          }
-        });
-        
-        // Get auth token
-        const token = localStorage.getItem('token') || '';
-        
-        // Save corrections for AI learning
-        await saveUserCorrections(
-          upload_id,
-          updatedCarrierId,
-          originalMappings,
-          correctedMappings,
-          headers,
-          token
-        );
-        
-        // AI learning data saved successfully
-      } catch (learningError) {
-        // AI learning save failed, continuing
-        // Continue even if AI learning fails
-      }
+      // REMOVED: Duplicate save-user-corrections call
+      // Format learning is now properly saved in learn-format-patterns endpoint with field_config
+      // This prevents duplicate format learning entries in the database
 
       setApprovalProgress(80);
 
@@ -650,11 +742,17 @@ export default function UnifiedTableEditor({
           return rowDict;
         });
         
+        // CRITICAL FIX: Convert summaryRows Set to Array for JSON serialization
+        // Sets serialize as empty objects {} in JSON, which breaks backend summary row exclusion
+        const summaryRowsArray = table.summaryRows 
+          ? (table.summaryRows instanceof Set ? Array.from(table.summaryRows) : table.summaryRows)
+          : [];
+        
         return {
           name: table.name,
           header: tableHeaders,
           rows: transformedRows,  // Now an array of dictionaries, WITHOUT deleted rows
-          summaryRows: table.summaryRows  // CRITICAL: Include summary rows for backend filtering
+          summaryRows: summaryRowsArray  // Convert Set to Array for proper JSON serialization
         };
       });
       
@@ -1040,15 +1138,27 @@ export default function UnifiedTableEditor({
               tableHeaders={tables?.[currentTableIdx]?.header || tables?.[currentTableIdx]?.headers}
               isLoading={isLoadingAIMapping}
               databaseFields={databaseFields}
-              onStateChange={setAiMapperState}
+              onStateChange={(newState) => {
+                console.log('╔══════════════════════════════════════════════════════════════');
+                console.log('║ 📥 UnifiedTableEditor: Received state from AIFieldMapperTable');
+                console.log('╠══════════════════════════════════════════════════════════════');
+                console.log('║ Row Statuses:', Object.keys(newState.rowStatuses || {}).length);
+                console.log('║ Database Field Selections:', Object.keys(newState.databaseFieldSelections || {}).length);
+                console.log('║ Selections Detail:', newState.databaseFieldSelections);
+                console.log('╚══════════════════════════════════════════════════════════════');
+                setAiMapperState(newState);
+              }}
+              availableTables={availableTables}
+              selectedTableIndex={currentTableIdx}
+              onTableChange={handleAIMappingTableChange}
             />
           ) : (
             // Show ExtractedDataTable in review mode
-              <div className={`h-full w-full transition-opacity duration-500 ${
-                isTransitioning ? 'opacity-0' : 'opacity-100'
-              }`}>
-                {tables && tables.length > 0 && tables[currentTableIdx] && (
-                  <ExtractedDataTable
+            <div className={`h-full w-full transition-opacity duration-500 ${
+              isTransitioning ? 'opacity-0' : 'opacity-100'
+            }`}>
+              {tables && tables.length > 0 && tables[currentTableIdx] && (
+                <ExtractedDataTable
                     table={tables[currentTableIdx]}
                     onTableChange={(updatedTable) => {
                       const updatedTables = [...tables];

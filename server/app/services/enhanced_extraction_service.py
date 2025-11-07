@@ -49,30 +49,22 @@ class EnhancedExtractionService:
     
     def __init__(self, use_enhanced: bool = None):
         """
-        Initialize the enhanced extraction service with timeout configuration.
+        Initialize with lazy loading - only instantiate services when needed.
         
         Args:
             use_enhanced: If True, use enhanced 3-phase extraction pipeline.
                          If None, check environment variable USE_ENHANCED_EXTRACTION.
         """
-        # PRIMARY: Claude Document AI (NEW - Superior accuracy)
-        self.claude_service = ClaudeDocumentAIService()
+        # ✅ ALWAYS NEEDED - Initialize immediately
+        self.claude_service = ClaudeDocumentAIService()  # PRIMARY extraction
+        self.gpt4o_service = GPT4oVisionService()  # For metadata extraction
+        self.summary_service = ConversationalSummaryService()  # For summaries
         
-        # FALLBACK: Mistral Document AI (Keep as fallback)
-        self.mistral_service = MistralDocumentAIService()
-        
-        # AI OPERATIONS: GPT-4 service
-        self.gpt4o_service = GPT4oVisionService()
-        
-        # FALLBACK: Alternative extraction methods
-        self.new_extraction_service = NewExtractionService()
-        self.docai_extractor = GoogleDocAIExtractor()
-        
-        # EXCEL: Specialized Excel extraction
-        self.excel_service = ExcelExtractionService()
-        
-        # CONVERSATIONAL SUMMARY: Enhanced summarization service
-        self.summary_service = ConversationalSummaryService()
+        # ❌ LAZY LOAD - Initialize only when actually called
+        self._mistral_service = None
+        self._new_extraction_service = None
+        self._docai_extractor = None
+        self._excel_service = None
         
         # Configure timeouts for different processing phases
         self.phase_timeouts = {
@@ -90,11 +82,43 @@ class EnhancedExtractionService:
         else:
             self.use_enhanced = use_enhanced
         
-        logger.info(f"✅ Enhanced Extraction Service initialized")
-        logger.info(f"🆕 PRIMARY: Claude Document AI (extraction) + GPT-4 (AI operations)")
-        logger.info(f"📋 FALLBACK: Mistral Document AI")
+        logger.info(f"✅ Enhanced Extraction Service initialized (OPTIMIZED)")
+        logger.info(f"🆕 PRIMARY: Claude Document AI + GPT-4 AI operations")
+        logger.info(f"📋 FALLBACK services: Lazy-loaded on demand")
         logger.info(f"⏱️  Timeout management: {self.phase_timeouts}")
         logger.info(f"🚀 Enhanced 3-phase pipeline: {'ENABLED' if self.use_enhanced else 'DISABLED'}")
+    
+    @property
+    def mistral_service(self):
+        """Lazy load Mistral service only when needed."""
+        if self._mistral_service is None:
+            logger.info("⚡ Lazy-loading Mistral Document AI service (fallback)...")
+            self._mistral_service = MistralDocumentAIService()
+        return self._mistral_service
+    
+    @property
+    def new_extraction_service(self):
+        """Lazy load new extraction service only when needed."""
+        if self._new_extraction_service is None:
+            logger.info("⚡ Lazy-loading NewExtractionService (fallback)...")
+            self._new_extraction_service = NewExtractionService()
+        return self._new_extraction_service
+    
+    @property
+    def docai_extractor(self):
+        """Lazy load Google DocAI only when needed."""
+        if self._docai_extractor is None:
+            logger.info("⚡ Lazy-loading Google DocAI extractor (fallback)...")
+            self._docai_extractor = GoogleDocAIExtractor()
+        return self._docai_extractor
+    
+    @property
+    def excel_service(self):
+        """Lazy load Excel service only when needed."""
+        if self._excel_service is None:
+            logger.info("⚡ Lazy-loading Excel extraction service...")
+            self._excel_service = ExcelExtractionService()
+        return self._excel_service
     
     async def _validate_extraction_services(self, extraction_method: str) -> Dict[str, Any]:
         """Validate that extraction services are actually functional before starting."""

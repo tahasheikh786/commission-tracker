@@ -472,6 +472,24 @@ async def learn_format_patterns(
             }
         }
         
+        # CRITICAL FIX: Extract field_mapping from field_config
+        # The user's final field mapping selections are in request.field_config
+        field_mapping = {}
+        if request.field_config and isinstance(request.field_config, list):
+            for config in request.field_config:
+                if isinstance(config, dict):
+                    # Support multiple formats:
+                    # 1. {'field': 'Company Name', 'mapping': 'Client Name'}
+                    # 2. {'source_field': 'Company Name', 'display_name': 'Client Name'}
+                    source_field = config.get('field') or config.get('source_field')
+                    target_field = config.get('mapping') or config.get('display_name')
+                    
+                    if source_field and target_field:
+                        field_mapping[source_field] = target_field
+            
+            logger.info(f"🎯 Format Learning: Extracted {len(field_mapping)} field mappings from field_config")
+            logger.info(f"🎯 Format Learning: Field mappings: {field_mapping}")
+        
         # Create format learning record using Pydantic schema
         format_learning = schemas.CarrierFormatLearningCreate(
             company_id=carrier_id,  # Use carrier_id for carrier-specific learning
@@ -483,7 +501,7 @@ async def learn_format_patterns(
                 "has_summary_rows": bool(main_table.summaryRows if hasattr(main_table, 'summaryRows') else False),
                 "summary_row_patterns": main_table.summaryRows if hasattr(main_table, 'summaryRows') and main_table.summaryRows else []
             },
-            field_mapping={},  # Empty for this endpoint
+            field_mapping=field_mapping,  # CRITICAL: Use user's field mapping selections
             table_editor_settings=table_editor_settings,
             confidence_score=95,  # High confidence for manually edited tables
             usage_count=1

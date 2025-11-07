@@ -103,20 +103,20 @@ async def delete_company(
             detail="Cannot delete a user company. Only carrier companies can be deleted."
         )
     
+    # Get all statements for this carrier
+    result = await db.execute(
+        select(StatementUpload).where(
+            or_(
+                StatementUpload.carrier_id == company_id,
+                StatementUpload.company_id == company_id
+            )
+        )
+    )
+    all_statements = result.scalars().all()
+    
     # Check if user has permission to delete this company/carrier
     # Non-admin users can only delete companies where ALL statements belong to them
     if current_user.role != "admin":
-        # Get all statements for this carrier
-        result = await db.execute(
-            select(StatementUpload).where(
-                or_(
-                    StatementUpload.carrier_id == company_id,
-                    StatementUpload.company_id == company_id
-                )
-            )
-        )
-        all_statements = result.scalars().all()
-        
         # Check if ANY statement belongs to another user
         if all_statements:
             other_user_statements = [s for s in all_statements if str(s.user_id) != str(current_user.id)]
@@ -125,8 +125,47 @@ async def delete_company(
                     status_code=403, 
                     detail="You cannot delete a carrier that contains data from other users"
                 )
-        # If no statements exist, user can delete the empty carrier
     
+    # CRITICAL FIX: Delete all related data before deleting the carrier
+    # This prevents foreign key constraint violations for both pending and approved statements
+    if all_statements:
+        statement_ids = [str(stmt.id) for stmt in all_statements]
+        
+        # 1. Delete edited tables (references statement_uploads)
+        from sqlalchemy import text, delete as sql_delete
+        await db.execute(
+            text("DELETE FROM edited_tables WHERE upload_id = ANY(:upload_ids)"),
+            {"upload_ids": statement_ids}
+        )
+        
+        # 2. Remove uploads from earned commission records
+        from app.db.crud.earned_commission import remove_upload_from_earned_commissions
+        for upload_id in statement_ids:
+            try:
+                await remove_upload_from_earned_commissions(db, upload_id)
+            except Exception as e:
+                print(f"⚠️  Warning: Failed to remove upload {upload_id} from earned commissions: {e}")
+        
+        # 3. Delete user data contributions (references statement_uploads)
+        await db.execute(
+            text("DELETE FROM user_data_contributions WHERE upload_id = ANY(:upload_ids)"),
+            {"upload_ids": statement_ids}
+        )
+        
+        # 4. Delete file duplicates (references statement_uploads)
+        await db.execute(
+            text("DELETE FROM file_duplicates WHERE original_upload_id = ANY(:upload_ids) OR duplicate_upload_id = ANY(:upload_ids)"),
+            {"upload_ids": statement_ids}
+        )
+        
+        # 5. Delete statement uploads themselves
+        await db.execute(
+            sql_delete(StatementUpload).where(StatementUpload.id.in_([stmt.id for stmt in all_statements]))
+        )
+        
+        print(f"✅ Deleted {len(statement_ids)} statement uploads and related data for carrier {company_id}")
+    
+    # Now safe to delete the carrier
     await crud.delete_company(db, company_id)
     return {"message": "Company deleted successfully"}
 
@@ -158,28 +197,68 @@ async def delete_multiple_companies(
                     errors.append(f"Cannot delete {company.name} - it is a user company, not a carrier")
                     continue
                 
+                # Get all statements for this carrier
+                result = await db.execute(
+                    select(StatementUpload).where(
+                        or_(
+                            StatementUpload.carrier_id == company_id,
+                            StatementUpload.company_id == company_id
+                        )
+                    )
+                )
+                all_statements = result.scalars().all()
+                
                 # Check if user has permission to delete this company/carrier
                 # Non-admin users can only delete companies where ALL statements belong to them
                 if current_user.role != "admin":
-                    # Get all statements for this carrier
-                    result = await db.execute(
-                        select(StatementUpload).where(
-                            or_(
-                                StatementUpload.carrier_id == company_id,
-                                StatementUpload.company_id == company_id
-                            )
-                        )
-                    )
-                    all_statements = result.scalars().all()
-                    
                     # Check if ANY statement belongs to another user
                     if all_statements:
                         other_user_statements = [s for s in all_statements if str(s.user_id) != str(current_user.id)]
                         if other_user_statements:
                             errors.append(f"Cannot delete carrier {company_id} - contains data from other users")
                             continue
-                    # If no statements exist, user can delete the empty carrier
                 
+                # CRITICAL FIX: Delete all related data before deleting the carrier
+                # This prevents foreign key constraint violations
+                if all_statements:
+                    statement_ids = [str(stmt.id) for stmt in all_statements]
+                    
+                    # 1. Delete edited tables (references statement_uploads)
+                    from sqlalchemy import text
+                    await db.execute(
+                        text("DELETE FROM edited_tables WHERE upload_id = ANY(:upload_ids)"),
+                        {"upload_ids": statement_ids}
+                    )
+                    
+                    # 2. Remove uploads from earned commission records
+                    from app.db.crud.earned_commission import remove_upload_from_earned_commissions
+                    for upload_id in statement_ids:
+                        try:
+                            await remove_upload_from_earned_commissions(db, upload_id)
+                        except Exception as e:
+                            print(f"⚠️  Warning: Failed to remove upload {upload_id} from earned commissions: {e}")
+                    
+                    # 3. Delete user data contributions (references statement_uploads)
+                    await db.execute(
+                        text("DELETE FROM user_data_contributions WHERE upload_id = ANY(:upload_ids)"),
+                        {"upload_ids": statement_ids}
+                    )
+                    
+                    # 4. Delete file duplicates (references statement_uploads)
+                    await db.execute(
+                        text("DELETE FROM file_duplicates WHERE original_upload_id = ANY(:upload_ids) OR duplicate_upload_id = ANY(:upload_ids)"),
+                        {"upload_ids": statement_ids}
+                    )
+                    
+                    # 5. Delete statement uploads themselves
+                    from sqlalchemy import delete as sql_delete
+                    await db.execute(
+                        sql_delete(StatementUpload).where(StatementUpload.id.in_([stmt.id for stmt in all_statements]))
+                    )
+                    
+                    print(f"✅ Deleted {len(statement_ids)} statement uploads and related data for carrier {company_id}")
+                
+                # Now safe to delete the carrier
                 await crud.delete_company(db, company_id)
                 deleted_count += 1
             except Exception as e:

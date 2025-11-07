@@ -20,11 +20,28 @@ interface AIFieldMapperTableProps {
     rowStatuses: Record<string, 'pending' | 'approved' | 'skipped'>;
     editedStatementFields: Record<string, string>;
     duplicateFields: string[];
+    databaseFieldSelections: Record<string, string>;  // CRITICAL FIX: Include dropdown selections
   }) => void;
   hideActionButtons?: boolean; // Hide "Accept All" and "Review Table" buttons (for modals)
+  // ✅ NEW: Multi-table support
+  availableTables?: Array<{ index: number; name: string; rowCount: number; headers: string[]; type?: string }>;
+  selectedTableIndex?: number;
+  onTableChange?: (tableIndex: number) => void;
 }
 
-export default function AIFieldMapperTable({ mappingResults, onReviewTable, tableData, tableHeaders, isLoading, databaseFields = [], onStateChange, hideActionButtons = false }: AIFieldMapperTableProps) {
+export default function AIFieldMapperTable({ 
+  mappingResults, 
+  onReviewTable, 
+  tableData, 
+  tableHeaders, 
+  isLoading, 
+  databaseFields = [], 
+  onStateChange, 
+  hideActionButtons = false,
+  availableTables = [],
+  selectedTableIndex = 0,
+  onTableChange
+}: AIFieldMapperTableProps) {
  
   // Debug logging
   useEffect(() => {
@@ -58,10 +75,19 @@ export default function AIFieldMapperTable({ mappingResults, onReviewTable, tabl
   // State for database field selections - Initialize with AI mappings
   const [databaseFieldSelections, setDatabaseFieldSelections] = useState<Record<string, string>>(() => {
     const initialSelections: Record<string, string> = {};
-    if (mappingResults?.mappings) {
+    if (mappingResults?.mappings && databaseFields.length > 0) {
+      console.log('🎬 AIFieldMapperTable: Initializing dropdown selections with AI mappings...');
       mappingResults.mappings.forEach(mapping => {
-        initialSelections[mapping.extracted_field] = mapping.database_field_id || '';
+        // Find database field ID from the AI-suggested display name
+        const dbField = databaseFields.find(f => f.display_name === mapping.mapped_to);
+        if (dbField) {
+          initialSelections[mapping.extracted_field] = dbField.id;
+          console.log(`   🤖 Init: "${mapping.extracted_field}" → "${dbField.display_name}" (ID: ${dbField.id})`);
+        } else {
+          console.log(`   ⚠️  Init: "${mapping.extracted_field}" → "${mapping.mapped_to}" (DB field not found)`);
+        }
       });
+      console.log(`   ✅ Initialized ${Object.keys(initialSelections).length} dropdown selections`);
     }
     return initialSelections;
   });
@@ -100,31 +126,21 @@ export default function AIFieldMapperTable({ mappingResults, onReviewTable, tabl
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mappingResults?.learned_format_used, mappingResults?.mappings]);
 
-  // Update database field selections when mappingResults changes
-  useEffect(() => {
-    if (mappingResults?.mappings) {
-      const newSelections: Record<string, string> = {};
-      mappingResults.mappings.forEach(mapping => {
-        // Only set if not already manually selected by user
-        if (!databaseFieldSelections[mapping.extracted_field]) {
-          newSelections[mapping.extracted_field] = mapping.database_field_id || '';
-        } else {
-          newSelections[mapping.extracted_field] = databaseFieldSelections[mapping.extracted_field];
-        }
-      });
-      setDatabaseFieldSelections(newSelections);
-    }
-  }, [mappingResults]);
+  // REMOVED: This useEffect was overwriting user's manual dropdown selections!
+  // The initial selections are already set in the useState initializer (line 60-68)
+  // Any subsequent changes should ONLY come from user interactions, not from mappingResults
   
   // Check for duplicate statement fields and notify parent
   const checkAndNotifyStateChange = (updates: Partial<{
     rowStatuses: Record<string, 'pending' | 'approved' | 'skipped'>;
     editedStatementFields: Record<string, string>;
+    databaseFieldSelections?: Record<string, string>;  // Add optional parameter for updated selections
   }>) => {
     if (!onStateChange) return;
     
     const currentRowStatuses = updates.rowStatuses || rowStatuses;
     const currentEditedFields = updates.editedStatementFields || editedStatementFields;
+    const currentDatabaseFieldSelections = updates.databaseFieldSelections || databaseFieldSelections;
     
     // Check for duplicates in statement fields
     const statementFieldValues: string[] = [];
@@ -143,7 +159,8 @@ export default function AIFieldMapperTable({ mappingResults, onReviewTable, tabl
     onStateChange({
       rowStatuses: currentRowStatuses,
       editedStatementFields: currentEditedFields,
-      duplicateFields: duplicates
+      duplicateFields: duplicates,
+      databaseFieldSelections: currentDatabaseFieldSelections  // CRITICAL FIX: Always pass current dropdown selections
     });
   };
 
@@ -154,6 +171,33 @@ export default function AIFieldMapperTable({ mappingResults, onReviewTable, tabl
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rowStatuses]);
+
+  // CRITICAL FIX: Notify parent whenever databaseFieldSelections changes
+  // This ensures the parent always has the latest user dropdown selections
+  // ⚠️ IMPORTANT: Only depend on databaseFieldSelections to avoid infinite loops
+  useEffect(() => {
+    if (Object.keys(databaseFieldSelections).length > 0 && onStateChange) {
+      console.log('╔═════════════════════════════════════════════════════════');
+      console.log('║ 📤 NOTIFYING PARENT: Dropdown Selections Changed');
+      console.log('╠═════════════════════════════════════════════════════════');
+      console.log('║ Total selections:', Object.keys(databaseFieldSelections).length);
+      Object.entries(databaseFieldSelections).forEach(([field, dbFieldId]) => {
+        const dbField = databaseFields.find(f => String(f.id) === String(dbFieldId));
+        console.log(`║   "${field}" → "${dbField?.display_name || 'Unknown'}" (ID: ${dbFieldId})`);
+      });
+      console.log('╚═════════════════════════════════════════════════════════');
+      
+      // Call onStateChange directly with current state snapshot
+      // Don't use checkAndNotifyStateChange to avoid triggering other state changes
+      onStateChange({
+        rowStatuses,
+        editedStatementFields,
+        duplicateFields: [],  // Will be calculated by parent if needed
+        databaseFieldSelections
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [databaseFieldSelections]);
 
   const handleApprove = (fieldId: string) => {
     setRowStatuses(prev => {
@@ -178,14 +222,33 @@ export default function AIFieldMapperTable({ mappingResults, onReviewTable, tabl
   };
 
   const handleDatabaseFieldChange = (fieldId: string, dbFieldId: string) => {
-        
+    // Find the database field to get its display name
+    const dbField = databaseFields.find(f => String(f.id) === String(dbFieldId));
+    const previousSelection = databaseFieldSelections[fieldId];
+    const previousField = databaseFields.find(f => String(f.id) === String(previousSelection));
+    
+    console.log('┌─────────────────────────────────────────────────────────');
+    console.log('│ 🔄 USER CHANGED MAPPING');
+    console.log('├─────────────────────────────────────────────────────────');
+    console.log(`│ Statement Field: "${fieldId}"`);
+    console.log(`│ Previous Mapping: "${previousField?.display_name || 'None'}" (ID: ${previousSelection})`);
+    console.log(`│ New Mapping: "${dbField?.display_name || 'Unknown'}" (ID: ${dbFieldId})`);
+    console.log('├─────────────────────────────────────────────────────────');
+    console.log(`│ Total selections before: ${Object.keys(databaseFieldSelections).length}`);
+    
     setDatabaseFieldSelections(prev => {
       const updated = {
         ...prev,
         [fieldId]: dbFieldId
       };
+      console.log(`│ Total selections after: ${Object.keys(updated).length}`);
+      console.log('│ Updated selections:', updated);
+      console.log('└─────────────────────────────────────────────────────────');
       return updated;
     });
+    
+    // Note: Parent notification happens via useEffect watching databaseFieldSelections
+    // This prevents React setState-during-render warnings
   };
 
   const handleRevert = (fieldId: string) => {
@@ -220,12 +283,47 @@ export default function AIFieldMapperTable({ mappingResults, onReviewTable, tabl
     <div className="h-full flex flex-col animate-fadeIn relative" style={{ overflow: 'visible' }}>
       {/* Header */}
       <div className="p-6 border-b border-slate-200 dark:border-slate-700">
-        <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
-          AI Field Mapping
-        </h2>
-        <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
-          Review and approve AI-suggested field mappings
-        </p>
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1">
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
+              AI Field Mapping
+            </h2>
+            <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
+              Review and approve AI-suggested field mappings
+            </p>
+          </div>
+          
+          {/* ✅ NEW: Table Selector (only show if multiple tables) */}
+          {availableTables.length > 1 && (
+            <div className="flex flex-col gap-2">
+              <label className="text-xs font-medium text-slate-600 dark:text-slate-400 uppercase tracking-wide">
+                Select Table for Mapping:
+              </label>
+              <select
+                value={selectedTableIndex}
+                onChange={(e) => {
+                  const newIndex = parseInt(e.target.value);
+                  console.log(`📊 ============ TABLE SWITCHED ============`);
+                  console.log(`📊 User switched from table ${selectedTableIndex} to table ${newIndex}`);
+                  console.log(`📊 New table:`, availableTables[newIndex]);
+                  if (onTableChange) {
+                    onTableChange(newIndex);
+                  }
+                }}
+                className="px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 cursor-pointer hover:border-slate-400 dark:hover:border-slate-500 transition-colors min-w-[300px]"
+              >
+                {availableTables.map((table) => (
+                  <option key={table.index} value={table.index}>
+                    📋 Table {table.index + 1}: {table.type || table.name || 'Unnamed'} • {table.rowCount} rows • {table.headers.length} cols
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-slate-500 dark:text-slate-400 italic">
+                💡 AI will re-map fields when you switch tables
+              </p>
+            </div>
+          )}
+        </div>
         
         {/* Learned Format Notification */}
         {mappingResults?.learned_format_used && mappingResults?.overall_confidence >= 0.9 && (

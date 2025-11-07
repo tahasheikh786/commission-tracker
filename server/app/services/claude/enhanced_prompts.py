@@ -127,6 +127,10 @@ For each unique agent mentioned:
 • Report Date: If different from statement date
 • Date Range: If period-based (start and end dates)
 • Total Pages: Document length
+• Total Amount: CRITICAL - Extract the total commission/compensation amount as shown in the document
+  * Look for: "Total Compensation", "Total Amount", "Total Commission", "Amount Due", "Net Payment", "EFT Amount", "Grand Total", "Total Paid Amount"
+  * Extract as numeric value (e.g., 3604.95)
+• Total Amount Label: The exact label used for the total (e.g., "Total Compensation")
 </document_metadata>
 
 <groups_and_companies>
@@ -282,6 +286,8 @@ Return your analysis in this JSON structure:
     "payment_type": "EFT",
     "report_date": "2025-08-06",
     "total_pages": 7,
+    "total_amount": 3604.95,
+    "total_amount_label": "Total Compensation",
     "confidence": 0.97
   },
   "writing_agents": [

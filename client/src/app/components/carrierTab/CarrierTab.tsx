@@ -1,6 +1,6 @@
 'use client'
-import React, { useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import React, { useEffect, useState, useRef } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import CarrierList from "./CarrierList";
 import CarrierStatementsTable from "./CarrierStatementsTable";
 import EditMappingModal from "./EditMappingModal";
@@ -44,6 +44,7 @@ interface CarrierTabProps {
 
 export default function CarrierTab({ environmentId }: CarrierTabProps) {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const { triggerDashboardRefresh } = useSubmission();
   const { permissions } = useAuth();
   const [carriers, setCarriers] = useState<Carrier[]>([]);
@@ -62,6 +63,9 @@ export default function CarrierTab({ environmentId }: CarrierTabProps) {
   const [viewAllData, setViewAllData] = useState(false);
   const [filterYear, setFilterYear] = useState<number | null>(null);
   const [filterMonth, setFilterMonth] = useState<number | null>(null);
+  
+  // ✅ FIX: Track if URL parameter has been processed to prevent override on user clicks
+  const urlParamProcessed = useRef(false);
   
   // Simplified permission logic:
   // My Data tab: All authenticated users can select and delete their own files
@@ -117,11 +121,14 @@ export default function CarrierTab({ environmentId }: CarrierTabProps) {
       .finally(() => setLoadingCarriers(false));
   }, [viewAllData, environmentId]);
 
-  // Auto-select carrier from URL parameter
+  // ✅ FIX: Auto-select carrier from URL parameter (ONLY ONCE on mount)
   useEffect(() => {
     const carrierParam = searchParams?.get('carrier');
     
-    if (carrierParam && carriers.length > 0 && !loadingCarriers) {
+    // Only process URL parameter once to avoid overriding user clicks
+    if (carrierParam && carriers.length > 0 && !loadingCarriers && !urlParamProcessed.current) {
+      console.log('📌 Processing URL parameter (one-time): carrier=', carrierParam);
+      
       // Decode the carrier name from URL
       const decodedCarrierName = decodeURIComponent(carrierParam);
       
@@ -132,12 +139,16 @@ export default function CarrierTab({ environmentId }: CarrierTabProps) {
       
       if (matchingCarrier) {
         setSelected(matchingCarrier);
-        // Show a success message
         toast.success(`Viewing statements for ${matchingCarrier.name}`);
+        console.log('✅ URL carrier selected:', matchingCarrier.name);
       } else {
-        // If carrier not found, show message
         toast(`Carrier "${decodedCarrierName}" not found in your carriers list`);
+        console.log('❌ URL carrier not found:', decodedCarrierName);
       }
+      
+      // Mark as processed so it doesn't run again
+      urlParamProcessed.current = true;
+      console.log('✅ URL parameter processed, will not override user selections anymore');
     }
   }, [searchParams, carriers, loadingCarriers]);
 
@@ -391,9 +402,21 @@ export default function CarrierTab({ environmentId }: CarrierTabProps) {
                 carriers={carriers}
                 selected={selected}
                 onSelect={c => {
+                  console.log('🔄 CarrierTab: User manually selected carrier:', c.name);
                   setSelected(c);
                   // Update the carrier in the list if name changed
                   setCarriers(prev => prev.map(car => car.id === c.id ? { ...car, name: c.name } : car));
+                  
+                  // ✅ FIX: Clear carrier URL parameter but keep other params (like tab=carriers)
+                  if (searchParams?.get('carrier')) {
+                    console.log('✅ Clearing carrier URL parameter to allow manual carrier switching');
+                    // Build new URL with all params except 'carrier'
+                    const params = new URLSearchParams(window.location.search);
+                    params.delete('carrier');
+                    const newUrl = params.toString() ? `${window.location.pathname}?${params.toString()}` : window.location.pathname;
+                    console.log('✅ New URL:', newUrl);
+                    router.replace(newUrl, { scroll: false });
+                  }
                 }}
                 loading={loadingCarriers || userCompaniesLoading}
                 onDelete={handleCarrierDelete}

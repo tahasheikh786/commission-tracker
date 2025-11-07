@@ -504,51 +504,71 @@ def extract_field_mappings_once(field_config):
     # Look for these specific database fields in the field_config
     for field in field_config:
         if isinstance(field, dict):
-            # Support multiple formats:
-            # 1. Auto-approval format: {'field': 'Group Name', 'mapping': 'Client Name'}
-            # 2. Old format: {'field': 'field_name', 'label': 'mapped_name'}
-            # 3. New format: {'display_name': 'Client Name', 'source_field': 'Group Name'} <- MOST COMMON
+            # ✅ UNIFIED FORMAT: {'field': 'Group Name', 'mapping': 'Client Name'}
+            # Support legacy formats for backward compatibility:
+            # - Legacy format 1: {'display_name': 'Client Name', 'source_field': 'Group Name'}
+            # - Legacy format 2: {'field': 'field_name', 'label': 'mapped_name'}
             
             # The SOURCE field is what appears in the table header (e.g., "Group Name")
-            # Check source_field FIRST, then field, then display_name as fallback
-            source_field = field.get('source_field', '') or field.get('field', '') or field.get('display_name', '')
+            # Priority 1: 'field' (new unified format)
+            # Priority 2: 'source_field' (legacy format)
+            # Priority 3: 'display_name' (fallback)
+            source_field = field.get('field', '') or field.get('source_field', '') or field.get('display_name', '')
             
             # The TARGET is what it's mapped to in our database (e.g., "Client Name")
-            # Check display_name FIRST (most common), then mapping, then label
-            target_mapping = field.get('display_name', '') or field.get('mapping', '') or field.get('label', '')
+            # Priority 1: 'mapping' (new unified format)
+            # Priority 2: 'display_name' (legacy format)
+            # Priority 3: 'label' (old format)
+            target_mapping = field.get('mapping', '') or field.get('display_name', '') or field.get('label', '')
             
             # Check what the field is MAPPED TO, not what it's called in the source
             target_lower = target_mapping.lower()
             
+            # CRITICAL FIX: Only set mapping if not already set (use FIRST match, not last)
+            # This ensures user corrections take precedence over later ambiguous matches
+            
             # Check for company/client name fields
-            if (target_lower in ['client name', 'company name', 'clientname', 'companyname'] or 
+            if not mappings['client_name_field'] and (target_lower in ['client name', 'company name', 'clientname', 'companyname'] or 
                 'client' in target_lower and 'name' in target_lower or
                 'company' in target_lower and 'name' in target_lower):
                 mappings['client_name_field'] = source_field
                 print(f"✅ Found client name field: {source_field} -> {target_mapping}")
             
-            # Check for commission earned fields
-            elif (target_lower in ['commission earned', 'commissionearned', 'commission_earned', 
-                                 'commission paid', 'total commission paid', 'paid amount'] or 
-                  'commission' in target_lower and ('earned' in target_lower or 'paid' in target_lower or 'amount' in target_lower)):
-                mappings['commission_earned_field'] = source_field
-                print(f"✅ Found commission field: {source_field} -> {target_mapping}")
+            # Check for commission earned fields - PRIORITIZE exact matches
+            elif not mappings['commission_earned_field']:
+                # Priority 1: Exact match to "Commission Earned"
+                if target_lower in ['commission earned', 'commissionearned', 'commission_earned']:
+                    mappings['commission_earned_field'] = source_field
+                    print(f"✅ Found commission field (exact match): {source_field} -> {target_mapping}")
+                # Priority 2: Other close matches (but only if no exact match found yet)
+                elif (target_lower in ['commission paid', 'paid amount'] or 
+                      ('commission' in target_lower and ('earned' in target_lower or 'amount' in target_lower))):
+                    mappings['commission_earned_field'] = source_field
+                    print(f"✅ Found commission field (pattern match): {source_field} -> {target_mapping}")
             
-            # Check for invoice total fields
-            elif (target_lower in ['invoice total', 'invoicetotal', 'invoice_total', 
-                                 'premium amount', 'premiumamount', 'premium total'] or 
-                  'invoice' in target_lower and 'total' in target_lower or
-                  'premium' in target_lower and ('amount' in target_lower or 'total' in target_lower)):
-                mappings['invoice_total_field'] = source_field
-                print(f"✅ Found invoice total field: {source_field} -> {target_mapping}")
+            # Check for invoice total fields - STRICT MATCHING for user selections
+            elif not mappings['invoice_total_field']:
+                # Priority 1: Exact match to "Invoice Total" (highest priority for user selection)
+                if target_lower in ['invoice total', 'invoicetotal', 'invoice_total']:
+                    mappings['invoice_total_field'] = source_field
+                    print(f"✅ Found invoice total field (exact): {source_field} -> {target_mapping}")
+                # Priority 2: Other acceptable matches ONLY if no Invoice Total was mapped
+                elif target_lower in ['premium amount', 'premiumamount', 'statement total amount', 'total amount']:
+                    mappings['invoice_total_field'] = source_field
+                    print(f"✅ Found invoice total field (alternative): {source_field} -> {target_mapping}")
+                # Priority 3: Pattern matching only if no exact matches found
+                elif ('invoice' in target_lower and 'total' in target_lower):
+                    mappings['invoice_total_field'] = source_field
+                    print(f"✅ Found invoice total field (pattern): {source_field} -> {target_mapping}")
     
     # If we didn't find the fields, try alternative field names
     if not mappings['client_name_field']:
         print("⚠️  Client name field not found, trying alternative patterns...")
         for field in field_config:
             if isinstance(field, dict):
-                source_field = field.get('source_field', '') or field.get('field', '') or field.get('display_name', '')
-                target_mapping = field.get('display_name', '') or field.get('mapping', '') or field.get('label', '')
+                # Use same priority order as above
+                source_field = field.get('field', '') or field.get('source_field', '') or field.get('display_name', '')
+                target_mapping = field.get('mapping', '') or field.get('display_name', '') or field.get('label', '')
                 
                 # Check source field for alternative client name patterns
                 if any(keyword in source_field.lower() for keyword in ['group name', 'group', 'employer', 'organization', 'customer']):
@@ -560,8 +580,9 @@ def extract_field_mappings_once(field_config):
         print("⚠️  Commission field not found, trying alternative patterns...")
         for field in field_config:
             if isinstance(field, dict):
-                source_field = field.get('source_field', '') or field.get('field', '') or field.get('display_name', '')
-                target_mapping = field.get('display_name', '') or field.get('mapping', '') or field.get('label', '')
+                # Use same priority order as above
+                source_field = field.get('field', '') or field.get('source_field', '') or field.get('display_name', '')
+                target_mapping = field.get('mapping', '') or field.get('display_name', '') or field.get('label', '')
                 
                 # Check source field for alternative commission patterns
                 if any(keyword in source_field.lower() for keyword in ['paid amount', 'commission', 'earned', 'paid', 'amount']):
@@ -571,6 +592,22 @@ def extract_field_mappings_once(field_config):
     
     # Debug logging to help troubleshoot field mapping issues
     print(f"🔍 Extracted field mappings: {mappings}")
+    
+    # ENHANCED DEBUG: Log which fields were found and which were skipped
+    if mappings['client_name_field']:
+        print(f"   ✅ Client Name: Using '{mappings['client_name_field']}'")
+    else:
+        print(f"   ❌ Client Name: NOT FOUND")
+    
+    if mappings['commission_earned_field']:
+        print(f"   ✅ Commission Earned: Using '{mappings['commission_earned_field']}'")
+    else:
+        print(f"   ❌ Commission Earned: NOT FOUND")
+    
+    if mappings['invoice_total_field']:
+        print(f"   ✅ Invoice Total: Using '{mappings['invoice_total_field']}'")
+    else:
+        print(f"   ⚠️  Invoice Total: NOT FOUND (will use $0.00 default)")
     
     return mappings
 
@@ -700,21 +737,42 @@ def prepare_bulk_operations(commission_records: List[Dict[str, Any]], existing_r
         upload_ids_list = list(agg_record['upload_ids'])
         
         if existing:
+            # CRITICAL FIX: Check if this is a RECALCULATION (same upload_id) or NEW statement
+            existing_upload_ids = existing.upload_ids or []
+            is_recalculation = any(uid in existing_upload_ids for uid in upload_ids_list)
+            
+            if is_recalculation:
+                print(f"🔄 RECALCULATION detected for {agg_record['client_name']} - upload_id {upload_ids_list[0]} already exists")
+                print(f"   Replacing values instead of adding to prevent double-counting")
+            
             # Prepare update operation - convert Decimal to float for arithmetic
             existing_invoice = float(existing.invoice_total) if existing.invoice_total else 0.0
             existing_commission = float(existing.commission_earned) if existing.commission_earned else 0.0
             
-            update_data = {
-                'invoice_total': existing_invoice + agg_record['invoice_total'],
-                'commission_earned': existing_commission + agg_record['commission_earned'],
-                'statement_count': (existing.statement_count or 0) + 1,
-                'last_updated': datetime.utcnow()
-            }
+            # CRITICAL FIX: For recalculations, REPLACE instead of ADD
+            if is_recalculation:
+                # REPLACE mode: Use new values directly
+                update_data = {
+                    'invoice_total': agg_record['invoice_total'],
+                    'commission_earned': agg_record['commission_earned'],
+                    'statement_count': existing.statement_count or 1,  # Keep count same for recalculation
+                    'last_updated': datetime.utcnow()
+                }
+            else:
+                # ADD mode: Add to existing values (different upload)
+                update_data = {
+                    'invoice_total': existing_invoice + agg_record['invoice_total'],
+                    'commission_earned': existing_commission + agg_record['commission_earned'],
+                    'statement_count': (existing.statement_count or 0) + 1,
+                    'last_updated': datetime.utcnow()
+                }
             
-            # Handle upload_ids - merge with existing
-            existing_upload_ids = existing.upload_ids or []
-            merged_upload_ids = list(set(existing_upload_ids + upload_ids_list))
-            update_data['upload_ids'] = merged_upload_ids
+            # Handle upload_ids - keep existing for recalculation, merge for new uploads
+            if is_recalculation:
+                update_data['upload_ids'] = existing_upload_ids  # Keep same
+            else:
+                merged_upload_ids = list(set(existing_upload_ids + upload_ids_list))
+                update_data['upload_ids'] = merged_upload_ids
             
             # Handle monthly breakdown - update all months that have commissions
             month_columns = {
@@ -728,7 +786,13 @@ def prepare_bulk_operations(commission_records: List[Dict[str, Any]], existing_r
                 if month_num in month_columns:
                     current_month_value = getattr(existing, month_columns[month_num], 0) or 0
                     current_month_float = float(current_month_value) if current_month_value else 0.0
-                    new_month_value = current_month_float + commission_amount
+                    
+                    # CRITICAL FIX: For recalculations, REPLACE monthly value instead of adding
+                    if is_recalculation:
+                        new_month_value = commission_amount  # REPLACE
+                    else:
+                        new_month_value = current_month_float + commission_amount  # ADD
+                    
                     update_data[month_columns[month_num]] = new_month_value
             
             updates.append({
@@ -1316,9 +1380,13 @@ async def bulk_process_commissions(db: AsyncSession, statement_upload: Statement
         print(f"📊 Table {table_index}: Mapped fields - client[{client_idx}]={client_name_field}, commission[{commission_idx}]={commission_earned_field}, invoice[{invoice_idx}]={invoice_total_field}")
         
         # CRITICAL FIX: Get summary rows to exclude from commission calculations
-        summary_rows_set = set(table.get('summaryRows', []))
+        summary_rows_raw = table.get('summaryRows', [])
+        print(f"🔍 DEBUG Table {table_index}: summaryRows raw value: {summary_rows_raw}, type: {type(summary_rows_raw)}")
+        summary_rows_set = set(summary_rows_raw) if summary_rows_raw else set()
         if summary_rows_set:
-            print(f"🔍 Table {table_index}: Excluding {len(summary_rows_set)} summary rows from commission calculations")
+            print(f"🔍 Table {table_index}: Excluding {len(summary_rows_set)} summary rows from commission calculations: {sorted(summary_rows_set)}")
+        else:
+            print(f"⚠️  Table {table_index}: NO summary rows to exclude - all rows will be processed")
             
         for row_index, row in enumerate(table['rows']):
             # CRITICAL FIX: Skip summary rows - they contain totals, not individual commissions

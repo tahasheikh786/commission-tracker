@@ -590,17 +590,64 @@ async def extract_tables_smart(
                     if len(extraction_result['tables']) > 1:
                         logger.info(f"🔍 Multiple tables detected ({len(extraction_result['tables'])}), analyzing for field mapping suitability")
                         
-                        # TODO: Implement intelligent table selection when table_suitability_service is available
-                        # For now, always use the first table which typically contains the main commission data
-                        logger.info(f"📊 Using first table for field mapping (intelligent selection not yet implemented)")
-                        selected_table_index = 0
+                        # ✅ INTELLIGENT TABLE SELECTION
+                        # Prioritize tables for field mapping based on:
+                        # 1. table_type: commission_table > commission_detail > data_table > summary/hold tables
+                        # 2. Row count: More rows generally means main data table
+                        # 3. Header patterns: Look for commission-related headers
+                        
+                        best_table_index = 0
+                        best_score = 0
+                        reasoning_parts = []
+                        
+                        for idx, table in enumerate(extraction_result['tables']):
+                            score = 0
+                            table_type = (table.get('table_type') or '').lower()
+                            row_count = len(table.get('rows', []))
+                            headers = table.get('header', table.get('headers', []))
+                            
+                            # Score based on table_type (most important)
+                            if 'commission' in table_type and 'detail' in table_type:
+                                score += 100  # commission_detail_table
+                            elif 'commission' in table_type:
+                                score += 90   # commission_table
+                            elif 'data' in table_type:
+                                score += 70
+                            elif any(x in table_type for x in ['hold', 'summary', 'total']):
+                                score += 10   # Usually not for mapping
+                            else:
+                                score += 50   # Unknown type
+                            
+                            # Score based on row count (more rows = likely main table)
+                            score += min(row_count, 50)  # Cap at 50 points
+                            
+                            # Score based on commission-related headers
+                            commission_headers = ['commission', 'paid_amount', 'client', 'company', 'premium', 'rate']
+                            header_matches = sum(1 for h in headers if any(keyword in h.lower() for keyword in commission_headers))
+                            score += header_matches * 5
+                            
+                            logger.info(f"   Table {idx}: type={table_type}, rows={row_count}, score={score}")
+                            
+                            if score > best_score:
+                                best_score = score
+                                best_table_index = idx
+                                reasoning_parts = [
+                                    f"table_type={table_type}",
+                                    f"rows={row_count}",
+                                    f"commission_headers={header_matches}",
+                                    f"score={score}"
+                                ]
+                        
+                        selected_table_index = best_table_index
                         table_selection_data = {
-                            "enabled": False,
-                            "selected_table_index": 0,
-                            "reasoning": "Using first table by default - intelligent table selection is not yet implemented",
+                            "enabled": True,
+                            "selected_table_index": best_table_index,
+                            "reasoning": f"Selected table {best_table_index} ({', '.join(reasoning_parts)})",
                             "total_tables": len(extraction_result['tables']),
-                            "fallback_used": True
+                            "fallback_used": False
                         }
+                        logger.info(f"🎯 INTELLIGENT SELECTION: Using table {best_table_index} for field mapping")
+                        logger.info(f"   Reasoning: {table_selection_data['reasoning']}")
                     else:
                         # Single table - use it directly
                         logger.info("📊 Single table detected, using it for field mapping")
@@ -775,9 +822,9 @@ async def extract_tables_smart(
                         
                     # ===== AI PLAN TYPE DETECTION (DURING EXTRACTION) =====
                     # Plan type detection happens here, but field mapping happens after table editing
-                    # Emit WebSocket: Step 4 - Plan Detection started (65% progress)
+                    # Emit WebSocket: Step 4 - Plan Detection started (70% progress)
                     if upload_id:
-                        await connection_manager.emit_upload_step(upload_id, 'plan_detection', 65)
+                        await connection_manager.emit_upload_step(upload_id, 'plan_detection', 70)
                     
                     try:
                         from app.services.ai_plan_type_detection_service import AIPlanTypeDetectionService
@@ -887,10 +934,6 @@ async def extract_tables_smart(
                     
             except Exception as e:
                 logger.warning(f"Format learning lookup failed: {str(e)}")
-        
-        # Emit WebSocket: Step 6 - Preparing Results (95% progress)
-        if upload_id:
-            await connection_manager.emit_upload_step(upload_id, 'preparing_results', 95)
         
         # ===== CONVERSATIONAL SUMMARY GENERATION =====
         # Generate natural language summary in parallel (non-blocking)
@@ -1043,7 +1086,7 @@ async def extract_tables_smart(
                     if upload_id:
                         await connection_manager.send_step_progress(
                             upload_id,
-                            percentage=70,  # ✅ FIX: Changed from 95 to 70
+                            percentage=85,  # ✅ FIXED: 85% not 70% (after field mapping at 80%)
                             estimated_time="Enhanced summary ready",
                             current_stage="summary_complete",
                             conversational_summary=conversational_summary  # ← NEW FIELD
@@ -1059,7 +1102,7 @@ async def extract_tables_smart(
                 if upload_id:
                     await connection_manager.send_step_progress(
                         upload_id,
-                        percentage=70,  # ✅ FIX: Changed from 95 to 70
+                        percentage=85,  # ✅ FIXED: 85% not 70% (after field mapping at 80%)
                         estimated_time="Enhanced summary ready",
                         current_stage="summary_complete",
                         conversational_summary=conversational_summary
@@ -1074,13 +1117,25 @@ async def extract_tables_smart(
             if upload_id:
                 await connection_manager.send_step_progress(
                     upload_id,
-                    percentage=70,  # ✅ FIX: Changed from 95 to 70
+                    percentage=85,  # ✅ FIXED: 85% not 70% (after field mapping at 80%)
                     estimated_time="Enhanced summary ready",
                     current_stage="summary_complete",
                     conversational_summary=conversational_summary
                 )
         
+        # ✅ Emit WebSocket: Step 6 - Preparing Results (95% progress) - AFTER summary
+        if upload_id:
+            await connection_manager.emit_upload_step(upload_id, 'preparing_results', 95)
+        
         # Add server-specific fields to response
+        # ✅ Extract total_amount from document_metadata if available
+        extracted_total = 0.0
+        if document_metadata and 'total_amount' in document_metadata:
+            try:
+                extracted_total = float(document_metadata.get('total_amount', 0))
+            except (ValueError, TypeError):
+                extracted_total = 0.0
+        
         client_response.update({
             "success": True,
             "extraction_id": str(upload_id_uuid),
@@ -1088,7 +1143,8 @@ async def extract_tables_smart(
             "gcs_url": gcs_url,
             "gcs_key": gcs_key,
             "file_name": gcs_key,  # Use full GCS path as file_name for PDF preview
-            "conversational_summary": conversational_summary  # ← NEW: Include in response
+            "conversational_summary": conversational_summary,  # ← NEW: Include in response
+            "extracted_total": extracted_total  # ✅ NEW: Include extracted total for auto-approval
         })
         
         # Emit WebSocket: EXTRACTION_COMPLETE with full results
@@ -1107,6 +1163,14 @@ async def extract_tables_smart(
             
             # Create a JSON-safe copy of the response
             json_safe_response = convert_uuids_to_strings(client_response)
+            
+            # ✅ Final completion at 100%
+            await connection_manager.send_step_progress(
+                upload_id,
+                percentage=100,
+                estimated_time="Complete",
+                current_stage="complete"
+            )
             
             await connection_manager.send_extraction_complete(upload_id, json_safe_response)
             logger.info(f"✅ Extraction complete! Sent results via WebSocket for upload_id: {upload_id}")

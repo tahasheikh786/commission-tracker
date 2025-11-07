@@ -12,7 +12,7 @@ async def upgrade(conn):
     # Add total amount fields to CarrierFormatLearning table
     await conn.execute(text("""
         ALTER TABLE carrier_format_learning
-        ADD COLUMN IF NOT EXISTS statement_total_amount FLOAT,
+        ADD COLUMN IF NOT EXISTS statement_total_amount NUMERIC(15, 2),
         ADD COLUMN IF NOT EXISTS total_amount_field_name VARCHAR(255),
         ADD COLUMN IF NOT EXISTS auto_approved_count INTEGER DEFAULT 0,
         ADD COLUMN IF NOT EXISTS last_auto_approved_at TIMESTAMP
@@ -24,7 +24,7 @@ async def upgrade(conn):
         ADD COLUMN IF NOT EXISTS automated_approval BOOLEAN DEFAULT FALSE,
         ADD COLUMN IF NOT EXISTS automation_timestamp TIMESTAMP,
         ADD COLUMN IF NOT EXISTS total_amount_match BOOLEAN,
-        ADD COLUMN IF NOT EXISTS extracted_total FLOAT
+        ADD COLUMN IF NOT EXISTS extracted_total NUMERIC(15, 2)
     """))
     
     print("✅ Added total amount tracking fields to carrier_format_learning and statement_uploads tables")

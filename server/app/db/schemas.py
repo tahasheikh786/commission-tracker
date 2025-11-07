@@ -145,6 +145,12 @@ class StatementUpload(BaseModel):
     # User session tracking
     session_id: Optional[str] = None
     auto_save_enabled: bool = True
+    
+    # ✅ Automation metadata (for reading from database)
+    automated_approval: Optional[bool] = None
+    automation_timestamp: Optional[datetime] = None
+    total_amount_match: Optional[bool] = None
+    extracted_total: Optional[float] = None
 
     class Config:
         from_attributes = True

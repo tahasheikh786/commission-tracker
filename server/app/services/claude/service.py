@@ -815,7 +815,9 @@ class ClaudeDocumentAIService:
                 'total_pages': pdf_info.get('page_count', 0),
                 'file_size_mb': pdf_info.get('file_size_mb', 0),
                 'extraction_method': 'claude',
-                'claude_model': self.primary_model
+                'claude_model': self.primary_model,
+                'total_amount': doc_metadata.get('total_amount', 0),  # ✅ NEW: Include extracted total
+                'total_amount_label': doc_metadata.get('total_amount_label')  # ✅ NEW: Include label
             },
             'extracted_carrier': doc_metadata.get('carrier_name'),
             'extracted_date': doc_metadata.get('statement_date'),

@@ -7,7 +7,22 @@ from uuid import UUID
 from typing import Optional
 
 async def get_company_by_name(db, name: str):
-    result = await db.execute(select(Company).where(Company.name == name))
+    """
+    Get company by name with case-insensitive matching and whitespace trimming.
+    This prevents duplicate carriers due to case/spacing differences.
+    """
+    if not name:
+        return None
+    
+    # Trim whitespace from input
+    name = name.strip()
+    
+    # CRITICAL FIX: Use case-insensitive matching to prevent duplicate carriers
+    # e.g., "UnitedHealthcare", "unitedhealthcare", "UNITEDHEALTHCARE" should all match
+    from sqlalchemy import func
+    result = await db.execute(
+        select(Company).where(func.lower(Company.name) == func.lower(name))
+    )
     return result.scalar_one_or_none()
 
 async def create_company(db, company: CompanyCreate):

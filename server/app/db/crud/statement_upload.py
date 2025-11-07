@@ -253,11 +253,50 @@ async def save_statement_review(
     print(f"📊 Final data rows: {len(final_data) if final_data else 0}")
     print(f"📅 Selected statement date being saved: {selected_statement_date}")
     
+    # DEBUG: Log summaryRows being saved
+    if final_data:
+        for idx, table in enumerate(final_data):
+            if isinstance(table, dict):
+                summary_rows = table.get('summaryRows', [])
+                print(f"🔍 DEBUG Saving table {idx} '{table.get('name', 'unknown')}': summaryRows={summary_rows}, type={type(summary_rows)}")
+    
+    # CRITICAL FIX: Extract field_mapping from field_config for review modal
+    # field_mapping is a simple dict mapping source fields to target fields
+    # This is used by the review modal to load saved mappings instead of calling AI
+    field_mapping = {}
+    if field_config:
+        for item in field_config:
+            if isinstance(item, dict):
+                # ✅ UNIFIED FORMAT: {'field': 'Company Name', 'mapping': 'Client Name'}
+                # Support legacy formats for backward compatibility:
+                # - Old format 1: {'field': 'Company Name', 'label': 'Client Name'}
+                # - Old format 2: {'display_name': 'Client Name', 'source_field': 'Company Name'}
+                
+                # Priority 1: New unified format (field + mapping)
+                source_field = item.get('field')
+                target_field = item.get('mapping')
+                
+                # Priority 2: Legacy format (source_field + display_name)
+                if not source_field:
+                    source_field = item.get('source_field')
+                if not target_field:
+                    target_field = item.get('display_name')
+                
+                # Priority 3: Old format (field + label)
+                if not target_field:
+                    target_field = item.get('label')
+                
+                if source_field and target_field:
+                    field_mapping[source_field] = target_field
+        
+        print(f"📝 Extracted field_mapping with {len(field_mapping)} mappings: {field_mapping}")
+    
     # Update the upload with final data
     db_upload.final_data = final_data
     db_upload.status = status
     db_upload.current_step = 'completed'
     db_upload.field_config = field_config
+    db_upload.field_mapping = field_mapping if field_mapping else None  # Save field_mapping for review
     db_upload.rejection_reason = rejection_reason
     db_upload.plan_types = plan_types
     db_upload.selected_statement_date = selected_statement_date

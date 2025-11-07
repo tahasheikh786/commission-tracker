@@ -238,81 +238,80 @@ async def auto_approve_statement(
         # Call approve_statement with the payload object
         approve_response = await approve_statement(approve_payload, db=db)
         
-        # Step 4: Calculate total from tables if not provided
+        # Step 4: Get extracted total from document (from Claude) and calculate from tables
         actual_extracted_total = request.extracted_total
         
         # Convert field_config_list to dict for easier lookup (needed for total calculation and saving)
         field_mapping = {item['field']: item['mapping'] for item in field_config_list if 'field' in item and 'mapping' in item}
         
-        # If extracted_total is 0, try to calculate from commission_tables (NOT all tables)
-        if actual_extracted_total == 0 and commission_tables:
-            logger.info("Extracted total is 0, attempting to calculate from commission tables...")
-            try:
-                # Get field mapping to find commission field
-                commission_field = None
-                for header, mapped in field_mapping.items():
-                    if mapped.lower() in ['commission earned', 'paid amount', 'commission amount', 'total commission']:
-                        commission_field = header
-                        break
-                
-                if commission_field:
-                    total_amount = 0.0
-                    for table in commission_tables:
-                        headers = table.get("header", [])
-                        if commission_field in headers:
-                            idx = headers.index(commission_field)
-                            # CRITICAL: Also exclude summary rows within the table
-                            summary_rows = set(table.get("summaryRows", []))
-                            for row_idx, row in enumerate(table.get("rows", [])):
-                                if row_idx in summary_rows:
-                                    continue  # Skip summary rows
-                                if idx < len(row):
-                                    value = str(row[idx]).replace('$', '').replace(',', '').strip()
-                                    try:
-                                        amount = float(value)
-                                        total_amount += amount
-                                    except:
-                                        pass
-                    
-                    if total_amount > 0:
-                        actual_extracted_total = total_amount
-                        logger.info(f"Calculated total from commission tables: ${actual_extracted_total:.2f}")
-            except Exception as e:
-                logger.warning(f"Failed to calculate total from commission tables: {e}")
-        
-        # Validate total amount
-        learned_format = request.learned_format
-        table_editor_settings = learned_format.get("table_editor_settings", {})
-        learned_total = table_editor_settings.get("statement_total_amount", 0) or learned_format.get("learned_total_amount", 0)
-        total_validation = {}
-        
-        # Round both values to 2 decimal places for comparison to avoid floating point issues
-        if learned_total > 0 and actual_extracted_total > 0:
-            # Round to 2 decimal places
-            learned_total_rounded = round(learned_total, 2)
-            extracted_total_rounded = round(actual_extracted_total, 2)
+        # ✅ NEW: Fallback to learned total if extracted_total not provided
+        if actual_extracted_total == 0:
+            # Try to get from learned format
+            table_editor_settings = request.learned_format.get("table_editor_settings", {})
+            learned_total = table_editor_settings.get("statement_total_amount", 0)
             
-            # Calculate percentage difference
-            diff_percent = abs(extracted_total_rounded - learned_total_rounded) / learned_total_rounded * 100
-            matches = diff_percent <= 5.0  # 5% tolerance
+            if learned_total:
+                actual_extracted_total = learned_total
+                logger.info(f"Using learned total from format: ${actual_extracted_total:.2f}")
+            else:
+                logger.warning("❌ No extracted total available - cannot validate")
+        
+        # ✅ Calculate commission from tables (for comparison only)
+        calculated_total = 0.0
+        commission_field = None
+        
+        # Find commission field from field mapping
+        for header, mapped in field_mapping.items():
+            if mapped.lower() in ["commission_earned", "paid_amount", "commission_amount", "total_commission"]:
+                commission_field = header
+                break
+        
+        if commission_field:
+            for table in commission_tables:
+                headers = table.get("header", [])
+                if commission_field in headers:
+                    idx = headers.index(commission_field)
+                    summary_rows = set(table.get("summaryRows", []))
+                    
+                    for row_idx, row in enumerate(table.get("rows", [])):
+                        # ✅ Skip summary rows when calculating
+                        if row_idx in summary_rows:
+                            continue
+                            
+                        if idx < len(row):
+                            value = str(row[idx]).replace("$", "").replace(",", "").strip()
+                            try:
+                                calculated_total += float(value)
+                            except:
+                                pass
+        
+        logger.info(f"Total validation:")
+        logger.info(f"  - Extracted from file: ${actual_extracted_total:.2f}")
+        logger.info(f"  - Calculated from table: ${calculated_total:.2f}")
+        
+        # ✅ Validate: Extracted total should match calculated total
+        total_validation = {}
+        if actual_extracted_total > 0:
+            difference = abs(actual_extracted_total - calculated_total)
+            difference_percent = (difference / actual_extracted_total) * 100
+            
+            matches = difference_percent < 5.0  # 5% tolerance
             
             total_validation = {
                 "matches": matches,
-                "extracted": extracted_total_rounded,
-                "expected": learned_total_rounded,
-                "difference": abs(extracted_total_rounded - learned_total_rounded),
-                "difference_percent": diff_percent
+                "extracted": round(actual_extracted_total, 2),
+                "calculated": round(calculated_total, 2),
+                "difference": round(difference, 2),
+                "difference_percent": round(difference_percent, 2)
             }
-            logger.info(f"Total validation: extracted=${extracted_total_rounded:.2f}, expected=${learned_total_rounded:.2f}, matches={matches}")
-        
-        # Only mark for review if we have validation data and it doesn't match
-        # If no learned total exists, we don't require review based on total
-        needs_review = False
-        if learned_total > 0 and total_validation:
-            needs_review = not total_validation.get("matches", False)
-            logger.info(f"Total validation required review: {needs_review}")
+            
+            logger.info(f"  - Match: {matches} (difference: {difference_percent:.2f}%)")
+            
+            # ✅ Set needs_review if totals don't match
+            needs_review = not matches
         else:
-            logger.info(f"No total validation performed - learned_total: {learned_total}, has_validation: {bool(total_validation)}")
+            needs_review = False
+            logger.warning("No extracted total - skipping validation")
         
         # Update upload with automation metadata
         from app.db.schemas import StatementUploadUpdate
@@ -356,7 +355,8 @@ async def auto_approve_statement(
             "carrier_name": carrier_name,
             "statement_date": request.statement_date,
             "total_amount_match": total_validation.get("matches", False) if total_validation else None,
-            "extracted_total": round(actual_extracted_total, 2) if actual_extracted_total else 0
+            "extracted_total": round(actual_extracted_total, 2) if actual_extracted_total else 0,
+            "calculated_total": round(calculated_total, 2) if calculated_total else 0
         }
         
     except Exception as e:

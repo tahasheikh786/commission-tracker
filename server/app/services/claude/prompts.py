@@ -37,6 +37,17 @@ METADATA EXTRACTION GUIDELINES:
   * If no date is visible or you cannot confidently extract it, return null instead of guessing
   * DO NOT extract dates from table cells, policy effective dates, or transaction dates - only extract the statement/report date from the document header
 - **BROKER COMPANY**: The broker/agent entity receiving commissions. Look for "Agent:", "Broker:", "Agency:", "To:", "Prepared For:" labels near the top of document. This is different from the carrier.
+- **TOTAL AMOUNT** (CRITICAL): Extract the TOTAL AMOUNT from the document as it appears. Look for labels like:
+  * "Total Compensation"
+  * "Total Amount"
+  * "Total Commission"
+  * "Amount Due"
+  * "Net Payment"
+  * "EFT Amount"
+  * "Grand Total"
+  * "Total Paid Amount"
+  * Extract the numeric value as a float (e.g., 1935.29)
+  * Also capture what label was used (e.g., "Total Compensation")
 
 CRITICAL REQUIREMENTS:
 - Extract EVERY table, even if partially visible
@@ -73,7 +84,9 @@ Return tables in this exact JSON structure:
     "date_confidence": 0.92,
     "broker_company": "Broker/Agent Company Name",
     "broker_confidence": 0.90,
-    "document_type": "commission_statement"
+    "document_type": "commission_statement",
+    "total_amount": 1935.29,
+    "total_amount_label": "Total Compensation"
   },
   "extraction_notes": "Any important observations about the document or extraction challenges"
 }

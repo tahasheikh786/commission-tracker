@@ -972,32 +972,23 @@ def _merge_table_group(group: List[Dict[str, Any]], canonical_header: List[str])
         "metadata": merged_metadata
     })
     
-    # **CRITICAL: Re-apply enhancements to the MERGED table with full row count**
-    # The enhancements were applied to individual tables before merging,
-    # but need to be re-applied to the merged table to work on all rows together
-    try:
-        from app.services.mistral.service import MistralDocumentAIService
-        
-        # Initialize service to get enhancement processors
-        mistral_service = MistralDocumentAIService()
-        
-        # Re-apply enhancements to the merged table
-        enhanced_merged = mistral_service._enhance_table_with_summary_detection(merged_table)
-        
-        logger.info(f"✅ Re-applied enhancements to merged table: {len(all_rows)} rows")
-        return enhanced_merged
-        
-    except Exception as e:
-        logger.warning(f"Failed to re-apply enhancements after merging: {e}")
-        # Fallback: preserve original summary_detection from base table if it exists
-        if "summary_detection" in base_table:
-            merged_table["summary_detection"] = base_table["summary_detection"]
-            # Update counts if summary rows were removed
-            if merged_table["summary_detection"].get("removed_indices"):
-                merged_table["summary_detection"]["original_row_count"] = len(all_rows)
-                merged_table["summary_detection"]["cleaned_row_count"] = len(all_rows)
-        
-        return merged_table
+    # **OPTIMIZATION: Skip re-applying enhancements after merge to avoid loading Mistral**
+    # Enhancement was already applied to individual tables before merging
+    # Preserve the enhancement metadata from the base table
+    if "summary_detection" in base_table:
+        merged_table["summary_detection"] = base_table["summary_detection"]
+        merged_table["summary_detection"]["original_row_count"] = len(all_rows)
+        merged_table["summary_detection"]["cleaned_row_count"] = len(all_rows)
+    
+    if "bracket_processing" in base_table:
+        merged_table["bracket_processing"] = base_table["bracket_processing"]
+        # Update cell counts for merged table
+        total_cells = len(all_rows) * len(canonical_header)
+        merged_table["bracket_processing"]["total_cells_processed"] = total_cells
+        merged_table["bracket_processing"]["validation"]["total_cells_checked"] = total_cells
+    
+    logger.info(f"✅ Merged table created: {len(all_rows)} rows (enhancements preserved from individual tables)")
+    return merged_table
 
 def log_pipeline_performance(tables: List[Dict[str, Any]], original_tables: List[Dict[str, Any]], filename: str = "unknown"):
     """

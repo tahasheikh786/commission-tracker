@@ -1,0 +1,386 @@
+rt Date', 'Compensation Period End Date', 'EFT Settlement Date', 'EFT Account Number', '%', 'Amount'], 'rows': [['12/18/2024', '01/07/2025', '01/13/2025', '****5680', '100', '$1935.29']], 'table_type': 'settlement_summary', 'page_number': 1, 'confidence_score': 0.98, 'summary_rows': [], 'metadata': {'total_tables_merged': 1, 'total_rows': 1, 'canonical_header': ['Compensation Period Start Date', 'Compensation Period End Date', 'EFT Settlement Date', 'EFT Account Number', '%', 'Amount'], 'merged_from_tables': [0]}, 'summaryRows': [], 'bracket_processing': {'enabled': True, 'total_cells_processed': 6, 'brackets_converted': 1, 'errors': 0, 'processing_method': 'professional_accounting_standard', 'validation': {'total_cells_checked': 6, 'negative_indicators_before': 0, 'negative_values_after': 0, 'data_integrity_preserved': True, 'validation_errors': []}}, 'summary_detection': {'enabled': True, 'removed_indices': [], 'detection_method': 'insufficient_rows', 'detection_confidence': 0.0, 'total_rows_before': 1, 'total_rows_after': 1, 'removal_threshold': 0.75, 'strategies_used': ['semantic', 'density', 'position', 'business_logic']}, 'header': ['Compensation Period Start Date', 'Compensation Period End Date', 'EFT Settlement Date', 'EFT Account Number', '%', 'Amount']}, {'headers': ['Current Compensation', 'YTD Compensation'], 'rows': [['$1935.29', '$1935.29']], 'table_type': 'compensation_summary', 'page_number': 1, 'confidence_score': 0.98, 'summary_rows': [], 'metadata': {'total_tables_merged': 1, 'total_rows': 1, 'canonical_header': ['Current Compensation', 'YTD Compensation'], 'merged_from_tables': [0]}, 'summaryRows': [], 'bracket_processing': {'enabled': True, 'total_cells_processed': 2, 'brackets_converted': 2, 'errors': 0, 'processing_method': 'professional_accounting_standard', 'validation': {'total_cells_checked': 2, 'negative_indicators_before': 0, 'negative_values_after': 0, 'data_integrity_preserved': True, 'validation_errors': []}}, 'summary_detection': {'enabled': True, 'removed_indices': [], 'detection_method': 'insufficient_rows', 'detection_confidence': 0.0, 'total_rows_before': 1, 'total_rows_after': 1, 'removal_threshold': 0.75, 'strategies_used': ['semantic', 'density', 'position', 'business_logic']}, 'header': ['Current Compensation', 'YTD Compensation']}, {'headers': ['Hold Reason', 'Compensation Type', 'Business Type', 'State', 'Hold Eff Date', 'Legal Entity'], 'rows': [['WA & PAYEE FAILED', 'Comm', 'Comm', 'GA', '07/21/2023', 'UnitedHealthcare Ins Co'], ['PAYEE FAILED', 'Comm', 'Comm', 'MA', '09/12/2024', 'UnitedHealthcare Ins Co'], ['WA & PAYEE FAILED', 'Comm', 'Comm', 'MA', '10/12/2024', 'UnitedHealthcare Ins Co'], ['WA & PAYEE FAILED', 'Comm', 'Comm', 'NV', '04/11/2024', 'UnitedHealthcare Ins Co'], ['WA & PAYEE FAILED', 'Comm', 'Comm', 'NV', '05/13/2024', 'UnitedHealthcare Ins Co'], ['WA & PAYEE FAILED', 'Comm', 'Comm', 'NV', '09/13/2024', 'UnitedHealthcare Ins Co'], ['WA FAILED', 'Comm', 'Comm', 'WA', '10/23/2024', 'UnitedHealthcare Ins Co'], ['WA FAILED', 'Comm', 'Comm', 'WA', '11/04/2024', 'UnitedHealthcare Ins Co'], ['WA FAILED', 'Comm', 'Comm', 'WA', '12/18/2024', 'UnitedHealthcare Ins Co'], ['WA FAILED', 'Comm', 'Comm', 'WA', '12/20/2024', 'UnitedHealthcare Ins Co'], ['WA & PAYEE FAILED', 'Comm', 'Comm', 'WA', '12/05/2024', 'UnitedHealthcare of Washington'], ['WA & PAYEE FAILED', 'Comm', 'Comm', 'WA', '12/05/2024', 'UnitedHealthcare of Washington'], ['WA & PAYEE FAILED', 'Comm', 'Comm', 'WA', '06/08/2024', 'UnitedHealthcare Ins Co'], ['WA & PAYEE FAILED', 'Comm', 'Comm', 'WA', '06/08/2024', 'UnitedHealthcare of Washington'], ['PAYEE FAILED', 'Comm', 'Comm', 'WI', '04/11/2024', 'UHC of Wisconsin Inc']], 'table_type': 'business_on_hold', 'page_number': 3, 'confidence_score': 0.92, 'summary_rows': [], 'metadata': {'total_tables_merged': 1, 'total_rows': 15, 'canonical_header': ['Hold Reason', 'Compensation Type', 'Business Type', 'State', 'Hold Eff Date', 'Legal Entity'], 'merged_from_tables': [0]}, 'summaryRows': [], 'bracket_processing': {'enabled': True, 'total_cells_processed': 90, 'brackets_converted': 0, 'errors': 0, 'processing_method': 'professional_accounting_standard', 'validation': {'total_cells_checked': 90, 'negative_indicators_before': 0, 'negative_values_after': 0, 'data_integrity_preserved': True, 'validation_errors': []}}, 'summary_detection': {'enabled': True, 'removed_indices': [], 'detection_method': 'multi_strategy_conservative', 'detection_confidence': 0.0, 'total_rows_before': 15, 'total_rows_after': 15, 'removal_threshold': 0.75, 'strategies_used': ['semantic', 'density', 'position', 'business_logic']}, 'header': ['Hold Reason', 'Compensation Type', 'Business Type', 'State', 'Hold Eff Date', 'Legal Entity']}], 'extraction_method': 'claude', 'file_type': 'pdf', 'document_metadata': {'carrier_name': 'UnitedHealthcare', 'carrier_confidence': 0.98, 'statement_date': '2025-01-07', 'date_confidence': 0.95, 'broker_company': 'INNOVATIVE BPS LLC', 'broker_confidence': 0.95, 'total_pages': 3, 'file_size_mb': 0.1610870361328125, 'extraction_method': 'claude', 'claude_model': 'claude-sonnet-4-20250514'}, 'extracted_carrier': 'UnitedHealthcare', 'extracted_date': '2025-01-07', 'quality_summary': {'overall_confidence': 0.99, 'table_structure_score': 1.0, 'data_completeness': 0.99, 'extraction_accuracy': 0.99, 'issues_detected': [], 'quality_grade': 'A', 'table_count': 4}, 'metadata': {'table_count': 4, 'quality_grade': 'A', 'confidence_score': 0.99, 'token_usage': {'input_tokens': 7739, 'output_tokens': 3413}}, 'extraction_quality': {'overall_confidence': 0.99, 'table_structure_score': 1.0, 'data_completeness': 0.99, 'extraction_accuracy': 0.99, 'issues_detected': [], 'quality_grade': 'A', 'table_count': 4}, 'entities': {'carrier': {'name': 'UnitedHealthcare', 'confidence': 0.98, 'evidence': 'Document metadata'}, 'broker': {'company_name': 'INNOVATIVE BPS LLC', 'confidence': 0.95, 'evidence': 'Document metadata'}, 'writing_agents': [], 'groups_and_companies': [{'group_name': '$90.00', 'group_number': None, 'paid_amount': '$90.00'}, {'group_name': '$30.00', 'group_number': None, 'paid_amount': '$30.00'}, {'group_name': '$240.00', 'group_number': None, 'paid_amount': '$240.00'}, {'group_name': '$240.00', 'group_number': None, 'paid_amount': '$240.00'}, {'group_name': '$35.00', 'group_number': None, 'paid_amount': '$35.00'}, {'group_name': '$70.00', 'group_number': None, 'paid_amount': '$70.00'}, {'group_name': '$70.00', 'group_number': None, 'paid_amount': '$70.00'}, {'group_name': '$210.00', 'group_number': None, 'paid_amount': '$210.00'}, {'group_name': '$35.00', 'group_number': None, 'paid_amount': '$35.00'}, {'group_name': '($50.00)', 'group_number': None, 'paid_amount': '($50.00)'}, {'group_name': '$50.00', 'group_number': None, 'paid_amount': '$50.00'}, {'group_name': '$250.00', 'group_number': None, 'paid_amount': '$250.00'}, {'group_name': '$150.00', 'group_number': None, 'paid_amount': '$150.00'}, {'group_name': '$400.00', 'group_number': None, 'paid_amount': '$400.00'}], 'document_metadata': {'carrier_name': 'UnitedHealthcare', 'carrier_confidence': 0.98, 'statement_date': '2025-01-07', 'date_confidence': 0.95, 'broker_company': 'INNOVATIVE BPS LLC', 'broker_confidence': 0.95, 'total_pages': 3, 'file_size_mb': 0.1610870361328125, 'extraction_method': 'claude', 'claude_model': 'claude-sonnet-4-20250514'}}, 'relationships': {'carrier_to_broker': {'carrier': 'UnitedHealthcare', 'broker': 'INNOVATIVE BPS LLC', 'relationship': 'issues_commission_to'}, 'broker_to_agents': [], 'agents_to_groups': [{'agent': 'Unknown', 'group': '$90.00', 'relationship': 'manages'}, {'agent': 'Unknown', 'group': '$30.00', 'relationship': 'manages'}, {'agent': 'Unknown', 'group': '$240.00', 'relationship': 'manages'}, {'agent': 'Unknown', 'group': '$240.00', 'relationship': 'manages'}, {'agent': 'Unknown', 'group': '$35.00', 'relationship': 'manages'}, {'agent': 'Unknown', 'group': '$70.00', 'relationship': 'manages'}, {'agent': 'Unknown', 'group': '$70.00', 'relationship': 'manages'}, {'agent': 'Unknown', 'group': '$210.00', 'relationship': 'manages'}, {'agent': 'Unknown', 'group': '$35.00', 'relationship': 'manages'}, {'agent': 'Unknown', 'group': '($50.00)', 'relationship': 'manages'}, {'agent': 'Unknown', 'group': '$50.00', 'relationship': 'manages'}, {'agent': 'Unknown', 'group': '$250.00', 'relationship': 'manages'}, {'agent': 'Unknown', 'group': '$150.00', 'relationship': 'manages'}, {'agent': 'Unknown', 'group': '$400.00', 'relationship': 'manages'}], 'groups_to_payments': [{'group': '$90.00', 'amount': '$90.00', 'relationship': 'generates_commission'}, {'group': '$30.00', 'amount': '$30.00', 'relationship': 'generates_commission'}, {'group': '$240.00', 'amount': '$240.00', 'relationship': 'generates_commission'}, {'group': '$240.00', 'amount': '$240.00', 'relationship': 'generates_commission'}, {'group': '$35.00', 'amount': '$35.00', 'relationship': 'generates_commission'}, {'group': '$70.00', 'amount': '$70.00', 'relationship': 'generates_commission'}, {'group': '$70.00', 'amount': '$70.00', 'relationship': 'generates_commission'}, {'group': '$210.00', 'amount': '$210.00', 'relationship': 'generates_commission'}, {'group': '$35.00', 'amount': '$35.00', 'relationship': 'generates_commission'}, {'group': '($50.00)', 'amount': '($50.00)', 'relationship': 'generates_commission'}, {'group': '$50.00', 'amount': '$50.00', 'relationship': 'generates_commission'}, {'group': '$250.00', 'amount': '$250.00', 'relationship': 'generates_commission'}, {'group': '$150.00', 'amount': '$150.00', 'relationship': 'generates_commission'}, {'group': '$400.00', 'amount': '$400.00', 'relationship': 'generates_commission'}]}, 'business_intelligence': {'total_commission_amount': 'Not specified', 'number_of_groups': 14, 'commission_structures': ['Percentage-based', 'PEPM'], 'top_contributors': [{'name': '$400.00', 'amount': '$400.00'}, {'name': '$250.00', 'amount': '$250.00'}, {'name': '$240.00', 'amount': '$240.00'}], 'special_payments': [], 'payment_period': '', 'patterns_detected': ['Large portfolio with 14 groups']}, 'summary': 'This is  a UnitedHealthcare commission statement for INNOVATIVE BPS LLC dated January 7, 2025, showing commission payments across 14 separate line items totaling $1,380.00 in gross commissions. The payments range dramatically from a single $400.00 top contributor down to smaller amounts like $30.00 and $35.00, with two identical $240.00 payments and matching $70.00 entries suggesting possible group plan tiers or product categories. Notably, the statement includes one negative adjustment of ($50.00) that was subsequently offset by a corresponding $50.00 positive entry, indicating some form of correction or reversal was processed during this commission period. The document structure suggests this may be a summary-level view rather than a detailed group breakdown, as the extracted data shows payment amounts in place of traditional group names, pointing to either a formatting anomaly or a high-level financial reconciliation report.', 'extraction_pipeline': '3-phase-enhanced', 'semantic_extraction_success': True}
+INFO:app.services.cancellation_manager:Cleared cancellation status for upload upload_1762548002590_fbgk5930q
+INFO:app.api.new_extract:💾 Updating upload record with results...
+INFO:app.api.new_extract:✅ Upload record updated successfully
+INFO:app.services.audit_logging_service:Audit: data_view by user f6cf1764-5bfc-4352-abd9-81b72b7cf191 on extraction_complete (ID: 48c4b7c4-2bc3-43fc-8772-a68659854a30)
+INFO:app.api.new_extract:🆕 Carrier 'UnitedHealthcare' not found in database, creating automatically...
+INFO:app.api.new_extract:✅ Auto-created carrier: UnitedHealthcare with ID a9a696a1-8d4d-4c52-aa25-8f82649fda97
+INFO:app.api.new_extract:🎯 Format Learning: Using carrier UnitedHealthcare with ID a9a696a1-8d4d-4c52-aa25-8f82649fda97
+WARNING:app.api.new_extract:🚨 CARRIER MISMATCH DETECTED: File uploaded to aa4a116d-b561-4eae-a3cc-7b0bda919685 but extracted as UnitedHealthcare (a9a696a1-8d4d-4c52-aa25-8f82649fda97)
+INFO:app.api.new_extract:🔄 Reassigning file to correct carrier: UnitedHealthcare
+INFO:app.services.gcs_utils:✅ File copied in GCS: statements/48c4b7c4-2bc3-43fc-8772-a68659854a30/01.07.2025 UHC Commission Statement.pdf -> statements/a9a696a1-8d4d-4c52-aa25-8f82649fda97/01.07.2025 UHC Commission Statement.pdf
+INFO:app.services.gcs_utils:✅ File deleted from GCS: statements/48c4b7c4-2bc3-43fc-8772-a68659854a30/01.07.2025 UHC Commission Statement.pdf
+INFO:app.services.gcs_utils:✅ Generated signed URL for GCS file with inline headers: statements/a9a696a1-8d4d-4c52-aa25-8f82649fda97/01.07.2025 UHC Commission Statement.pdf
+INFO:app.api.new_extract:✅ File moved to correct carrier folder in GCS: statements/a9a696a1-8d4d-4c52-aa25-8f82649fda97/01.07.2025 UHC Commission Statement.pdf
+INFO:app.api.new_extract:✅ Updated statement upload: carrier_id=a9a696a1-8d4d-4c52-aa25-8f82649fda97, company_id=a9a696a1-8d4d-4c52-aa25-8f82649fda97
+INFO:app.api.new_extract:🔍 Multiple tables detected (4), analyzing for field mapping suitability
+INFO:app.api.new_extract:📊 Using first table for field mapping (intelligent selection not yet implemented)
+INFO:app.api.new_extract:🎯 Using table 0 for field mapping with 16 headers
+🎯 FormatLearningService: Finding matching format for company a9a696a1-8d4d-4c52-aa25-8f82649fda97
+🎯 FormatLearningService: Headers: ['Company Name', 'Cov Type', 'Bill Eff Date', 'Billed Premium', 'Paid Premium', 'Sub Count', 'Adj Typ', 'Iss St', 'Method', 'Rate', 'Split %', 'Comp Type', 'Bus Type', 'Billed Fee Amount', 'Customer Paid Fee', 'Paid Amount']
+🎯 FormatLearningService: Table structure: {'row_count': 26, 'column_count': 16, 'has_financial_data': True}
+🎯 FormatLearningService: Headers type: <class 'list'>
+🎯 FormatLearningService: Headers length: 16
+🎯 CRUD: Finding best matching format for company a9a696a1-8d4d-4c52-aa25-8f82649fda97
+🎯 CRUD: Input headers: ['Company Name', 'Cov Type', 'Bill Eff Date', 'Billed Premium', 'Paid Premium', 'Sub Count', 'Adj Typ', 'Iss St', 'Method', 'Rate', 'Split %', 'Comp Type', 'Bus Type', 'Billed Fee Amount', 'Customer Paid Fee', 'Paid Amount']
+🎯 CRUD: Input table structure: {'row_count': 26, 'column_count': 16, 'has_financial_data': True}
+🎯 CRUD: Found 0 saved formats for company
+🎯 FormatLearningService: Best match score: 0
+🎯 FormatLearningService: No matching format found
+INFO:app.api.new_extract:🎯 Format Learning: No matching format found (score: 0.0)
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1762548002590_fbgk5930q: STEP_STARTED
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1762548002590_fbgk5930q
+INFO:app.services.websocket_service:Step started: Understanding Structure (Step 4) for upload_id upload_1762548002590_fbgk5930q
+INFO:app.services.ai_plan_type_detection_service:AI Plan Type Detection Service initialized successfully
+INFO:app.api.new_extract:🔍 AI Plan Type Detection: Detecting plan types during extraction
+INFO:app.services.ai_plan_type_detection_service:🔍 AI Plan Detection: Analyzing document for insurance plan types
+INFO:httpx:HTTP Request: POST https://api.mistral.ai/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.services.ai_plan_type_detection_service:✅ AI successfully detected plan types
+INFO:app.services.ai_plan_type_detection_service:✅ AI Plan Detection: Found 1 plan types with 0.95 confidence
+INFO:app.api.new_extract:✅ AI Plan Detection: 1 plan types with 0.95 confidence
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1762548002590_fbgk5930q: STEP_STARTED
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1762548002590_fbgk5930q
+INFO:app.services.websocket_service:Step started: AI Field Mapping (Step 5) for upload_id upload_1762548002590_fbgk5930q
+INFO:app.api.new_extract:🧠 AI Field Mapping: Starting field mapping during extraction
+INFO:app.api.ai_intelligent_mapping:🚀 Enhanced AI Analysis Request: User muhammad@pinecrestconsulting.com
+INFO:app.services.ai_field_mapping_service:🤖 AI Mapping: Analyzing 16 headers with AI intelligence
+INFO:app.services.ai_field_mapping_service:🔍 AI Mapping: carrier_id provided: True (value: a9a696a1-8d4d-4c52-aa25-8f82649fda97)
+INFO:app.api.websocket:Received unknown message type: heartbeat
+INFO:app.services.ai_field_mapping_service:🎯 Carrier ID is valid, attempting to retrieve learned mapping for carrier a9a696a1-8d4d-4c52-aa25-8f82649fda97
+INFO:app.services.ai_field_mapping_service:🔍 Generated format signature for lookup: 9ff6925662a0c2baadcc65242ff62669
+INFO:app.services.ai_field_mapping_service:🔍 Looking up learned format for carrier a9a696a1-8d4d-4c52-aa25-8f82649fda97 with 16 headers
+INFO:app.services.ai_field_mapping_service:❌ No exact match found, trying fuzzy matching...
+INFO:app.services.ai_field_mapping_service:🔍 Found 0 saved formats for fuzzy matching
+INFO:app.services.ai_field_mapping_service:❌ No matching format found
+INFO:app.services.ai_field_mapping_service:❌ No learned mapping found for carrier a9a696a1-8d4d-4c52-aa25-8f82649fda97
+INFO:httpx:HTTP Request: POST https://api.mistral.ai/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.services.ai_field_mapping_service:✅ AI successfully generated field mappings
+INFO:app.services.ai_field_mapping_service:✅ AI Mapping: Generated 10 mappings with 0.85 confidence
+INFO:app.services.ai_plan_type_detection_service:🔍 AI Plan Detection: Analyzing document for insurance plan types
+INFO:httpx:HTTP Request: POST https://api.mistral.ai/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.services.ai_plan_type_detection_service:✅ AI successfully detected plan types
+INFO:app.services.ai_plan_type_detection_service:✅ AI Plan Detection: Found 1 plan types with 0.95 confidence
+INFO:app.api.ai_intelligent_mapping:✅ Enhanced AI Analysis Complete: Overall confidence 0.90
+INFO:app.api.new_extract:✅ AI Field Mapping: 10 mappings with 0.85 confidence
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1762548002590_fbgk5930q: STEP_STARTED
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1762548002590_fbgk5930q
+INFO:app.services.websocket_service:Step started: Preparing Results (Step 6) for upload_id upload_1762548002590_fbgk5930q
+INFO:app.api.new_extract:✅ Enhanced summary already generated by Claude pipeline - using it
+INFO:app.api.new_extract:   Enhanced summary: This is  a UnitedHealthcare commission statement for INNOVATIVE BPS LLC dated January 7, 2025, showing commission payments across 14 separate line items totaling $1,380.00 in gross commissions. The payments range dramatically from a single $400.00 top contributor down to smaller amounts like $30.00 and $35.00, with two identical $240.00 payments and matching $70.00 entries suggesting possible group plan tiers or product categories. Notably, the statement includes one negative adjustment of ($50.00) that was subsequently offset by a corresponding $50.00 positive entry, indicating some form of correction or reversal was processed during this commission period. The document structure suggests this may be a summary-level view rather than a detailed group breakdown, as the extracted data shows payment amounts in place of traditional group names, pointing to either a formatting anomaly or a high-level financial reconciliation report.
+INFO:app.services.user_profile_service:Recorded contribution: upload for user f6cf1764-5bfc-4352-abd9-81b72b7cf191
+INFO:app.services.audit_logging_service:Audit: file_upload by user f6cf1764-5bfc-4352-abd9-81b72b7cf191 on statement_upload (ID: 48c4b7c4-2bc3-43fc-8772-a68659854a30)
+INFO:app.api.new_extract:📤 Sending pre-generated enhanced summary via WebSocket...
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1762548002590_fbgk5930q: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1762548002590_fbgk5930q
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1762548002590_fbgk5930q: EXTRACTION_COMPLETE
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1762548002590_fbgk5930q
+INFO:app.services.websocket_service:Extraction complete for upload_id upload_1762548002590_fbgk5930q
+INFO:app.api.new_extract:✅ Extraction complete! Sent results via WebSocket for upload_id: upload_1762548002590_fbgk5930q
+INFO:     connection closed
+INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1762548002590_fbgk5930q, session_id=session_1762548002619_fzc4z5vry
+INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1762548002590_fbgk5930q, session_id=session_1762548002619_fzc4z5vry
+INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1762548002590_fbgk5930q
+INFO:     127.0.0.1:59461 - "POST /api/extract-tables-smart/ HTTP/1.1" 200 OK
+INFO:app.api.pdf_proxy:🔄 Proxying PDF from: https://storage.googleapis.com/pdf_extraction_files_saver/statements/a9a696a1-8d4d-4c52-aa25-8f82649...
+INFO:httpx:HTTP Request: GET https://storage.googleapis.com/pdf_extraction_files_saver/statements/a9a696a1-8d4d-4c52-aa25-8f82649fda97/01.07.2025%20UHC%20Commission%20Statement.pdf?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=docsai-table-extractor%40pdf-tables-extractor-465009.iam.gserviceaccount.com%2F20251107%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20251107T204128Z&X-Goog-Expires=3599&X-Goog-SignedHeaders=host&response-content-disposition=inline&response-content-type=application%2Fpdf&X-Goog-Signature=88d2b3c67ba02f0f993a90a7c02d32df465a4f3d39592d978c57e091d5bd4630f57ea061643fe2e593d4ad1b822c9a7d6cb28b55e928ac3392b54bf9adde58b60344fa3a90245b0dd37e6e5f4f22817989a871561ec91699306fcae22c5eaa83bde7dc0e54ddea0aed494eac38f4b580c4dfad1d2dc8cb18480338824711afd099182c7de47ca940ecfcf5c2b0a23c6496a7ba6cb2d96f04fd2b9f0283dc00f89478905659c2b65e453d3be54b99ccde293320812cadf70295e6b38f9b367506f69e64b009d9e74e6b5ae62279314cf7d6e42b47708fde92b1357e409112d74410474e8251c424d811cf8848e10e042c138728916875997c42ed196217a0c0fe "HTTP/1.1 200 OK"
+INFO:     127.0.0.1:59938 - "GET /api/pdf-proxy?url=https%3A%2F%2Fstorage.googleapis.com%2Fpdf_extraction_files_saver%2Fstatements%2Fa9a696a1-8d4d-4c52-aa25-8f82649fda97%2F01.07.2025%2520UHC%2520Commission%2520Statement.pdf%3FX-Goog-Algorithm%3DGOOG4-RSA-SHA256%26X-Goog-Credential%3Ddocsai-table-extractor%2540pdf-tables-extractor-465009.iam.gserviceaccount.com%252F20251107%252Fauto%252Fstorage%252Fgoog4_request%26X-Goog-Date%3D20251107T204128Z%26X-Goog-Expires%3D3599%26X-Goog-SignedHeaders%3Dhost%26response-content-disposition%3Dinline%26response-content-type%3Dapplication%252Fpdf%26X-Goog-Signature%3D88d2b3c67ba02f0f993a90a7c02d32df465a4f3d39592d978c57e091d5bd4630f57ea061643fe2e593d4ad1b822c9a7d6cb28b55e928ac3392b54bf9adde58b60344fa3a90245b0dd37e6e5f4f22817989a871561ec91699306fcae22c5eaa83bde7dc0e54ddea0aed494eac38f4b580c4dfad1d2dc8cb18480338824711afd099182c7de47ca940ecfcf5c2b0a23c6496a7ba6cb2d96f04fd2b9f0283dc00f89478905659c2b65e453d3be54b99ccde293320812cadf70295e6b38f9b367506f69e64b009d9e74e6b5ae62279314cf7d6e42b47708fde92b1357e409112d74410474e8251c424d811cf8848e10e042c138728916875997c42ed196217a0c0fe HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59932 - "GET /api/pending/progress/48c4b7c4-2bc3-43fc-8772-a68659854a30/table_editor HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60360 - "OPTIONS /api/table-editor/save-tables/ HTTP/1.1" 200 OK
+INFO:app.api.table_editor:🎯 Table Editor API: Saving edited tables for upload_id: 48c4b7c4-2bc3-43fc-8772-a68659854a30
+INFO:app.api.table_editor:🎯 Table Editor API: Tables count: 4
+INFO:app.api.table_editor:🎯 Table Editor API: Selected statement date: {'date': '2025-01-07', 'confidence': 0.95, 'source': 'ai_extraction'}
+INFO:app.api.table_editor:🎯 Table Editor API: Company ID: a9a696a1-8d4d-4c52-aa25-8f82649fda97
+INFO:app.api.table_editor:🎯 Table Editor API: Field config received: [{'field': 'Company Name', 'mapping': 'Client Name'}, {'field': 'Paid Amount', 'mapping': 'Commission Earned'}, {'field': 'Bill Eff Date', 'mapping': 'Plan Effective Date'}, {'field': 'Billed Premium', 'mapping': 'Premium Total'}, {'field': 'Paid Premium', 'mapping': 'Premium Current Month'}, {'field': 'Sub Count', 'mapping': 'Total Subscribers'}, {'field': 'Iss St', 'mapping': 'Group State'}, {'field': 'Rate', 'mapping': 'Commission Rate'}, {'field': 'Customer Paid Fee', 'mapping': 'Total Commission Paid'}]
+INFO:app.api.table_editor:🎯 Table Editor API: Converted 4 tables to database format
+INFO:app.api.table_editor:🎯 Table Editor API: Saved edited tables to database
+INFO:app.api.table_editor:🎯 Table Editor API: Processing carrier (potentially corrected by user): UnitedHealthcare
+INFO:app.api.table_editor:🎯 Table Editor API: Using existing carrier: a9a696a1-8d4d-4c52-aa25-8f82649fda97 (UnitedHealthcare)
+INFO:app.api.table_editor:🎯 Table Editor API: Updating upload with tables, statement date, and carrier
+🎯 CRUD: update_upload_tables called for upload_id: 48c4b7c4-2bc3-43fc-8772-a68659854a30
+🎯 CRUD: Tables data length: 4
+🎯 CRUD: Selected statement date: {'date': '2025-01-07', 'confidence': 0.95, 'source': 'ai_extraction'}
+🎯 CRUD: Carrier ID: a9a696a1-8d4d-4c52-aa25-8f82649fda97
+🎯 CRUD: Found upload, updating with tables, statement date, and carrier
+🎯 CRUD: Saved selected statement date to database: {'date': '2025-01-07', 'confidence': 0.95, 'source': 'ai_extraction'}
+🎯 CRUD: Statement date type: <class 'dict'>
+🎯 CRUD: Statement date keys: ['date', 'confidence', 'source']
+🎯 CRUD: Linking statement to carrier: carrier_id=a9a696a1-8d4d-4c52-aa25-8f82649fda97, company_id=a9a696a1-8d4d-4c52-aa25-8f82649fda97
+🎯 CRUD: Also saved statement date and carrier to progress_data
+🎯 CRUD: Successfully updated upload 48c4b7c4-2bc3-43fc-8772-a68659854a30 with tables, statement date, and carrier
+🎯 CRUD: Final selected_statement_date in database: {'date': '2025-01-07', 'confidence': 0.95, 'source': 'ai_extraction'}
+INFO:app.api.table_editor:🎯 Table Editor API: Successfully updated upload with statement date and carrier
+INFO:app.api.table_editor:🎯 Table Editor API: Learning format patterns from edited tables for carrier a9a696a1-8d4d-4c52-aa25-8f82649fda97
+INFO:app.api.table_editor:🎯 Table Editor Format Learning: Saving 9 field mappings
+INFO:app.api.table_editor:🎯 Table Editor API: Successfully learned format with signature: 9ff6925662a0c2baadcc65242ff62669 for carrier a9a696a1-8d4d-4c52-aa25-8f82649fda97
+INFO:app.api.table_editor:🎯 Table Editor API: Successfully learned table editor format patterns
+INFO:app.api.table_editor:🎯 Table Editor API: Successfully saved 4 edited tables
+INFO:     127.0.0.1:60362 - "POST /api/table-editor/save-tables/ HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60400 - "OPTIONS /api/table-editor/learn-format-patterns HTTP/1.1" 200 OK
+INFO:app.api.table_editor:🎯 Format Learning: Processing carrier (may be user-corrected): UnitedHealthcare
+INFO:app.api.table_editor:🎯 Format Learning: Using existing carrier: a9a696a1-8d4d-4c52-aa25-8f82649fda97
+INFO:app.api.table_editor:🎯 Format Learning: Extracted 9 field mappings from field_config
+INFO:app.api.table_editor:🎯 Format Learning: Field mappings: {'Company Name': 'Client Name', 'Paid Amount': 'Commission Earned', 'Bill Eff Date': 'Plan Effective Date', 'Billed Premium': 'Premium Total', 'Paid Premium': 'Premium Current Month', 'Sub Count': 'Total Subscribers', 'Iss St': 'Group State', 'Rate': 'Commission Rate', 'Customer Paid Fee': 'Total Commission Paid'}
+INFO:app.api.table_editor:Successfully learned format patterns with signature: 9ff6925662a0c2baadcc65242ff62669 for carrier a9a696a1-8d4d-4c52-aa25-8f82649fda97
+INFO:     127.0.0.1:60362 - "POST /api/table-editor/learn-format-patterns HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60400 - "OPTIONS /api/companies/a9a696a1-8d4d-4c52-aa25-8f82649fda97/mapping/?upload_id=48c4b7c4-2bc3-43fc-8772-a68659854a30 HTTP/1.1" 200 OK
+INFO:app.api.mapping:🎯 Mapping API: Received mapping request for carrier/company a9a696a1-8d4d-4c52-aa25-8f82649fda97
+INFO:app.api.mapping:🎯 Mapping API: Upload ID: 48c4b7c4-2bc3-43fc-8772-a68659854a30
+INFO:app.api.mapping:🎯 Mapping API: Config received - mapping keys: ['Company Name', 'Paid Amount', 'Bill Eff Date', 'Billed Premium', 'Paid Premium', 'Sub Count', 'Iss St', 'Rate', 'Customer Paid Fee']
+INFO:app.api.mapping:🎯 Mapping API: Selected statement date: {'date': '2025-01-07', 'confidence': 0.95, 'source': 'ai_extraction'}
+INFO:app.api.mapping:🎯 Mapping API: Table data rows: 26
+INFO:app.api.mapping:🎯 Mapping API: Headers: ['Company Name', 'Cov Type', 'Bill Eff Date', 'Billed Premium', 'Paid Premium', 'Sub Count', 'Adj Typ', 'Iss St', 'Method', 'Rate', 'Split %', 'Comp Type', 'Bus Type', 'Billed Fee Amount', 'Customer Paid Fee', 'Paid Amount']
+INFO:app.api.mapping:🎯 Mapping API: Retrieved carrier_id from upload: a9a696a1-8d4d-4c52-aa25-8f82649fda97
+INFO:app.api.mapping:🎯 Mapping API: Final carrier_id to use: a9a696a1-8d4d-4c52-aa25-8f82649fda97
+INFO:app.api.mapping:🎯 Mapping API: Saved 9 field mappings for carrier a9a696a1-8d4d-4c52-aa25-8f82649fda97
+INFO:app.api.mapping:🎯 Mapping API: Saved configuration for carrier a9a696a1-8d4d-4c52-aa25-8f82649fda97
+INFO:app.api.mapping:🎯 Mapping API: Learning format from processed file for carrier a9a696a1-8d4d-4c52-aa25-8f82649fda97
+INFO:app.api.mapping:🎯 Mapping API: Table data length: 26
+INFO:app.api.mapping:🎯 Mapping API: Headers: ['Company Name', 'Cov Type', 'Bill Eff Date', 'Billed Premium', 'Paid Premium', 'Sub Count', 'Adj Typ', 'Iss St', 'Method', 'Rate', 'Split %', 'Comp Type', 'Bus Type', 'Billed Fee Amount', 'Customer Paid Fee', 'Paid Amount']
+INFO:app.api.mapping:🎯 Mapping API: Mapping: {'Company Name': 'Client Name', 'Paid Amount': 'Commission Earned', 'Bill Eff Date': 'Plan Effective Date', 'Billed Premium': 'Premium Total', 'Paid Premium': 'Premium Current Month', 'Sub Count': 'Total Subscribers', 'Iss St': 'Group State', 'Rate': 'Commission Rate', 'Customer Paid Fee': 'Total Commission Paid'}
+INFO:app.api.mapping:🎯 Mapping API: Retrieved carrier name for format learning: UnitedHealthcare
+🎯 FormatLearningService: Learning from processed file for company a9a696a1-8d4d-4c52-aa25-8f82649fda97
+🎯 FormatLearningService: Headers: ['Company Name', 'Cov Type', 'Bill Eff Date', 'Billed Premium', 'Paid Premium', 'Sub Count', 'Adj Typ', 'Iss St', 'Method', 'Rate', 'Split %', 'Comp Type', 'Bus Type', 'Billed Fee Amount', 'Customer Paid Fee', 'Paid Amount']
+🎯 FormatLearningService: Field mapping: {'Company Name': 'Client Name', 'Paid Amount': 'Commission Earned', 'Bill Eff Date': 'Plan Effective Date', 'Billed Premium': 'Premium Total', 'Paid Premium': 'Premium Current Month', 'Sub Count': 'Total Subscribers', 'Iss St': 'Group State', 'Rate': 'Commission Rate', 'Customer Paid Fee': 'Total Commission Paid'}
+🎯 FormatLearningService: Table data length: 26
+🎯 FormatLearningService: Generated format signature: 9ff6925662a0c2baadcc65242ff62669
+🎯 FormatLearningService: Found potential total field: Billed Fee Amount at index 13
+🎯 FormatLearningService: No total amount could be extracted
+🎯 FormatLearningService: Saving corrected carrier name: UnitedHealthcare
+🎯 FormatLearningService: Saving corrected statement date: 2025-01-07
+🎯 FormatLearningService: Final enhanced table editor settings keys: ['carrier_name', 'corrected_carrier_name', 'statement_date', 'corrected_statement_date']
+🎯 FormatLearningService: Successfully learned format for company a9a696a1-8d4d-4c52-aa25-8f82649fda97
+INFO:app.api.mapping:🎯 Mapping API: Format learning completed successfully for carrier a9a696a1-8d4d-4c52-aa25-8f82649fda97
+INFO:app.api.mapping:🎯 Mapping API: Processing commission data with statement date
+INFO:app.api.mapping:🎯 Mapping API: Statement date object: {'date': '2025-01-07', 'confidence': 0.95, 'source': 'ai_extraction'}
+WARNING:app.api.mapping:🎯 Mapping API: Could not retrieve environment_id: module 'app.db.crud' has no attribute 'get_statement_upload'
+INFO:app.api.mapping:🎯 Commission Processing: Starting commission data processing
+INFO:app.api.mapping:🎯 Commission Processing: Company ID: a9a696a1-8d4d-4c52-aa25-8f82649fda97
+INFO:app.api.mapping:🎯 Commission Processing: Table data rows: 26
+INFO:app.api.mapping:🎯 Commission Processing: Headers: ['Company Name', 'Cov Type', 'Bill Eff Date', 'Billed Premium', 'Paid Premium', 'Sub Count', 'Adj Typ', 'Iss St', 'Method', 'Rate', 'Split %', 'Comp Type', 'Bus Type', 'Billed Fee Amount', 'Customer Paid Fee', 'Paid Amount']
+INFO:app.api.mapping:🎯 Commission Processing: Mapping: {'Company Name': 'Client Name', 'Paid Amount': 'Commission Earned', 'Bill Eff Date': 'Plan Effective Date', 'Billed Premium': 'Premium Total', 'Paid Premium': 'Premium Current Month', 'Sub Count': 'Total Subscribers', 'Iss St': 'Group State', 'Rate': 'Commission Rate', 'Customer Paid Fee': 'Total Commission Paid'}
+INFO:app.api.mapping:🎯 Commission Processing: Statement date: {'date': '2025-01-07', 'confidence': 0.95, 'source': 'ai_extraction'}
+INFO:app.api.mapping:🎯 Commission Processing: Date value extracted: 2025-01-07
+INFO:app.api.mapping:🎯 Date Parsing: Attempting to parse date: 2025-01-07
+INFO:app.api.mapping:🎯 Date Parsing: Successfully parsed date '2025-01-07' with format '%Y-%m-%d' -> 2025-01-07 00:00:00
+INFO:app.api.mapping:🎯 Commission Processing: Parsed date: 2025-01-07 00:00:00
+INFO:app.api.mapping:🎯 Commission Processing: Month: 1, Year: 2025
+INFO:app.api.mapping:🎯 Commission Processing: Found client name column: Company Name -> Client Name
+INFO:app.api.mapping:🎯 Commission Processing: Found commission column: Paid Amount -> Commission Earned
+INFO:app.api.mapping:🎯 Commission Processing: Found invoice total column: Billed Premium -> Premium Total
+INFO:app.api.mapping:🎯 Commission Processing: Found commission column: Customer Paid Fee -> Total Commission Paid
+INFO:app.api.mapping:🎯 Commission Processing: Final column mapping - Client: Company Name, Invoice: Billed Premium, Commission: Customer Paid Fee
+INFO:app.api.mapping:🎯 Commission Processing: Row 0 - Client: B & B Lightning Protection, Invoice: -$3844.84, Commission: 
+INFO:app.api.mapping:🎯 Commission Processing: Row 0 - Parsed values - Invoice: -3844.84, Commission: 0.0
+INFO:app.api.mapping:🎯 Commission Processing: Skipping row 0 - commission <= 0
+INFO:app.api.mapping:🎯 Commission Processing: Row 1 - Client: B & B Lightning Protection, Invoice: $3844.84, Commission: 
+INFO:app.api.mapping:🎯 Commission Processing: Row 1 - Parsed values - Invoice: 3844.84, Commission: 0.0
+INFO:app.api.mapping:🎯 Commission Processing: Skipping row 1 - commission <= 0
+INFO:app.api.mapping:🎯 Commission Processing: Row 2 - Client: MAMMOTH DELIVERY LLC, Invoice: $55.58, Commission: $90.00
+INFO:app.api.mapping:🎯 Commission Processing: Row 2 - Parsed values - Invoice: 55.58, Commission: 90.0
+INFO:app.api.mapping:🎯 Commission Record: Creating/updating record for a9a696a1-8d4d-4c52-aa25-8f82649fda97 - MAMMOTH DELIVERY LLC - 2025-01-07 00:00:00 - user: f6cf1764-5bfc-4352-abd9-81b72b7cf191
+INFO:app.api.mapping:🎯 Commission Record: Creating new record with user_id: f6cf1764-5bfc-4352-abd9-81b72b7cf191 and environment_id: None
+INFO:app.api.mapping:🎯 Commission Record: Set jan_commission = 90.0
+INFO:app.api.mapping:🎯 Commission Record: Successfully created new record
+INFO:app.api.mapping:🎯 Commission Processing: Successfully processed row 2
+INFO:app.api.mapping:🎯 Commission Processing: Row 3 - Client: MAMMOTH DELIVERY LLC, Invoice: $14.25, Commission: $30.00
+INFO:app.api.mapping:🎯 Commission Processing: Row 3 - Parsed values - Invoice: 14.25, Commission: 30.0
+INFO:app.api.mapping:🎯 Commission Record: Creating/updating record for a9a696a1-8d4d-4c52-aa25-8f82649fda97 - MAMMOTH DELIVERY LLC - 2025-01-07 00:00:00 - user: f6cf1764-5bfc-4352-abd9-81b72b7cf191
+INFO:app.api.mapping:🎯 Commission Record: Updating existing record ID da6dbfbc-344f-454a-954c-53f982c035db
+INFO:app.api.mapping:🎯 Commission Record: Successfully updated existing record
+INFO:app.api.mapping:🎯 Commission Processing: Successfully processed row 3
+INFO:app.api.mapping:🎯 Commission Processing: Row 4 - Client: MAMMOTH DELIVERY LLC, Invoice: $126.83, Commission: $240.00
+INFO:app.api.mapping:🎯 Commission Processing: Row 4 - Parsed values - Invoice: 126.83, Commission: 240.0
+INFO:app.api.mapping:🎯 Commission Record: Creating/updating record for a9a696a1-8d4d-4c52-aa25-8f82649fda97 - MAMMOTH DELIVERY LLC - 2025-01-07 00:00:00 - user: f6cf1764-5bfc-4352-abd9-81b72b7cf191
+INFO:app.api.mapping:🎯 Commission Record: Updating existing record ID da6dbfbc-344f-454a-954c-53f982c035db
+INFO:app.api.mapping:🎯 Commission Record: Successfully updated existing record
+INFO:app.api.mapping:🎯 Commission Processing: Successfully processed row 4
+INFO:app.api.mapping:🎯 Commission Processing: Row 5 - Client: MAMMOTH DELIVERY LLC, Invoice: $114.00, Commission: $240.00
+INFO:app.api.mapping:🎯 Commission Processing: Row 5 - Parsed values - Invoice: 114.0, Commission: 240.0
+INFO:app.api.mapping:🎯 Commission Record: Creating/updating record for a9a696a1-8d4d-4c52-aa25-8f82649fda97 - MAMMOTH DELIVERY LLC - 2025-01-07 00:00:00 - user: f6cf1764-5bfc-4352-abd9-81b72b7cf191
+INFO:app.api.mapping:🎯 Commission Record: Updating existing record ID da6dbfbc-344f-454a-954c-53f982c035db
+INFO:app.api.mapping:🎯 Commission Record: Successfully updated existing record
+INFO:app.api.mapping:🎯 Commission Processing: Successfully processed row 5
+INFO:app.api.mapping:🎯 Commission Processing: Row 6 - Client: MAMMOTH DELIVERY LLC, Invoice: $92.61, Commission: 
+INFO:app.api.mapping:🎯 Commission Processing: Row 6 - Parsed values - Invoice: 92.61, Commission: 0.0
+INFO:app.api.mapping:🎯 Commission Processing: Skipping row 6 - commission <= 0
+INFO:app.api.mapping:🎯 Commission Processing: Row 7 - Client: MAMMOTH DELIVERY LLC, Invoice: $452.29, Commission: 
+INFO:app.api.mapping:🎯 Commission Processing: Row 7 - Parsed values - Invoice: 452.29, Commission: 0.0
+INFO:app.api.mapping:🎯 Commission Processing: Skipping row 7 - commission <= 0
+INFO:app.api.mapping:🎯 Commission Processing: Row 8 - Client: MAMMOTH DELIVERY LLC, Invoice: $27.51, Commission: 
+INFO:app.api.mapping:🎯 Commission Processing: Row 8 - Parsed values - Invoice: 27.51, Commission: 0.0
+INFO:app.api.mapping:🎯 Commission Processing: Skipping row 8 - commission <= 0
+INFO:app.api.mapping:🎯 Commission Processing: Row 9 - Client: MAMMOTH DELIVERY LLC, Invoice: $99.12, Commission: 
+INFO:app.api.mapping:🎯 Commission Processing: Row 9 - Parsed values - Invoice: 99.12, Commission: 0.0
+INFO:app.api.mapping:🎯 Commission Processing: Skipping row 9 - commission <= 0
+INFO:app.api.mapping:🎯 Commission Processing: Row 10 - Client: ALPHA ONE LOGISTICS LLC, Invoice: $22.90, Commission: $35.00
+INFO:app.api.mapping:🎯 Commission Processing: Row 10 - Parsed values - Invoice: 22.9, Commission: 35.0
+INFO:app.api.mapping:🎯 Commission Record: Creating/updating record for a9a696a1-8d4d-4c52-aa25-8f82649fda97 - ALPHA ONE LOGISTICS LLC - 2025-01-07 00:00:00 - user: f6cf1764-5bfc-4352-abd9-81b72b7cf191
+INFO:app.api.mapping:🎯 Commission Record: Creating new record with user_id: f6cf1764-5bfc-4352-abd9-81b72b7cf191 and environment_id: None
+INFO:app.api.mapping:🎯 Commission Record: Set jan_commission = 35.0
+INFO:app.api.mapping:🎯 Commission Record: Successfully created new record
+INFO:app.api.mapping:🎯 Commission Processing: Successfully processed row 10
+INFO:app.api.mapping:🎯 Commission Processing: Row 11 - Client: ALPHA ONE LOGISTICS LLC, Invoice: $45.80, Commission: $70.00
+INFO:app.api.mapping:🎯 Commission Processing: Row 11 - Parsed values - Invoice: 45.8, Commission: 70.0
+INFO:app.api.mapping:🎯 Commission Record: Creating/updating record for a9a696a1-8d4d-4c52-aa25-8f82649fda97 - ALPHA ONE LOGISTICS LLC - 2025-01-07 00:00:00 - user: f6cf1764-5bfc-4352-abd9-81b72b7cf191
+INFO:app.api.mapping:🎯 Commission Record: Updating existing record ID 8892db17-5a8e-44c0-bdbd-3c8b173eecba
+INFO:app.api.mapping:🎯 Commission Record: Successfully updated existing record
+INFO:app.api.mapping:🎯 Commission Processing: Successfully processed row 11
+INFO:app.api.mapping:🎯 Commission Processing: Row 12 - Client: ALPHA ONE LOGISTICS LLC, Invoice: $66.64, Commission: $70.00
+INFO:app.api.mapping:🎯 Commission Processing: Row 12 - Parsed values - Invoice: 66.64, Commission: 70.0
+INFO:app.api.mapping:🎯 Commission Record: Creating/updating record for a9a696a1-8d4d-4c52-aa25-8f82649fda97 - ALPHA ONE LOGISTICS LLC - 2025-01-07 00:00:00 - user: f6cf1764-5bfc-4352-abd9-81b72b7cf191
+INFO:app.api.mapping:🎯 Commission Record: Updating existing record ID 8892db17-5a8e-44c0-bdbd-3c8b173eecba
+INFO:app.api.mapping:🎯 Commission Record: Successfully updated existing record
+INFO:app.api.mapping:🎯 Commission Processing: Successfully processed row 12
+INFO:app.api.mapping:🎯 Commission Processing: Row 13 - Client: ALPHA ONE LOGISTICS LLC, Invoice: $137.40, Commission: $210.00
+INFO:app.api.mapping:🎯 Commission Processing: Row 13 - Parsed values - Invoice: 137.4, Commission: 210.0
+INFO:app.api.mapping:🎯 Commission Record: Creating/updating record for a9a696a1-8d4d-4c52-aa25-8f82649fda97 - ALPHA ONE LOGISTICS LLC - 2025-01-07 00:00:00 - user: f6cf1764-5bfc-4352-abd9-81b72b7cf191
+INFO:app.api.mapping:🎯 Commission Record: Updating existing record ID 8892db17-5a8e-44c0-bdbd-3c8b173eecba
+INFO:app.api.mapping:🎯 Commission Record: Successfully updated existing record
+INFO:app.api.mapping:🎯 Commission Processing: Successfully processed row 13
+INFO:app.api.mapping:🎯 Commission Processing: Row 14 - Client: ALPHA ONE LOGISTICS LLC, Invoice: $22.90, Commission: $35.00
+INFO:app.api.mapping:🎯 Commission Processing: Row 14 - Parsed values - Invoice: 22.9, Commission: 35.0
+INFO:app.api.mapping:🎯 Commission Record: Creating/updating record for a9a696a1-8d4d-4c52-aa25-8f82649fda97 - ALPHA ONE LOGISTICS LLC - 2025-01-07 00:00:00 - user: f6cf1764-5bfc-4352-abd9-81b72b7cf191
+INFO:app.api.mapping:🎯 Commission Record: Updating existing record ID 8892db17-5a8e-44c0-bdbd-3c8b173eecba
+INFO:app.api.mapping:🎯 Commission Record: Successfully updated existing record
+INFO:app.api.mapping:🎯 Commission Processing: Successfully processed row 14
+INFO:app.api.mapping:🎯 Commission Processing: Row 15 - Client: Go Go Logistics, Invoice: -$20.51, Commission: -$50.00
+INFO:app.api.mapping:🎯 Commission Processing: Row 15 - Parsed values - Invoice: -20.51, Commission: -50.0
+INFO:app.api.mapping:🎯 Commission Processing: Skipping row 15 - commission <= 0
+INFO:app.api.mapping:🎯 Commission Processing: Row 16 - Client: Go Go Logistics, Invoice: $20.51, Commission: $50.00
+INFO:app.api.mapping:🎯 Commission Processing: Row 16 - Parsed values - Invoice: 20.51, Commission: 50.0
+INFO:app.api.mapping:🎯 Commission Record: Creating/updating record for a9a696a1-8d4d-4c52-aa25-8f82649fda97 - Go Go Logistics - 2025-01-07 00:00:00 - user: f6cf1764-5bfc-4352-abd9-81b72b7cf191
+INFO:app.api.mapping:🎯 Commission Record: Creating new record with user_id: f6cf1764-5bfc-4352-abd9-81b72b7cf191 and environment_id: None
+INFO:app.api.mapping:🎯 Commission Record: Set jan_commission = 50.0
+INFO:app.api.mapping:🎯 Commission Record: Successfully created new record
+INFO:app.api.mapping:🎯 Commission Processing: Successfully processed row 16
+INFO:app.api.mapping:🎯 Commission Processing: Row 17 - Client: Go Go Logistics, Invoice: $102.55, Commission: $250.00
+INFO:app.api.mapping:🎯 Commission Processing: Row 17 - Parsed values - Invoice: 102.55, Commission: 250.0
+INFO:app.api.mapping:🎯 Commission Record: Creating/updating record for a9a696a1-8d4d-4c52-aa25-8f82649fda97 - Go Go Logistics - 2025-01-07 00:00:00 - user: f6cf1764-5bfc-4352-abd9-81b72b7cf191
+INFO:app.api.mapping:🎯 Commission Record: Updating existing record ID 1abea418-1036-4334-8ca1-c64d1e1432df
+INFO:app.api.mapping:🎯 Commission Record: Successfully updated existing record
+INFO:app.api.mapping:🎯 Commission Processing: Successfully processed row 17
+INFO:app.api.mapping:🎯 Commission Processing: Row 18 - Client: Go Go Logistics, Invoice: $61.53, Commission: $150.00
+INFO:app.api.mapping:🎯 Commission Processing: Row 18 - Parsed values - Invoice: 61.53, Commission: 150.0
+INFO:app.api.mapping:🎯 Commission Record: Creating/updating record for a9a696a1-8d4d-4c52-aa25-8f82649fda97 - Go Go Logistics - 2025-01-07 00:00:00 - user: f6cf1764-5bfc-4352-abd9-81b72b7cf191
+INFO:app.api.mapping:🎯 Commission Record: Updating existing record ID 1abea418-1036-4334-8ca1-c64d1e1432df
+INFO:app.api.mapping:🎯 Commission Record: Successfully updated existing record
+INFO:app.api.mapping:🎯 Commission Processing: Successfully processed row 18
+INFO:app.api.mapping:🎯 Commission Processing: Row 19 - Client: Go Go Logistics, Invoice: $164.08, Commission: $400.00
+INFO:app.api.mapping:🎯 Commission Processing: Row 19 - Parsed values - Invoice: 164.08, Commission: 400.0
+INFO:app.api.mapping:🎯 Commission Record: Creating/updating record for a9a696a1-8d4d-4c52-aa25-8f82649fda97 - Go Go Logistics - 2025-01-07 00:00:00 - user: f6cf1764-5bfc-4352-abd9-81b72b7cf191
+INFO:app.api.mapping:🎯 Commission Record: Updating existing record ID 1abea418-1036-4334-8ca1-c64d1e1432df
+INFO:app.api.mapping:🎯 Commission Record: Successfully updated existing record
+INFO:app.api.mapping:🎯 Commission Processing: Successfully processed row 19
+INFO:app.api.mapping:🎯 Commission Processing: Row 20 - Client: IMPACT HEATING AND COOLING, Invoice: -$82.49, Commission: 
+INFO:app.api.mapping:🎯 Commission Processing: Row 20 - Parsed values - Invoice: -82.49, Commission: 0.0
+INFO:app.api.mapping:🎯 Commission Processing: Skipping row 20 - commission <= 0
+INFO:app.api.mapping:🎯 Commission Processing: Row 21 - Client: IMPACT HEATING AND COOLING, Invoice: $219.32, Commission: 
+INFO:app.api.mapping:🎯 Commission Processing: Row 21 - Parsed values - Invoice: 219.32, Commission: 0.0
+INFO:app.api.mapping:🎯 Commission Processing: Skipping row 21 - commission <= 0
+INFO:app.api.mapping:🎯 Commission Processing: Row 22 - Client: IMPACT HEATING AND COOLING, Invoice: $305.15, Commission: 
+INFO:app.api.mapping:🎯 Commission Processing: Row 22 - Parsed values - Invoice: 305.15, Commission: 0.0
+INFO:app.api.mapping:🎯 Commission Processing: Skipping row 22 - commission <= 0
+INFO:app.api.mapping:🎯 Commission Processing: Row 23 - Client: IMPACT HEATING AND COOLING, Invoice: -$11.25, Commission: 
+INFO:app.api.mapping:🎯 Commission Processing: Row 23 - Parsed values - Invoice: -11.25, Commission: 0.0
+INFO:app.api.mapping:🎯 Commission Processing: Skipping row 23 - commission <= 0
+INFO:app.api.mapping:🎯 Commission Processing: Row 24 - Client: IMPACT HEATING AND COOLING, Invoice: $31.00, Commission: 
+INFO:app.api.mapping:🎯 Commission Processing: Row 24 - Parsed values - Invoice: 31.0, Commission: 0.0
+INFO:app.api.mapping:🎯 Commission Processing: Skipping row 24 - commission <= 0
+INFO:app.api.mapping:🎯 Commission Processing: Row 25 - Client: IMPACT HEATING AND COOLING, Invoice: $19.71, Commission: 
+INFO:app.api.mapping:🎯 Commission Processing: Row 25 - Parsed values - Invoice: 19.71, Commission: 0.0
+INFO:app.api.mapping:🎯 Commission Processing: Skipping row 25 - commission <= 0
+INFO:app.api.mapping:🎯 Commission Processing: Completed processing 13 rows with statement date 2025-01-07
+Processed commission data for 26 rows with statement date 2025-01-07
+INFO:app.api.mapping:🎯 Mapping API: Commission data processing completed successfully
+INFO:app.api.mapping:🎯 Mapping API: Mapping update completed successfully for carrier a9a696a1-8d4d-4c52-aa25-8f82649fda97
+INFO:     127.0.0.1:60362 - "POST /api/companies/a9a696a1-8d4d-4c52-aa25-8f82649fda97/mapping/?upload_id=48c4b7c4-2bc3-43fc-8772-a68659854a30 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60533 - "OPTIONS /api/review/approve/ HTTP/1.1" 200 OK
+💾 Saving statement review: upload_id=48c4b7c4-2bc3-43fc-8772-a68659854a30, status=Approved
+📋 Field config being saved: [{'display_name': 'Client Name', 'source_field': 'Company Name'}, {'display_name': 'Commission Earned', 'source_field': 'Paid Amount'}, {'display_name': 'Plan Effective Date', 'source_field': 'Bill Eff Date'}, {'display_name': 'Premium Total', 'source_field': 'Billed Premium'}, {'display_name': 'Premium Current Month', 'source_field': 'Paid Premium'}, {'display_name': 'Total Subscribers', 'source_field': 'Sub Count'}, {'display_name': 'Group State', 'source_field': 'Iss St'}, {'display_name': 'Commission Rate', 'source_field': 'Rate'}, {'display_name': 'Total Commission Paid', 'source_field': 'Customer Paid Fee'}]
+📊 Final data rows: 4
+📅 Selected statement date being saved: {'date': '2025-01-07', 'confidence': 0.95, 'source': 'ai_extraction'}
+🔍 DEBUG Saving table 0 'Unnamed Table': summaryRows=[], type=<class 'list'>
+🔍 DEBUG Saving table 1 'Unnamed Table': summaryRows=[], type=<class 'list'>
+🔍 DEBUG Saving table 2 'Unnamed Table': summaryRows=[], type=<class 'list'>
+🔍 DEBUG Saving table 3 'Unnamed Table': summaryRows=[], type=<class 'list'>
+📝 Extracted field_mapping with 9 mappings: {'Company Name': 'Client Name', 'Paid Amount': 'Commission Earned', 'Bill Eff Date': 'Plan Effective Date', 'Billed Premium': 'Premium Total', 'Paid Premium': 'Premium Current Month', 'Sub Count': 'Total Subscribers', 'Iss St': 'Group State', 'Rate': 'Commission Rate', 'Customer Paid Fee': 'Total Commission Paid'}
+✅ Statement approved, processing commission data with BULK OPTIMIZATION...
+🚀 BULK PROCESSING: Starting optimized commission processing for upload 48c4b7c4-2bc3-43fc-8772-a68659854a30
+🔍 Extracting field mappings from: [{'display_name': 'Client Name', 'source_field': 'Company Name'}, {'display_name': 'Commission Earned', 'source_field': 'Paid Amount'}, {'display_name': 'Plan Effective Date', 'source_field': 'Bill Eff Date'}, {'display_name': 'Premium Total', 'source_field': 'Billed Premium'}, {'display_name': 'Premium Current Month', 'source_field': 'Paid Premium'}, {'display_name': 'Total Subscribers', 'source_field': 'Sub Count'}, {'display_name': 'Group State', 'source_field': 'Iss St'}, {'display_name': 'Commission Rate', 'source_field': 'Rate'}, {'display_name': 'Total Commission Paid', 'source_field': 'Customer Paid Fee'}]
+✅ Found client name field: Company Name -> Client Name
+✅ Found commission field (exact match): Paid Amount -> Commission Earned
+🔍 Extracted field mappings: {'client_name_field': 'Company Name', 'commission_earned_field': 'Paid Amount', 'invoice_total_field': None}
+   ✅ Client Name: Using 'Company Name'
+   ✅ Commission Earned: Using 'Paid Amount'
+   ⚠️  Invoice Total: NOT FOUND (will use $0.00 default)
+✅ OPTIMIZED: Pre-extracted field mappings: client=Company Name, commission=Paid Amount, invoice=None
+👤 Processing for user_id: f6cf1764-5bfc-4352-abd9-81b72b7cf191
+🌍 Processing for environment_id: ce970b80-0cbc-4861-b6bd-449e1590a99c
+📅 Statement date: 2025-01-07 00:00:00 (month: 1, year: 2025)
+📊 Table 0: Mapped fields - client[0]=Company Name, commission[15]=Paid Amount, invoice[None]=None
+🔍 DEBUG Table 0: summaryRows raw value: [], type: <class 'list'>
+⚠️  Table 0: NO summary rows to exclude - all rows will be processed
+⚠️  Table 1: Client field 'Company Name' not found in headers: ['Compensation Period Start Date', 'Compensation Period End Date', 'EFT Settlement Date', 'EFT Account Number', '%', 'Amount']
+⚠️  Table 2: Client field 'Company Name' not found in headers: ['Current Compensation', 'YTD Compensation']
+⚠️  Table 3: Client field 'Company Name' not found in headers: ['Hold Reason', 'Compensation Type', 'Business Type', 'State', 'Hold Eff Date', 'Legal Entity']
+📊 Extracted 26 commission records for bulk processing
+🔍 Found 5 clients with multiple statement rows:
+   1. B & B Lightning Protection: 2 rows, total commission: $0.00
+   2. MAMMOTH DELIVERY LLC: 8 rows, total commission: $667.15
+   3. ALPHA ONE LOGISTICS LLC: 5 rows, total commission: $420.00
+   4. Go Go Logistics: 5 rows, total commission: $800.00
+   5. IMPACT HEATING AND COOLING: 6 rows, total commission: $48.14
+📊 Commission Analysis: {'total_records': 26, 'unique_clients': 5, 'clients_with_multiple_rows': 5}
+🔍 Bulk fetch: Looking up 5 unique commission records (with user isolation)
+✅ Bulk fetch: Found 0 existing records for specified users
+📊 Aggregating 26 individual records by unique constraint...
+✅ Aggregated into 5 unique commission records (with user isolation)
+   📋 B & B Lightning Protection (user: f6cf1764-5bfc-4352-abd9-81b72b7cf191): $0.00 commission, $0.00 invoice
+   📋 MAMMOTH DELIVERY LLC (user: f6cf1764-5bfc-4352-abd9-81b72b7cf191): $667.15 commission, $0.00 invoice
+   📋 ALPHA ONE LOGISTICS LLC (user: f6cf1764-5bfc-4352-abd9-81b72b7cf191): $420.00 commission, $0.00 invoice
+📊 Bulk operations prepared: 0 updates, 5 inserts
+➕ Executing bulk insert for 5 records
+✅ BULK PROCESSING: Successfully processed 26 records
+📈 Performance: Reduced from 600-800 DB operations to 2-3 operations
+INFO:     127.0.0.1:60362 - "POST /api/review/approve/ HTTP/1.1" 200 OK
+🔍 Auth Status - All cookies: ['access_token', 'refresh_token', 'session_token', '__next_hmr_refresh_hash__']
+🔍 Auth Status - Access token present: True
+🔍 Auth Status - Request host: localhost:8000
+🔍 Auth Status - Request origin: http://localhost:3000
+🔍 Auth Status - Cookie access_token: eyJhbGciOiJIUzI1NiIs...
+🔍 Auth Status - Cookie refresh_token: eyJhbGciOiJIUzI1NiIs...
+🔍 Auth Status - Cookie session_token: ab85a2c2-71fb-4c21-b...
+🔍 Auth Status - Cookie __next_hmr_refresh_hash__: e15bb4e2d824c9020b8d6a4cc1ac8876633457081244afec
+INFO:     127.0.0.1:60362 - "GET /api/auth/otp/status HTTP/1.1" 200 OK
+🔍 Debug - All cookies received: ['access_token', 'refresh_token', 'session_token', '__next_hmr_refresh_hash__']
+🔍 Debug - Access token present: True
+INFO:     127.0.0.1:60362 - "GET /api/auth/permissions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60570 - "GET /environments HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60582 - "GET /api/dashboard/earned-commissions?view_mode=my_data&year=2025 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60586 - "GET /api/earned-commission/carriers-detailed?view_mode=my_data&year=2025 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60570 - "GET /api/earned-commission/companies-aggregated?view_mode=my_data&year=2025 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60584 - "GET /api/earned-commission/carriers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60580 - "GET /api/dashboard/stats?view_mode=my_data HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60362 - "GET /api/earned-commission/stats?view_mode=my_data&year=2025 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60586 - "GET /api/companies/?view_mode=my_data HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60582 - "GET /api/companies/user-specific HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60570 - "GET /api/companies/user-specific?environment_id=ce970b80-0cbc-4861-b6bd-449e1590a99c HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60584 - "GET /api/companies/?view_mode=my_data&environment_id=ce970b80-0cbc-4861-b6bd-449e1590a99c HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60580 - "GET /api/dashboard/earned-commissions?view_mode=my_data&year=2025 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60362 - "GET /api/earned-commission/carriers-detailed?view_mode=my_data&year=2025 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60586 - "GET /api/earned-commission/companies-aggregated?view_mode=my_data&year=2025 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60582 - "GET /api/earned-commission/carriers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60580 - "GET /api/companies/?view_mode=my_data HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60584 - "GET /api/earned-commission/stats?view_mode=my_data&year=2025 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60570 - "GET /api/dashboard/stats?view_mode=my_data HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60362 - "GET /api/companies/user-specific/a9a696a1-8d4d-4c52-aa25-8f82649fda97/statements HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60586 - "GET /api/earned-commission/carrier/user-specific/a9a696a1-8d4d-4c52-aa25-8f82649fda97/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60582 - "GET /api/companies/user-specific HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60580 - "GET /api/companies/user-specific?environment_id=ce970b80-0cbc-4861-b6bd-449e1590a99c HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60362 - "GET /api/companies/user-specific/a9a696a1-8d4d-4c52-aa25-8f82649fda97/statements HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60582 - "GET /api/companies/user-specific HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60586 - "GET /api/earned-commission/carrier/user-specific/a9a696a1-8d4d-4c52-aa25-8f82649fda97/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60362 - "GET /api/companies/user-specific/a9a696a1-8d4d-4c52-aa25-8f82649fda97/statements HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60580 - "GET /api/companies/user-specific HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60586 - "GET /api/earned-commission/carrier/user-specific/a9a696a1-8d4d-4c52-aa25-8f82649fda97/stats HTTP/1.1" 200 OK
+ 

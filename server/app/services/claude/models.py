@@ -37,6 +37,8 @@ class ClaudeDocumentMetadata(BaseModel):
     file_size_mb: float = Field(description="File size in megabytes")
     extraction_method: str = Field(default="claude", description="Extraction method used")
     claude_model: str = Field(description="Claude model used for extraction")
+    total_amount: Optional[float] = Field(default=0, description="Total commission/compensation amount from document")  # ✅ NEW
+    total_amount_label: Optional[str] = Field(default=None, description="Label used for total amount in document")  # ✅ NEW
 
 
 class ClaudeQualityMetrics(BaseModel):
