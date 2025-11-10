@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import List, Dict, Any, Optional
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.models import StatementUpload, Company
 from app.db.crud import save_edited_tables, get_edited_tables, update_upload_tables, delete_edited_tables
@@ -32,6 +32,16 @@ class TableData(BaseModel):
     summaryRows: Optional[List[int]] = None  # Convert Set to List for JSON serialization
     extractor: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None
+    
+    @field_validator('summaryRows', mode='before')
+    @classmethod
+    def normalize_summary_rows(cls, v):
+        """Ensure summaryRows is always a list, never an empty dict or None."""
+        if v is None or v == {} or v == '{}':
+            return []
+        if isinstance(v, (list, set)):
+            return list(v)
+        return []
 
 
 class SaveTablesRequest(BaseModel):

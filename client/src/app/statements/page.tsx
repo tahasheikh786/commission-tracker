@@ -23,7 +23,7 @@ interface Statement {
   id: string;
   file_name: string;
   company_name: string;
-  status: 'extracted' | 'success' | 'completed' | 'Approved' | 'rejected' | 'pending';
+  status: 'extracted' | 'success' | 'completed' | 'Approved' | 'rejected' | 'pending' | 'needs_review';
   uploaded_at: string;
   last_updated: string;
   completed_at?: string;
@@ -192,6 +192,8 @@ export default function StatementsPage() {
         return 'bg-green-100 text-green-800 border-green-200';
       case 'rejected':
         return 'bg-red-100 text-red-800 border-red-200';
+      case 'needs_review':
+        return 'bg-amber-100 text-amber-800 border-amber-300 animate-pulse';
       case 'extracted':
       case 'success':
       case 'pending':
@@ -476,6 +478,7 @@ export default function StatementsPage() {
                             <h3 className="font-semibold text-gray-900 truncate">{statement.file_name}</h3>
                             <span className={`px-3 py-1 rounded-full text-sm font-medium border ${getStatusColor(statement.status)}`}>
                               {statement.status === 'extracted' || statement.status === 'success' || statement.status === 'pending' ? 'Pending' :
+                               statement.status === 'needs_review' ? 'Needs Review' :
                                statement.status === 'completed' || statement.status === 'Approved' ? 'Approved' :
                                statement.status === 'rejected' ? 'Rejected' :
                                statement.status}
@@ -529,12 +532,16 @@ export default function StatementsPage() {
                         >
                           <Download size={16} className="text-gray-500" />
                         </button>
-                        {(statement.status === 'extracted' || statement.status === 'success' || statement.status === 'pending') && (
+                        {(statement.status === 'extracted' || statement.status === 'success' || statement.status === 'pending' || statement.status === 'needs_review') && (
                           <button
                             onClick={() => router.push(`/upload?resume=${statement.id}`)}
-                            className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                            className={`px-4 py-2 text-white text-sm rounded-lg transition-colors font-medium ${
+                              statement.status === 'needs_review' 
+                                ? 'bg-amber-600 hover:bg-amber-700 animate-pulse' 
+                                : 'bg-blue-600 hover:bg-blue-700'
+                            }`}
                           >
-                            Complete Review
+                            {statement.status === 'needs_review' ? 'Review Required' : 'Complete Review'}
                           </button>
                         )}
                       </div>

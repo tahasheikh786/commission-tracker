@@ -139,7 +139,20 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
           summaryRowsValue: t.summaryRows instanceof Set ? Array.from(t.summaryRows) : t.summaryRows
         }))
       );
-      setTables(tableData);
+      
+      // CRITICAL FIX: Normalize summaryRows to ensure it's always an array
+      // Backend might return {} for empty summaryRows which breaks validation
+      const normalizedTables = tableData.map(table => ({
+        ...table,
+        summaryRows: Array.isArray(table.summaryRows) 
+          ? table.summaryRows 
+          : (table.summaryRows instanceof Set 
+            ? Array.from(table.summaryRows) 
+            : [])  // Convert {} or any non-array/Set to []
+      }));
+      
+      console.log('✅ EditableCompareModal: Normalized summaryRows for all tables');
+      setTables(normalizedTables);
       setCurrentTableIndex(0);
     }
   }, [statement]);

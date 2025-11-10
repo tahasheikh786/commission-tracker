@@ -31,6 +31,140 @@ class ConversationalSummaryService:
         """Check if service is ready"""
         return bool(os.getenv("CLAUDE_API_KEY"))
     
+    def extract_structured_summary_data(
+        self,
+        extraction_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Extract structured summary data for frontend display.
+        This provides the individual fields for bullet-point display,
+        separate from the conversational summary text.
+        
+        Returns:
+            Dictionary with structured fields for UI display
+        """
+        try:
+            # Get entities if enhanced extraction
+            entities = extraction_data.get('entities', {})
+            business_intel = extraction_data.get('business_intelligence', {})
+            doc_meta = entities.get('document_metadata', {}) if entities else extraction_data.get('document_metadata', {})
+            tables = extraction_data.get('tables', [])
+            
+            # Extract structured fields
+            structured_data = {
+                'broker_id': doc_meta.get('statement_number') or doc_meta.get('document_number'),
+                'carrier_name': entities.get('carrier', {}).get('name') if entities else extraction_data.get('carrier_name'),
+                'broker_company': entities.get('broker', {}).get('company_name') if entities else extraction_data.get('broker_company'),
+                'statement_date': doc_meta.get('statement_date'),
+                'payment_type': doc_meta.get('payment_type'),
+                'total_amount': None,  # Will be processed below
+                'company_count': business_intel.get('number_of_groups') if business_intel else None,
+                'broker_id_confidence': 0.95 if doc_meta.get('statement_number') else 0.7
+            }
+            
+            # Convert total_amount (check doc_meta first, then business_intel)
+            total_from_doc = doc_meta.get('total_amount')
+            if total_from_doc:
+                try:
+                    structured_data['total_amount'] = str(float(total_from_doc))
+                except (ValueError, TypeError):
+                    pass
+            
+            if not structured_data.get('total_amount') and business_intel:
+                raw_amount = business_intel.get('total_commission_amount')
+                if raw_amount:
+                    try:
+                        if isinstance(raw_amount, str):
+                            cleaned = raw_amount.replace('$', '').replace(',', '').strip()
+                            if cleaned and cleaned != 'Not specified':
+                                structured_data['total_amount'] = cleaned
+                        elif isinstance(raw_amount, (int, float)):
+                            structured_data['total_amount'] = str(float(raw_amount))
+                    except (ValueError, TypeError, AttributeError):
+                        pass
+            
+            # Extract top_contributors from business_intelligence
+            if business_intel and business_intel.get('top_contributors'):
+                top_contributors = business_intel.get('top_contributors', [])
+                # Format: [{'name': '...', 'amount': '$123.45'}]
+                formatted_contributors = []
+                for contrib in top_contributors[:3]:  # Top 3 only
+                    if isinstance(contrib, dict) and 'name' in contrib and 'amount' in contrib:
+                        amount_str = str(contrib['amount']).replace('$', '').replace(',', '').strip()
+                        formatted_contributors.append({
+                            'name': contrib['name'],
+                            'amount': amount_str
+                        })
+                if formatted_contributors:
+                    structured_data['top_contributors'] = formatted_contributors
+            
+            # Extract commission_structure from business_intelligence
+            if business_intel and business_intel.get('commission_structures'):
+                structures = business_intel.get('commission_structures', [])
+                if structures:
+                    structured_data['commission_structure'] = ', '.join(structures[:2])  # First 2
+            
+            # Extract census_count from tables or groups
+            if tables and len(tables) > 0:
+                table = tables[0]
+                headers = table.get('headers', []) or table.get('header', [])
+                rows = table.get('rows', [])
+                
+                # Try to find census count column
+                census_col_idx = None
+                for idx, header in enumerate(headers):
+                    if 'census' in str(header).lower():
+                        census_col_idx = idx
+                        break
+                
+                if census_col_idx is not None and rows:
+                    total_census = 0
+                    for row in rows:
+                        if census_col_idx < len(row):
+                            try:
+                                val = str(row[census_col_idx]).replace(',', '').strip()
+                                census = int(val)
+                                if census > 0:  # Only positive values
+                                    total_census += census
+                            except (ValueError, TypeError):
+                                pass
+                    if total_census > 0:
+                        structured_data['census_count'] = str(total_census)
+                
+                # Extract billing_periods from table rows
+                billing_col_idx = None
+                for idx, header in enumerate(headers):
+                    if 'billing' in str(header).lower() or 'period' in str(header).lower():
+                        billing_col_idx = idx
+                        break
+                
+                if billing_col_idx is not None and rows:
+                    periods = set()
+                    for row in rows:
+                        if billing_col_idx < len(row):
+                            period = str(row[billing_col_idx]).strip()
+                            if period and period != '':
+                                periods.add(period)
+                    if periods:
+                        periods_list = sorted(list(periods))
+                        if len(periods_list) == 1:
+                            structured_data['billing_periods'] = periods_list[0]
+                        elif len(periods_list) == 2:
+                            structured_data['billing_periods'] = f"{periods_list[0]} - {periods_list[1]}"
+                        else:
+                            structured_data['billing_periods'] = f"{periods_list[0]} - {periods_list[-1]}"
+            
+            # Remove None values
+            structured_data = {k: v for k, v in structured_data.items() if v is not None}
+            
+            logger.info(f"✅ Extracted structured summary data ({len(structured_data)} fields): {list(structured_data.keys())}")
+            return structured_data
+            
+        except Exception as e:
+            logger.error(f"❌ Error extracting structured summary data: {e}")
+            logger.exception("Full traceback:")
+            return {}
+    
     async def generate_conversational_summary(
         self,
         extraction_data: Dict[str, Any],
@@ -83,19 +217,59 @@ class ConversationalSummaryService:
             
             # Extract summary from response (prepend the prefill text with space)
             raw_summary = response.content[0].text if response.content else ""
-            summary_text = ("This is " + raw_summary).strip()  # Ensure no double spaces
+            
+            # Try to parse as JSON (new structured format)
+            try:
+                import json
+                import re
+                
+                # Check if response contains JSON structure
+                json_match = re.search(r'\{[\s\S]*"conversational_summary"[\s\S]*\}', raw_summary)
+                
+                if json_match:
+                    logger.info("✅ Detected structured JSON response from Claude")
+                    json_str = json_match.group(0)
+                    parsed = json.loads(json_str)
+                    
+                    summary_text = ("This is " + parsed.get('conversational_summary', raw_summary)).strip()
+                    key_value_data = parsed.get('key_value_data', {})
+                    
+                    logger.info(f"📊 Claude provided {len(key_value_data)} fields: {list(key_value_data.keys())}")
+                    
+                    # Merge with extracted structured data (fallback for missing fields)
+                    structured_data = self.extract_structured_summary_data(extraction_data)
+                    
+                    # Prefer Claude's key-value data if available, fallback to extracted
+                    final_structured_data = {**structured_data, **key_value_data}
+                    
+                    # Log what was added
+                    added_fields = set(structured_data.keys()) - set(key_value_data.keys())
+                    if added_fields:
+                        logger.info(f"✅ Fallback added {len(added_fields)} missing fields: {list(added_fields)}")
+                    
+                else:
+                    # Old format - just text summary
+                    logger.info("⚠️ No structured JSON found, using text-only summary")
+                    summary_text = ("This is " + raw_summary).strip()
+                    final_structured_data = self.extract_structured_summary_data(extraction_data)
+                    
+            except Exception as e:
+                logger.warning(f"⚠️ Could not parse JSON response, using fallback: {e}")
+                summary_text = ("This is " + raw_summary).strip()
+                final_structured_data = self.extract_structured_summary_data(extraction_data)
+            
             logger.info(f"📄 Generated summary length: {len(summary_text)} characters")
-            logger.info(f"📄 Generated summary: {summary_text}")
+            logger.info(f"📊 Final structured data keys: {list(final_structured_data.keys())}")
             
             processing_time = (datetime.now() - start_time).total_seconds()
-            logger.info(f"✅ Summary generated in {processing_time:.2f}s: {summary_text[:100]}...")
             
             return {
                 "success": True,
                 "summary": summary_text,
+                "structured_data": final_structured_data,  # Now includes Claude's key-value data
                 "processing_time": processing_time,
                 "model": self.model,
-                "approach": "conversational_natural_language"
+                "approach": "conversational_natural_language_with_structured_output"
             }
             
         except Exception as e:
@@ -238,6 +412,10 @@ Remember: You're not just reporting data - you're telling the story of this comm
         plan_types = self._extract_plan_types(tables)
         payment_period = self._extract_payment_period(tables)
         
+        # ✨ NEW: Extract broker ID from document metadata
+        broker_id = self._extract_broker_id(extraction_data, document_context)
+        payment_type = extraction_data.get('document_metadata', {}).get('payment_type', 'Unknown')
+        
         # Get carrier-specific context
         carrier_context = self._get_carrier_context(carrier.lower())
         carrier_type = self._get_carrier_type(carrier)
@@ -247,7 +425,22 @@ Remember: You're not just reporting data - you're telling the story of this comm
         
         # ✨ BUILD XML-STRUCTURED PROMPT
         prompt = f"""<context>
-You are analyzing a commission statement to create a conversational summary.
+You are analyzing a commission statement to create a detailed, information-rich conversational summary.
+
+**🎯 SUMMARY REQUIREMENTS:**
+
+Your summary MUST include ALL of the following information (if available):
+1. Document type (e.g., "ABSF Commission Payment Summary", "Commission Statement")
+2. Carrier name
+3. Broker/agent company
+4. Statement/report date
+5. Document/broker ID (if present)
+6. Payment type (EFT, Check, Wire)
+7. **Total commission amount** ← CRITICAL, NEVER OMIT
+8. Number of companies/groups
+9. Top 2-3 contributors with amounts
+10. Plan types or commission structures
+11. Special payments, incentives, or notable items
 
 <carrier_info>
 Carrier: {carrier}
@@ -258,6 +451,8 @@ Carrier Type: {carrier_type}
 <document_metadata>
 Statement Date: {date} ({formatted_date})
 Broker/Agent: {broker}
+Document/Broker ID: {broker_id if broker_id else 'Not found'}
+Payment Type: {payment_type}
 File Name: {document_context.get('file_name', 'Unknown')}
 Total Pages: {document_context.get('page_count', 'Unknown')}
 Extraction Method: {document_context.get('extraction_method', 'AI')}
@@ -266,9 +461,16 @@ Extraction Method: {document_context.get('extraction_method', 'AI')}
 
 <data>
 <commission_summary>
-Total Amount: {total_amount}
+🔴 TOTAL AMOUNT (MUST INCLUDE): {total_amount}
 Company Count: {company_count}
+Payment Type: {payment_type}
+Document/Broker ID: {broker_id if broker_id else 'Not found'}
 Payment Period: {payment_period if payment_period else 'Not specified'}
+
+**CRITICAL INSTRUCTION**: 
+- You MUST mention the total amount in your summary (Sentence 2)
+- Format as: "The document shows $X,XXX.XX in total commissions/compensation..."
+- If total is "Not specified", say: "Total amount not explicitly stated in document"
 </commission_summary>
 
 <top_earners>
@@ -317,6 +519,26 @@ Think through these points, then craft your summary to capture the most importan
 </thinking>
 
 <examples>
+<example_0>
+<input_data>
+Document Type: ABSF Commission Payment Summary
+Document Number: G0227540
+Carrier: Allied Benefit
+Date: January 8, 2025
+Broker: INNOVATIVE BPS LLC
+Payment Type: EFT
+Total: $1,027.20
+Companies: 1 (SOAR LOGISTICS LL)
+Groups: 4 billing periods
+Agent Rate: 6%
+Calculation Method: Premium Equivalent
+Census Count: 46 total
+</input_data>
+<ideal_summary>
+This is an ABSF Commission Payment Summary from Allied Benefit for INNOVATIVE BPS LLC, dated January 8, 2025 (document G0227540), with EFT as the payment type. The statement shows $1,027.20 in total compensation from SOAR LOGISTICS LL across 4 billing periods (December 2024 and January 2025), with a 6% agent rate applied using the Premium Equivalent calculation method. The commission covers 46 total census counts, with individual payments of $93.67 and $419.93 per period based on different group sizes.
+</ideal_summary>
+</example_0>
+
 <example_1>
 <input_data>
 Carrier: Aetna
@@ -395,14 +617,27 @@ Write a natural, flowing 3-4 sentence paragraph that:
 ✓ Flows as one coherent paragraph, not a list
 
 **Quality Checklist** (ensure your summary includes):
+- [ ] Document type (if specific, like "ABSF Commission Payment Summary")
 - [ ] Carrier name
-- [ ] Broker name  
+- [ ] Broker name
 - [ ] Exact date (formatted naturally)
-- [ ] Total commission amount
-- [ ] Company count (specific number, not "various")
-- [ ] Top 1-2 earners with amounts
-- [ ] Plan type breakdown or commission structure
-- [ ] Any special payments, bonuses, or unique items
+- [ ] Document/Broker ID (if found, e.g., "document G0227540")
+- [ ] Payment type (EFT, Check, Wire)
+- [ ] **🔴 TOTAL COMMISSION AMOUNT** ← **MANDATORY, NEVER SKIP**
+- [ ] Company count (specific number, e.g., "1 company" or "8 groups")
+- [ ] Top 1-2 company names with their amounts
+- [ ] Commission structure (e.g., "6% Premium Equivalent") or plan types
+- [ ] Census counts, PEPM rates, or enrollment data (if present)
+- [ ] Any special payments, bonuses, adjustments, or notable items
+
+**🚨 CRITICAL ERROR CHECK:**
+Before submitting your summary, verify:
+1. Did I include the total amount? (Look for "$X,XXX.XX in total")
+2. Did I mention specific company names? (Not "various companies")
+3. Did I cite specific numbers? (Not "several groups")
+4. Is it 3-4 sentences minimum? (Not just 1-2 brief sentences)
+
+If ANY of these checks fail, REVISE your summary immediately.
 
 Your summary should feel like Gemini's document summaries - comprehensive yet conversational, specific yet natural.
 </instructions>
@@ -514,24 +749,93 @@ Start immediately with "This is a..." or "This document shows..." and provide th
         return date_str
     
     def _extract_total_amount(self, tables: list) -> str:
-        """Extract total commission amount from tables"""
+        """
+        Extract total commission amount from tables using multi-strategy approach.
+        Returns formatted string like "$1,027.20" or "Not specified"
+        """
         try:
+            # STRATEGY 1: Check summary rows first (most reliable)
             for table in tables:
                 rows = table.get('rows', [])
                 summary_rows = table.get('summaryRows', [])
                 
-                # Look for total rows
                 for row_idx in summary_rows:
                     if row_idx < len(rows):
                         row = rows[row_idx]
+                        row_text = ' '.join(str(cell).lower() for cell in row)
+                        
+                        # Check if this is a total row
+                        if any(kw in row_text for kw in ['total', 'vendor', 'grand', 'net payment']):
+                            for cell in row:
+                                cell_str = str(cell)
+                                if '$' in cell_str or (cell_str.replace(',', '').replace('.', '').isdigit() and '.' in cell_str):
+                                    # Clean and return
+                                    amount_clean = cell_str.strip().replace('$', '').replace(',', '')
+                                    try:
+                                        amount_float = float(amount_clean)
+                                        if amount_float > 0:
+                                            return f"${amount_float:,.2f}"
+                                    except ValueError:
+                                        continue
+            
+            # STRATEGY 2: Check last 5 rows of each table
+            for table in tables:
+                rows = table.get('rows', [])
+                if not rows:
+                    continue
+                
+                for row in reversed(rows[-5:]):
+                    row_text = ' '.join(str(cell).lower() for cell in row)
+                    
+                    # Look for total indicators
+                    if any(kw in row_text for kw in ['total', 'vendor', 'grand']):
                         for cell in row:
                             cell_str = str(cell)
-                            if '$' in cell_str and ',' in cell_str:
-                                # Clean and return the amount
-                                return cell_str.strip()
+                            # Match dollar amounts
+                            if '$' in cell_str:
+                                amount_clean = cell_str.strip().replace('$', '').replace(',', '')
+                                try:
+                                    amount_float = float(amount_clean)
+                                    if amount_float > 10:  # Reasonable minimum
+                                        return f"${amount_float:,.2f}"
+                                except ValueError:
+                                    continue
+            
+            # STRATEGY 3: Calculate from data (if no explicit total found)
+            logger.debug("No explicit total found, attempting to calculate from data rows")
+            for table in tables:
+                headers = table.get('headers', []) or table.get('header', [])
+                rows = table.get('rows', [])
+                
+                # Find amount column
+                amount_col = None
+                for idx, header in enumerate(headers):
+                    h_lower = str(header).lower()
+                    if any(kw in h_lower for kw in ['paid amount', 'commission', 'net compensation', 'amount paid']):
+                        amount_col = idx
+                        break
+                
+                if amount_col is not None:
+                    calculated = 0.0
+                    for row in rows:
+                        if amount_col < len(row):
+                            cell_str = str(row[amount_col])
+                            # Parse amount
+                            amount_clean = cell_str.replace('$', '').replace(',', '').replace('(', '-').replace(')', '')
+                            try:
+                                amount = float(amount_clean)
+                                calculated += amount
+                            except ValueError:
+                                continue
+                    
+                    if calculated > 0:
+                        logger.info(f"Calculated total from data rows: ${calculated:,.2f}")
+                        return f"${calculated:,.2f} (calculated)"
             
             return "Not specified"
-        except:
+            
+        except Exception as e:
+            logger.error(f"Error extracting total amount: {e}")
             return "Not specified"
     
     def _count_unique_companies(self, tables: list) -> int:
@@ -808,6 +1112,43 @@ Start immediately with "This is a..." or "This document shows..." and provide th
             return "Regional carrier (state-specific)"
         else:
             return "Insurance carrier"
+    
+    def _extract_broker_id(self, extraction_data: dict, document_context: dict) -> str:
+        """
+        Extract broker ID, document number, or statement ID.
+        Common formats: G0227540, #12345, Statement: 001234, NPN: 123456
+        """
+        try:
+            # Check document metadata first
+            doc_meta = extraction_data.get('document_metadata', {})
+            
+            # Check for statement number/document ID
+            if 'statement_number' in doc_meta:
+                return doc_meta['statement_number']
+            if 'document_number' in doc_meta:
+                return doc_meta['document_number']
+            if 'document_id' in doc_meta:
+                return doc_meta['document_id']
+            
+            # Check file name for ID patterns
+            filename = document_context.get('file_name', '')
+            
+            # Pattern 1: Alphanumeric starting with letter (e.g., G0227540)
+            import re
+            match = re.search(r'[A-Z]\d{6,10}', filename.upper())
+            if match:
+                return match.group(0)
+            
+            # Pattern 2: Pure numeric ID (e.g., 12345678)
+            match = re.search(r'\b\d{6,10}\b', filename)
+            if match:
+                return match.group(0)
+            
+            return None
+            
+        except Exception as e:
+            logger.debug(f"Error extracting broker ID: {e}")
+            return None
     
     def _build_enhanced_summary_prompt(
         self,

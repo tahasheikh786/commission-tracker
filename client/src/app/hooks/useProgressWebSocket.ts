@@ -38,6 +38,8 @@ export interface ProgressState {
   isConnected: boolean;
   error: string | null;
   conversationalSummary?: string | null;  // ← NEW: Natural language summary
+  stageDetails?: any; // ← NEW: Metadata from extraction stages
+  summaryData?: any; // ← NEW: Structured summary data (broker_id, total_amount, company_count)
 }
 
 export interface ProgressMessage {
@@ -56,6 +58,7 @@ export interface ProgressMessage {
   current_stage?: string;
   stage_details?: any;
   conversational_summary?: string;  // ← NEW: Natural language summary
+  summary_data?: any;  // ← NEW: Structured summary data
 }
 
 interface UseProgressWebSocketOptions {
@@ -80,7 +83,9 @@ export function useProgressWebSocket({
     estimatedTimeRemaining: null,
     isConnected: false,
     error: null,
-    conversationalSummary: null  // ← NEW: Initialize summary field
+    conversationalSummary: null,  // ← NEW: Initialize summary field
+    stageDetails: null,  // ← NEW: Initialize stage details
+    summaryData: null  // ← NEW: Initialize structured summary data
   });
 
   const wsRef = useRef<WebSocket | null>(null);
@@ -374,7 +379,7 @@ export function useProgressWebSocket({
 
       case 'STEP_PROGRESS':
         // Debug logging for all data keys
-        if (data.current_stage === 'summary_complete' || data.conversational_summary) {
+        if (data.current_stage === 'summary_complete' || data.conversational_summary || data.summary_data) {
           console.log('📊 [STEP_PROGRESS] Full data:', data);
           console.log('🔑 [STEP_PROGRESS] Data keys:', Object.keys(data));
         }
@@ -384,12 +389,24 @@ export function useProgressWebSocket({
           percentage: data.percentage ?? prev.percentage,
           estimatedTimeRemaining: data.estimatedTime ?? prev.estimatedTimeRemaining,
           message: data.message || prev.message,
-          conversationalSummary: data.conversational_summary ?? prev.conversationalSummary  // ← NEW: Handle summary
+          conversationalSummary: data.conversational_summary ?? prev.conversationalSummary,  // ← NEW: Handle summary
+          stageDetails: data.stage_details ?? prev.stageDetails,  // ← NEW: Capture stage details
+          summaryData: data.summary_data ?? prev.summaryData  // ← NEW: Capture structured summary data
         }));
 
         // ← NEW: Log when conversational summary arrives
         if (data.conversational_summary) {
           console.log('✨ Conversational summary received:', data.conversational_summary);
+        }
+        
+        // ← NEW: Log when stage details arrive
+        if (data.stage_details) {
+          console.log('📋 Stage details received:', data.stage_details);
+        }
+        
+        // ← NEW: Log when structured summary data arrives
+        if (data.summary_data) {
+          console.log('📊 Structured summary data received:', data.summary_data);
         }
 
         // Manejar metadata si existe
@@ -495,7 +512,9 @@ export function useProgressWebSocket({
       estimatedTimeRemaining: null,
       isConnected: false,
       error: null,
-      conversationalSummary: null  // ← NEW: Reset summary
+      conversationalSummary: null,  // ← NEW: Reset summary
+      stageDetails: null,  // ← NEW: Reset stage details
+      summaryData: null  // ← NEW: Reset structured summary data
     });
     reconnectAttemptsRef.current = 0;
   }, [disconnect]);

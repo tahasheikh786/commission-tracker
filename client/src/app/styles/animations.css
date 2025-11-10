@@ -2112,6 +2112,85 @@
 }
 
 /* ============================================
+   SUMMARY PROGRESS LOADER RESPONSIVE DESIGN
+   ============================================ */
+
+/* Mobile: < 640px */
+@media (max-width: 640px) {
+  /* Reduce padding on mobile */
+  .summary-loader-container {
+    padding: 1rem;
+  }
+  
+  /* Smaller step indicators */
+  .summary-loader-step-indicator {
+    width: 20px;
+    height: 20px;
+  }
+  
+  /* Compact file preview */
+  .summary-loader-file-preview {
+    padding: 1.5rem 1rem;
+  }
+  
+  /* Stack document summary items */
+  .summary-loader-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+}
+
+/* Tablet: 640px - 1024px */
+@media (min-width: 641px) and (max-width: 1024px) {
+  .summary-loader-container {
+    padding: 1.5rem;
+  }
+}
+
+/* Desktop: > 1024px */
+@media (min-width: 1025px) {
+  /* Default styles apply */
+  .summary-loader-container {
+    max-width: 48rem; /* 768px */
+  }
+}
+
+/* Pulse animation for step indicator (60fps optimized) */
+@keyframes summary-step-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.3;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 0.5;
+  }
+}
+
+.animate-summary-step-pulse {
+  animation: summary-step-pulse 2s ease-in-out infinite;
+}
+
+/* Progressive disclosure fade-in */
+@keyframes summary-item-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+    max-height: 0;
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    max-height: 200px;
+  }
+}
+
+.animate-summary-item-reveal {
+  animation: summary-item-reveal 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* ============================================
    Conversational Summary Styling
    ============================================ */
 

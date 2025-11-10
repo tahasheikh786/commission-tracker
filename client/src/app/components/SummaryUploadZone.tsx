@@ -234,11 +234,24 @@ export default function SummaryUploadZone({
         // AUTOMATION PATH
         console.log("🤖 Automation eligible - processing automatically...");
         
+        // ✨ CURSOR FIX: Prefer extracted_total from main response over format learning
+        // This ensures we use the most accurate total from document extraction
+        const extractedTotal = results.extracted_total || 
+                               results.extractedTotal || 
+                               formatLearning.current_total_amount || 
+                               0;
+        
+        console.log("🔍 Total amount sources:", {
+          fromResults: results.extracted_total,
+          fromFormatLearning: formatLearning.current_total_amount,
+          using: extractedTotal
+        });
+        
         triggerAutoApproval({
           uploadId: results.upload_id,
           carrierId: results.carrier_id,
           learnedFormat: formatLearning.learned_format,
-          extractedTotal: formatLearning.current_total_amount || 0,
+          extractedTotal: extractedTotal,
           statementDate: documentMetadata.statement_date,
           fullResults: results
         });
@@ -641,36 +654,8 @@ export default function SummaryUploadZone({
           pdfUrl={localPdfUrl}
           onCancel={handleCancel}
           uploadedFile={uploadedFile ? { name: uploadedFile.name, size: uploadedFile.size } : null}
-          summaryContent={wsProgress.conversationalSummary || null}
-          metadataContent={(() => {
-            return `
-### File Information
-**Original File**: ${uploadedFile?.name || 'Unknown'}
-**File Size**: ${uploadedFile ? (uploadedFile.size / 1024 / 1024).toFixed(2) + ' MB' : 'Unknown'}
-**File Type**: ${uploadedFile?.type || 'Unknown'}
-**Upload Date**: ${uploadDate || 'Unknown'}
-**Processing Status**: ${isN8nLoading ? '🔄 In Progress' : '✅ Completed'}
-
-### PDF Processing Details
-${extractedPages ? `
-**Pages Extracted**: First 3 pages (${uploadedFile?.name} had more than 3 pages)
-**Extracted File**: ${extractedPages.name}
-**Extraction Method**: PDF-lib automatic extraction
-**Processing Type**: Partial document analysis
-` : `
-**Pages**: Using original file (${uploadedFile?.name} - ${totalPages || 'Unknown'} pages)
-**Processing**: Full document analysis
-**Processing Type**: Complete document analysis
-`}
-
-### AI Analysis Details
-**Analysis Date**: ${completionDate || uploadDate || 'Unknown'}
-**Processing Time**: Real-time analysis
-**Data Quality**: High confidence extraction
-
----
-*Analysis ${isN8nLoading ? 'started' : 'completed'} at ${isN8nLoading ? uploadDate : completionDate || 'Unknown'}*`;
-          })()}
+          summaryContent={wsProgress.summaryData ? JSON.stringify(wsProgress.summaryData) : (wsProgress.stageDetails ? JSON.stringify(wsProgress.stageDetails) : null)}
+          metadataContent={wsProgress.stageDetails ? JSON.stringify(wsProgress.stageDetails) : null}
         />
       </div>
     );

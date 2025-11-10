@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Eye, LayoutList, Trash2, CheckCircle, XCircle, Clock, FileText, ExternalLink, ChevronLeft, ChevronRight, Table, User } from "lucide-react";
+import { Eye, LayoutList, Trash2, CheckCircle, XCircle, Clock, FileText, ExternalLink, ChevronLeft, ChevronRight, Table, User, Edit, AlertTriangle } from "lucide-react";
 import { useRouter } from 'next/navigation';
 import TableViewerModal from './TableViewerModal';
 import EditableCompareModal from './EditableCompareModal';
@@ -63,7 +63,8 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
       case 'approved':
         return status === 'approved' || status === 'completed';
       case 'pending':
-        return ['pending', 'extracted', 'success', 'processing'].includes(status);
+        // ✅ FIX: Include 'needs_review' status in pending filter
+        return ['pending', 'extracted', 'success', 'processing', 'needs_review'].includes(status);
       case 'rejected':
         return status === 'rejected';
       default:
@@ -222,6 +223,15 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
           textColor: 'text-destructive',
           borderColor: 'border-destructive/20'
         };
+      case 'needs_review':
+        return {
+          label: 'Needs Review',
+          color: 'amber',
+          icon: AlertTriangle,
+          bgColor: 'bg-amber-100 dark:bg-amber-900/20',
+          textColor: 'text-amber-700 dark:text-amber-400',
+          borderColor: 'border-amber-300 dark:border-amber-700'
+        };
       case 'pending':
       case 'extracted':
       case 'success':
@@ -325,7 +335,7 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
             <Clock size={16} />
             <span>Pending</span>
             <span className="text-xs bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-300 px-2 py-1 rounded-full">
-              {(statements || []).filter(s => ['pending', 'extracted', 'success', 'processing'].includes(s.status.toLowerCase())).length}
+              {(statements || []).filter(s => ['pending', 'extracted', 'success', 'processing', 'needs_review'].includes(s.status.toLowerCase())).length}
             </span>
           </button>
           <button
@@ -521,7 +531,9 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
                   <td className="px-6 py-4">
                     <div className="flex items-center justify-center gap-2">
                       {/* Show eye icon only for approved/rejected statements */}
-                      {(statement.status === "Approved" || statement.status === "completed" || statement.status === "Rejected" || statement.status === "rejected") && (
+                      {(statement.status.toLowerCase() === 'approved' || 
+                        statement.status.toLowerCase() === 'completed' || 
+                        statement.status.toLowerCase() === 'rejected') && (
                         <button
                           title="View mapped table"
                           className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
@@ -548,42 +560,64 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
                         <Table size={16} />
                       </button>
                       
-                      {/* Review button for approved statements */}
+                      {/* Review & Edit button for approved statements - ALWAYS VISIBLE */}
                       {(statement.status.toLowerCase() === 'approved' || 
                         statement.status.toLowerCase() === 'completed') && (
                         <button
-                          title="Review and Edit"
-                          className={`p-2 rounded-lg transition-colors ${
+                          title="Review and Edit this statement"
+                          className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg font-medium text-sm transition-all duration-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 ${
                             statement.total_amount_match === false && statement.automated_approval === true
-                              ? 'text-yellow-600 dark:text-yellow-400 hover:bg-yellow-50 dark:hover:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700'
-                              : 'text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30'
+                              ? 'bg-gradient-to-r from-yellow-500 to-amber-500 text-white hover:from-yellow-600 hover:to-amber-600 border border-yellow-400 dark:border-yellow-600'
+                              : 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white hover:from-blue-600 hover:to-indigo-600 border border-blue-400 dark:border-blue-600'
                           }`}
-                          onClick={() => handleReviewStatement(statement)}
+                          onClick={() => {
+                            console.log('Review & Edit clicked for statement:', statement.id);
+                            handleReviewStatement(statement);
+                          }}
+                          style={{ 
+                            display: 'inline-flex',
+                            visibility: 'visible'
+                          }}
                         >
-                          <svg 
-                            className="w-5 h-5" 
-                            fill="none" 
-                            stroke="currentColor" 
-                            viewBox="0 0 24 24"
-                          >
-                            <path 
-                              strokeLinecap="round" 
-                              strokeLinejoin="round" 
-                              strokeWidth={2} 
-                              d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" 
-                            />
-                          </svg>
+                          <Edit size={14} />
+                          <span>Review & Edit</span>
                         </button>
                       )}
                       
-                      {(statement.status === "Pending" || statement.status === "pending" || statement.status === "extracted" || statement.status === "success") && (
+                      {/* Review & Edit button for needs_review status - HIGHLIGHTED */}
+                      {statement.status.toLowerCase() === 'needs_review' && (
+                        <button
+                          title="Review Required - Total mismatch detected"
+                          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg font-medium text-sm transition-all duration-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 bg-gradient-to-r from-yellow-500 to-amber-500 text-white hover:from-yellow-600 hover:to-amber-600 border border-yellow-400 dark:border-yellow-600 animate-pulse"
+                          onClick={() => {
+                            console.log('Review & Edit clicked for needs_review statement:', statement.id);
+                            handleReviewStatement(statement);
+                          }}
+                          style={{ 
+                            display: 'inline-flex',
+                            visibility: 'visible'
+                          }}
+                        >
+                          <AlertTriangle size={14} />
+                          <span>Review Required</span>
+                        </button>
+                      )}
+                      
+                      {/* Complete Review button for pending statements */}
+                      {(statement.status.toLowerCase() === 'pending' || 
+                        statement.status.toLowerCase() === 'extracted' || 
+                        statement.status.toLowerCase() === 'success') && (
                         <button
                           onClick={() => router.push(`/upload?resume=${statement.id}`)}
-                          className="inline-flex items-center gap-1 px-3 py-2 bg-blue-500 text-white rounded-lg font-medium shadow-sm hover:bg-blue-600 transition-all duration-200 text-sm"
-                          title="Complete Review"
+                          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg font-medium text-sm transition-all duration-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 bg-gradient-to-r from-orange-500 to-amber-500 text-white hover:from-orange-600 hover:to-amber-600 border border-orange-400 dark:border-orange-600"
+                          title="Complete Review Process"
+                          style={{ 
+                            display: 'inline-flex',
+                            visibility: 'visible'
+                          }}
                         >
                           <ExternalLink size={14} />
-                          Review
+                          <span>Complete Review</span>
                         </button>
                       )}
                     </div>

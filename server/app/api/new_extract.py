@@ -752,29 +752,50 @@ async def extract_tables_smart(
                             can_automate = True
                             automation_reason = "All criteria met - automation eligible"
                         
-                        # Extract total amount from current file for validation
+                        # ✨ ENHANCED: Extract total amount from current file for validation
                         current_total_amount = None
+                        total_extraction_method = None
                         
-                        # First try to extract from GPT metadata summary
-                        if document_metadata and document_metadata.get('summary'):
+                        # STRATEGY 1: Check document_metadata.total_amount (most reliable)
+                        if document_metadata and 'total_amount' in document_metadata:
+                            try:
+                                current_total_amount = float(document_metadata['total_amount'])
+                                total_extraction_method = 'document_metadata'
+                                logger.info(f"✅ Total extracted from document_metadata: ${current_total_amount:.2f}")
+                            except (ValueError, TypeError):
+                                pass
+                        
+                        # STRATEGY 2: Parse from summary text (GPT metadata)
+                        if current_total_amount is None and document_metadata and document_metadata.get('summary'):
                             summary_text = document_metadata['summary']
-                            # Extract total amount from summary using regex
-                            # Look for patterns like "Total amount: $1,027.20" or "total of $1,027.20"
-                            total_matches = re.findall(r'[Tt]otal(?:\s+amount)?[:]*\s*\$?([\d,]+\.?\d*)', summary_text)
-                            if total_matches:
-                                # Take the first match and parse it
-                                total_str = total_matches[0].replace(',', '')
-                                try:
-                                    current_total_amount = float(total_str)
-                                    logger.info(f"🎯 Format Learning: Extracted total from GPT summary: ${current_total_amount:.2f}")
-                                except ValueError:
-                                    pass
+                            
+                            # Pattern 1: "Total for Vendor: $1,027.20" or "Total: $1,027.20"
+                            total_patterns = [
+                                r'[Tt]otal\s+for\s+(?:Vendor|Group|Broker)[:\s]*\$?([\d,]+\.?\d{2})',  # Total for Vendor: $X.XX
+                                r'[Tt]otal\s+[Cc]ompensation[:\s]*\$?([\d,]+\.?\d{2})',  # Total Compensation: $X.XX
+                                r'[Tt]otal\s+[Aa]mount[:\s]*\$?([\d,]+\.?\d{2})',  # Total Amount: $X.XX
+                                r'[Nn]et\s+[Pp]ayment[:\s]*\$?([\d,]+\.?\d{2})',  # Net Payment: $X.XX
+                                r'[Gg]rand\s+[Tt]otal[:\s]*\$?([\d,]+\.?\d{2})',  # Grand Total: $X.XX
+                                r'\$?([\d,]+\.?\d{2})\s+in\s+total'  # "$1,027.20 in total"
+                            ]
+                            
+                            for pattern in total_patterns:
+                                matches = re.findall(pattern, summary_text)
+                                if matches:
+                                    try:
+                                        total_str = matches[0].replace(',', '')
+                                        current_total_amount = float(total_str)
+                                        total_extraction_method = 'gpt_summary_regex'
+                                        logger.info(f"✅ Total extracted from summary text: ${current_total_amount:.2f}")
+                                        break
+                                    except ValueError:
+                                        continue
                         
-                        # Fallback to table extraction if not found in GPT summary
-                        total_field_name = table_editor_settings.get("total_amount_field_name")
+                        # STRATEGY 3: Extract from table footer rows
                         learned_total_amount = table_editor_settings.get("statement_total_amount")
+                        total_field_name = table_editor_settings.get("total_amount_field_name")
                         
-                        if total_field_name and selected_table:
+                        if current_total_amount is None and total_field_name and selected_table:
                             # Find the total amount in the current extraction
                             try:
                                 headers = selected_table.get("header", [])
@@ -788,15 +809,50 @@ async def extract_tables_smart(
                                         break
                                 
                                 if total_idx is not None:
-                                    # Try to find in last few rows or summary rows
-                                    for row in reversed(rows[-5:]):  # Check last 5 rows
+                                    # Check last 10 rows for total (some statements have detailed breakdowns before total)
+                                    for row in reversed(rows[-10:]):
                                         if total_idx < len(row):
-                                            current_total_amount = format_learning_service.parse_currency_value(str(row[total_idx]))
-                                            if current_total_amount:
-                                                logger.info(f"🎯 Format Learning: Extracted current total amount: ${current_total_amount:.2f}")
-                                                break
+                                            potential_total = format_learning_service.parse_currency_value(str(row[total_idx]))
+                                            if potential_total and potential_total > 0:
+                                                # Validate this looks like a total row
+                                                row_text = ' '.join(str(cell).lower() for cell in row)
+                                                if any(keyword in row_text for keyword in ['total', 'vendor', 'grand', 'net', 'payment']):
+                                                    current_total_amount = potential_total
+                                                    total_extraction_method = 'table_footer'
+                                                    logger.info(f"✅ Total extracted from table footer: ${current_total_amount:.2f}")
+                                                    break
                             except Exception as e:
                                 logger.warning(f"Failed to extract current total amount: {e}")
+                        
+                        # STRATEGY 4: Calculate from paid_amount column if still not found
+                        if current_total_amount is None and selected_table:
+                            try:
+                                headers = selected_table.get('header', [])
+                                rows = selected_table.get('rows', [])
+                                
+                                # Find "Paid Amount" or similar column
+                                amount_col_idx = None
+                                for idx, header in enumerate(headers):
+                                    h_lower = str(header).lower()
+                                    if any(kw in h_lower for kw in ['paid amount', 'commission', 'net compensation', 'amount']):
+                                        amount_col_idx = idx
+                                        break
+                                
+                                if amount_col_idx is not None:
+                                    calculated_total = 0.0
+                                    for row in rows:
+                                        if amount_col_idx < len(row):
+                                            amount = format_learning_service.parse_currency_value(str(row[amount_col_idx]))
+                                            if amount:
+                                                calculated_total += amount
+                                    
+                                    if calculated_total > 0:
+                                        current_total_amount = calculated_total
+                                        total_extraction_method = 'calculated_sum'
+                                        logger.info(f"✅ Total CALCULATED from data rows: ${current_total_amount:.2f}")
+                                        
+                            except Exception as calc_error:
+                                logger.warning(f"Failed to calculate total from rows: {calc_error}")
                         
                         # Validate total amount if we have both values
                         total_validation = None
@@ -817,8 +873,83 @@ async def extract_tables_smart(
                             "learned_total_amount": learned_total_amount,
                             "total_validation": total_validation,
                         })
+                        
+                        # ✨ CRITICAL: Add total amount to document_metadata for frontend display
+                        if current_total_amount is not None:
+                            if document_metadata is None:
+                                document_metadata = {}
+                            
+                            document_metadata.update({
+                                'total_amount': current_total_amount,
+                                'total_amount_label': document_metadata.get('total_amount_label', 'Total Amount'),
+                                'total_extraction_method': total_extraction_method,
+                                'total_confidence': 0.95 if total_extraction_method in ['document_metadata', 'table_footer'] else 0.7
+                            })
+                            
+                            logger.info(f"📊 Added total to document_metadata: ${current_total_amount:.2f} (method: {total_extraction_method})")
                     else:
                         logger.info(f"🎯 Format Learning: No matching format found (score: {match_score})")
+                        
+                        # ✨ FALLBACK: Extract total amount even without format learning
+                        # This ensures document_metadata.total_amount is ALWAYS populated
+                        if document_metadata and 'total_amount' not in document_metadata:
+                            logger.info("🔍 No format learning - attempting direct total extraction")
+                            fallback_total = None
+                            fallback_method = None
+                            
+                            # Try to extract from tables
+                            if selected_table:
+                                try:
+                                    headers = selected_table.get('header', [])
+                                    rows = selected_table.get('rows', [])
+                                    
+                                    # Look for amount column
+                                    amount_col_idx = None
+                                    for idx, header in enumerate(headers):
+                                        h_lower = str(header).lower()
+                                        if any(kw in h_lower for kw in ['paid amount', 'commission', 'net compensation', 'total', 'amount']):
+                                            amount_col_idx = idx
+                                            break
+                                    
+                                    if amount_col_idx is not None:
+                                        # Check last 10 rows for total
+                                        for row in reversed(rows[-10:]):
+                                            if amount_col_idx < len(row):
+                                                row_text = ' '.join(str(cell).lower() for cell in row)
+                                                if any(kw in row_text for kw in ['total', 'vendor', 'grand', 'net']):
+                                                    potential_total = format_learning_service.parse_currency_value(str(row[amount_col_idx]))
+                                                    if potential_total and potential_total > 0:
+                                                        fallback_total = potential_total
+                                                        fallback_method = 'table_scan'
+                                                        logger.info(f"✅ Fallback: Found total in table footer: ${fallback_total:.2f}")
+                                                        break
+                                        
+                                        # If still not found, calculate from all rows
+                                        if fallback_total is None:
+                                            calculated = 0.0
+                                            for row in rows:
+                                                if amount_col_idx < len(row):
+                                                    amount = format_learning_service.parse_currency_value(str(row[amount_col_idx]))
+                                                    if amount:
+                                                        calculated += amount
+                                            
+                                            if calculated > 0:
+                                                fallback_total = calculated
+                                                fallback_method = 'calculated'
+                                                logger.info(f"✅ Fallback: Calculated total from rows: ${fallback_total:.2f}")
+                                
+                                except Exception as e:
+                                    logger.warning(f"Fallback total extraction failed: {e}")
+                            
+                            # Update document_metadata with fallback total
+                            if fallback_total is not None:
+                                document_metadata.update({
+                                    'total_amount': fallback_total,
+                                    'total_amount_label': 'Total Amount',
+                                    'total_extraction_method': fallback_method,
+                                    'total_confidence': 0.7  # Lower confidence for fallback
+                                })
+                                logger.info(f"📊 Fallback: Added total to document_metadata: ${fallback_total:.2f}")
                         
                     # ===== AI PLAN TYPE DETECTION (DURING EXTRACTION) =====
                     # Plan type detection happens here, but field mapping happens after table editing
@@ -938,13 +1069,16 @@ async def extract_tables_smart(
         # ===== CONVERSATIONAL SUMMARY GENERATION =====
         # Generate natural language summary in parallel (non-blocking)
         conversational_summary = None
+        structured_data = None  # ← Store structured data from summary
         summary_generation_task = None
         
         # Check if enhanced summary was already generated by Claude pipeline
         if extraction_result.get('summary') and extraction_result.get('extraction_pipeline') == '3-phase-enhanced':
             logger.info("✅ Enhanced summary already generated by Claude pipeline - using it")
             conversational_summary = extraction_result.get('summary')
+            structured_data = extraction_result.get('structured_data', {})  # ← Extract structured data too
             logger.info(f"   Enhanced summary: {conversational_summary}")
+            logger.info(f"   Structured data: {structured_data}")
         else:
             # Generate conversational summary if not already done
             try:
@@ -1080,16 +1214,20 @@ async def extract_tables_smart(
                 
                 if summary_result and summary_result.get('success'):
                     conversational_summary = summary_result.get('summary')
+                    structured_data = summary_result.get('structured_data', {})
                     logger.info(f"✅ Conversational summary ready: {conversational_summary[:100]}...")
+                    logger.info(f"✅ Structured data ready: {structured_data}")
                     
-                    # Send summary via WebSocket for real-time display
+                    # Send summary AND structured data via WebSocket for real-time display
                     if upload_id:
+                        import json
                         await connection_manager.send_step_progress(
                             upload_id,
                             percentage=85,  # ✅ FIXED: 85% not 70% (after field mapping at 80%)
                             estimated_time="Enhanced summary ready",
                             current_stage="summary_complete",
-                            conversational_summary=conversational_summary  # ← NEW FIELD
+                            conversational_summary=conversational_summary,  # Text summary
+                            summaryContent=json.dumps(structured_data)  # Structured key-value data
                         )
                 else:
                     logger.warning("Summary generation returned unsuccessful result")
@@ -1115,12 +1253,18 @@ async def extract_tables_smart(
             # Enhanced summary was already generated - send it via WebSocket
             logger.info("📤 Sending pre-generated enhanced summary via WebSocket...")
             if upload_id:
+                # Use structured_data if available (should be set above), otherwise empty dict
+                import json
+                structured_data_json = json.dumps(structured_data if structured_data else {})
+                logger.info(f"📊 Sending structured data: {structured_data_json[:200]}...")
+                
                 await connection_manager.send_step_progress(
                     upload_id,
                     percentage=85,  # ✅ FIXED: 85% not 70% (after field mapping at 80%)
                     estimated_time="Enhanced summary ready",
                     current_stage="summary_complete",
-                    conversational_summary=conversational_summary
+                    conversational_summary=conversational_summary,
+                    summaryContent=structured_data_json
                 )
         
         # ✅ Emit WebSocket: Step 6 - Preparing Results (95% progress) - AFTER summary

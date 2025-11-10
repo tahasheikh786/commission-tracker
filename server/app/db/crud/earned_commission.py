@@ -524,8 +524,9 @@ def extract_field_mappings_once(field_config):
             # Check what the field is MAPPED TO, not what it's called in the source
             target_lower = target_mapping.lower()
             
-            # CRITICAL FIX: Only set mapping if not already set (use FIRST match, not last)
-            # This ensures user corrections take precedence over later ambiguous matches
+            # 🔧 FIX 2: Use independent if statements instead of elif chain
+            # This ensures each field is checked against all patterns, not just the first match
+            # CRITICAL: Only set mapping if not already set (use FIRST match, not last)
             
             # Check for company/client name fields
             if not mappings['client_name_field'] and (target_lower in ['client name', 'company name', 'clientname', 'companyname'] or 
@@ -535,7 +536,8 @@ def extract_field_mappings_once(field_config):
                 print(f"✅ Found client name field: {source_field} -> {target_mapping}")
             
             # Check for commission earned fields - PRIORITIZE exact matches
-            elif not mappings['commission_earned_field']:
+            # 🔧 FIX 2: Changed from elif to if for independent checking
+            if not mappings['commission_earned_field']:
                 # Priority 1: Exact match to "Commission Earned"
                 if target_lower in ['commission earned', 'commissionearned', 'commission_earned']:
                     mappings['commission_earned_field'] = source_field
@@ -547,7 +549,8 @@ def extract_field_mappings_once(field_config):
                     print(f"✅ Found commission field (pattern match): {source_field} -> {target_mapping}")
             
             # Check for invoice total fields - STRICT MATCHING for user selections
-            elif not mappings['invoice_total_field']:
+            # 🔧 FIX 2: Changed from elif to if for independent checking
+            if not mappings['invoice_total_field']:
                 # Priority 1: Exact match to "Invoice Total" (highest priority for user selection)
                 if target_lower in ['invoice total', 'invoicetotal', 'invoice_total']:
                     mappings['invoice_total_field'] = source_field
@@ -1382,6 +1385,10 @@ async def bulk_process_commissions(db: AsyncSession, statement_upload: Statement
         # CRITICAL FIX: Get summary rows to exclude from commission calculations
         summary_rows_raw = table.get('summaryRows', [])
         print(f"🔍 DEBUG Table {table_index}: summaryRows raw value: {summary_rows_raw}, type: {type(summary_rows_raw)}")
+        # CRITICAL FIX: Handle case where summaryRows might be {} instead of []
+        if isinstance(summary_rows_raw, dict):
+            summary_rows_raw = []
+            print(f"🔧 Normalized summaryRows from dict to list for table {table_index}")
         summary_rows_set = set(summary_rows_raw) if summary_rows_raw else set()
         if summary_rows_set:
             print(f"🔍 Table {table_index}: Excluding {len(summary_rows_set)} summary rows from commission calculations: {sorted(summary_rows_set)}")

@@ -37,17 +37,44 @@ METADATA EXTRACTION GUIDELINES:
   * If no date is visible or you cannot confidently extract it, return null instead of guessing
   * DO NOT extract dates from table cells, policy effective dates, or transaction dates - only extract the statement/report date from the document header
 - **BROKER COMPANY**: The broker/agent entity receiving commissions. Look for "Agent:", "Broker:", "Agency:", "To:", "Prepared For:" labels near the top of document. This is different from the carrier.
-- **TOTAL AMOUNT** (CRITICAL): Extract the TOTAL AMOUNT from the document as it appears. Look for labels like:
-  * "Total Compensation"
-  * "Total Amount"
-  * "Total Commission"
-  * "Amount Due"
-  * "Net Payment"
-  * "EFT Amount"
-  * "Grand Total"
-  * "Total Paid Amount"
-  * Extract the numeric value as a float (e.g., 1935.29)
-  * Also capture what label was used (e.g., "Total Compensation")
+- **TOTAL AMOUNT** (🔴 HIGHEST PRIORITY): Extract the TOTAL commission/payment amount from the document.
+  
+  **WHERE TO LOOK (in priority order):**
+  
+  1. **Document summary section** (usually at bottom/end):
+     - "Total for Vendor" ← **Priority label for vendor-level totals**
+     - "Total for Group" ← Group-level subtotals
+     - "Total Compensation" / "Total Amount" / "Total Commission"
+     - "Grand Total" / "Net Payment" / "EFT Amount"
+     - "Total Paid Amount" / "Net Compensation" / "Amount Due"
+  
+  2. **Table footer rows**:
+     - Last 3-5 rows of main commission table
+     - Look for cells with "Total" keyword and a dollar amount
+  
+  3. **Header summary box** (less common):
+     - Some statements show total in a box at the top
+     - Usually labeled "Payment Amount" or "Check/EFT Amount"
+  
+  **EXTRACTION RULES:**
+  - Extract as FLOAT: 1027.20 (no dollar sign, no commas)
+  - Capture exact label: "Total for Vendor"
+  - If multiple totals exist, use highest-level vendor/broker total
+  - If NO explicit total found, calculate by summing "Paid Amount" column
+  - NEVER return null - if you can't find it, set confidence low and attempt calculation
+  
+  **OUTPUT FORMAT:**
+  ```json
+  "total_amount": 1027.20,
+  "total_amount_label": "Total for Vendor",
+  "total_amount_confidence": 0.95,
+  "total_calculation_method": "extracted"  // or "calculated" if summed
+  ```
+  
+  **VALIDATION:**
+  - Total should be positive (> 0)
+  - Should be reasonable for commission statement ($100 - $1M typical range)
+  - If calculated, should match sum of data rows (tolerance: ±$0.01)
 
 CRITICAL REQUIREMENTS:
 - Extract EVERY table, even if partially visible

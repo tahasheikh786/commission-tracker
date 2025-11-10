@@ -57,10 +57,10 @@ class EnhancedExtractionService:
         """
         # ✅ ALWAYS NEEDED - Initialize immediately
         self.claude_service = ClaudeDocumentAIService()  # PRIMARY extraction
-        self.gpt4o_service = GPT4oVisionService()  # For metadata extraction
         self.summary_service = ConversationalSummaryService()  # For summaries
         
         # ❌ LAZY LOAD - Initialize only when actually called
+        self._gpt4o_service = None  # DEPRECATED - lazy load only if needed for fallback
         self._mistral_service = None
         self._new_extraction_service = None
         self._docai_extractor = None
@@ -83,10 +83,18 @@ class EnhancedExtractionService:
             self.use_enhanced = use_enhanced
         
         logger.info(f"✅ Enhanced Extraction Service initialized (OPTIMIZED)")
-        logger.info(f"🆕 PRIMARY: Claude Document AI + GPT-4 AI operations")
-        logger.info(f"📋 FALLBACK services: Lazy-loaded on demand")
+        logger.info(f"🆕 PRIMARY: Claude Document AI (all extraction + metadata)")
+        logger.info(f"📋 FALLBACK services: Lazy-loaded on demand (GPT-4, Mistral, DocAI, Excel)")
         logger.info(f"⏱️  Timeout management: {self.phase_timeouts}")
         logger.info(f"🚀 Enhanced 3-phase pipeline: {'ENABLED' if self.use_enhanced else 'DISABLED'}")
+    
+    @property
+    def gpt4o_service(self):
+        """Lazy load GPT-4 service only when needed (rarely used - fallback only)."""
+        if self._gpt4o_service is None:
+            logger.info("⚠️ Lazy-loading GPT-4 service (should rarely be needed - fallback only)")
+            self._gpt4o_service = GPT4oVisionService()
+        return self._gpt4o_service
     
     @property
     def mistral_service(self):
@@ -836,7 +844,6 @@ class EnhancedExtractionService:
         Enhanced with Claude's superior vision capabilities for table extraction.
         """
         try:
-
             await progress_tracker.start_stage("document_processing", "Preparing for Claude AI")
             
             # Stage 1: Document processing
@@ -848,50 +855,67 @@ class EnhancedExtractionService:
             
             await progress_tracker.complete_stage("document_processing", "Claude AI ready")
 
+            # 🔧 FIX: Extract metadata with Claude FIRST to get accurate carrier name for carrier-specific prompts
+            logger.info("⚡ Extracting metadata with Claude to determine carrier-specific prompt")
+            carrier_name_for_prompt = None
+            carrier_info = None
+            
             try:
-                # Stage 1.5: GPT Metadata Extraction
-                logger.info("🔍 Starting GPT metadata extraction...")
-                await progress_tracker.start_stage("gpt_metadata_extraction", "Extracting metadata with GPT")
-                await progress_tracker.update_progress("gpt_metadata_extraction", 10, "Extracting metadata with GPT")
-                 # Emit WebSocket: Step 2 - Extraction started (25% progress)
-                logger.info("📡 Emitting extraction step...")
-                logger.info(f"📄 Calling _extract_metadata_with_gpt for file: {file_path}")
-                await progress_tracker.connection_manager.emit_upload_step(progress_tracker.upload_id, 'extraction', 25)
+                # Extract metadata using Claude AI to get accurate carrier name from PDF
+                await progress_tracker.update_progress("document_processing", 35, "Extracting carrier information with Claude...")
+                claude_metadata = await self.claude_service.extract_metadata_only(file_path)
                 
-                # Check for cancellation before GPT metadata extraction
-                await cancellation_manager.check_cancellation(progress_tracker.upload_id)
-                
-                gpt_metadata = await self._extract_metadata_with_gpt(file_path)
-                
-                if gpt_metadata.get('success'):
-                    logger.info("✅ GPT metadata marked as successful in result")
-                else:
-                    logger.error(f"❌ GPT metadata extraction failed: {gpt_metadata.get('error')}")
-                    await progress_tracker.send_error(f"GPT metadata extraction failed: {gpt_metadata.get('error')}")
-
-                logger.info("📤 Sending step progress with metadata...")
-                # En tu stage 1.5 de metadata extraction:
-                await progress_tracker.connection_manager.send_step_progress(
-                    progress_tracker.upload_id,
-                    percentage=50,
-                    estimated_time="Metadata extraction complete",
-                    current_stage="metadata_extraction",
-                    # Data adicional:
-                    stage_details={
-                        "carrier_name": gpt_metadata.get('carrier_name'),
-                        "statement_date": gpt_metadata.get('statement_date'),
-                        "broker_company": gpt_metadata.get('broker_company'),
-                        "summary": gpt_metadata.get('summary')
+                if claude_metadata.get('success') and claude_metadata.get('carrier_name'):
+                    carrier_name_for_prompt = claude_metadata.get('carrier_name')
+                    carrier_info = {
+                        'carrier_name': carrier_name_for_prompt,
+                        'carrier_confidence': claude_metadata.get('carrier_confidence', 0.9)
                     }
-                )
-                logger.info("✅ Step progress sent successfully")
-                
+                    logger.info(f"✓ Using Claude-extracted carrier name for prompt: {carrier_name_for_prompt}")
+                    
+                    # Send carrier detected message
+                    await progress_tracker.connection_manager.send_commission_specific_message(
+                        progress_tracker.upload_id,
+                        'carrier_detected',
+                        {
+                            'carrier_name': carrier_name_for_prompt,
+                            'current_stage': 'metadata_extraction',
+                            'progress': 35
+                        }
+                    )
             except Exception as e:
-                logger.error(f"❌ Error in GPT metadata extraction: {str(e)}")
-                logger.error(f"❌ Error type: {type(e).__name__}")
-                import traceback
-                logger.error(f"❌ Traceback: {traceback.format_exc()}")
-                raise e
+                logger.warning(f"Could not extract carrier name with Claude: {e}")
+            
+            # Fallback: Use database company name if Claude didn't extract carrier
+            if not carrier_name_for_prompt and company_id:
+                try:
+                    from app.db import crud, get_db
+                    async for db in get_db():
+                        company = await crud.get_company_by_id(db=db, company_id=company_id)
+                        if company:
+                            carrier_name_for_prompt = company.name
+                            logger.info(f"⚠️ Fallback: Using database company name: {carrier_name_for_prompt}")
+                        break
+                except Exception as e:
+                    logger.warning(f"⚠️ Could not retrieve carrier name from company_id: {e}")
+            
+            # Emit WebSocket: Step 2 - Extraction started (25% progress)
+            logger.info("📡 Emitting extraction step...")
+            await progress_tracker.connection_manager.emit_upload_step(progress_tracker.upload_id, 'extraction', 25)
+            
+            # Check for cancellation before Claude extraction
+            await cancellation_manager.check_cancellation(progress_tracker.upload_id)
+            
+            # Placeholder for metadata - will be populated from Claude extraction results
+            gpt_metadata = {
+                'success': True,
+                'extraction_method': 'claude_integrated',
+                'carrier_name': carrier_name_for_prompt,  # Pre-populate with Claude-extracted name
+                'statement_date': None,
+                'broker_company': None,
+                'summary': 'Metadata extracted by Claude'
+            }
+            logger.info("✅ Metadata extraction completed by Claude")
             
             # Stage 2: Claude AI Extraction
             # Emit WebSocket: Step 3 - Table extraction started (45% progress)
@@ -906,12 +930,36 @@ class EnhancedExtractionService:
             # Perform actual extraction using Claude
             logger.info(f"Starting Claude extraction for {file_path} (enhanced={self.use_enhanced})")
             
+            # 🔧 FIX 1: Pass carrier name to Claude for carrier-specific prompts (e.g., UHC)
             result = await self.claude_service.extract_commission_data(
                 file_path=file_path,
                 progress_tracker=progress_tracker,
-                carrier_name=gpt_metadata.get('carrier_name'),
+                carrier_name=carrier_name_for_prompt,  # ✅ Pass actual carrier name
                 use_enhanced=self.use_enhanced  # ⭐ Enable enhanced 3-phase pipeline
             )
+            
+            # ✅ OPTIMIZATION: Extract metadata from Claude result (no GPT call needed)
+            logger.info("⚡ Extracting metadata from Claude extraction results")
+            claude_entities = result.get('entities', {})
+            claude_doc_meta = claude_entities.get('document_metadata', {})
+            claude_carrier = claude_entities.get('carrier', {})
+            claude_broker = claude_entities.get('broker', {})
+            
+            # Update gpt_metadata with Claude-extracted data
+            gpt_metadata = {
+                'success': True,
+                'carrier_name': claude_carrier.get('name') or result.get('extracted_carrier'),
+                'carrier_confidence': claude_carrier.get('confidence', 0.95),
+                'statement_date': claude_doc_meta.get('statement_date') or result.get('extracted_date'),
+                'date_confidence': 0.95,
+                'broker_company': claude_broker.get('company_name'),
+                'broker_confidence': claude_broker.get('confidence', 0.90),
+                'summary': f"Metadata extracted by Claude during main extraction",
+                'evidence': 'From Claude enhanced extraction',
+                'extraction_method': 'claude_integrated'
+            }
+            logger.info(f"✅ Using Claude metadata: carrier={gpt_metadata.get('carrier_name')}, "
+                       f"date={gpt_metadata.get('statement_date')}, broker={gpt_metadata.get('broker_company')}")
             
             await progress_tracker.update_progress("table_detection", 80, "Processing Claude results")
             await asyncio.sleep(0.2)
@@ -957,16 +1005,22 @@ class EnhancedExtractionService:
                 logger.info(f"   Summary length: {len(conversational_summary)} characters")
                 logger.info(f"   Summary preview: {conversational_summary[:200]}...")
                 
-                # ✅ FIX: Send Claude-generated summary immediately via WebSocket
+                # ✅ FIX: Send Claude-generated summary AND structured data immediately via WebSocket
                 if upload_id_uuid and progress_tracker:
-                    logger.info("📤 Sending Claude-generated summary to frontend via WebSocket NOW")
+                    logger.info("📤 Sending Claude-generated summary AND structured data to frontend via WebSocket NOW")
+                    
+                    # Get structured data from summary result
+                    structured_summary_data = result.get('structured_data', {})
+                    
                     await progress_tracker.connection_manager.send_step_progress(
                         progress_tracker.upload_id,
                         percentage=70,  # Right after table extraction
                         estimated_time='Enhanced summary ready',
                         current_stage='summary_complete',
-                        conversational_summary=conversational_summary
+                        conversational_summary=conversational_summary,
+                        summary_data=structured_summary_data  # ← ADD THIS - sends structured JSON
                     )
+                    logger.info(f"✅ Sent structured summary data to frontend: {structured_summary_data}")
                     logger.info("✅ Claude-generated summary sent to frontend successfully")
             elif self.use_enhanced and self.summary_service.is_available():
                 # Generate enhanced summary if Claude didn't provide one
@@ -987,16 +1041,22 @@ class EnhancedExtractionService:
                         conversational_summary = summary_result.get('summary')
                         logger.info(f"✅ Enhanced summary generated: {conversational_summary[:100]}...")
                         
-                        # ✅ FIX: Send enhanced summary immediately via WebSocket
+                        # Get structured data from summary result - STORE IT for later use
+                        structured_summary_data = summary_result.get('structured_data', {})
+                        logger.info(f"✅ Structured summary data extracted: {list(structured_summary_data.keys())}")
+                        
+                        # ✅ FIX: Send enhanced summary AND structured data immediately via WebSocket
                         if upload_id_uuid and progress_tracker:
-                            logger.info("📤 Sending enhanced summary to frontend via WebSocket NOW")
+                            logger.info("📤 Sending enhanced summary AND structured data to frontend via WebSocket NOW")
                             await progress_tracker.connection_manager.send_step_progress(
                                 progress_tracker.upload_id,
                                 percentage=70,  # Right after table extraction
                                 estimated_time='Enhanced summary ready',
                                 current_stage='summary_complete',
-                                conversational_summary=conversational_summary
+                                conversational_summary=conversational_summary,
+                                summary_data=structured_summary_data  # ← ADD THIS - sends structured JSON
                             )
+                            logger.info(f"✅ Sent structured summary data to frontend: {structured_summary_data}")
                             logger.info("✅ Enhanced summary sent to frontend successfully")
                     
                     await progress_tracker.complete_stage("summary_generation", "Summary complete")
@@ -1015,6 +1075,14 @@ class EnhancedExtractionService:
                 logger.info("=" * 80)
                 gpt_metadata['summary'] = conversational_summary
                 gpt_metadata['summary_type'] = 'enhanced_conversational'
+                
+                # ✅ CRITICAL FIX: Store structured_data in result for retrieval in new_extract.py
+                if 'structured_summary_data' in locals() and structured_summary_data:
+                    result['structured_data'] = structured_summary_data
+                    logger.info(f"✅ Added structured_data to result: {list(structured_summary_data.keys())}")
+                else:
+                    result['structured_data'] = {}
+                    logger.warning("⚠️ No structured_summary_data available")
             else:
                 logger.warning("=" * 80)
                 logger.warning("⚠️ FINAL SUMMARY SELECTION: STANDARD GPT METADATA")
@@ -1023,6 +1091,7 @@ class EnhancedExtractionService:
                 logger.warning(f"   GPT metadata summary: {gpt_metadata.get('summary', 'N/A')[:200]}...")
                 logger.warning("=" * 80)
                 gpt_metadata['summary_type'] = 'standard_gpt'
+                result['structured_data'] = {}  # Empty dict for fallback
             
             # Stage 4: Validation
             await progress_tracker.start_stage("validation", "Validating Claude results")

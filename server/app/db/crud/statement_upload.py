@@ -260,6 +260,21 @@ async def save_statement_review(
                 summary_rows = table.get('summaryRows', [])
                 print(f"🔍 DEBUG Saving table {idx} '{table.get('name', 'unknown')}': summaryRows={summary_rows}, type={type(summary_rows)}")
     
+    # CRITICAL FIX: Normalize summaryRows to always be a list
+    # Frontend might send {} for empty summaryRows which breaks validation
+    if final_data:
+        for table in final_data:
+            if isinstance(table, dict):
+                summary_rows = table.get('summaryRows')
+                # Convert {} or any non-list to []
+                if not isinstance(summary_rows, list):
+                    if summary_rows == {} or summary_rows is None:
+                        table['summaryRows'] = []
+                        print(f"🔧 Normalized summaryRows from {type(summary_rows)} to [] for table '{table.get('name', 'unknown')}'")
+                    elif isinstance(summary_rows, set):
+                        table['summaryRows'] = list(summary_rows)
+                        print(f"🔧 Converted summaryRows from set to list for table '{table.get('name', 'unknown')}'")
+    
     # CRITICAL FIX: Extract field_mapping from field_config for review modal
     # field_mapping is a simple dict mapping source fields to target fields
     # This is used by the review modal to load saved mappings instead of calling AI

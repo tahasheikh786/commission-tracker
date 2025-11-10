@@ -218,9 +218,9 @@ async def auto_approve_statement(
         selected_table = commission_tables[0] if commission_tables else {}
         final_data = [{
             "name": t.get("name", f"Table {i+1}"),
-            "header": t.get("header", []),
+            "header": t.get("headers", []) or t.get("header", []),  # ✅ CURSOR FIX: Support both keys
             "rows": t.get("rows", []),
-            "summaryRows": t.get("summaryRows", [])
+            "summaryRows": t.get("summaryRows", []) or t.get("summary_rows", [])  # ✅ CURSOR FIX: Support both keys
         } for i, t in enumerate(commission_tables)]
         
         # Call approve endpoint (reuse existing logic)
@@ -261,29 +261,63 @@ async def auto_approve_statement(
         commission_field = None
         
         # Find commission field from field mapping
+        # ✅ FIX: Normalize both spaces and underscores for matching
+        commission_field_candidates = [
+            "commission_earned", "commission earned",
+            "paid_amount", "paid amount", 
+            "commission_amount", "commission amount",
+            "total_commission", "total commission",
+            "commission", "earned"
+        ]
+        
         for header, mapped in field_mapping.items():
-            if mapped.lower() in ["commission_earned", "paid_amount", "commission_amount", "total_commission"]:
+            # Normalize the mapped value: replace spaces/underscores, lowercase
+            normalized_mapped = mapped.lower().replace("_", " ").strip()
+            
+            # Also check if any candidate matches the normalized value
+            if any(candidate.replace("_", " ") == normalized_mapped for candidate in commission_field_candidates):
                 commission_field = header
+                logger.info(f"💰 Auto-approval: Found commission field: '{commission_field}' (mapped to '{mapped}')")
                 break
         
         if commission_field:
-            for table in commission_tables:
-                headers = table.get("header", [])
+            logger.info(f"💰 Auto-approval: Calculating total from {len(commission_tables)} table(s)")
+            for table_idx, table in enumerate(commission_tables):
+                # ✅ CURSOR FIX: Support both "headers" (plural) and "header" (singular) keys
+                headers = table.get("headers", []) or table.get("header", [])
+                logger.info(f"💰 Auto-approval: Table {table_idx}: Found {len(headers)} headers")
+                
                 if commission_field in headers:
                     idx = headers.index(commission_field)
-                    summary_rows = set(table.get("summaryRows", []))
+                    logger.info(f"💰 Auto-approval: Commission field '{commission_field}' found at index {idx}")
                     
-                    for row_idx, row in enumerate(table.get("rows", [])):
+                    # ✅ CURSOR FIX: Support both "summaryRows" (camelCase) and "summary_rows" (snake_case)
+                    summary_rows = set(table.get("summaryRows", []) or table.get("summary_rows", []))
+                    rows = table.get("rows", [])
+                    logger.info(f"💰 Auto-approval: Table has {len(rows)} rows, {len(summary_rows)} summary rows to skip")
+                    
+                    row_count = 0
+                    for row_idx, row in enumerate(rows):
                         # ✅ Skip summary rows when calculating
                         if row_idx in summary_rows:
+                            logger.debug(f"💰 Auto-approval: Skipping summary row {row_idx}")
                             continue
                             
                         if idx < len(row):
                             value = str(row[idx]).replace("$", "").replace(",", "").strip()
                             try:
-                                calculated_total += float(value)
-                            except:
-                                pass
+                                amount = float(value)
+                                calculated_total += amount
+                                row_count += 1
+                                logger.debug(f"💰 Auto-approval: Row {row_idx}: Added ${amount:.2f} (running total: ${calculated_total:.2f})")
+                            except Exception as e:
+                                logger.warning(f"💰 Auto-approval: Row {row_idx}: Failed to parse value '{value}': {e}")
+                    
+                    logger.info(f"💰 Auto-approval: Processed {row_count} data rows from table {table_idx}")
+                else:
+                    logger.warning(f"💰 Auto-approval: Commission field '{commission_field}' NOT found in table {table_idx} headers: {headers}")
+        else:
+            logger.error(f"💰 Auto-approval: No commission field identified in field_mapping: {field_mapping}")
         
         logger.info(f"Total validation:")
         logger.info(f"  - Extracted from file: ${actual_extracted_total:.2f}")

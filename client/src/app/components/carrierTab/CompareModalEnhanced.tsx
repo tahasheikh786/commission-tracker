@@ -96,7 +96,17 @@ export default function CompareModalEnhanced({ statement, onClose }: CompareModa
     if (statement) {
       const tableData = statement.edited_tables || statement.raw_data || [];
       if (Array.isArray(tableData) && tableData.length > 0) {
-        setTables(tableData);
+        // CRITICAL FIX: Normalize summaryRows to ensure it's always an array
+        // Backend might return {} for empty summaryRows which breaks validation
+        const normalizedTables = tableData.map(table => ({
+          ...table,
+          summaryRows: Array.isArray(table.summaryRows) 
+            ? table.summaryRows 
+            : (table.summaryRows instanceof Set 
+              ? Array.from(table.summaryRows) 
+              : [])  // Convert {} or any non-array/Set to []
+        }));
+        setTables(normalizedTables);
         setCurrentTableIndex(0);
       } else {
         setTables([]);

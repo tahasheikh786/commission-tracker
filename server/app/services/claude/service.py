@@ -939,6 +939,7 @@ class ClaudeDocumentAIService:
                 'relationships': semantic_result.get('relationships', {}),
                 'business_intelligence': semantic_result.get('business_intelligence', {}),
                 'summary': summary_result.get('summary', ''),
+                'structured_data': summary_result.get('structured_data', {}),  # ← ADD THIS for frontend
                 'extraction_pipeline': '3-phase-enhanced',
                 'semantic_extraction_success': semantic_result.get('success', False)
             }
@@ -947,6 +948,7 @@ class ClaudeDocumentAIService:
             logger.info(f"📦 Enhanced result keys: {list(enhanced_result.keys())}")
             logger.info(f"   - Summary length: {len(enhanced_result.get('summary', ''))} characters")
             logger.info(f"   - Summary preview: {enhanced_result.get('summary', '')[:150]}...")
+            logger.info(f"   - Structured data: {enhanced_result.get('structured_data', {})}")
             return enhanced_result
             
         except Exception as e:

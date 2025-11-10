@@ -66,11 +66,17 @@ Your goal is NOT to simply extract tables, but to UNDERSTAND the document as a b
 
 <quality_standards>
 Your extraction must be:
-• ACCURATE: Every number, name, and date must be exact
+• ACCURATE: Every number, name, and date must be EXACTLY as shown in the document - DO NOT add abbreviations, parenthetical notes, or modify text
 • COMPREHENSIVE: Capture all entities and relationships
 • SEMANTIC: Understand meaning, not just text
 • STRUCTURED: Organize data with clear hierarchies
 • INTELLIGENT: Identify patterns and key insights
+
+CRITICAL: Extract names and text EXACTLY as they appear. DO NOT:
+- Add abbreviations in parentheses (e.g., don't add "(ABSF)" if it's not in the document)
+- Expand or standardize names
+- Add clarifying text
+- Modify ANY text - copy it character-for-character as it appears
 </quality_standards>
 
 You will be given PDF images of commission statements. Use your vision-language capabilities to analyze both the visual layout and textual content to produce intelligent, structured extraction results."""
@@ -99,7 +105,13 @@ Examine the document visually to understand:
 **STEP 2: Entity Extraction with Visual Context**
 <entities_to_extract>
 <carrier>
-• Name: The insurance company (look in headers, logos, footers)
+• Name: The insurance company EXACTLY as written in the document (look in headers, logos, footers)
+  **CRITICAL**: Extract the carrier name EXACTLY character-for-character as it appears. DO NOT:
+  - Add abbreviations (e.g., don't add "(ABSF)" if not in document)
+  - Remove text
+  - Standardize or normalize
+  - Add clarifying notes
+  Example: If document shows "Allied Benefit Systems", extract "Allied Benefit Systems" NOT "Allied Benefit Systems (ABSF)"
 • Confidence: Your certainty level (0.0-1.0)
 • Evidence: Where you found it (e.g., "Header logo and letterhead")
 </carrier>
@@ -127,10 +139,54 @@ For each unique agent mentioned:
 • Report Date: If different from statement date
 • Date Range: If period-based (start and end dates)
 • Total Pages: Document length
-• Total Amount: CRITICAL - Extract the total commission/compensation amount as shown in the document
-  * Look for: "Total Compensation", "Total Amount", "Total Commission", "Amount Due", "Net Payment", "EFT Amount", "Grand Total", "Total Paid Amount"
-  * Extract as numeric value (e.g., 3604.95)
-• Total Amount Label: The exact label used for the total (e.g., "Total Compensation")
+• Total Amount: **🔴 CRITICAL PRIORITY #1** - Extract the TOTAL commission/compensation amount
+
+  **EXTRACTION STRATEGY - Multi-Level Search:**
+  
+  1. **PRIMARY SEARCH - Document Summary Section (Check FIRST):**
+     - Look for summary rows at the BOTTOM of tables or END of document
+     - Common labels (case-insensitive):
+       * "Total for Vendor" ← **COMMON IN ALLIED BENEFIT**
+       * "Total for Group"
+       * "Total Compensation"
+       * "Total Amount"
+       * "Total Commission"
+       * "Grand Total"
+       * "Net Payment"
+       * "EFT Amount"
+       * "Amount Due"
+       * "Total Paid Amount"
+       * "Net Compensation"
+     - These are usually in BOLD or highlighted sections
+     - May appear in a separate summary box or final row
+  
+  2. **SECONDARY SEARCH - Table Footer Rows:**
+     - If no summary section found, look for totals in last few rows of main table
+     - Check for rows with "Total" or "Subtotal" keywords
+     - Validate it's a sum row (not a data row)
+  
+  3. **TERTIARY SEARCH - Calculate from Data:**
+     - If no explicit total found, SUM all "Paid Amount" or "Commission" column values
+     - Only use data rows (exclude headers and subtotals)
+     - Return calculated total with confidence = 0.7
+  
+  **EXTRACTION FORMAT:**
+  - Extract as NUMERIC VALUE: 1027.20 (NO dollar sign, NO commas)
+  - Store label separately: "Total for Vendor"
+  - Include confidence: 0.95 (explicit) or 0.7 (calculated)
+  
+  **VALIDATION:**
+  - Total should be > $0 (if document has data)
+  - If multiple "total" rows found, use the HIGHEST level summary (e.g., "Total for Vendor" > "Total for Group")
+  - Cross-check: Does it match sum of individual line items?
+  
+  **EXAMPLES:**
+  - Document shows "Total for Vendor: $1,027.20" → Extract: 1027.20
+  - Document shows "Net Payment   $3,604.95" → Extract: 3604.95
+  - No explicit total found, 4 rows sum to $1,027.20 → Extract: 1027.20 (confidence: 0.7)
+
+• Total Amount Label: The exact label text used (e.g., "Total for Vendor", "Total Compensation")
+• Total Amount Confidence: 0.95 if explicit, 0.7 if calculated, 0.5 if uncertain
 </document_metadata>
 
 <groups_and_companies>
@@ -506,10 +562,15 @@ Generate summaries that match or exceed Google Gemini's quality:
         """
         Phase 3: Intelligent Summarization Prompt
         
-        Creates comprehensive, conversational summary with business intelligence.
+        Creates comprehensive, conversational summary with business intelligence
+        AND structured key-value data for UI display.
         """
         return f"""<task>
 Create a comprehensive, conversational summary of this commission statement that captures all key business intelligence.
+
+🔴 CRITICAL: You MUST return BOTH outputs:
+1. A conversational summary (3-4 sentence paragraph)
+2. A structured key-value data object (JSON) for UI display
 </task>
 
 <input_data>
@@ -537,7 +598,7 @@ Create a 3-4 sentence paragraph that flows naturally:
 
 Sentence 1: Document identification
 • Type, carrier, broker, date, and document number
-• Example: "This is an ABSF Commission Payment Summary from Allied Benefit for INNOVATIVE BPS LLC, dated August 6, 2025 (document G0223428)"
+• Example: "This is an ABSF Commission Payment Summary from Allied Benefit for INNOVATIVE BPS LLC, dated August 6, 2025 (document G0227540)"
 
 Sentence 2: Financial overview with key contributors
 • Total amount, number of groups, and top 2-3 earners with amounts
@@ -551,7 +612,34 @@ Sentence 4 (if applicable): Notable features
 • Special payments, anomalies, or unique characteristics
 • Example: "The statement includes both current period charges and prior period adjustments, with census counts ranging from -1 (adjustments) to 13 members"
 
-**STEP 3: Quality Check**
+**STEP 3: Extract Structured Key-Value Data**
+Extract the following fields for UI display (MUST be scannable, short values):
+
+MANDATORY (always try to find these):
+• broker_id: Document/statement/broker ID number
+• total_amount: Total commission/compensation (numeric only, no $ or commas)
+• carrier_name: Insurance carrier name
+• broker_company: Broker/agent company name
+• statement_date: Statement date (YYYY-MM-DD format)
+
+OPTIONAL (include if found):
+• payment_type: EFT, Check, Wire, etc.
+• company_count: Number of companies/groups (as string)
+• top_contributors: Array of top 1-3 companies with amounts (e.g., [{{"name": "Company A", "amount": "1027.20"}}])
+• commission_structure: E.g., "PEPM", "Percentage-based", "Premium Equivalent"
+• plan_types: E.g., "Medical, Dental, Vision"
+• census_count: Total members/subscribers (as string)
+• billing_periods: Date range covered (e.g., "Dec 2024 - Jan 2025")
+• special_payments: Bonuses, incentives, etc. (as string)
+
+**RULES FOR KEY-VALUE DATA:**
+1. All amounts should be NUMERIC ONLY (no $, no commas) - e.g., "1027.20" not "$1,027.20"
+2. Dates in YYYY-MM-DD format
+3. Keep values SHORT (1-3 words preferred) for scannable display
+4. If a field is not found, OMIT it (don't include null/empty values)
+5. Be PRECISE - values must match extracted data exactly
+
+**STEP 4: Quality Check**
 Ensure your summary:
 ☑ Names specific entities (carriers, brokers, agents, companies)
 ☑ Includes exact amounts and percentages
@@ -562,22 +650,84 @@ Ensure your summary:
 ☑ Contains NO bullet points or field labels
 ☑ Reads like a human explaining to another human
 
-**OUTPUT FORMAT**
-Return ONLY the summary paragraph. Do not include:
-• Preambles ("Here's a summary:")
-• Bullet points or lists
-• Field labels ("Carrier:", "Date:")
-• Closing remarks ("Let me know if you need more details")
+**🔴 CRITICAL: OUTPUT FORMAT**
 
-Start immediately with "This is..." or "This document..." and provide the rich, flowing summary.
+You MUST return your response in this EXACT JSON format:
+
+```json
+{{
+  "conversational_summary": "This is an ABSF Commission Payment Summary from Allied Benefit...",
+  "key_value_data": {{
+    "broker_id": "G0227540",
+    "total_amount": "1027.20",
+    "carrier_name": "Allied Benefit",
+    "broker_company": "INNOVATIVE BPS LLC",
+    "statement_date": "2025-01-08",
+    "payment_type": "EFT",
+    "company_count": "1",
+    "top_contributors": [
+      {{"name": "SOAR LOGISTICS LL", "amount": "1027.20"}}
+    ],
+    "commission_structure": "6% Premium Equivalent",
+    "census_count": "46",
+    "billing_periods": "Dec 2024 - Jan 2025"
+  }}
+}}
+```
+
+Return ONLY valid JSON. Do not include:
+• Preambles ("Here's the result:")
+• Markdown code fences (```json)
+• Closing remarks
+• Any text outside the JSON object
+
+Start immediately with the JSON object.
 </instructions>
 
 <examples>
-**Example 1 - Allied Benefit Statement:**
-"This is an ABSF Commission Payment Summary from Allied Benefit for INNOVATIVE BPS LLC, dated August 6, 2025 (document G0223428), with EFT as the payment type. The document details $3,604.95 in total commissions across 11 groups covering various billing periods from July to August 2025, with LUDICROUS SPEED LOGI as the largest contributor at $1,384.84 (38% of total), followed by FUZION EXPRESS LL at $514.61, and G & N LOGISTICS LL at $468.84. ANAT GOLDSTEIN serves as the primary Writing Agent managing 8 groups using the Premium Equivalent calculation method (commission rates from 15.5% to 22.5%), while LIOR C GOLDSTEIN manages 3 groups, all processed with census counts ranging from -1 (indicating adjustments) to 13 members."
+**Example 1 - Allied Benefit Statement (EXACT OUTPUT FORMAT):**
+{{
+  "conversational_summary": "This is an ABSF Commission Payment Summary from Allied Benefit for INNOVATIVE BPS LLC, dated August 6, 2025 (document G0223428), with EFT as the payment type. The document details $3,604.95 in total commissions across 11 groups covering various billing periods from July to August 2025, with LUDICROUS SPEED LOGI as the largest contributor at $1,384.84 (38% of total), followed by FUZION EXPRESS LL at $514.61, and G & N LOGISTICS LL at $468.84. ANAT GOLDSTEIN serves as the primary Writing Agent managing 8 groups using the Premium Equivalent calculation method (commission rates from 15.5% to 22.5%), while LIOR C GOLDSTEIN manages 3 groups, all processed with census counts ranging from -1 (indicating adjustments) to 13 members.",
+  "key_value_data": {{
+    "broker_id": "G0223428",
+    "total_amount": "3604.95",
+    "carrier_name": "Allied Benefit",
+    "broker_company": "INNOVATIVE BPS LLC",
+    "statement_date": "2025-08-06",
+    "payment_type": "EFT",
+    "company_count": "11",
+    "top_contributors": [
+      {{"name": "LUDICROUS SPEED LOGI", "amount": "1384.84"}},
+      {{"name": "FUZION EXPRESS LL", "amount": "514.61"}},
+      {{"name": "G & N LOGISTICS LL", "amount": "468.84"}}
+    ],
+    "commission_structure": "Premium Equivalent",
+    "census_count": "Multiple (ranges -1 to 13)",
+    "billing_periods": "Jul - Aug 2025"
+  }}
+}}
 
-**Example 2 - UnitedHealthcare Statement:**
-"This is a UnitedHealthcare commission statement for ABC Insurance Services dated April 15, 2025, detailing $15,432.67 in total commissions from 12 employer groups covering 487 subscribers. The largest payments went to Tech Solutions Inc ($4,230.50), Metro Health Group ($3,890.25), and Retail Partners LLC ($2,100.00), representing a mix of Medical, Dental, and Vision plans with PEPM rates from $24-$52. The statement includes a $1,500 Q1 production bonus in addition to the base commissions, demonstrating strong performance across diversified product lines."
+**Example 2 - UnitedHealthcare Statement (EXACT OUTPUT FORMAT):**
+{{
+  "conversational_summary": "This is a UnitedHealthcare commission statement for ABC Insurance Services dated April 15, 2025, detailing $15,432.67 in total commissions from 12 employer groups covering 487 subscribers. The largest payments went to Tech Solutions Inc ($4,230.50), Metro Health Group ($3,890.25), and Retail Partners LLC ($2,100.00), representing a mix of Medical, Dental, and Vision plans with PEPM rates from $24-$52. The statement includes a $1,500 Q1 production bonus in addition to the base commissions, demonstrating strong performance across diversified product lines.",
+  "key_value_data": {{
+    "broker_id": "UHC-2025-0415",
+    "total_amount": "15432.67",
+    "carrier_name": "UnitedHealthcare",
+    "broker_company": "ABC Insurance Services",
+    "statement_date": "2025-04-15",
+    "company_count": "12",
+    "top_contributors": [
+      {{"name": "Tech Solutions Inc", "amount": "4230.50"}},
+      {{"name": "Metro Health Group", "amount": "3890.25"}},
+      {{"name": "Retail Partners LLC", "amount": "2100.00"}}
+    ],
+    "commission_structure": "PEPM ($24-$52)",
+    "plan_types": "Medical, Dental, Vision",
+    "census_count": "487",
+    "special_payments": "Q1 Bonus: $1,500"
+  }}
+}}
 </examples>
 
 <critical_rules>
