@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import toast from 'react-hot-toast';
 import { CardLoader } from '@/app/upload/components/Loader';
 import { Search, Edit, Trash2, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
+import CarrierMergeConfirmModal from './CarrierMergeConfirmModal';
 
 type Carrier = { id: string; name: string };
 
@@ -24,6 +25,17 @@ export default function CarrierList({ carriers, selected, onSelect, loading, onD
   const [editingCarrierId, setEditingCarrierId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [updating, setUpdating] = useState(false);
+  
+  // Merge modal state
+  const [mergeModalOpen, setMergeModalOpen] = useState(false);
+  const [mergeData, setMergeData] = useState<{
+    sourceCarrierId: string;
+    sourceCarrierName: string;
+    targetCarrierId: string;
+    targetCarrierName: string;
+    sourceStatementCount: number;
+    targetStatementCount: number;
+  } | null>(null);
 
   const sortedCarriers = carriers
     .filter(carrier => carrier.name.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -88,13 +100,42 @@ export default function CarrierList({ carriers, selected, onSelect, loading, onD
       cancelEdit();
       return;
     }
+    
     setUpdating(true);
     try {
+      // First, check if this name matches an existing carrier
+      const checkRes = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/companies/check-duplicate/${encodeURIComponent(editName.trim())}?current_carrier_id=${carrier.id}`,
+        { credentials: 'include' }
+      );
+      
+      if (checkRes.ok) {
+        const checkData = await checkRes.json();
+        
+        if (checkData.exists) {
+          // Found a duplicate carrier - show merge confirmation modal
+          setMergeData({
+            sourceCarrierId: carrier.id,
+            sourceCarrierName: carrier.name,
+            targetCarrierId: checkData.existing_carrier.id,
+            targetCarrierName: checkData.existing_carrier.name,
+            sourceStatementCount: checkData.current_statement_count,
+            targetStatementCount: checkData.existing_carrier.statement_count
+          });
+          setMergeModalOpen(true);
+          setUpdating(false);
+          return;
+        }
+      }
+      
+      // No duplicate found, proceed with normal name update
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/companies/${carrier.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ name: editName }),
       });
+      
       if (res.ok) {
         const updated = await res.json();
         // Update local state
@@ -108,6 +149,59 @@ export default function CarrierList({ carriers, selected, onSelect, loading, onD
     } catch (e) {
       toast.error('Network error.');
     }
+    setUpdating(false);
+  };
+  
+  const handleMergeConfirm = async () => {
+    if (!mergeData) return;
+    
+    setUpdating(true);
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/companies/merge`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          source_carrier_id: mergeData.sourceCarrierId,
+          target_carrier_id: mergeData.targetCarrierId
+        }),
+      });
+      
+      if (res.ok) {
+        const result = await res.json();
+        toast.success(`Successfully merged carriers! ${result.details.statements_migrated} statements moved.`);
+        
+        // Clear editing state
+        setEditingCarrierId(null);
+        setEditName('');
+        setMergeModalOpen(false);
+        setMergeData(null);
+        
+        // If the merged carrier was selected, select the target carrier instead
+        if (selected?.id === mergeData.sourceCarrierId) {
+          const targetCarrier = carriers.find(c => c.id === mergeData.targetCarrierId);
+          if (targetCarrier) {
+            onSelect(targetCarrier);
+          }
+        }
+        
+        // Reload the page to refresh the carrier list
+        window.location.reload();
+      } else {
+        const error = await res.json();
+        toast.error(error.detail || 'Failed to merge carriers.');
+      }
+    } catch (e) {
+      toast.error('Network error during merge.');
+    }
+    setUpdating(false);
+  };
+  
+  const handleMergeCancel = () => {
+    setMergeModalOpen(false);
+    setMergeData(null);
+    setEditingCarrierId(null);
+    setEditName('');
     setUpdating(false);
   };
 
@@ -148,7 +242,7 @@ export default function CarrierList({ carriers, selected, onSelect, loading, onD
           placeholder="Search carriers..."
           value={searchQuery}
           onChange={handleSearch}
-          className="w-full pl-10 pr-4 py-3 text-sm bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-lg border border-slate-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+          className="w-full pl-10 pr-4 py-2.5 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-lg border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 placeholder:text-slate-400"
         />
         {searchQuery && (
           <button
@@ -192,10 +286,10 @@ export default function CarrierList({ carriers, selected, onSelect, loading, onD
           {paginatedCarriers.map((carrier, index) => (
             <div
               key={carrier.id}
-              className={`group relative p-4 rounded-xl border transition-all duration-200 ${
+              className={`group relative p-4 rounded-lg border transition-all duration-200 ${
                 selected?.id === carrier.id
                   ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30 shadow-md'
-                  : 'border-slate-200 dark:border-slate-600 hover:border-slate-300 dark:hover:border-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700/50'
+                  : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800/50'
               }`}
               style={{ animationDelay: `${index * 50}ms` }}
             >
@@ -329,6 +423,20 @@ export default function CarrierList({ carriers, selected, onSelect, loading, onD
             }
           </p>
         </div>
+      )}
+      
+      {/* Merge Confirmation Modal */}
+      {mergeData && (
+        <CarrierMergeConfirmModal
+          isOpen={mergeModalOpen}
+          onClose={handleMergeCancel}
+          onConfirm={handleMergeConfirm}
+          sourceCarrierName={mergeData.sourceCarrierName}
+          targetCarrierName={mergeData.targetCarrierName}
+          sourceStatementCount={mergeData.sourceStatementCount}
+          targetStatementCount={mergeData.targetStatementCount}
+          isProcessing={updating}
+        />
       )}
     </div>
   );

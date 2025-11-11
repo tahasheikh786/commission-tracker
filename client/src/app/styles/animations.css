@@ -2492,3 +2492,19 @@
   animation: pulseGlowSoft 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
+/* Subtle Pulse for Priority Status Badge (needs_review) */
+@keyframes subtle-pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.02);
+  }
+}
+
+.status-badge-priority {
+  animation: subtle-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+

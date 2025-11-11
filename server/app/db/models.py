@@ -136,7 +136,8 @@ class StatementUpload(Base):
     automated_approval = Column(Boolean, default=False)  # True if auto-approved, False if manual
     automation_timestamp = Column(DateTime, nullable=True)  # When automation occurred
     total_amount_match = Column(Boolean, nullable=True)  # True if totals match, False if mismatch, NULL if not checked
-    extracted_total = Column(Numeric(15, 2), nullable=True)  # The total amount extracted
+    extracted_total = Column(Numeric(15, 2), nullable=True)  # The earned commission total extracted from document
+    extracted_invoice_total = Column(Numeric(15, 2), nullable=True)  # The invoice total calculated from table data
 
 class Extraction(Base):
     __tablename__ = 'extractions'

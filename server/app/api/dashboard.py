@@ -550,7 +550,13 @@ async def get_user_specific_company_statements(
                 "edited_tables": statement.edited_tables,  # Include edited tables for preview
                 "field_config": statement.field_config,
                 "raw_data": statement.raw_data,
-                "field_mapping": statement.field_mapping  # Include field mapping for review
+                "field_mapping": statement.field_mapping,  # Include field mapping for review
+                # ✅ NEW: Include automation/validation metadata
+                "automated_approval": statement.automated_approval,
+                "automation_timestamp": statement.automation_timestamp.isoformat() if statement.automation_timestamp else None,
+                "total_amount_match": statement.total_amount_match,
+                "extracted_total": float(statement.extracted_total) if statement.extracted_total else None,
+                "extracted_invoice_total": float(statement.extracted_invoice_total) if statement.extracted_invoice_total else None
             })
         
         return formatted_statements

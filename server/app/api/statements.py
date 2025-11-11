@@ -76,7 +76,13 @@ async def get_statements_for_company(
             "last_updated": statement.last_updated,
             "uploaded_by_email": user.email,
             "uploaded_by_name": user_display_name,
-            "field_mapping": statement.field_mapping  # Include field mapping for review
+            "field_mapping": statement.field_mapping,  # Include field mapping for review
+            # ✅ Include automation/validation metadata
+            "automated_approval": statement.automated_approval,
+            "automation_timestamp": statement.automation_timestamp.isoformat() if statement.automation_timestamp else None,
+            "total_amount_match": statement.total_amount_match,
+            "extracted_total": float(statement.extracted_total) if statement.extracted_total else None,
+            "extracted_invoice_total": float(statement.extracted_invoice_total) if statement.extracted_invoice_total else None
         })
     
     return formatted_statements

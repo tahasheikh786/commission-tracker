@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Eye, LayoutList, Trash2, CheckCircle, XCircle, Clock, FileText, ExternalLink, ChevronLeft, ChevronRight, Table, User, Edit, AlertTriangle } from "lucide-react";
+import { Trash2, CheckCircle2, XCircle, Clock, FileText, ExternalLink, ChevronLeft, ChevronRight, Table as TableIcon, User, Edit, AlertTriangle, PlayCircle, AlertCircle, ReceiptText, ChevronDown, ChevronRight as ChevronRightIcon } from "lucide-react";
 import { useRouter } from 'next/navigation';
 import TableViewerModal from './TableViewerModal';
 import EditableCompareModal from './EditableCompareModal';
@@ -15,18 +15,19 @@ type Statement = {
   selected_statement_date?: any;
   raw_data?: any;
   edited_tables?: any;
-  final_data?: any;
+  final_data?: any[];  // Array of commission records (tables with rows)
+  field_config?: any[];  // Field configuration/mappings
+  field_mapping?: Record<string, string> | null;  // Field mappings saved during approval
   uploaded_by_email?: string;
   uploaded_by_name?: string;
   // NEW: Automation metadata
   automated_approval?: boolean;
   automation_timestamp?: string;
   total_amount_match?: boolean | null;
-  extracted_total?: number;
+  extracted_total?: number;  // Earned commission total extracted from document
+  extracted_invoice_total?: number;  // Invoice total calculated from table data
   gcs_key?: string;
   gcs_url?: string;
-  // ✅ FIX: Correct property name to match API response
-  fieldmapping?: Record<string, string> | null;  // Field mappings from format learning (no underscore!)
 };
 
 type Props = {
@@ -51,6 +52,7 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
   const [activeStatusTab, setActiveStatusTab] = useState<'all' | 'approved' | 'pending' | 'rejected'>('all');
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
   const [reviewStatement, setReviewStatement] = useState<Statement | null>(null);
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const itemsPerPage = 10;
   const router = useRouter();
 
@@ -155,6 +157,18 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
     toast.success("Statement recalculated successfully!");
   };
 
+  const toggleExpand = (statementId: string) => {
+    setExpandedRows(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(statementId)) {
+        newSet.delete(statementId);
+      } else {
+        newSet.add(statementId);
+      }
+      return newSet;
+    });
+  };
+
   const normalizeFileName = (fileName: string) => {
     // Extract just the filename from the full path
     const parts = fileName.split('/');
@@ -209,28 +223,29 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
         return {
           label: 'Approved',
           color: 'success',
-          icon: CheckCircle,
-          bgColor: 'bg-success/10',
-          textColor: 'text-success',
-          borderColor: 'border-success/20'
+          icon: CheckCircle2,
+          bgColor: 'bg-green-50 dark:bg-green-950/20',
+          textColor: 'text-green-700 dark:text-green-400',
+          borderColor: 'border-green-200 dark:border-green-800'
         };
       case 'rejected':
         return {
           label: 'Rejected',
           color: 'destructive',
           icon: XCircle,
-          bgColor: 'bg-destructive/10',
-          textColor: 'text-destructive',
-          borderColor: 'border-destructive/20'
+          bgColor: 'bg-red-50 dark:bg-red-950/20',
+          textColor: 'text-red-700 dark:text-red-400',
+          borderColor: 'border-red-200 dark:border-red-800'
         };
       case 'needs_review':
         return {
           label: 'Needs Review',
           color: 'amber',
-          icon: AlertTriangle,
-          bgColor: 'bg-amber-100 dark:bg-amber-900/20',
+          icon: AlertCircle,
+          bgColor: 'bg-amber-50 dark:bg-amber-950/20',
           textColor: 'text-amber-700 dark:text-amber-400',
-          borderColor: 'border-amber-300 dark:border-amber-700'
+          borderColor: 'border-2 border-amber-400 dark:border-amber-600',
+          pulse: true
         };
       case 'pending':
       case 'extracted':
@@ -240,9 +255,9 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
           label: 'Pending',
           color: 'warning',
           icon: Clock,
-          bgColor: 'bg-warning/10',
-          textColor: 'text-warning',
-          borderColor: 'border-warning/20'
+          bgColor: 'bg-slate-50 dark:bg-slate-800/30',
+          textColor: 'text-slate-600 dark:text-slate-400',
+          borderColor: 'border-slate-200 dark:border-slate-700'
         };
     }
   };
@@ -318,7 +333,7 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
                 : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
             }`}
           >
-            <CheckCircle size={16} />
+            <CheckCircle2 size={16} />
             <span>Approved</span>
             <span className="text-xs bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-300 px-2 py-1 rounded-full">
               {(statements || []).filter(s => s.status.toLowerCase() === 'approved' || s.status.toLowerCase() === 'completed').length}
@@ -355,278 +370,506 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
         </div>
       </div>
 
-      {/* Enhanced Table */}
-      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden w-full">
-        <table className="w-full border-collapse company-table">
-          <thead className="bg-slate-50 dark:bg-slate-700/50">
-            <tr>
-              <th className="px-6 py-4 w-12">
-                {canSelectFiles ? (
-                  <input
-                    type="checkbox"
-                    checked={selectAll}
-                    onChange={(e) => {
-                      e.stopPropagation();
-                      handleSelectAllChange();
-                    }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleSelectAllChange();
-                    }}
-                    className="w-4 h-4 text-blue-500 border-slate-300 dark:border-slate-600 rounded focus:ring-blue-500 cursor-pointer"
-                    style={{ pointerEvents: 'auto', zIndex: 10 }}
-                  />
-                ) : (
-                  <div className="w-4 h-4 border border-slate-300 dark:border-slate-600 rounded bg-slate-100 dark:bg-slate-700" title="Selection disabled"></div>
-                )}
-              </th>
-              <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
-                <div className="flex items-center gap-2">
-                  <FileText size={16} className="text-slate-500 dark:text-slate-400" />
-                  Statement
-                </div>
-              </th>
-              <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Uploaded On</th>
-              {showUploadedByColumn && (
-                <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
-                  <div className="flex items-center gap-2">
-                    <User size={16} className="text-slate-500 dark:text-slate-400" />
-                    Uploaded By
-                  </div>
+      {/* Minimalist Table */}
+      <div className="w-full overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse">
+            <thead className="sticky top-0 z-10 bg-slate-50/95 dark:bg-slate-900/95 backdrop-blur-sm">
+              <tr className="border-b-2 border-slate-200 dark:border-slate-700">
+                <th className="py-3 px-4 w-8">
+                  {/* Expand column */}
                 </th>
-              )}
-              <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Statement Date</th>
-              <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Status</th>
-              <th className="px-6 py-4 text-left text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Rejection Reason</th>
-              <th className="px-6 py-4 text-center text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Actions</th>
-            </tr>
-          </thead>
+                <th className="py-3 px-4 w-12">
+                  {canSelectFiles ? (
+                    <input
+                      type="checkbox"
+                      checked={selectAll}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        handleSelectAllChange();
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSelectAllChange();
+                      }}
+                      className="w-4 h-4 text-blue-500 border-slate-300 dark:border-slate-600 rounded focus:ring-blue-500 cursor-pointer"
+                      style={{ pointerEvents: 'auto', zIndex: 10 }}
+                    />
+                  ) : (
+                    <div className="w-4 h-4 border border-slate-300 dark:border-slate-600 rounded bg-slate-100 dark:bg-slate-700" title="Selection disabled"></div>
+                  )}
+                </th>
+                <th className="py-3 px-4 text-left">
+                  <span className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
+                    Statement
+                  </span>
+                </th>
+                <th className="py-3 px-4 text-left">
+                  <span className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
+                    Uploaded On
+                  </span>
+                </th>
+                {showUploadedByColumn && (
+                  <th className="py-3 px-4 text-left">
+                    <span className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
+                      Uploaded By
+                    </span>
+                  </th>
+                )}
+                <th className="py-3 px-4 text-left">
+                  <span className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
+                    Date
+                  </span>
+                </th>
+                <th className="py-3 px-4 text-left">
+                  <span className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
+                    Status
+                  </span>
+                </th>
+                <th className="py-3 px-4 text-right">
+                  <span className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
+                    Actions
+                  </span>
+                </th>
+              </tr>
+            </thead>
           <tbody>
             {paginatedStatements.map((statement, idx) => {
               const statusInfo = getStatusInfo(statement.status);
               const StatusIcon = statusInfo.icon;
+              const isExpanded = expandedRows.has(statement.id);
               
-              // Add function to determine row styling
-              function getRowBackgroundStyle(statement: Statement) {
-                // Only apply styling to approved statements with automation metadata
-                if (statement.status.toLowerCase() !== 'approved') {
-                  return '';
+              // Determine row background based on status - Premium visible colors
+              const getRowBgColor = () => {
+                const status = statement.status.toLowerCase();
+                if (status === 'approved' || status === 'completed') {
+                  return 'bg-emerald-50 dark:bg-emerald-900/20 hover:!bg-emerald-100 dark:hover:!bg-emerald-900/30';
+                } else if (status === 'needs_review') {
+                  return 'bg-amber-50 dark:bg-amber-900/20 hover:!bg-amber-100 dark:hover:!bg-amber-900/30';
                 }
-                
-                // Check if this was auto-approved and has total validation info
-                const automatedApproval = statement.automated_approval === true;
-                const totalMatch = statement.total_amount_match;
-                
-                if (!automatedApproval) {
-                  return ''; // Normal styling for manually approved statements
-                }
-                
-                // Green background for matched totals
-                if (totalMatch === true) {
-                  return 'bg-green-50 dark:bg-green-900/10 border-l-4 border-green-500';
-                }
-                
-                // Yellow background for mismatched totals
-                if (totalMatch === false) {
-                  return 'bg-yellow-50 dark:bg-yellow-900/10 border-l-4 border-yellow-500';
-                }
-                
-                return '';
-              }
-              
-              const rowStyle = getRowBackgroundStyle(statement);
+                return 'bg-white dark:bg-slate-900 hover:!bg-slate-50 dark:hover:!bg-slate-800/50';
+              };
               
               return (
-                <tr 
-                  key={statement.id} 
-                  className={`hover:bg-slate-50/50 dark:hover:bg-slate-700/50 transition-colors duration-200 animate-fade-in ${rowStyle}`}
-                  style={{ animationDelay: `${idx * 50}ms` }}
-                >
-                  <td className="px-6 py-4">
-                    {canSelectFiles ? (
-                      <input
-                        type="checkbox"
-                        checked={selectedStatements.has(statement.id)}
-                        onChange={(e) => {
-                          e.stopPropagation();
-                          handleCheckboxChange(statement.id);
-                        }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleCheckboxChange(statement.id);
-                        }}
-                        className="w-4 h-4 text-blue-500 border-slate-300 dark:border-slate-600 rounded focus:ring-blue-500 cursor-pointer"
-                        style={{ pointerEvents: 'auto', zIndex: 10 }}
-                      />
-                    ) : (
-                      <div className="w-4 h-4 border border-slate-300 dark:border-slate-600 rounded bg-slate-100 dark:bg-slate-700" title="Selection disabled"></div>
-                    )}
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
-                        <FileText size={16} className="text-blue-600 dark:text-blue-400" />
-                      </div>
-                      <div>
-                        <div className="font-semibold text-slate-900 dark:text-slate-100">{normalizeFileName(statement.file_name)}</div>
-                        <div className="text-sm text-slate-500 dark:text-slate-400">ID: {statement.id.slice(0, 8)}...</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-sm text-slate-900 dark:text-slate-100">
-                      {new Date(statement.uploaded_at).toLocaleDateString()}
-                    </div>
-                    <div className="text-xs text-slate-500 dark:text-slate-400">
-                      {new Date(statement.uploaded_at).toLocaleTimeString()}
-                    </div>
-                  </td>
-                  {showUploadedByColumn && (
-                    <td className="px-6 py-4">
-                      <div className="text-sm text-slate-900 dark:text-slate-100">
-                        {statement.uploaded_by_name || statement.uploaded_by_email || '—'}
-                      </div>
-                      {statement.uploaded_by_name && statement.uploaded_by_email && (
-                        <div className="text-xs text-slate-500 dark:text-slate-400">
-                          {statement.uploaded_by_email}
-                        </div>
+                <React.Fragment key={statement.id}>
+                  {/* Main compact row */}
+                  <tr 
+                    className={`border-b border-slate-100 dark:border-slate-800 transition-colors group ${getRowBgColor()}`}
+                  >
+                    {/* Expand icon column */}
+                    <td className="py-3 px-4">
+                      <button 
+                        onClick={() => toggleExpand(statement.id)}
+                        className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                      >
+                        {isExpanded ? (
+                          <ChevronDown className="w-4 h-4" />
+                        ) : (
+                          <ChevronRightIcon className="w-4 h-4" />
+                        )}
+                      </button>
+                    </td>
+
+                    {/* Checkbox column */}
+                    <td className="py-3 px-4">
+                      {canSelectFiles ? (
+                        <input
+                          type="checkbox"
+                          checked={selectedStatements.has(statement.id)}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            handleCheckboxChange(statement.id);
+                          }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCheckboxChange(statement.id);
+                          }}
+                          className="w-4 h-4 text-blue-500 border-slate-300 dark:border-slate-600 rounded focus:ring-blue-500 cursor-pointer"
+                          style={{ pointerEvents: 'auto', zIndex: 10 }}
+                        />
+                      ) : (
+                        <div className="w-4 h-4 border border-slate-300 dark:border-slate-600 rounded bg-slate-100 dark:bg-slate-700" title="Selection disabled"></div>
                       )}
                     </td>
-                  )}
-                  <td className="px-6 py-4">
-                    <div className="text-sm text-slate-900 dark:text-slate-100">
-                      {formatStatementDate(statement.selected_statement_date)}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col gap-1">
-                      {/* Main status badge */}
-                      <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium border ${statusInfo.bgColor} ${statusInfo.textColor} ${statusInfo.borderColor}`}>
-                        <StatusIcon size={14} />
-                        {statusInfo.label}
-                      </div>
-                      
-                      {/* Needs Review indicator */}
-                      {statement.total_amount_match === false && statement.automated_approval === true && (
-                        <div className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-800">
-                          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                          </svg>
-                          Needs Review
-                        </div>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="max-w-xs">
-                      {statement.rejection_reason ? (
-                        <div className="text-sm text-slate-600 dark:text-slate-300 bg-red-50 dark:bg-red-950/40 p-2 rounded-lg border border-red-200 dark:border-red-800">
-                          {statement.rejection_reason}
-                        </div>
-                      ) : (
-                        <span className="text-slate-400 dark:text-slate-500">—</span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center justify-center gap-2">
-                      {/* Show eye icon only for approved/rejected statements */}
-                      {(statement.status.toLowerCase() === 'approved' || 
-                        statement.status.toLowerCase() === 'completed' || 
-                        statement.status.toLowerCase() === 'rejected') && (
-                        <button
-                          title="View mapped table"
-                          className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
-                          onClick={() => onPreview(startIndex + idx)}
-                        >
-                          <Eye size={16} />
-                        </button>
-                      )}
-                      
-                      <button
-                        title="Compare mapped & extracted"
-                        className="p-2 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/30 rounded-lg transition-colors"
-                        onClick={() => onCompare(startIndex + idx)}
-                      >
-                        <LayoutList size={16} />
-                      </button>
 
-                      {/* Formatted table viewing button */}
-                      <button
-                        title="View formatted tables"
-                        className="p-2 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 rounded-lg transition-colors"
-                        onClick={() => handleViewFormattedTables(statement.id)}
-                      >
-                        <Table size={16} />
-                      </button>
-                      
-                      {/* Review & Edit button for approved statements - ALWAYS VISIBLE */}
-                      {(statement.status.toLowerCase() === 'approved' || 
-                        statement.status.toLowerCase() === 'completed') && (
+                    {/* Statement name column */}
+                    <td className="py-3 px-4">
+                      <div className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                        {normalizeFileName(statement.file_name)}
+                      </div>
+                      <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                        ID: {statement.id.slice(0, 8)}
+                      </div>
+                    </td>
+
+                    {/* Uploaded date column */}
+                    <td className="py-3 px-4">
+                      <div className="text-sm text-slate-700 dark:text-slate-300">
+                        {new Date(statement.uploaded_at).toLocaleDateString()}
+                      </div>
+                      <div className="text-xs text-slate-500 dark:text-slate-400">
+                        {new Date(statement.uploaded_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </div>
+                    </td>
+
+                    {/* Uploaded by column (conditional) */}
+                    {showUploadedByColumn && (
+                      <td className="py-3 px-4">
+                        <div className="text-sm text-slate-900 dark:text-slate-100">
+                          {statement.uploaded_by_name || statement.uploaded_by_email || '—'}
+                        </div>
+                        {statement.uploaded_by_name && statement.uploaded_by_email && (
+                          <div className="text-xs text-slate-500 dark:text-slate-400">
+                            {statement.uploaded_by_email}
+                          </div>
+                        )}
+                      </td>
+                    )}
+
+                    {/* Statement date column */}
+                    <td className="py-3 px-4">
+                      <div className="text-sm text-slate-700 dark:text-slate-300">
+                        {formatStatementDate(statement.selected_statement_date)}
+                      </div>
+                    </td>
+
+                    {/* Status column - minimal dot + text */}
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-2">
+                        {/* Minimalist status badge */}
+                        {statement.status.toLowerCase() === 'approved' || statement.status.toLowerCase() === 'completed' ? (
+                          <div className="inline-flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400"></span>
+                            <span className="text-sm text-emerald-700 dark:text-emerald-400 font-medium">Approved</span>
+                          </div>
+                        ) : statement.status.toLowerCase() === 'needs_review' ? (
+                          <div className="inline-flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 dark:bg-amber-400 animate-pulse"></span>
+                            <span className="text-sm text-amber-700 dark:text-amber-400 font-semibold">Needs Review</span>
+                          </div>
+                        ) : statement.status.toLowerCase() === 'rejected' ? (
+                          <div className="inline-flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-red-500 dark:bg-red-400"></span>
+                            <span className="text-sm text-red-700 dark:text-red-400 font-medium">Rejected</span>
+                          </div>
+                        ) : (
+                          <div className="inline-flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-slate-400 dark:bg-slate-500"></span>
+                            <span className="text-sm text-slate-600 dark:text-slate-400">Pending</span>
+                          </div>
+                        )}
+                        
+                        {/* Warning icon for rejection reason - only icon, details in expandable row */}
+                        {statement.rejection_reason && (
+                          <div className="relative group">
+                            <AlertCircle className="w-4 h-4 text-red-500" />
+                            {/* Tooltip on hover */}
+                            <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 px-3 py-2 text-xs text-white bg-slate-900 dark:bg-slate-700 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap max-w-xs z-20 shadow-lg">
+                              {statement.rejection_reason.slice(0, 100)}{statement.rejection_reason.length > 100 ? '...' : ''}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </td>
+
+                    {/* Actions column - compact buttons */}
+                    <td className="py-3 px-4">
+                      <div className="flex items-center justify-end gap-1.5">
+                        {/* View Table button - always visible */}
                         <button
-                          title="Review and Edit this statement"
-                          className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg font-medium text-sm transition-all duration-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 ${
-                            statement.total_amount_match === false && statement.automated_approval === true
-                              ? 'bg-gradient-to-r from-yellow-500 to-amber-500 text-white hover:from-yellow-600 hover:to-amber-600 border border-yellow-400 dark:border-yellow-600'
-                              : 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white hover:from-blue-600 hover:to-indigo-600 border border-blue-400 dark:border-blue-600'
-                          }`}
-                          onClick={() => {
-                            console.log('Review & Edit clicked for statement:', statement.id);
-                            handleReviewStatement(statement);
-                          }}
-                          style={{ 
-                            display: 'inline-flex',
-                            visibility: 'visible'
-                          }}
+                          onClick={() => handleViewFormattedTables(statement.id)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-sm"
                         >
-                          <Edit size={14} />
-                          <span>Review & Edit</span>
+                          <TableIcon className="w-3.5 h-3.5" />
+                          <span>View Table</span>
                         </button>
-                      )}
-                      
-                      {/* Review & Edit button for needs_review status - HIGHLIGHTED */}
-                      {statement.status.toLowerCase() === 'needs_review' && (
-                        <button
-                          title="Review Required - Total mismatch detected"
-                          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg font-medium text-sm transition-all duration-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 bg-gradient-to-r from-yellow-500 to-amber-500 text-white hover:from-yellow-600 hover:to-amber-600 border border-yellow-400 dark:border-yellow-600 animate-pulse"
-                          onClick={() => {
-                            console.log('Review & Edit clicked for needs_review statement:', statement.id);
-                            handleReviewStatement(statement);
-                          }}
-                          style={{ 
-                            display: 'inline-flex',
-                            visibility: 'visible'
-                          }}
-                        >
-                          <AlertTriangle size={14} />
-                          <span>Review Required</span>
-                        </button>
-                      )}
-                      
-                      {/* Complete Review button for pending statements */}
-                      {(statement.status.toLowerCase() === 'pending' || 
-                        statement.status.toLowerCase() === 'extracted' || 
-                        statement.status.toLowerCase() === 'success') && (
-                        <button
-                          onClick={() => router.push(`/upload?resume=${statement.id}`)}
-                          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg font-medium text-sm transition-all duration-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 bg-gradient-to-r from-orange-500 to-amber-500 text-white hover:from-orange-600 hover:to-amber-600 border border-orange-400 dark:border-orange-600"
-                          title="Complete Review Process"
-                          style={{ 
-                            display: 'inline-flex',
-                            visibility: 'visible'
-                          }}
-                        >
-                          <ExternalLink size={14} />
-                          <span>Complete Review</span>
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
+
+                        {/* Primary action button - compact */}
+                        {statement.status.toLowerCase() === 'needs_review' ? (
+                          <button
+                            onClick={() => handleReviewStatement(statement)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-amber-900 dark:text-amber-100 bg-amber-200 dark:bg-amber-600 border border-amber-400 dark:border-amber-500 rounded hover:bg-amber-300 dark:hover:bg-amber-500 transition-colors animate-pulse shadow-sm"
+                          >
+                            <AlertTriangle className="w-3.5 h-3.5" />
+                            <span>Review</span>
+                          </button>
+                        ) : (statement.status.toLowerCase() === 'approved' || statement.status.toLowerCase() === 'completed') ? (
+                          <button
+                            onClick={() => handleReviewStatement(statement)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-sm"
+                          >
+                            <Edit className="w-3.5 h-3.5" />
+                            <span>Edit</span>
+                          </button>
+                        ) : (statement.status.toLowerCase() === 'pending' || statement.status.toLowerCase() === 'extracted' || statement.status.toLowerCase() === 'success') ? (
+                          <button
+                            onClick={() => router.push(`/upload?resume=${statement.id}`)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-sm"
+                          >
+                            <PlayCircle className="w-3.5 h-3.5" />
+                            <span>Continue</span>
+                          </button>
+                        ) : null}
+                      </div>
+                    </td>
+                  </tr>
+
+                  {/* Expandable detail row - ONLY shown when expanded */}
+                  {isExpanded && (
+                    <tr className={`border-b border-slate-100 dark:border-slate-800 ${getRowBgColor()} !transition-colors`}>
+                      <td colSpan={showUploadedByColumn ? 8 : 7} className="py-4 px-4">
+                        <div className="max-w-3xl ml-12">
+                          {/* Commission Details Section */}
+                          {(statement.status.toLowerCase() === 'approved' || 
+                            statement.status.toLowerCase() === 'completed' ||
+                            statement.status.toLowerCase() === 'needs_review') && (
+                            (() => {
+                              const extractedTotal = statement.extracted_total;
+                          
+                          // Find the commission field name from field_config or field_mapping
+                          let sourceCommissionFieldName = ''; // The actual column name in the data
+                          
+                          // Try field_mapping first (most reliable)
+                          if (statement.field_mapping && typeof statement.field_mapping === 'object') {
+                            // field_mapping is like: {"Paid Amount": "Commission Earned"}
+                            // Find the source field that maps to a commission-related target
+                            const commissionMappingCandidates = [
+                              'commission earned', 'commission_earned', 'total commission paid',
+                              'commission', 'paid amount', 'paid_amount', 'amount paid'
+                            ];
+                            
+                            for (const [sourceField, targetField] of Object.entries(statement.field_mapping)) {
+                              const normalizedTarget = String(targetField).toLowerCase().trim();
+                              if (commissionMappingCandidates.some(candidate => 
+                                normalizedTarget.includes(candidate) || candidate.includes(normalizedTarget)
+                              )) {
+                                sourceCommissionFieldName = sourceField;
+                                console.log(`💰 Found commission field from field_mapping: "${sourceField}" → "${targetField}"`);
+                                break;
+                              }
+                            }
+                          }
+                          
+                          // Fallback to field_config if field_mapping didn't work
+                          if (!sourceCommissionFieldName && statement.field_config && Array.isArray(statement.field_config)) {
+                            const commissionField = statement.field_config.find((field: any) => {
+                              const fieldName = field.field || field.source_field || '';
+                              const mappingName = field.mapping || field.label || field.display_name || '';
+                              return fieldName.toLowerCase().includes('commission') ||
+                                     fieldName.toLowerCase().includes('paid') ||
+                                     mappingName.toLowerCase().includes('commission');
+                            });
+                            
+                            if (commissionField) {
+                              sourceCommissionFieldName = commissionField.field || commissionField.source_field || '';
+                              console.log(`💰 Found commission field from field_config: "${sourceCommissionFieldName}"`);
+                            }
+                          }
+                          
+                          // Calculate total from final_data
+                          // CRITICAL FIX: Rows are stored as ARRAYS, not objects!
+                          // We need to find the column index from headers and access by index
+                          let calculatedTotal = 0;
+                          
+                          console.log('🔍 Calculating total for statement:', statement.id);
+                          console.log('📊 final_data structure:', statement.final_data);
+                          console.log('🏷️ Using source commission field name:', sourceCommissionFieldName);
+                          console.log('⚙️ field_mapping:', statement.field_mapping);
+                          console.log('⚙️ field_config:', statement.field_config);
+                          
+                          if (statement.final_data && Array.isArray(statement.final_data)) {
+                            // Iterate through each table in final_data
+                            statement.final_data.forEach((table: any, tableIdx: number) => {
+                              // Get headers (can be 'header' or 'headers')
+                              const headers = table.header || table.headers || [];
+                              const rows = table.rows || [];
+                              const summaryRows = new Set(table.summaryRows || []);
+                              
+                              console.log(`📋 Table ${tableIdx + 1}:`, table.name);
+                              console.log(`  Headers (${headers.length}):`, headers);
+                              console.log(`  Rows: ${rows.length}, Summary rows: ${summaryRows.size}`);
+                              
+                              // Find the column index for the commission field
+                              let commissionColumnIndex = -1;
+                              
+                              if (sourceCommissionFieldName) {
+                                // Try exact match first
+                                commissionColumnIndex = headers.indexOf(sourceCommissionFieldName);
+                                
+                                // Try case-insensitive match
+                                if (commissionColumnIndex === -1) {
+                                  commissionColumnIndex = headers.findIndex((h: string) => 
+                                    h && h.toLowerCase() === sourceCommissionFieldName.toLowerCase()
+                                  );
+                                }
+                              }
+                              
+                              // Fallback: search for common commission field names in headers
+                              if (commissionColumnIndex === -1) {
+                                const commissionHeaderCandidates = [
+                                  'commission earned', 'paid amount', 'total commission paid',
+                                  'commission', 'amount paid', 'earned'
+                                ];
+                                
+                                commissionColumnIndex = headers.findIndex((h: string) => {
+                                  if (!h) return false;
+                                  const normalized = h.toLowerCase().trim();
+                                  return commissionHeaderCandidates.some(candidate => 
+                                    normalized.includes(candidate) || candidate.includes(normalized)
+                                  );
+                                });
+                              }
+                              
+                              if (commissionColumnIndex === -1) {
+                                console.warn(`  ⚠️ Could not find commission column in headers:`, headers);
+                                return;
+                              }
+                              
+                              console.log(`  💰 Commission column found at index ${commissionColumnIndex}: "${headers[commissionColumnIndex]}"`);
+                              
+                              // Sum up commission values from non-summary rows
+                              let tableTotal = 0;
+                              rows.forEach((row: any[], rowIdx: number) => {
+                                // Skip summary rows
+                                if (summaryRows.has(rowIdx)) {
+                                  console.log(`    Row ${rowIdx}: SKIPPED (summary row)`);
+                                  return;
+                                }
+                                
+                                // Access by index (rows are arrays!)
+                                const rawValue = row[commissionColumnIndex];
+                                
+                                if (rawValue === undefined || rawValue === null || rawValue === '') {
+                                  console.log(`    Row ${rowIdx}: EMPTY value`);
+                                  return;
+                                }
+                                
+                                // Parse the value
+                                let numericValue = 0;
+                                if (typeof rawValue === 'number') {
+                                  numericValue = rawValue;
+                                } else if (typeof rawValue === 'string') {
+                                  // Remove currency symbols and commas
+                                  const cleaned = rawValue.replace(/[$,]/g, '').trim();
+                                  numericValue = parseFloat(cleaned);
+                                }
+                                
+                                if (!isNaN(numericValue) && numericValue !== 0) {
+                                  tableTotal += numericValue;
+                                  calculatedTotal += numericValue;
+                                  console.log(`    Row ${rowIdx}: Added $${numericValue.toFixed(2)} (raw: "${rawValue}")`);
+                                } else {
+                                  console.log(`    Row ${rowIdx}: Could not parse "${rawValue}"`);
+                                }
+                              });
+                              
+                              console.log(`  ✅ Table ${tableIdx + 1} total: $${tableTotal.toFixed(2)}`);
+                            });
+                          }
+                          
+                          console.log('💰 Final calculated total:', calculatedTotal.toFixed(2));
+                          
+                          // Get invoice total (NEW)
+                          const extractedInvoiceTotal = (statement as any).extracted_invoice_total;
+                          const hasInvoiceTotal = extractedInvoiceTotal !== undefined && extractedInvoiceTotal !== null && extractedInvoiceTotal > 0;
+                          
+                          // Calculate the difference and match status
+                              const difference = calculatedTotal - (extractedTotal || 0);
+                              const isMatch = statement.total_amount_match === true;
+                              const hasExtractedTotal = extractedTotal !== undefined && extractedTotal !== null && extractedTotal > 0;
+                              const hasCalculatedTotal = calculatedTotal > 0;
+                              
+                              // If no data at all, don't show the card
+                              if (!hasExtractedTotal && !hasCalculatedTotal && !hasInvoiceTotal) return null;
+                              
+                              return (
+                                <div className="mb-4">
+                                  <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">
+                                    <ReceiptText className="w-4 h-4" />
+                                    <span>Commission Details</span>
+                                  </div>
+                                  
+                                  <div className="grid grid-cols-3 gap-4 text-sm">
+                                    {/* Show Invoice Total if available */}
+                                    {hasInvoiceTotal && (
+                                      <div>
+                                        <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">
+                                          Total Invoice
+                                        </div>
+                                        <div className="font-semibold text-slate-900 dark:text-slate-100">
+                                          ${extractedInvoiceTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        </div>
+                                      </div>
+                                    )}
+                                    
+                                    {/* Show Earned Commission (from document extraction or calculation) */}
+                                    <div>
+                                      <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">
+                                        {statement.status.toLowerCase() === 'needs_review' ? 'Commission on File' : 'Earned Commission'}
+                                      </div>
+                                      <div className="font-semibold text-slate-900 dark:text-slate-100">
+                                        {hasExtractedTotal 
+                                          ? `$${extractedTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                          : hasCalculatedTotal 
+                                            ? `$${calculatedTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                            : '—'
+                                        }
+                                      </div>
+                                    </div>
+                                    
+                                    {/* Show calculated commission if we have both extracted and calculated */}
+                                    {hasExtractedTotal && hasCalculatedTotal && Math.abs(calculatedTotal - extractedTotal) > 0.01 && (
+                                      <div>
+                                        <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">
+                                          Calculated Commission
+                                        </div>
+                                        <div className="font-semibold text-slate-900 dark:text-slate-100">
+                                          ${calculatedTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        </div>
+                                      </div>
+                                    )}
+                                    
+                                    {/* Show difference if there's a mismatch */}
+                                    {hasExtractedTotal && !isMatch && Math.abs(difference) > 0.01 && (
+                                      <div>
+                                        <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Difference</div>
+                                        <div className={`font-semibold ${
+                                          difference > 0 
+                                            ? 'text-amber-600 dark:text-amber-400' 
+                                            : 'text-amber-600 dark:text-amber-400'
+                                        }`}>
+                                          {difference > 0 ? '+' : ''}${Math.abs(difference).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })()
+                          )}
+
+                          {/* Rejection reason in expandable section */}
+                          {statement.rejection_reason && (
+                            <div className="pt-3 border-t border-slate-200 dark:border-slate-700">
+                              <div className="flex items-start gap-2 text-sm">
+                                <AlertCircle className="w-4 h-4 text-red-500 mt-0.5" />
+                                <div>
+                                  <div className="font-medium text-red-700 dark:text-red-400 mb-1">Rejection Reason</div>
+                                  <div className="text-slate-600 dark:text-slate-400">{statement.rejection_reason}</div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
               );
             })}
-          </tbody>
-        </table>
+            </tbody>
+          </table>
+        </div>
         
         {/* Pagination */}
         {totalPages > 1 && (
@@ -674,14 +917,14 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
 
         {/* Empty State */}
         {filteredStatements.length === 0 && (
-          <div className="text-center py-16">
-            <div className="w-16 h-16 bg-slate-100 rounded-xl flex items-center justify-center mx-auto mb-4">
-              <FileText className="h-8 w-8 text-slate-400" />
+          <div className="text-center py-16 bg-white dark:bg-slate-900">
+            <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center mx-auto mb-4">
+              <FileText className="h-8 w-8 text-slate-400 dark:text-slate-500" />
             </div>
-            <h3 className="text-lg font-semibold text-slate-700 mb-2">
+            <h3 className="text-lg font-semibold text-slate-700 dark:text-slate-200 mb-2">
               {activeStatusTab === 'all' ? 'No statements found' : `No ${activeStatusTab} statements found`}
             </h3>
-            <p className="text-slate-500 text-sm">
+            <p className="text-slate-500 dark:text-slate-400 text-sm">
               {activeStatusTab === 'all' 
                 ? 'Upload statements to see them listed here'
                 : `Try selecting a different status tab to view other statements`

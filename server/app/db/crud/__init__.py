@@ -6,7 +6,8 @@ from .company import (
     get_company_by_id,
     delete_company,
     update_company_name,
-    get_latest_statement_upload_for_company
+    get_latest_statement_upload_for_company,
+    merge_carriers
 )
 
 from .company_mapping import (

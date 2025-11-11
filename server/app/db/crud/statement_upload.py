@@ -306,6 +306,262 @@ async def save_statement_review(
         
         print(f"📝 Extracted field_mapping with {len(field_mapping)} mappings: {field_mapping}")
     
+    # ✅ CRITICAL FIX: Calculate extracted_total from final_data for approved statements
+    # This ensures the dropdown shows commission details even for manually approved statements
+    extracted_total = None
+    total_amount_match = None
+    
+    if status == "Approved" and final_data and field_mapping:
+        print(f"💰 Calculating extracted_total for manual approval...")
+        print(f"💰 field_mapping keys: {list(field_mapping.keys())}")
+        print(f"💰 Number of tables in final_data: {len(final_data)}")
+        
+        # Find the commission field from field_mapping
+        # ✅ CRITICAL: Be precise - don't match "Commission Rate", only match actual earned commission fields
+        commission_field_candidates = [
+            'commission earned', 'commission_earned', 'total commission paid',
+            'paid amount', 'paid_amount', 'amount paid', 'commission amount', 'earned commission'
+        ]
+        
+        # ✅ Exclude rate/percentage fields - these are NOT commission earned amounts
+        excluded_fields = ['commission rate', 'commission_rate', 'rate', 'percentage', 'agent rate', 'agent %']
+        
+        commission_source_field = None
+        
+        # ✅ FIRST: Try exact match for "Commission Earned" or "Paid Amount"
+        for source_field, target_field in field_mapping.items():
+            normalized_target = str(target_field).lower().strip()
+            if normalized_target in ['commission earned', 'paid amount', 'commission amount']:
+                commission_source_field = source_field
+                print(f"💰 Found commission field (EXACT MATCH): {source_field} -> {target_field}")
+                break
+        
+        # If no exact match, search with exclusions
+        if not commission_source_field:
+            for source_field, target_field in field_mapping.items():
+                normalized_target = str(target_field).lower().strip()
+                
+                print(f"  🔍 Checking: '{source_field}' -> '{target_field}' (normalized: '{normalized_target}')")
+                
+                # Skip if this is a rate/percentage field
+                if any(excluded in normalized_target for excluded in excluded_fields):
+                    print(f"  ⏭️ Skipping rate field: {source_field} -> {target_field}")
+                    continue
+                
+                # Check if it matches commission candidates
+                if any(candidate in normalized_target or normalized_target in candidate 
+                       for candidate in commission_field_candidates):
+                    commission_source_field = source_field
+                    print(f"💰 Found commission field: {source_field} -> {target_field}")
+                    break
+        
+        print(f"💰 Final commission_source_field: {commission_source_field}")
+        
+        if commission_source_field:
+            calculated_total = 0
+            
+            # Calculate total from final_data
+            for table_idx, table in enumerate(final_data):
+                if not isinstance(table, dict):
+                    continue
+                    
+                headers = table.get('header') or table.get('headers', [])
+                rows = table.get('rows', [])
+                summary_rows_set = set(table.get('summaryRows', []))
+                
+                print(f"  📊 Table {table_idx}: {len(headers)} headers, {len(rows)} rows")
+                print(f"  📋 Headers: {headers}")
+                if rows:
+                    print(f"  📋 First row sample: {rows[0]}")
+                
+                # Find commission column index
+                commission_col_idx = -1
+                if commission_source_field in headers:
+                    commission_col_idx = headers.index(commission_source_field)
+                else:
+                    # Try case-insensitive match
+                    for idx, header in enumerate(headers):
+                        if header and header.lower() == commission_source_field.lower():
+                            commission_col_idx = idx
+                            break
+                
+                if commission_col_idx == -1:
+                    print(f"  ⚠️ Table {table_idx}: Commission column '{commission_source_field}' not found in headers: {headers}")
+                    continue
+                
+                print(f"  💰 Table {table_idx}: Commission column '{commission_source_field}' at index {commission_col_idx}")
+                
+                # Sum non-summary rows
+                table_total = 0
+                processed_count = 0
+                for row_idx, row in enumerate(rows):
+                    if row_idx in summary_rows_set:
+                        print(f"    Row {row_idx}: SKIPPED (summary row)")
+                        continue
+                    
+                    if isinstance(row, list) and len(row) > commission_col_idx:
+                        raw_value = row[commission_col_idx]
+                        print(f"    Row {row_idx}: raw_value = '{raw_value}' (type: {type(raw_value)})")
+                        
+                        if raw_value is None or raw_value == '':
+                            print(f"    Row {row_idx}: SKIPPED (empty value)")
+                            continue
+                        
+                        # Parse numeric value
+                        try:
+                            if isinstance(raw_value, (int, float)):
+                                numeric_value = float(raw_value)
+                            elif isinstance(raw_value, str):
+                                # ✅ Handle negative numbers in parentheses format: ($141.14) = -141.14
+                                value_str = raw_value.strip()
+                                is_negative = value_str.startswith('(') and value_str.endswith(')')
+                                if is_negative:
+                                    value_str = value_str[1:-1]  # Remove parentheses
+                                
+                                cleaned = value_str.replace('$', '').replace(',', '').strip()
+                                numeric_value = float(cleaned) if cleaned else 0
+                                
+                                # Apply negative sign if needed
+                                if is_negative:
+                                    numeric_value = -numeric_value
+                            else:
+                                numeric_value = 0
+                            
+                            if numeric_value != 0:
+                                table_total += numeric_value
+                                calculated_total += numeric_value
+                                processed_count += 1
+                                print(f"    Row {row_idx}: Added ${numeric_value:.2f} (running total: ${calculated_total:.2f})")
+                            else:
+                                print(f"    Row {row_idx}: Value is zero, skipped")
+                        except (ValueError, TypeError) as e:
+                            print(f"    Row {row_idx}: FAILED to parse '{raw_value}': {e}")
+                            continue
+                
+                print(f"  ✅ Table {table_idx} total: ${table_total:.2f}")
+            
+            extracted_total = round(calculated_total, 2)
+            total_amount_match = True  # Assume match for manually approved statements
+            
+            print(f"💰 Final extracted_total: ${extracted_total:.2f}")
+        else:
+            print(f"⚠️ No commission field found in field_mapping")
+    
+    # ✅ NEW: Calculate invoice total for manual approval
+    extracted_invoice_total = None
+    
+    if status == "Approved" and final_data and field_mapping:
+        print(f"💰 Calculating extracted_invoice_total for manual approval...")
+        
+        # Find the invoice total field from field_mapping
+        invoice_field_candidates = [
+            'invoice total', 'invoice_total', 'total invoice', 'total_invoice',
+            'premium amount', 'premium_amount', 'premium'
+        ]
+        
+        # ✅ Exclude non-invoice fields
+        excluded_invoice_fields = ['stoploss', 'commission', 'paid amount', 'rate']
+        
+        invoice_source_field = None
+        for source_field, target_field in field_mapping.items():
+            normalized_target = str(target_field).lower().strip()
+            
+            # Skip if this is an excluded field
+            if any(excluded in normalized_target for excluded in excluded_invoice_fields):
+                continue
+            
+            # Check exact match first for "Invoice Total"
+            if normalized_target == 'invoice total':
+                invoice_source_field = source_field
+                print(f"💰 Found invoice field (exact match): {source_field} -> {target_field}")
+                break
+                
+            # Then check other candidates
+            if any(candidate in normalized_target or normalized_target in candidate 
+                   for candidate in invoice_field_candidates):
+                invoice_source_field = source_field
+                print(f"💰 Found invoice field: {source_field} -> {target_field}")
+                break
+        
+        if invoice_source_field:
+            calculated_invoice = 0
+            
+            # Calculate total from final_data
+            for table_idx, table in enumerate(final_data):
+                if not isinstance(table, dict):
+                    continue
+                    
+                headers = table.get('header') or table.get('headers', [])
+                rows = table.get('rows', [])
+                summary_rows_set = set(table.get('summaryRows', []))
+                
+                print(f"  📊 Table {table_idx}: {len(headers)} headers, {len(rows)} rows")
+                print(f"  📋 Headers: {headers}")
+                if rows:
+                    print(f"  📋 First row sample: {rows[0]}")
+                
+                # Find invoice column index
+                invoice_col_idx = -1
+                if invoice_source_field in headers:
+                    invoice_col_idx = headers.index(invoice_source_field)
+                else:
+                    # Try case-insensitive match
+                    for idx, header in enumerate(headers):
+                        if header and header.lower() == invoice_source_field.lower():
+                            invoice_col_idx = idx
+                            break
+                
+                if invoice_col_idx == -1:
+                    print(f"  ⚠️ Table {table_idx}: Invoice column '{invoice_source_field}' not found in headers: {headers}")
+                    continue
+                
+                print(f"  💰 Table {table_idx}: Invoice column '{invoice_source_field}' at index {invoice_col_idx}")
+                
+                # Sum non-summary rows
+                table_total = 0
+                for row_idx, row in enumerate(rows):
+                    if row_idx in summary_rows_set:
+                        continue
+                    
+                    if isinstance(row, list) and len(row) > invoice_col_idx:
+                        raw_value = row[invoice_col_idx]
+                        
+                        if raw_value is None or raw_value == '':
+                            continue
+                        
+                        # Parse numeric value
+                        try:
+                            if isinstance(raw_value, (int, float)):
+                                numeric_value = float(raw_value)
+                            elif isinstance(raw_value, str):
+                                # ✅ Handle negative numbers in parentheses format: ($627.27) = -627.27
+                                value_str = raw_value.strip()
+                                is_negative = value_str.startswith('(') and value_str.endswith(')')
+                                if is_negative:
+                                    value_str = value_str[1:-1]  # Remove parentheses
+                                
+                                cleaned = value_str.replace('$', '').replace(',', '').strip()
+                                numeric_value = float(cleaned) if cleaned else 0
+                                
+                                # Apply negative sign if needed
+                                if is_negative:
+                                    numeric_value = -numeric_value
+                            else:
+                                numeric_value = 0
+                            
+                            if numeric_value != 0:
+                                table_total += numeric_value
+                                calculated_invoice += numeric_value
+                        except (ValueError, TypeError):
+                            continue
+                
+                print(f"  ✅ Table {table_idx} invoice total: ${table_total:.2f}")
+            
+            extracted_invoice_total = round(calculated_invoice, 2)
+            print(f"💰 Final extracted_invoice_total: ${extracted_invoice_total:.2f}")
+        else:
+            print(f"⚠️ No invoice field found in field_mapping")
+    
     # Update the upload with final data
     db_upload.final_data = final_data
     db_upload.status = status
@@ -317,6 +573,17 @@ async def save_statement_review(
     db_upload.selected_statement_date = selected_statement_date
     db_upload.completed_at = datetime.utcnow()
     db_upload.last_updated = datetime.utcnow()
+    
+    # Set extracted_total and total_amount_match if calculated
+    if extracted_total is not None:
+        db_upload.extracted_total = extracted_total
+        db_upload.total_amount_match = total_amount_match
+        print(f"✅ Set extracted_total={extracted_total}, total_amount_match={total_amount_match}")
+    
+    # Set extracted_invoice_total if calculated
+    if extracted_invoice_total is not None:
+        db_upload.extracted_invoice_total = extracted_invoice_total
+        print(f"✅ Set extracted_invoice_total={extracted_invoice_total}")
     
     # If the statement is approved, process commission data BEFORE committing
     if status == "Approved":

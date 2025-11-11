@@ -9,7 +9,7 @@ import StatementPreviewModal from "./StatementPreviewModal";
 import DatabaseFieldsManager from "./DatabaseFieldsManager";
 import PlanTypesManager from "./PlanTypesManager";
 import toast from 'react-hot-toast';
-import { Database, Settings, Plus, Search, Filter, Sparkles, Building2, FileText, DollarSign, TrendingUp, Users, Eye, EyeOff } from "lucide-react";
+import { Database, Settings, Plus, Search, Filter, Sparkles, Building2, FileText, DollarSign, TrendingUp, Users, Eye, EyeOff, ReceiptText } from "lucide-react";
 import { useSubmission } from "@/context/SubmissionContext";
 import { useUserSpecificCompanies } from "@/app/hooks/useDashboard";
 import { useAuth } from "@/context/AuthContext";
@@ -21,13 +21,19 @@ type Statement = {
   file_name: string;
   uploaded_at: string;
   status: string;
-  final_data?: any[];
-  field_config?: any[];
+  final_data?: any[];  // Array of tables with rows
+  field_config?: any[];  // Field configuration/mappings
+  field_mapping?: Record<string, string> | null;  // Field mappings saved during approval
   raw_data?: any[];
   rejection_reason?: string;
   selected_statement_date?: any;
   uploaded_by_email?: string;
   uploaded_by_name?: string;
+  // NEW: Automation metadata
+  automated_approval?: boolean;
+  automation_timestamp?: string;
+  total_amount_match?: boolean | null;
+  extracted_total?: number;  // Total extracted from document
 };
 
 interface CommissionStats {
@@ -269,6 +275,14 @@ export default function CarrierTab({ environmentId }: CarrierTabProps) {
     })
       .then((response) => {
         setCarriers(carriers.filter(carrier => !ids.includes(carrier.id)));
+        
+        // Clear selection if the deleted carrier was currently selected
+        if (selected && ids.includes(selected.id)) {
+          setSelected(null);
+          setStatements([]);
+          setCommissionStats(null);
+        }
+        
         toast.success(response.data.message || 'Carriers deleted successfully!');
         // Trigger global dashboard refresh after successful deletion
         triggerDashboardRefresh();
@@ -444,22 +458,6 @@ export default function CarrierTab({ environmentId }: CarrierTabProps) {
                       </p>
                     )}
                   </div>
-                  
-                  {selected && (
-                    <button
-                      disabled={!canDeleteFiles}
-                      className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-200 font-medium ${
-                        !canDeleteFiles
-                          ? 'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed opacity-50'
-                          : 'bg-blue-500 text-white hover:bg-blue-600'
-                      }`}
-                      onClick={() => setShowEditMapping(true)}
-                      title={!canDeleteFiles ? "Read-only mode - switch to 'My Data' to edit" : "Edit carrier mappings"}
-                    >
-                      <Settings size={16} />
-                      Edit Mappings
-                    </button>
-                  )}
                 </div>
               </div>
               
@@ -540,35 +538,58 @@ export default function CarrierTab({ environmentId }: CarrierTabProps) {
                           </p>
                         </div>
                       )}
-                      <div className="grid grid-cols-3 gap-6">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
-                          <DollarSign className="text-green-600 dark:text-green-400" size={18} />
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        {/* Total Commission Card */}
+                        <div className="bg-gradient-to-br from-green-50 to-green-100/50 dark:from-green-950/30 dark:to-green-900/20 border border-green-200 dark:border-green-800 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow duration-200">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="text-sm font-medium text-green-600 dark:text-green-400 mb-2">
+                                Total Commission
+                              </div>
+                              <div className="text-3xl font-bold text-green-900 dark:text-green-100">
+                                {formatCurrency(commissionStats.total_commission)}
+                              </div>
+                            </div>
+                            <div className="w-12 h-12 bg-green-600 dark:bg-green-500 rounded-lg flex items-center justify-center">
+                              <DollarSign className="w-6 h-6 text-white" />
+                            </div>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-sm text-slate-600 dark:text-slate-400">Total Commission</p>
-                          <p className="font-bold text-green-700 dark:text-green-400 text-lg">{formatCurrency(commissionStats.total_commission)}</p>
+                        
+                        {/* Total Invoice Card */}
+                        <div className="bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-950/30 dark:to-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow duration-200">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="text-sm font-medium text-blue-600 dark:text-blue-400 mb-2">
+                                Total Invoice
+                              </div>
+                              <div className="text-3xl font-bold text-blue-900 dark:text-blue-100">
+                                {formatCurrency(commissionStats.total_invoice)}
+                              </div>
+                            </div>
+                            <div className="w-12 h-12 bg-blue-600 dark:bg-blue-500 rounded-lg flex items-center justify-center">
+                              <ReceiptText className="w-6 h-6 text-white" />
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Total Companies Card */}
+                        <div className="bg-gradient-to-br from-purple-50 to-purple-100/50 dark:from-purple-950/30 dark:to-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow duration-200">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="text-sm font-medium text-purple-600 dark:text-purple-400 mb-2">
+                                Total Companies
+                              </div>
+                              <div className="text-3xl font-bold text-purple-900 dark:text-purple-100">
+                                {commissionStats.total_companies}
+                              </div>
+                            </div>
+                            <div className="w-12 h-12 bg-purple-600 dark:bg-purple-500 rounded-lg flex items-center justify-center">
+                              <Users className="w-6 h-6 text-white" />
+                            </div>
+                          </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
-                          <TrendingUp className="text-blue-600 dark:text-blue-400" size={18} />
-                        </div>
-                        <div>
-                          <p className="text-sm text-slate-600 dark:text-slate-400">Total Invoice</p>
-                          <p className="font-bold text-blue-700 dark:text-blue-400 text-lg">{formatCurrency(commissionStats.total_invoice)}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
-                          <Users className="text-purple-600 dark:text-purple-400" size={18} />
-                        </div>
-                        <div>
-                          <p className="text-sm text-slate-600 dark:text-slate-400">Total Companies</p>
-                          <p className="font-bold text-purple-700 dark:text-purple-400 text-lg">{commissionStats.total_companies}</p>
-                        </div>
-                      </div>
-                    </div>
                     </>
                   ) : statements.length === 0 ? (
                     <div className="text-center py-2">

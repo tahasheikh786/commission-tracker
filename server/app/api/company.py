@@ -289,3 +289,114 @@ async def update_company(company_id: str, update: CompanyUpdate, db: AsyncSessio
         raise HTTPException(status_code=404, detail="Company not found")
     updated_company = await crud.update_company_name(db, company_id, update.name)
     return updated_company
+
+@router.get("/companies/check-duplicate/{carrier_name}")
+async def check_duplicate_carrier(
+    carrier_name: str,
+    current_carrier_id: str = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """Check if a carrier name already exists (case-insensitive)"""
+    existing_carrier = await crud.get_company_by_name(db, carrier_name)
+    
+    # If carrier exists and it's not the same carrier being edited
+    if existing_carrier and (not current_carrier_id or str(existing_carrier.id) != current_carrier_id):
+        # Get statement counts for both carriers
+        from sqlalchemy import func
+        
+        # Count statements for existing carrier
+        existing_carrier_count = await db.execute(
+            select(func.count(StatementUpload.id)).where(
+                or_(
+                    StatementUpload.carrier_id == existing_carrier.id,
+                    StatementUpload.company_id == existing_carrier.id
+                )
+            )
+        )
+        existing_count = existing_carrier_count.scalar() or 0
+        
+        # Count statements for current carrier if provided
+        current_count = 0
+        if current_carrier_id:
+            current_carrier_count = await db.execute(
+                select(func.count(StatementUpload.id)).where(
+                    or_(
+                        StatementUpload.carrier_id == current_carrier_id,
+                        StatementUpload.company_id == current_carrier_id
+                    )
+                )
+            )
+            current_count = current_carrier_count.scalar() or 0
+        
+        return {
+            "exists": True,
+            "existing_carrier": {
+                "id": str(existing_carrier.id),
+                "name": existing_carrier.name,
+                "statement_count": existing_count
+            },
+            "current_statement_count": current_count
+        }
+    
+    return {"exists": False}
+
+class MergeCarriersRequest(BaseModel):
+    source_carrier_id: str
+    target_carrier_id: str
+
+@router.post("/companies/merge")
+async def merge_carriers_endpoint(
+    request: MergeCarriersRequest,
+    current_user: User = Depends(get_current_user_hybrid),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Merge source carrier into target carrier.
+    All data (statements, format learning, mappings, etc.) from source will be transferred to target.
+    Source carrier will be deleted after merge.
+    """
+    try:
+        # Verify both carriers exist
+        source_carrier = await crud.get_company_by_id(db, request.source_carrier_id)
+        target_carrier = await crud.get_company_by_id(db, request.target_carrier_id)
+        
+        if not source_carrier:
+            raise HTTPException(status_code=404, detail="Source carrier not found")
+        if not target_carrier:
+            raise HTTPException(status_code=404, detail="Target carrier not found")
+        
+        # Permission check: Non-admin users can only merge carriers where they own all statements
+        if current_user.role != "admin":
+            # Check all statements for source carrier
+            source_statements = await db.execute(
+                select(StatementUpload).where(
+                    or_(
+                        StatementUpload.carrier_id == request.source_carrier_id,
+                        StatementUpload.company_id == request.source_carrier_id
+                    )
+                )
+            )
+            source_stmts = source_statements.scalars().all()
+            
+            # Check if any statement belongs to another user
+            if source_stmts:
+                other_user_statements = [s for s in source_stmts if str(s.user_id) != str(current_user.id)]
+                if other_user_statements:
+                    raise HTTPException(
+                        status_code=403,
+                        detail="You cannot merge a carrier that contains data from other users"
+                    )
+        
+        # Perform the merge
+        merge_result = await crud.merge_carriers(db, request.source_carrier_id, request.target_carrier_id)
+        
+        return {
+            "success": True,
+            "message": f"Successfully merged '{source_carrier.name}' into '{target_carrier.name}'",
+            "details": merge_result
+        }
+        
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to merge carriers: {str(e)}")

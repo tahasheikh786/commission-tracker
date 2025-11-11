@@ -82,14 +82,13 @@ input[type='checkbox']:focus {
   ring-color: #3b82f6;
 }
 
-/* Table row hover animation */
-tbody tr {
+/* Table row hover animation - SCOPED TO REVIEW COMPONENT ONLY */
+.table-row-hover {
   transition: all 0.15s ease-out;
 }
 
-tbody tr:hover {
-  background-color: #f9fafb;
-  transform: scale(1.001);
+.table-row-hover:hover {
+  /* Don't apply any background here - let component-specific styles handle it */
 }
 
 tbody tr.selected {
@@ -97,9 +96,23 @@ tbody tr.selected {
   border-left: 4px solid #3b82f6;
 }
 
+@media (prefers-color-scheme: dark) {
+  tbody tr.selected {
+    background-color: rgb(30 58 138 / 0.3);
+    border-left-color: rgb(96 165 250);
+  }
+}
+
 tbody tr.summary-row {
   background-color: #fff7ed;
   border-left: 4px solid #fb923c;
+}
+
+@media (prefers-color-scheme: dark) {
+  tbody tr.summary-row {
+    background-color: rgb(124 45 18 / 0.3);
+    border-left-color: rgb(251 146 60);
+  }
 }
 
 /* Panel collapse animation */

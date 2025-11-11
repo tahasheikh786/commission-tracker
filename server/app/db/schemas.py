@@ -150,7 +150,8 @@ class StatementUpload(BaseModel):
     automated_approval: Optional[bool] = None
     automation_timestamp: Optional[datetime] = None
     total_amount_match: Optional[bool] = None
-    extracted_total: Optional[float] = None
+    extracted_total: Optional[float] = None  # Earned commission total
+    extracted_invoice_total: Optional[float] = None  # Invoice total
 
     class Config:
         from_attributes = True
@@ -188,7 +189,8 @@ class StatementUploadUpdate(BaseModel):
     automated_approval: Optional[bool] = None
     automation_timestamp: Optional[datetime] = None
     total_amount_match: Optional[bool] = None
-    extracted_total: Optional[float] = None
+    extracted_total: Optional[float] = None  # Earned commission total
+    extracted_invoice_total: Optional[float] = None  # Invoice total
 
 class ExtractionCreate(BaseModel):
     company_id: str

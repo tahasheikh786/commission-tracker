@@ -261,20 +261,27 @@ async def auto_approve_statement(
         commission_field = None
         
         # Find commission field from field mapping
-        # ✅ FIX: Normalize both spaces and underscores for matching
+        # ✅ CRITICAL: Be precise - don't match "Commission Rate", only match actual earned commission fields
         commission_field_candidates = [
-            "commission_earned", "commission earned",
-            "paid_amount", "paid amount", 
-            "commission_amount", "commission amount",
-            "total_commission", "total commission",
-            "commission", "earned"
+            "commission earned", "commission_earned",
+            "paid amount", "paid_amount", 
+            "commission amount", "commission_amount",
+            "total commission paid", "earned commission"
         ]
+        
+        # ✅ Exclude rate/percentage fields - these are NOT commission earned amounts
+        excluded_fields = ['commission rate', 'commission_rate', 'rate', 'percentage', 'agent rate', 'agent %', 'agent percent']
         
         for header, mapped in field_mapping.items():
             # Normalize the mapped value: replace spaces/underscores, lowercase
             normalized_mapped = mapped.lower().replace("_", " ").strip()
             
-            # Also check if any candidate matches the normalized value
+            # Skip if this is a rate/percentage field
+            if any(excluded in normalized_mapped for excluded in excluded_fields):
+                logger.info(f"  ⏭️ Auto-approval: Skipping rate field: '{header}' -> '{mapped}'")
+                continue
+            
+            # Check if any candidate matches the normalized value
             if any(candidate.replace("_", " ") == normalized_mapped for candidate in commission_field_candidates):
                 commission_field = header
                 logger.info(f"💰 Auto-approval: Found commission field: '{commission_field}' (mapped to '{mapped}')")
@@ -304,14 +311,26 @@ async def auto_approve_statement(
                             continue
                             
                         if idx < len(row):
-                            value = str(row[idx]).replace("$", "").replace(",", "").strip()
+                            value = str(row[idx]).strip()
                             try:
+                                # ✅ Handle negative numbers in parentheses format: ($141.14) = -141.14
+                                is_negative = value.startswith('(') and value.endswith(')')
+                                if is_negative:
+                                    value = value[1:-1]  # Remove parentheses
+                                
+                                # Remove currency symbols and commas
+                                value = value.replace("$", "").replace(",", "").strip()
                                 amount = float(value)
+                                
+                                # Apply negative sign if needed
+                                if is_negative:
+                                    amount = -amount
+                                
                                 calculated_total += amount
                                 row_count += 1
                                 logger.debug(f"💰 Auto-approval: Row {row_idx}: Added ${amount:.2f} (running total: ${calculated_total:.2f})")
                             except Exception as e:
-                                logger.warning(f"💰 Auto-approval: Row {row_idx}: Failed to parse value '{value}': {e}")
+                                logger.warning(f"💰 Auto-approval: Row {row_idx}: Failed to parse value '{row[idx]}': {e}")
                     
                     logger.info(f"💰 Auto-approval: Processed {row_count} data rows from table {table_idx}")
                 else:
@@ -319,9 +338,90 @@ async def auto_approve_statement(
         else:
             logger.error(f"💰 Auto-approval: No commission field identified in field_mapping: {field_mapping}")
         
+        # ✅ NEW: Calculate invoice total from tables
+        calculated_invoice_total = 0.0
+        invoice_field = None
+        
+        # Find invoice total field from field mapping
+        invoice_field_candidates = [
+            "invoice total", "invoice_total",
+            "total invoice", "total_invoice",
+            "premium amount", "premium_amount",
+            "premium"
+        ]
+        
+        # ✅ Exclude non-invoice fields
+        excluded_invoice_fields = ['stoploss', 'commission', 'paid amount', 'rate']
+        
+        for header, mapped in field_mapping.items():
+            # Normalize the mapped value: replace spaces/underscores, lowercase
+            normalized_mapped = mapped.lower().replace("_", " ").strip()
+            
+            # Skip if this is an excluded field
+            if any(excluded in normalized_mapped for excluded in excluded_invoice_fields):
+                continue
+            
+            # Check exact match first for "invoice total"
+            if normalized_mapped == "invoice total":
+                invoice_field = header
+                logger.info(f"💰 Auto-approval: Found invoice field (exact match): '{invoice_field}' (mapped to '{mapped}')")
+                break
+            
+            # Then check other candidates
+            if any(candidate.replace("_", " ") == normalized_mapped for candidate in invoice_field_candidates):
+                invoice_field = header
+                logger.info(f"💰 Auto-approval: Found invoice field: '{invoice_field}' (mapped to '{mapped}')")
+                break
+        
+        if invoice_field:
+            logger.info(f"💰 Auto-approval: Calculating invoice total from {len(commission_tables)} table(s)")
+            for table_idx, table in enumerate(commission_tables):
+                headers = table.get("headers", []) or table.get("header", [])
+                
+                if invoice_field in headers:
+                    idx = headers.index(invoice_field)
+                    logger.info(f"💰 Auto-approval: Invoice field '{invoice_field}' found at index {idx}")
+                    
+                    summary_rows = set(table.get("summaryRows", []) or table.get("summary_rows", []))
+                    rows = table.get("rows", [])
+                    
+                    row_count = 0
+                    for row_idx, row in enumerate(rows):
+                        # ✅ Skip summary rows when calculating
+                        if row_idx in summary_rows:
+                            continue
+                            
+                        if idx < len(row):
+                            value = str(row[idx]).strip()
+                            try:
+                                # ✅ Handle negative numbers in parentheses format: ($627.27) = -627.27
+                                is_negative = value.startswith('(') and value.endswith(')')
+                                if is_negative:
+                                    value = value[1:-1]  # Remove parentheses
+                                
+                                # Remove currency symbols and commas
+                                value = value.replace("$", "").replace(",", "").strip()
+                                amount = float(value)
+                                
+                                # Apply negative sign if needed
+                                if is_negative:
+                                    amount = -amount
+                                
+                                calculated_invoice_total += amount
+                                row_count += 1
+                            except Exception as e:
+                                logger.warning(f"💰 Auto-approval: Row {row_idx}: Failed to parse invoice value '{row[idx]}': {e}")
+                    
+                    logger.info(f"💰 Auto-approval: Processed {row_count} invoice rows from table {table_idx}")
+                else:
+                    logger.warning(f"💰 Auto-approval: Invoice field '{invoice_field}' NOT found in table {table_idx} headers: {headers}")
+        else:
+            logger.warning(f"💰 Auto-approval: No invoice field identified in field_mapping: {field_mapping}")
+        
         logger.info(f"Total validation:")
         logger.info(f"  - Extracted from file: ${actual_extracted_total:.2f}")
         logger.info(f"  - Calculated from table: ${calculated_total:.2f}")
+        logger.info(f"  - Invoice total calculated: ${calculated_invoice_total:.2f}")
         
         # ✅ Validate: Extracted total should match calculated total
         total_validation = {}
@@ -355,7 +455,8 @@ async def auto_approve_statement(
             automated_approval=True,  # Set to True for boolean
             automation_timestamp=datetime.utcnow(),
             total_amount_match=True if total_validation.get("matches", False) else False,
-            extracted_total=round(actual_extracted_total, 2) if actual_extracted_total else 0,
+            extracted_total=round(actual_extracted_total, 2) if actual_extracted_total else 0,  # Earned commission
+            extracted_invoice_total=round(calculated_invoice_total, 2) if calculated_invoice_total else 0,  # Invoice total
             field_mapping=field_mapping  # Save the field mapping for review
         )
         

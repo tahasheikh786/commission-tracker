@@ -421,6 +421,22 @@ class ClaudeDocumentAIService:
             tables = parsed_data.get('tables', [])
             doc_metadata = parsed_data.get('document_metadata', {})
             
+            # Validate carrier extraction to prevent duplicates
+            carrier_name_extracted = doc_metadata.get('carrier_name', '')
+            if carrier_name_extracted:
+                carrier_validation = self.response_parser.validate_carrier_extraction(carrier_name_extracted)
+                
+                # Add validation metadata to doc_metadata
+                doc_metadata['carrier_validation'] = carrier_validation
+                
+                # Log validation issues if any
+                if carrier_validation.get('warnings'):
+                    logger.warning(f"Carrier extraction validation warnings: {carrier_validation['warnings']}")
+                    
+                # If validation quality is very low, log critical warning
+                if carrier_validation.get('quality_score', 1.0) < 0.5:
+                    logger.critical(f"LOW QUALITY carrier extraction detected for '{carrier_name_extracted}' - possible hallucination or addition")
+            
             # Normalize headers
             for table in tables:
                 if 'headers' in table and 'rows' in table:

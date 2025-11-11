@@ -228,6 +228,97 @@ class ClaudeResponseParser:
             return None
     
     @staticmethod
+    def validate_carrier_extraction(extracted_name: str, pdf_text: str = None) -> Dict[str, Any]:
+        """
+        Verify carrier name was extracted exactly as shown.
+        Returns validation results with flagged issues.
+        
+        This validation helps prevent duplicate carrier entries by detecting
+        when text has been added or modified during extraction.
+        
+        Args:
+            extracted_name: The carrier name extracted by Claude
+            pdf_text: Optional PDF text content for verification (if available)
+            
+        Returns:
+            Dict with validation results:
+            - is_exact_match: Whether name appears in source text
+            - found_in_source: Whether name was found (if pdf_text provided)
+            - has_additions: Whether suspicious additions detected
+            - warnings: List of specific issues found
+            - quality_score: Overall quality score (0.0-1.0)
+        """
+        validation = {
+            'is_exact_match': True,
+            'found_in_source': None,
+            'has_additions': False,
+            'warnings': [],
+            'quality_score': 1.0
+        }
+        
+        if not extracted_name:
+            validation['warnings'].append("Carrier name is empty")
+            validation['quality_score'] = 0.0
+            return validation
+        
+        # Check if carrier name appears in source PDF text (if provided)
+        if pdf_text:
+            if extracted_name in pdf_text:
+                validation['found_in_source'] = True
+                validation['is_exact_match'] = True
+            else:
+                validation['found_in_source'] = False
+                validation['is_exact_match'] = False
+                validation['warnings'].append(f"Carrier name '{extracted_name}' not found in source document")
+                validation['quality_score'] -= 0.3
+        
+        # Check for common additions that indicate hallucination
+        suspicious_patterns = [
+            (r'\([A-Z]+\)$', 'Abbreviation in parentheses at end', 0.4),  # (ABSF), (UHC), etc.
+            (r'\([A-Za-z\s]+\)$', 'Text in parentheses at end', 0.3),  # (United Health), etc.
+            (r'\[[A-Z]+\]$', 'Abbreviation in brackets at end', 0.4),  # [ABSF]
+            (r'\s+LLC$', 'Added LLC suffix', 0.2),  # Added LLC
+            (r'\s+Inc\.$', 'Added Inc. suffix', 0.2),  # Added Inc.
+            (r'\s+Corp\.$', 'Added Corp. suffix', 0.2),  # Added Corp.
+            (r'\s+\(.*?\)\s+', 'Parentheses in middle of name', 0.3),  # Text (something) more text
+        ]
+        
+        for pattern, description, penalty in suspicious_patterns:
+            if re.search(pattern, extracted_name):
+                validation['has_additions'] = True
+                validation['warnings'].append(f"Suspicious pattern detected: {description}")
+                validation['quality_score'] -= penalty
+        
+        # Additional checks for common formatting issues
+        
+        # Check for double spaces (might indicate incorrect parsing)
+        if '  ' in extracted_name:
+            validation['warnings'].append("Double spaces detected in carrier name")
+            validation['quality_score'] -= 0.1
+        
+        # Check for leading/trailing whitespace
+        if extracted_name != extracted_name.strip():
+            validation['warnings'].append("Leading or trailing whitespace detected")
+            validation['quality_score'] -= 0.1
+        
+        # Check for unusual characters that might indicate OCR errors
+        unusual_chars = re.findall(r'[^a-zA-Z0-9\s\.,&\-\']', extracted_name)
+        if unusual_chars:
+            validation['warnings'].append(f"Unusual characters detected: {', '.join(set(unusual_chars))}")
+            validation['quality_score'] -= 0.1
+        
+        # Ensure quality score doesn't go below 0
+        validation['quality_score'] = max(0.0, validation['quality_score'])
+        
+        # Log validation results
+        if validation['warnings']:
+            logger.warning(f"Carrier extraction validation issues for '{extracted_name}': {', '.join(validation['warnings'])}")
+        else:
+            logger.debug(f"Carrier extraction validation passed for '{extracted_name}'")
+        
+        return validation
+    
+    @staticmethod
     def validate_table_structure(table_data: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
         """Validate extracted table structure"""
         required_fields = ['headers', 'rows']
