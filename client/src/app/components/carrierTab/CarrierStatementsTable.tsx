@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Trash2, CheckCircle2, XCircle, Clock, FileText, ExternalLink, ChevronLeft, ChevronRight, Table as TableIcon, User, Edit, AlertTriangle, PlayCircle, AlertCircle, ReceiptText, ChevronDown, ChevronRight as ChevronRightIcon } from "lucide-react";
+import { Trash2, CheckCircle2, XCircle, Clock, FileText, ExternalLink, ChevronLeft, ChevronRight, Table as TableIcon, User, Edit, AlertTriangle, PlayCircle, AlertCircle, ReceiptText } from "lucide-react";
 import { useRouter } from 'next/navigation';
 import TableViewerModal from './TableViewerModal';
 import EditableCompareModal from './EditableCompareModal';
@@ -52,7 +52,6 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
   const [activeStatusTab, setActiveStatusTab] = useState<'all' | 'approved' | 'pending' | 'rejected'>('all');
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
   const [reviewStatement, setReviewStatement] = useState<Statement | null>(null);
-  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const itemsPerPage = 10;
   const router = useRouter();
 
@@ -157,18 +156,6 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
     toast.success("Statement recalculated successfully!");
   };
 
-  const toggleExpand = (statementId: string) => {
-    setExpandedRows(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(statementId)) {
-        newSet.delete(statementId);
-      } else {
-        newSet.add(statementId);
-      }
-      return newSet;
-    });
-  };
-
   const normalizeFileName = (fileName: string) => {
     // Extract just the filename from the full path
     const parts = fileName.split('/');
@@ -260,6 +247,155 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
           borderColor: 'border-slate-200 dark:border-slate-700'
         };
     }
+  };
+
+  // Helper function to render commission cells
+  const renderCommissionCell = (statement: Statement) => {
+    const status = statement.status.toLowerCase();
+    const extractedTotal = statement.extracted_total || 0;
+    const extractedInvoice = statement.extracted_invoice_total || 0;
+    const isApproved = status === "approved" || status === "completed";
+    const isNeedsReview = status === "needs_review";
+    
+    // For APPROVED statements - show the values directly
+    if (isApproved && extractedTotal > 0) {
+      return {
+        invoice: (
+          <div className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">
+            {extractedInvoice.toLocaleString("en-US", {
+              style: "currency",
+              currency: "USD",
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2
+            })}
+          </div>
+        ),
+        commission: (
+          <div className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">
+            {extractedTotal.toLocaleString("en-US", {
+              style: "currency",
+              currency: "USD",
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2
+            })}
+          </div>
+        )
+      };
+    }
+    
+    // For NEEDSREVIEW statements - calculate and show difference
+    if (isNeedsReview && extractedTotal > 0) {
+      // Calculate the total from finaldata (same logic as in expandable section)
+      let calculatedTotal = 0;
+      
+      // Find commission field name
+      let sourceCommissionFieldName = "";
+      if (statement.field_mapping && typeof statement.field_mapping === "object") {
+        const commissionMappingCandidates = [
+          "commission earned", "commissionearned", "total commission paid",
+          "commission", "paid amount", "paidamount", "amount paid"
+        ];
+        
+        for (const [sourceField, targetField] of Object.entries(statement.field_mapping)) {
+          const normalizedTarget = String(targetField).toLowerCase().trim();
+          if (commissionMappingCandidates.some(candidate => 
+            normalizedTarget.includes(candidate) || candidate.includes(normalizedTarget)
+          )) {
+            sourceCommissionFieldName = sourceField;
+            break;
+          }
+        }
+      }
+      
+      // Calculate from finaldata if we found the field
+      if (sourceCommissionFieldName && statement.final_data && Array.isArray(statement.final_data)) {
+        statement.final_data.forEach((table: any) => {
+          const headers = table.header || table.headers;
+          const rows = table.rows;
+          const summaryRows = new Set(table.summaryRows || []);
+          
+          let commissionColumnIndex = headers?.indexOf(sourceCommissionFieldName);
+          if (commissionColumnIndex === -1) {
+            commissionColumnIndex = headers?.findIndex((h: string) => 
+              h.toLowerCase() === sourceCommissionFieldName.toLowerCase()
+            );
+          }
+          
+          if (commissionColumnIndex >= 0 && rows) {
+            rows.forEach((row: any, rowIdx: number) => {
+              if (summaryRows.has(rowIdx)) return;
+              
+              const rawValue = row[commissionColumnIndex];
+              if (rawValue !== undefined && rawValue !== null && rawValue !== "") {
+                let numericValue = 0;
+                if (typeof rawValue === "number") {
+                  numericValue = rawValue;
+                } else if (typeof rawValue === "string") {
+                  const cleaned = rawValue.replace(/[$,]/g, "").trim();
+                  numericValue = parseFloat(cleaned);
+                }
+                
+                if (!isNaN(numericValue) && numericValue !== 0) {
+                  calculatedTotal += numericValue;
+                }
+              }
+            });
+          }
+        });
+      }
+      
+      const difference = calculatedTotal - extractedTotal;
+      const isMatch = Math.abs(difference) < 0.01;
+      
+      return {
+        invoice: (
+          <div className="text-sm font-medium text-slate-700 dark:text-slate-300">
+            {extractedInvoice > 0 ? extractedInvoice.toLocaleString("en-US", {
+              style: "currency",
+              currency: "USD",
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2
+            }) : "—"}
+          </div>
+        ),
+        commission: (
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">File:</span>
+              <span className="text-sm font-semibold text-amber-700 dark:text-amber-300">
+                ${extractedTotal.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">Calc:</span>
+              <span className="text-sm font-semibold text-amber-700 dark:text-amber-300">
+                ${calculatedTotal.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+            {!isMatch && Math.abs(difference) > 0.01 && (
+              <div className="flex items-center gap-1 px-2 py-0.5 bg-amber-100 dark:bg-amber-900/30 rounded">
+                <span className="text-xs text-amber-700 dark:text-amber-300 font-bold">
+                  Δ {difference > 0 ? "+" : ""}{difference.toLocaleString("en-US", {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                  })}
+                </span>
+              </div>
+            )}
+          </div>
+        )
+      };
+    }
+    
+    // For PENDING or no data - show placeholders
+    return {
+      invoice: (
+        <div className="text-sm text-slate-400 dark:text-slate-500">—</div>
+      ),
+      commission: (
+        <div className="text-sm text-slate-400 dark:text-slate-500">—</div>
+      )
+    };
   };
 
   return (
@@ -376,9 +512,6 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
           <table className="w-full border-collapse">
             <thead className="sticky top-0 z-10 bg-slate-50/95 dark:bg-slate-900/95 backdrop-blur-sm">
               <tr className="border-b-2 border-slate-200 dark:border-slate-700">
-                <th className="py-3 px-4 w-8">
-                  {/* Expand column */}
-                </th>
                 <th className="py-3 px-4 w-12">
                   {canSelectFiles ? (
                     <input
@@ -421,6 +554,21 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
                     Date
                   </span>
                 </th>
+                
+                {/* NEW COLUMN: Total Invoice */}
+                <th className="py-3 px-4 text-right">
+                  <span className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
+                    Total Invoice
+                  </span>
+                </th>
+                
+                {/* NEW COLUMN: Earned Commission */}
+                <th className="py-3 px-4 text-right">
+                  <span className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
+                    Earned Commission
+                  </span>
+                </th>
+                
                 <th className="py-3 px-4 text-left">
                   <span className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
                     Status
@@ -437,7 +585,6 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
             {paginatedStatements.map((statement, idx) => {
               const statusInfo = getStatusInfo(statement.status);
               const StatusIcon = statusInfo.icon;
-              const isExpanded = expandedRows.has(statement.id);
               
               // Determine row background based on status - Premium visible colors
               const getRowBgColor = () => {
@@ -456,20 +603,6 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
                   <tr 
                     className={`border-b border-slate-100 dark:border-slate-800 transition-colors group ${getRowBgColor()}`}
                   >
-                    {/* Expand icon column */}
-                    <td className="py-3 px-4">
-                      <button 
-                        onClick={() => toggleExpand(statement.id)}
-                        className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
-                      >
-                        {isExpanded ? (
-                          <ChevronDown className="w-4 h-4" />
-                        ) : (
-                          <ChevronRightIcon className="w-4 h-4" />
-                        )}
-                      </button>
-                    </td>
-
                     {/* Checkbox column */}
                     <td className="py-3 px-4">
                       {canSelectFiles ? (
@@ -531,6 +664,16 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
                       <div className="text-sm text-slate-700 dark:text-slate-300">
                         {formatStatementDate(statement.selected_statement_date)}
                       </div>
+                    </td>
+
+                    {/* NEW: Total Invoice Column */}
+                    <td className="py-3 px-4 text-right">
+                      {renderCommissionCell(statement).invoice}
+                    </td>
+
+                    {/* NEW: Earned Commission Column */}
+                    <td className="py-3 px-4 text-right">
+                      {renderCommissionCell(statement).commission}
                     </td>
 
                     {/* Status column - minimal dot + text */}
@@ -613,257 +756,6 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
                       </div>
                     </td>
                   </tr>
-
-                  {/* Expandable detail row - ONLY shown when expanded */}
-                  {isExpanded && (
-                    <tr className={`border-b border-slate-100 dark:border-slate-800 ${getRowBgColor()} !transition-colors`}>
-                      <td colSpan={showUploadedByColumn ? 8 : 7} className="py-4 px-4">
-                        <div className="max-w-3xl ml-12">
-                          {/* Commission Details Section */}
-                          {(statement.status.toLowerCase() === 'approved' || 
-                            statement.status.toLowerCase() === 'completed' ||
-                            statement.status.toLowerCase() === 'needs_review') && (
-                            (() => {
-                              const extractedTotal = statement.extracted_total;
-                          
-                          // Find the commission field name from field_config or field_mapping
-                          let sourceCommissionFieldName = ''; // The actual column name in the data
-                          
-                          // Try field_mapping first (most reliable)
-                          if (statement.field_mapping && typeof statement.field_mapping === 'object') {
-                            // field_mapping is like: {"Paid Amount": "Commission Earned"}
-                            // Find the source field that maps to a commission-related target
-                            const commissionMappingCandidates = [
-                              'commission earned', 'commission_earned', 'total commission paid',
-                              'commission', 'paid amount', 'paid_amount', 'amount paid'
-                            ];
-                            
-                            for (const [sourceField, targetField] of Object.entries(statement.field_mapping)) {
-                              const normalizedTarget = String(targetField).toLowerCase().trim();
-                              if (commissionMappingCandidates.some(candidate => 
-                                normalizedTarget.includes(candidate) || candidate.includes(normalizedTarget)
-                              )) {
-                                sourceCommissionFieldName = sourceField;
-                                console.log(`💰 Found commission field from field_mapping: "${sourceField}" → "${targetField}"`);
-                                break;
-                              }
-                            }
-                          }
-                          
-                          // Fallback to field_config if field_mapping didn't work
-                          if (!sourceCommissionFieldName && statement.field_config && Array.isArray(statement.field_config)) {
-                            const commissionField = statement.field_config.find((field: any) => {
-                              const fieldName = field.field || field.source_field || '';
-                              const mappingName = field.mapping || field.label || field.display_name || '';
-                              return fieldName.toLowerCase().includes('commission') ||
-                                     fieldName.toLowerCase().includes('paid') ||
-                                     mappingName.toLowerCase().includes('commission');
-                            });
-                            
-                            if (commissionField) {
-                              sourceCommissionFieldName = commissionField.field || commissionField.source_field || '';
-                              console.log(`💰 Found commission field from field_config: "${sourceCommissionFieldName}"`);
-                            }
-                          }
-                          
-                          // Calculate total from final_data
-                          // CRITICAL FIX: Rows are stored as ARRAYS, not objects!
-                          // We need to find the column index from headers and access by index
-                          let calculatedTotal = 0;
-                          
-                          console.log('🔍 Calculating total for statement:', statement.id);
-                          console.log('📊 final_data structure:', statement.final_data);
-                          console.log('🏷️ Using source commission field name:', sourceCommissionFieldName);
-                          console.log('⚙️ field_mapping:', statement.field_mapping);
-                          console.log('⚙️ field_config:', statement.field_config);
-                          
-                          if (statement.final_data && Array.isArray(statement.final_data)) {
-                            // Iterate through each table in final_data
-                            statement.final_data.forEach((table: any, tableIdx: number) => {
-                              // Get headers (can be 'header' or 'headers')
-                              const headers = table.header || table.headers || [];
-                              const rows = table.rows || [];
-                              const summaryRows = new Set(table.summaryRows || []);
-                              
-                              console.log(`📋 Table ${tableIdx + 1}:`, table.name);
-                              console.log(`  Headers (${headers.length}):`, headers);
-                              console.log(`  Rows: ${rows.length}, Summary rows: ${summaryRows.size}`);
-                              
-                              // Find the column index for the commission field
-                              let commissionColumnIndex = -1;
-                              
-                              if (sourceCommissionFieldName) {
-                                // Try exact match first
-                                commissionColumnIndex = headers.indexOf(sourceCommissionFieldName);
-                                
-                                // Try case-insensitive match
-                                if (commissionColumnIndex === -1) {
-                                  commissionColumnIndex = headers.findIndex((h: string) => 
-                                    h && h.toLowerCase() === sourceCommissionFieldName.toLowerCase()
-                                  );
-                                }
-                              }
-                              
-                              // Fallback: search for common commission field names in headers
-                              if (commissionColumnIndex === -1) {
-                                const commissionHeaderCandidates = [
-                                  'commission earned', 'paid amount', 'total commission paid',
-                                  'commission', 'amount paid', 'earned'
-                                ];
-                                
-                                commissionColumnIndex = headers.findIndex((h: string) => {
-                                  if (!h) return false;
-                                  const normalized = h.toLowerCase().trim();
-                                  return commissionHeaderCandidates.some(candidate => 
-                                    normalized.includes(candidate) || candidate.includes(normalized)
-                                  );
-                                });
-                              }
-                              
-                              if (commissionColumnIndex === -1) {
-                                console.warn(`  ⚠️ Could not find commission column in headers:`, headers);
-                                return;
-                              }
-                              
-                              console.log(`  💰 Commission column found at index ${commissionColumnIndex}: "${headers[commissionColumnIndex]}"`);
-                              
-                              // Sum up commission values from non-summary rows
-                              let tableTotal = 0;
-                              rows.forEach((row: any[], rowIdx: number) => {
-                                // Skip summary rows
-                                if (summaryRows.has(rowIdx)) {
-                                  console.log(`    Row ${rowIdx}: SKIPPED (summary row)`);
-                                  return;
-                                }
-                                
-                                // Access by index (rows are arrays!)
-                                const rawValue = row[commissionColumnIndex];
-                                
-                                if (rawValue === undefined || rawValue === null || rawValue === '') {
-                                  console.log(`    Row ${rowIdx}: EMPTY value`);
-                                  return;
-                                }
-                                
-                                // Parse the value
-                                let numericValue = 0;
-                                if (typeof rawValue === 'number') {
-                                  numericValue = rawValue;
-                                } else if (typeof rawValue === 'string') {
-                                  // Remove currency symbols and commas
-                                  const cleaned = rawValue.replace(/[$,]/g, '').trim();
-                                  numericValue = parseFloat(cleaned);
-                                }
-                                
-                                if (!isNaN(numericValue) && numericValue !== 0) {
-                                  tableTotal += numericValue;
-                                  calculatedTotal += numericValue;
-                                  console.log(`    Row ${rowIdx}: Added $${numericValue.toFixed(2)} (raw: "${rawValue}")`);
-                                } else {
-                                  console.log(`    Row ${rowIdx}: Could not parse "${rawValue}"`);
-                                }
-                              });
-                              
-                              console.log(`  ✅ Table ${tableIdx + 1} total: $${tableTotal.toFixed(2)}`);
-                            });
-                          }
-                          
-                          console.log('💰 Final calculated total:', calculatedTotal.toFixed(2));
-                          
-                          // Get invoice total (NEW)
-                          const extractedInvoiceTotal = (statement as any).extracted_invoice_total;
-                          const hasInvoiceTotal = extractedInvoiceTotal !== undefined && extractedInvoiceTotal !== null && extractedInvoiceTotal > 0;
-                          
-                          // Calculate the difference and match status
-                              const difference = calculatedTotal - (extractedTotal || 0);
-                              const isMatch = statement.total_amount_match === true;
-                              const hasExtractedTotal = extractedTotal !== undefined && extractedTotal !== null && extractedTotal > 0;
-                              const hasCalculatedTotal = calculatedTotal > 0;
-                              
-                              // If no data at all, don't show the card
-                              if (!hasExtractedTotal && !hasCalculatedTotal && !hasInvoiceTotal) return null;
-                              
-                              return (
-                                <div className="mb-4">
-                                  <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">
-                                    <ReceiptText className="w-4 h-4" />
-                                    <span>Commission Details</span>
-                                  </div>
-                                  
-                                  <div className="grid grid-cols-3 gap-4 text-sm">
-                                    {/* Show Invoice Total if available */}
-                                    {hasInvoiceTotal && (
-                                      <div>
-                                        <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">
-                                          Total Invoice
-                                        </div>
-                                        <div className="font-semibold text-slate-900 dark:text-slate-100">
-                                          ${extractedInvoiceTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                        </div>
-                                      </div>
-                                    )}
-                                    
-                                    {/* Show Earned Commission (from document extraction or calculation) */}
-                                    <div>
-                                      <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">
-                                        {statement.status.toLowerCase() === 'needs_review' ? 'Commission on File' : 'Earned Commission'}
-                                      </div>
-                                      <div className="font-semibold text-slate-900 dark:text-slate-100">
-                                        {hasExtractedTotal 
-                                          ? `$${extractedTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                                          : hasCalculatedTotal 
-                                            ? `$${calculatedTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                                            : '—'
-                                        }
-                                      </div>
-                                    </div>
-                                    
-                                    {/* Show calculated commission if we have both extracted and calculated */}
-                                    {hasExtractedTotal && hasCalculatedTotal && Math.abs(calculatedTotal - extractedTotal) > 0.01 && (
-                                      <div>
-                                        <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">
-                                          Calculated Commission
-                                        </div>
-                                        <div className="font-semibold text-slate-900 dark:text-slate-100">
-                                          ${calculatedTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                        </div>
-                                      </div>
-                                    )}
-                                    
-                                    {/* Show difference if there's a mismatch */}
-                                    {hasExtractedTotal && !isMatch && Math.abs(difference) > 0.01 && (
-                                      <div>
-                                        <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Difference</div>
-                                        <div className={`font-semibold ${
-                                          difference > 0 
-                                            ? 'text-amber-600 dark:text-amber-400' 
-                                            : 'text-amber-600 dark:text-amber-400'
-                                        }`}>
-                                          {difference > 0 ? '+' : ''}${Math.abs(difference).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              );
-                            })()
-                          )}
-
-                          {/* Rejection reason in expandable section */}
-                          {statement.rejection_reason && (
-                            <div className="pt-3 border-t border-slate-200 dark:border-slate-700">
-                              <div className="flex items-start gap-2 text-sm">
-                                <AlertCircle className="w-4 h-4 text-red-500 mt-0.5" />
-                                <div>
-                                  <div className="font-medium text-red-700 dark:text-red-400 mb-1">Rejection Reason</div>
-                                  <div className="text-slate-600 dark:text-slate-400">{statement.rejection_reason}</div>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  )}
                 </React.Fragment>
               );
             })}

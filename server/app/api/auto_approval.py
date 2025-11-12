@@ -238,6 +238,48 @@ async def auto_approve_statement(
         # Call approve_statement with the payload object
         approve_response = await approve_statement(approve_payload, db=db)
         
+        # ✨ NORMALIZE FILENAME: Rename file in GCS to carrier_YYYY-MM.pdf format
+        # This happens for auto-approved statements that bypass the table editor
+        try:
+            from app.utils.filename_utils import get_normalized_filename_for_upload
+            from app.services.gcs_utils import rename_gcs_file
+            
+            # Get carrier name
+            carrier = await with_db_retry(db, crud.get_company_by_id, company_id=request.carrier_id)
+            if carrier and carrier.name and upload.file_name:
+                logger.info(f"📝 Auto-approval: Normalizing filename for upload {request.upload_id}")
+                
+                old_gcs_key = upload.file_name
+                original_filename = old_gcs_key.split('/')[-1]
+                
+                # Generate normalized filename (pass current path to preserve folder structure)
+                new_gcs_key = await get_normalized_filename_for_upload(
+                    db=db,
+                    carrier_id=UUID(request.carrier_id),
+                    carrier_name=carrier.name,
+                    statement_date={"date": request.statement_date},
+                    original_filename=original_filename,
+                    upload_id=UUID(request.upload_id),
+                    current_file_path=old_gcs_key
+                )
+                
+                # Only rename if the filename actually changed
+                if old_gcs_key != new_gcs_key:
+                    rename_success = rename_gcs_file(old_gcs_key, new_gcs_key)
+                    
+                    if rename_success:
+                        # Update database with new filename
+                        upload.file_name = new_gcs_key
+                        await db.commit()
+                        logger.info(f"✅ Auto-approval: Successfully normalized filename to {new_gcs_key.split('/')[-1]}")
+                    else:
+                        logger.warning(f"⚠️ Auto-approval: Failed to rename file in GCS")
+                else:
+                    logger.info(f"📝 Auto-approval: Filename already normalized")
+        except Exception as e:
+            logger.error(f"❌ Auto-approval: Error normalizing filename: {e}")
+            # Don't fail the approval if filename normalization fails
+        
         # Step 4: Get extracted total from document (from Claude) and calculate from tables
         actual_extracted_total = request.extracted_total
         

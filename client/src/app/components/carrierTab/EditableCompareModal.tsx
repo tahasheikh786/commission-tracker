@@ -33,7 +33,8 @@ interface Statement {
   automated_approval?: boolean;
   automation_timestamp?: string;
   total_amount_match?: boolean | null;
-  extracted_total?: number;
+  extracted_total?: number;  // Earned commission total extracted from document
+  extracted_invoice_total?: number;  // Invoice total calculated from table data
   // ✅ FIX: Correct property name to match API response (field_mapping with underscore)
   field_mapping?: Record<string, string> | null;  // Field mappings from format learning
   field_config?: Array<Record<string, any>> | null;  // Field config for fallback reconstruction

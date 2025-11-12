@@ -311,6 +311,44 @@ class GCSService:
             logger.error(f"Unexpected error copying in GCS: {e}")
             return False
     
+    def rename_file(self, old_key: str, new_key: str) -> bool:
+        """
+        Rename a file in Google Cloud Storage by copying to new name and deleting old.
+        
+        Args:
+            old_key: Current GCS object key (path in bucket)
+            new_key: New GCS object key (path in bucket)
+            
+        Returns:
+            bool: True if rename successful, False otherwise
+        """
+        if not self.is_available():
+            logger.error("GCS not available or not properly configured")
+            return False
+        
+        try:
+            # Check if source exists
+            if not self.file_exists(old_key):
+                logger.error(f"Source file not found in GCS for rename: {old_key}")
+                return False
+            
+            # Copy to new location
+            if not self.copy_file(old_key, new_key):
+                logger.error(f"Failed to copy file during rename: {old_key} -> {new_key}")
+                return False
+            
+            # Delete old file
+            if not self.delete_file(old_key):
+                logger.warning(f"Failed to delete old file after rename: {old_key}")
+                # We still consider rename successful if copy worked
+            
+            logger.info(f"✅ File renamed in GCS: {old_key} -> {new_key}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Unexpected error renaming file in GCS: {e}")
+            return False
+    
     def delete_file(self, gcs_key: str) -> bool:
         """
         Delete a file from Google Cloud Storage.
@@ -454,3 +492,7 @@ def copy_gcs_file(source_key: str, dest_key: str) -> bool:
 def delete_gcs_file(gcs_key: str) -> bool:
     """Delete file from GCS."""
     return gcs_service.delete_file(gcs_key)
+
+def rename_gcs_file(old_key: str, new_key: str) -> bool:
+    """Rename file in GCS."""
+    return gcs_service.rename_file(old_key, new_key)

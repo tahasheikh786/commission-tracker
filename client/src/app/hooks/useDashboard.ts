@@ -21,7 +21,7 @@ interface Statement {
   id: string;
   file_name: string;
   company_name: string;
-  status: 'extracted' | 'success' | 'completed' | 'Approved' | 'rejected' | 'pending';
+  status: 'extracted' | 'success' | 'completed' | 'Approved' | 'rejected' | 'pending' | 'needs_review';
   uploaded_at: string;
   last_updated: string;
   completed_at?: string;
@@ -30,6 +30,14 @@ interface Statement {
   raw_data?: any;
   edited_tables?: any;
   final_data?: any;
+  field_config?: any;
+  field_mapping?: Record<string, string> | null;
+  // Automation metadata
+  automated_approval?: boolean;
+  automation_timestamp?: string;
+  total_amount_match?: boolean | null;
+  extracted_total?: number;  // Earned commission total extracted from document
+  extracted_invoice_total?: number;  // Invoice total calculated from table data
 }
 
 export function useDashboardStats(shouldFetch: boolean = true, environmentId?: string | null, viewMode: 'my_data' | 'all_data' = 'my_data') {

@@ -28,6 +28,73 @@ import {
   Layers
 } from 'lucide-react';
 
+// Animated Background Component with Premium Gradient Orbs
+const AnimatedBackground: React.FC = () => {
+  return (
+    <div className="absolute inset-0 overflow-hidden">
+      {/* Base Gradient Layer */}
+      <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950" />
+      
+      {/* Animated Gradient Orbs */}
+      <div className="absolute inset-0">
+        {/* Orb 1 - Blue */}
+        <div 
+          className="absolute w-[600px] h-[600px] rounded-full opacity-30 blur-3xl"
+          style={{
+            top: '10%',
+            left: '10%',
+            background: 'linear-gradient(to right, rgb(96, 165, 250), rgb(59, 130, 246))',
+            animation: 'float-1 20s ease-in-out infinite'
+          }}
+        />
+        
+        {/* Orb 2 - Purple */}
+        <div 
+          className="absolute w-[500px] h-[500px] rounded-full opacity-30 blur-3xl"
+          style={{
+            top: '60%',
+            right: '10%',
+            background: 'linear-gradient(to right, rgb(192, 132, 252), rgb(168, 85, 247))',
+            animation: 'float-2 25s ease-in-out infinite'
+          }}
+        />
+        
+        {/* Orb 3 - Emerald */}
+        <div 
+          className="absolute w-[450px] h-[450px] rounded-full opacity-20 blur-3xl"
+          style={{
+            bottom: '10%',
+            left: '30%',
+            background: 'linear-gradient(to right, rgb(52, 211, 153), rgb(20, 184, 166))',
+            animation: 'float-3 30s ease-in-out infinite'
+          }}
+        />
+      </div>
+      
+      {/* Mesh Gradient Overlay */}
+      <div 
+        className="absolute inset-0 opacity-50"
+        style={{
+          background: `
+            radial-gradient(circle at 20% 50%, rgba(59, 130, 246, 0.15) 0%, transparent 50%),
+            radial-gradient(circle at 80% 80%, rgba(168, 85, 247, 0.15) 0%, transparent 50%),
+            radial-gradient(circle at 40% 90%, rgba(16, 185, 129, 0.1) 0%, transparent 50%)
+          `,
+          animation: 'mesh-move 15s ease-in-out infinite'
+        }}
+      />
+      
+      {/* Noise Texture Overlay for Premium Feel */}
+      <div 
+        className="absolute inset-0 opacity-5"
+        style={{
+          backgroundImage: 'url("data:image/svg+xml,%3Csvg viewBox=\'0 0 400 400\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cfilter id=\'noiseFilter\'%3E%3CfeTurbulence type=\'fractalNoise\' baseFrequency=\'0.9\' numOctaves=\'4\' /%3E%3C/filter%3E%3Crect width=\'100%25\' height=\'100%25\' filter=\'url(%23noiseFilter)\' /%3E%3C/svg%3E")'
+        }}
+      />
+    </div>
+  );
+};
+
 // Compact Info Item for key-value display (3-column layout)
 interface InfoItemProps {
   icon: React.ReactNode;
@@ -231,21 +298,24 @@ export default function SummaryProgressLoader({
   };
   
   return (
-    <div className="fixed inset-0 z-50 bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 overflow-auto flex items-center justify-center">
+    <div className="fixed inset-0 z-50 overflow-auto flex items-center justify-center">
+      
+      {/* Animated Background Layers */}
+      <AnimatedBackground />
       
       {/* Three-Column Layout Container - Vertically Centered */}
-      <div className="w-full p-4 md:p-8">
+      <div className="w-full p-4 md:p-8 relative z-10">
         
         <div className="max-w-[1600px] mx-auto">
           
-          {/* Three-Column Grid - Steps | PDF | Key Info - 60% Height */}
-          <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr_350px] gap-4 h-[60vh]">
+          {/* Three-Column Grid - Steps | PDF | Key Info - 70% Height */}
+          <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr_350px] gap-4 h-[70vh]">
             
             {/* ============== COLUMN 1: STEPS (Left) ============== */}
             <div className="space-y-3 overflow-y-auto pr-2">
               
               {/* Compact Progress Steps */}
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3">
+              <div className="glass-card-premium rounded-xl shadow-sm p-3">
                 <h3 className="text-xs font-semibold text-gray-700 mb-2 flex items-center gap-2">
                   <Clock className="w-3 h-3" />
                   Extraction Progress
@@ -283,7 +353,7 @@ export default function SummaryProgressLoader({
               
               {/* File Metadata Card */}
               {uploadedFile && (
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3">
+                <div className="glass-card-premium rounded-xl shadow-sm p-3">
                   <h3 className="text-xs font-semibold text-gray-700 mb-1 flex items-center gap-2">
                     <FileText className="w-3 h-3" />
                     Document
@@ -297,7 +367,7 @@ export default function SummaryProgressLoader({
             </div>
             
             {/* ============== COLUMN 2: PDF PREVIEW (Center) ============== */}
-            <div className="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden flex flex-col">
+            <div className="glass-card-premium rounded-2xl shadow-xl overflow-hidden flex flex-col">
               {pdfUrl ? (
                 <>
                   {/* Header with file name */}
@@ -345,7 +415,7 @@ export default function SummaryProgressLoader({
             </div>
             
             {/* ============== COLUMN 3: KEY INFORMATION (Right) ============== */}
-            <div className="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden flex flex-col">
+            <div className="glass-card-premium rounded-2xl shadow-xl overflow-hidden flex flex-col">
               
               {/* Header */}
               <div className="px-4 py-3 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">

@@ -761,37 +761,6 @@ export default function SummaryUploadZone({
               </div>
             </div>
           </div>
-          
-          {/* Security & Compliance Card */}
-          <div className="max-w-3xl mx-auto">
-            <div className="bg-gradient-to-r from-green-50 via-emerald-50 to-teal-50 dark:from-green-900/20 dark:via-emerald-900/20 dark:to-teal-900/20 rounded-2xl border-2 border-green-200 dark:border-green-700 p-6 shadow-lg">
-              <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-                {/* Left: Security Badge */}
-                <div className="flex items-center space-x-4">
-                  <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center shadow-md">
-                    <Shield className="w-7 h-7 text-white" />
-                  </div>
-                  <div>
-                    <p className="text-lg font-bold text-gray-900 dark:text-white">Bank-Level Security</p>
-                    <p className="text-sm text-gray-700 dark:text-gray-300">SOC 2 Type II Certified • GDPR Compliant</p>
-                  </div>
-                </div>
-                
-                {/* Right: Stats */}
-                <div className="flex items-center gap-8">
-                  <div className="text-center">
-                    <p className="text-3xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">99.9%</p>
-                    <p className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">Uptime</p>
-                  </div>
-                  <div className="h-12 w-px bg-gray-300 dark:bg-gray-600"></div>
-                  <div className="text-center">
-                    <p className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">24/7</p>
-                    <p className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">Support</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
     </div>

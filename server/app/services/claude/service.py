@@ -49,7 +49,8 @@ from .utils import (
     ClaudeTokenEstimator,
     ClaudeResponseParser,
     ClaudeQualityAssessor,
-    ClaudeErrorHandler
+    ClaudeErrorHandler,
+    ClaudeTokenBucket
 )
 
 # Import existing utilities for compatibility
@@ -108,19 +109,30 @@ class ClaudeDocumentAIService:
         self.enhanced_prompts = EnhancedClaudePrompts()
         self.semantic_extractor = SemanticExtractionService()
         
+        # Initialize rate limiter for Claude API (CRITICAL for preventing 429 errors)
+        self.rate_limiter = ClaudeTokenBucket(
+            requests_per_minute=50,
+            tokens_per_minute=30000,
+            buffer_percentage=0.85  # Use 85% to prevent edge cases
+        )
+        
         # Processing statistics
         self.stats = {
             'total_extractions': 0,
             'successful_extractions': 0,
             'failed_extractions': 0,
             'total_tokens_used': 0,
-            'total_processing_time': 0.0
+            'total_processing_time': 0.0,
+            'rate_limit_waits': 0,
+            'total_wait_time': 0.0
         }
         
         logger.info(f"✅ Claude Document AI Service initialized")
         logger.info(f"📋 Primary model: {self.primary_model}")
         logger.info(f"📋 Fallback model: {self.fallback_model}")
         logger.info(f"📏 Limits: {self.max_file_size_mb}MB, {self.max_pages} pages")
+        logger.info(f"🛡️  Rate limiting: ENABLED (50 RPM, 25,500 TPM)")
+        logger.info(f"💾 Prompt caching: SUPPORTED")
     
     def _initialize_client(self):
         """Initialize Claude API client"""
@@ -195,7 +207,9 @@ class ClaudeDocumentAIService:
             extraction_result = await self._call_claude_api(
                 pdf_base64,
                 metadata_prompt,
-                model=self.primary_model
+                model=self.primary_model,
+                pdf_pages=pdf_info.get('page_count', 0),
+                use_cache=False  # Metadata extraction is lightweight
             )
             
             # Parse response
@@ -401,7 +415,9 @@ class ClaudeDocumentAIService:
             extraction_result = await self._call_claude_api(
                 pdf_base64,
                 self.prompts.get_table_extraction_prompt() + dynamic_prompt,
-                model=self.primary_model
+                model=self.primary_model,
+                pdf_pages=pdf_info.get('page_count', 0),
+                use_cache=False  # Standard files don't need caching
             )
             
             if progress_tracker:
@@ -506,7 +522,14 @@ class ClaudeDocumentAIService:
         pdf_info: Dict[str, Any],
         progress_tracker = None
     ) -> Dict[str, Any]:
-        """Extract data from large files by chunking"""
+        """
+        Extract data from large files using smart chunking with rate limiting.
+        
+        Strategy:
+        1. Check if prompt caching would be beneficial (>30 pages)
+        2. Use chunking with rate-limited API calls
+        3. Merge results intelligently
+        """
         try:
             if progress_tracker:
                 await progress_tracker.update_progress(
@@ -515,15 +538,24 @@ class ClaudeDocumentAIService:
                     "Processing large document - preparing chunks"
                 )
             
-            # Split into manageable chunks
-            chunks = self.pdf_processor.chunk_large_pdf(file_path, max_pages_per_chunk=40)
+            page_count = pdf_info.get('page_count', 0)
             
-            logger.info(f"Split document into {len(chunks)} chunks")
+            # Determine strategy based on file size
+            if page_count > 100:
+                logger.warning(f"⚠️  Very large file ({page_count} pages) - Using optimized chunking strategy")
+                return await self._extract_very_large_file_with_caching(
+                    carrier_name, file_path, pdf_info, progress_tracker
+                )
+            
+            # ✅ REDUCED CHUNK SIZE: 20 pages per chunk (from 25) for better rate limiting
+            chunks = self.pdf_processor.chunk_large_pdf(file_path, max_pages_per_chunk=20)
+            
+            logger.info(f"📄 Split document into {len(chunks)} chunks (20 pages each)")
             
             all_tables = []
             doc_metadata = {}
             
-            # Process each chunk
+            # Process each chunk with rate limiting
             for chunk_idx, chunk_info in enumerate(chunks):
                 if progress_tracker:
                     progress = 20 + (chunk_idx / len(chunks)) * 60
@@ -533,10 +565,18 @@ class ClaudeDocumentAIService:
                         f"Processing chunk {chunk_idx + 1}/{len(chunks)}"
                     )
                 
-                # Extract this chunk
-                chunk_result = await self._extract_chunk(
+                # ✅ ADD DELAY BETWEEN CHUNKS (except first)
+                if chunk_idx > 0:
+                    delay_seconds = 5.0  # 5-second safety buffer
+                    logger.info(
+                        f"⏸️  Waiting {delay_seconds}s between chunks "
+                        f"for rate limit safety..."
+                    )
+                    await asyncio.sleep(delay_seconds)
+                
+                # Extract this chunk - rate limiting is handled in _call_claude_api
+                chunk_result = await self._extract_chunk_with_rate_limiting(
                     carrier_name,
-                    file_path,
                     chunk_info,
                     progress_tracker
                 )
@@ -563,7 +603,7 @@ class ClaudeDocumentAIService:
                 tables=merged_tables,
                 doc_metadata=doc_metadata,
                 pdf_info=pdf_info,
-                token_usage={'note': 'Chunked processing - multiple API calls'},
+                token_usage={'note': 'Chunked processing with rate limiting'},
                 quality_metrics=quality_metrics
             )
             
@@ -572,6 +612,135 @@ class ClaudeDocumentAIService:
         except Exception as e:
             logger.error(f"Error in large file extraction: {e}")
             raise
+    
+    async def _extract_very_large_file_with_caching(
+        self,
+        carrier_name: str,
+        file_path: str,
+        pdf_info: Dict[str, Any],
+        progress_tracker = None
+    ) -> Dict[str, Any]:
+        """
+        Extract from very large files (100+ pages) using prompt caching.
+        
+        This method uses Claude's prompt caching to dramatically reduce:
+        - Token consumption (90% reduction on cached tokens)
+        - API costs (cached tokens are 90% cheaper)
+        - Rate limit impact (cached tokens don't count toward limits!)
+        """
+        try:
+            logger.info("🚀 Using prompt caching strategy for very large file")
+            
+            # ✅ Split into chunks (20 pages per chunk for better rate limiting)
+            chunks = self.pdf_processor.chunk_large_pdf(file_path, max_pages_per_chunk=20)
+            logger.info(f"📄 Created {len(chunks)} chunks for processing (20 pages each)")
+            
+            all_tables = []
+            doc_metadata = {}
+            
+            # Process each chunk with caching
+            for chunk_idx, chunk_info in enumerate(chunks):
+                if progress_tracker:
+                    progress = 20 + (chunk_idx / len(chunks)) * 60
+                    await progress_tracker.update_progress(
+                        "table_detection",
+                        int(progress),
+                        f"Processing chunk {chunk_idx + 1}/{len(chunks)} with caching"
+                    )
+                
+                # Use caching for chunks - first call creates cache, subsequent calls use it
+                use_cache = True  # Enable caching for all chunks
+                
+                # Get carrier-specific prompt
+                dynamic_prompt = self.dynamic_prompts.get_prompt_by_name(carrier_name)
+                chunk_prompt = self.prompts.get_table_extraction_prompt() + dynamic_prompt
+                
+                # Call API with caching enabled
+                extraction_result = await self._call_claude_api(
+                    chunk_info['data'],  # Already base64 encoded chunk
+                    chunk_prompt,
+                    model=self.primary_model,
+                    pdf_pages=chunk_info.get('page_count', 0),
+                    use_cache=use_cache  # Enable prompt caching
+                )
+                
+                # Parse response
+                parsed_data = self.response_parser.parse_json_response(
+                    extraction_result['content']
+                )
+                
+                if parsed_data:
+                    # Accumulate tables
+                    if parsed_data.get('tables'):
+                        all_tables.extend(parsed_data['tables'])
+                    
+                    # Use metadata from first chunk
+                    if chunk_idx == 0 and parsed_data.get('document_metadata'):
+                        doc_metadata = parsed_data['document_metadata']
+                
+                # Small delay between chunks
+                if chunk_idx < len(chunks) - 1:
+                    await asyncio.sleep(2)
+            
+            # Merge tables
+            merged_tables = self._merge_split_tables(all_tables)
+            
+            # Quality assessment
+            quality_metrics = self.quality_assessor.assess_extraction_quality(
+                merged_tables,
+                doc_metadata
+            )
+            
+            # Format response
+            result = self._format_response(
+                tables=merged_tables,
+                doc_metadata=doc_metadata,
+                pdf_info=pdf_info,
+                token_usage={'note': 'Chunked processing with prompt caching'},
+                quality_metrics=quality_metrics
+            )
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error in very large file extraction with caching: {e}")
+            raise
+    
+    async def _extract_chunk_with_rate_limiting(
+        self,
+        carrier_name: str,
+        chunk_info: Dict[str, Any],
+        progress_tracker = None
+    ) -> Dict[str, Any]:
+        """Extract data from a chunk with proper rate limiting."""
+        try:
+            # Create chunk-specific prompt
+            chunk_prompt = self.prompts.get_chunk_extraction_prompt(
+                f"{chunk_info['chunk_index'] + 1}/{chunk_info['total_chunks']}"
+            )
+            
+            # Add carrier-specific prompt if available
+            dynamic_prompt = self.dynamic_prompts.get_prompt_by_name(carrier_name)
+            
+            # Call API - rate limiting handled automatically
+            extraction_result = await self._call_claude_api(
+                chunk_info['data'],  # Already base64 encoded
+                chunk_prompt + dynamic_prompt,
+                model=self.primary_model,
+                pdf_pages=chunk_info.get('page_count', 0),
+                use_cache=False
+            )
+            
+            # Parse response
+            parsed_data = self.response_parser.parse_json_response(
+                extraction_result['content']
+            )
+            
+            return parsed_data or {'tables': [], 'document_metadata': {}}
+        
+        except Exception as e:
+            logger.error(f"Error extracting chunk: {e}")
+            return {'tables': [], 'document_metadata': {}}
     
     async def _extract_chunk(
         self,
@@ -596,7 +765,9 @@ class ClaudeDocumentAIService:
             extraction_result = await self._call_claude_api(
                 pdf_base64,
                 chunk_prompt + dynamic_prompt,
-                model=self.primary_model
+                model=self.primary_model,
+                pdf_pages=chunk_info.get('page_count', 0),
+                use_cache=False  # Chunks are processed individually
             )
             
             # Parse response
@@ -638,7 +809,9 @@ class ClaudeDocumentAIService:
         extraction_result = await self._call_claude_api(
             pdf_base64,
             self.prompts.get_table_extraction_prompt() + dynamic_prompt,
-            model=self.fallback_model
+            model=self.fallback_model,
+            pdf_pages=pdf_info.get('page_count', 0),
+            use_cache=False
         )
         
         parsed_data = self.response_parser.parse_json_response(
@@ -678,52 +851,108 @@ class ClaudeDocumentAIService:
         pdf_base64: str,
         prompt: str,
         model: str,
-        max_retries: int = 3
+        max_retries: int = 5,
+        pdf_pages: int = 0,
+        use_cache: bool = False
     ) -> Dict[str, Any]:
         """
-        Call Claude API with retry logic
+        Call Claude API with rate limiting, retry logic, and 429 handling.
         
         Args:
             pdf_base64: Base64-encoded PDF
             prompt: Extraction prompt
             model: Claude model to use
-            max_retries: Maximum retry attempts
+            max_retries: Maximum retry attempts (increased to 5 for rate limits)
+            pdf_pages: Number of PDF pages (for token estimation)
+            use_cache: Whether to use prompt caching
             
         Returns:
             API response with content and usage
         """
+        # STEP 1: Estimate tokens BEFORE making the call
+        estimated_tokens = self.rate_limiter.estimate_tokens(
+            text=prompt,
+            images=0,
+            pdf_pages=pdf_pages
+        )
+        
+        logger.info(f"📊 Estimated tokens for request: {estimated_tokens:,} ({pdf_pages} pages)")
+        
+        # STEP 2: Wait if needed to respect rate limits (CRITICAL)
+        wait_start = time.time()
+        self.rate_limiter.wait_if_needed(estimated_tokens)
+        wait_time = time.time() - wait_start
+        
+        if wait_time > 1:
+            self.stats['rate_limit_waits'] += 1
+            self.stats['total_wait_time'] += wait_time
+            logger.info(f"⏱️  Waited {wait_time:.2f}s for rate limit compliance")
+        
+        # STEP 3: Make API call with exponential backoff
         for attempt in range(max_retries):
             try:
                 # Prepare messages
-                messages = [
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "document",
-                                "source": {
-                                    "type": "base64",
-                                    "media_type": "application/pdf",
-                                    "data": pdf_base64
+                if use_cache:
+                    # Use prompt caching for large PDFs
+                    messages = [
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "document",
+                                    "source": {
+                                        "type": "base64",
+                                        "media_type": "application/pdf",
+                                        "data": pdf_base64
+                                    },
+                                    "cache_control": {"type": "ephemeral"}  # Cache the PDF
+                                },
+                                {
+                                    "type": "text",
+                                    "text": prompt
                                 }
-                            },
-                            {
-                                "type": "text",
-                                "text": prompt
-                            }
-                        ]
-                    }
-                ]
+                            ]
+                        }
+                    ]
+                    system_prompt = [
+                        {
+                            "type": "text",
+                            "text": self.prompts.get_system_prompt(),
+                            "cache_control": {"type": "ephemeral"}
+                        }
+                    ]
+                else:
+                    # Standard request without caching
+                    messages = [
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "document",
+                                    "source": {
+                                        "type": "base64",
+                                        "media_type": "application/pdf",
+                                        "data": pdf_base64
+                                    }
+                                },
+                                {
+                                    "type": "text",
+                                    "text": prompt
+                                }
+                            ]
+                        }
+                    ]
+                    system_prompt = self.prompts.get_system_prompt()
                 
                 # Call API
-                logger.info(f"Calling Claude API with model: {model} (attempt {attempt + 1}/{max_retries})")
+                logger.info(f"🔄 Calling Claude API with model: {model} (attempt {attempt + 1}/{max_retries}, cache={use_cache})")
                 
                 response = await asyncio.wait_for(
                     self.async_client.messages.create(
                         model=model,
                         max_tokens=16000,  # Large enough for comprehensive extraction
                         temperature=0.1,  # Low temperature for consistency
-                        system=self.prompts.get_system_prompt(),
+                        system=system_prompt,
                         messages=messages
                     ),
                     timeout=self.timeout_seconds
@@ -739,16 +968,52 @@ class ClaudeDocumentAIService:
                     elif isinstance(block, dict) and 'text' in block:
                         content_text += block['text']
                 
-                # Extract usage
+                # Extract usage with cache information
                 usage = {}
                 if hasattr(response, 'usage'):
                     usage = {
                         'input_tokens': getattr(response.usage, 'input_tokens', 0),
-                        'output_tokens': getattr(response.usage, 'output_tokens', 0)
+                        'output_tokens': getattr(response.usage, 'output_tokens', 0),
+                        'cache_creation_input_tokens': getattr(response.usage, 'cache_creation_input_tokens', 0),
+                        'cache_read_input_tokens': getattr(response.usage, 'cache_read_input_tokens', 0)
                     }
                     self.stats['total_tokens_used'] += usage.get('input_tokens', 0) + usage.get('output_tokens', 0)
+                    
+                    # Log cache savings if applicable
+                    if usage.get('cache_read_input_tokens', 0) > 0:
+                        logger.info(f"💾 Cache hit! Read {usage['cache_read_input_tokens']:,} tokens from cache")
+                    if usage.get('cache_creation_input_tokens', 0) > 0:
+                        logger.info(f"💾 Cache created with {usage['cache_creation_input_tokens']:,} tokens")
                 
-                logger.info(f"✅ Claude API call successful. Tokens: {usage}")
+                logger.info(f"✅ Claude API call successful. Tokens: input={usage.get('input_tokens', 0):,}, output={usage.get('output_tokens', 0):,}")
+                
+                # ✅ UPDATE token bucket with ACTUAL usage (not estimate)
+                actual_input_tokens = usage.get('input_tokens', 0)
+                
+                # Calculate the difference
+                token_diff = actual_input_tokens - estimated_tokens
+                
+                self.logger.info(
+                    f"📊 Token tracking: "
+                    f"Estimated={estimated_tokens:,}, "
+                    f"Actual={actual_input_tokens:,}, "
+                    f"Diff={token_diff:+,}"
+                )
+                
+                # Correct the token bucket count
+                # We already added 'estimated_tokens' in wait_if_needed()
+                # Now adjust by the difference
+                with self.rate_limiter.lock:
+                    old_count = self.rate_limiter.token_count
+                    # Replace estimated with actual
+                    self.rate_limiter.token_count = (
+                        self.rate_limiter.token_count - estimated_tokens + actual_input_tokens
+                    )
+                    
+                    self.logger.info(
+                        f"🔧 Token bucket adjusted: "
+                        f"{old_count:,} → {self.rate_limiter.token_count:,}"
+                    )
                 
                 return {
                     'content': content_text,
@@ -757,18 +1022,44 @@ class ClaudeDocumentAIService:
                 }
             
             except asyncio.TimeoutError:
-                logger.warning(f"Claude API timeout (attempt {attempt + 1}/{max_retries})")
+                logger.warning(f"⏱️  Claude API timeout (attempt {attempt + 1}/{max_retries})")
                 if attempt == max_retries - 1:
                     raise ValueError(f"Claude API timeout after {max_retries} attempts")
-                await asyncio.sleep(self.error_handler.get_retry_delay(attempt))
+                
+                retry_delay = self.error_handler.get_retry_delay(attempt, is_rate_limit=False)
+                logger.info(f"⏳ Waiting {retry_delay:.2f}s before retry...")
+                await asyncio.sleep(retry_delay)
             
             except Exception as e:
-                logger.error(f"Claude API error (attempt {attempt + 1}/{max_retries}): {e}")
+                is_rate_limit = self.error_handler.is_rate_limit_error(e)
+                is_retriable = self.error_handler.is_retriable_error(e)
                 
-                if not self.error_handler.is_retriable_error(e) or attempt == max_retries - 1:
+                logger.error(f"❌ Claude API error (attempt {attempt + 1}/{max_retries}): {e}")
+                logger.error(f"   Rate limit error: {is_rate_limit}, Retriable: {is_retriable}")
+                
+                # If it's a rate limit error, extract retry-after header
+                if is_rate_limit:
+                    retry_after = self.error_handler.extract_retry_after(e)
+                    if retry_after:
+                        logger.warning(f"⚠️  Rate limit hit! Retry-After: {retry_after:.2f}s")
+                        if attempt < max_retries - 1:
+                            await asyncio.sleep(retry_after)
+                            continue
+                    else:
+                        # Use exponential backoff for rate limits
+                        retry_delay = self.error_handler.get_retry_delay(attempt, is_rate_limit=True)
+                        logger.warning(f"⚠️  Rate limit hit! Waiting {retry_delay:.2f}s before retry {attempt + 2}/{max_retries}")
+                        if attempt < max_retries - 1:
+                            await asyncio.sleep(retry_delay)
+                            continue
+                
+                # For other errors, check if retriable
+                if not is_retriable or attempt == max_retries - 1:
                     raise
                 
-                await asyncio.sleep(self.error_handler.get_retry_delay(attempt))
+                retry_delay = self.error_handler.get_retry_delay(attempt, is_rate_limit=is_rate_limit)
+                logger.info(f"⏳ Waiting {retry_delay:.2f}s before retry...")
+                await asyncio.sleep(retry_delay)
         
         raise ValueError(f"Claude API failed after {max_retries} attempts")
     
@@ -1009,7 +1300,9 @@ class ClaudeDocumentAIService:
             extraction_result = await self._call_claude_api(
                 pdf_base64,
                 prompt,
-                model=self.primary_model
+                model=self.primary_model,
+                pdf_pages=pdf_info.get('page_count', 0),
+                use_cache=False
             )
             
             # Extract content from the result

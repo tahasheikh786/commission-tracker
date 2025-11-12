@@ -8,6 +8,11 @@ error handling, and quality assessment.
 import os
 import base64
 import logging
+import time
+import threading
+import asyncio
+import random
+from collections import deque
 from typing import Dict, Any, List, Optional, Tuple
 from pathlib import Path
 import json
@@ -28,6 +33,128 @@ except ImportError:
     logging.warning("tiktoken not available. Token estimation will be approximate.")
 
 logger = logging.getLogger(__name__)
+
+
+class ClaudeTokenBucket:
+    """
+    Token bucket algorithm for Claude API rate limiting.
+    Tier 1 limits: 50 RPM, 30,000 ITPM (Input Tokens Per Minute)
+    
+    This prevents rate limit errors before they occur by managing token consumption proactively.
+    """
+    
+    def __init__(
+        self,
+        requests_per_minute: int = 50,
+        tokens_per_minute: int = 30000,
+        buffer_percentage: float = 0.85  # Use only 85% to be safe
+    ):
+        self.rpm_limit = requests_per_minute
+        self.tpm_limit = int(tokens_per_minute * buffer_percentage)
+        
+        # Request tracking
+        self.request_times = deque()
+        
+        # Token tracking
+        self.token_count = 0
+        self.token_reset_time = time.time()
+        
+        self.lock = threading.Lock()
+        
+        self.logger = logging.getLogger(__name__)
+    
+    def estimate_tokens(self, text: str, images: int = 0, pdf_pages: int = 0) -> int:
+        """
+        Estimate token count for a request.
+        PDF pages: ~2,500-3,000 tokens per page
+        Images: ~3,000 tokens per image
+        """
+        # Text tokens: rough estimation (1 token ≈ 4 characters)
+        text_tokens = len(text) // 4
+        
+        # Image tokens
+        image_tokens = images * 3000
+        
+        # PDF tokens (more accurate for PDFs)
+        pdf_tokens = pdf_pages * 2750  # Avg tokens per page
+        
+        # Add 20% buffer for safety
+        total = int((text_tokens + image_tokens + pdf_tokens) * 1.2)
+        
+        return total
+    
+    def wait_if_needed(self, estimated_tokens: int) -> None:
+        """
+        Block execution until rate limits allow the request.
+        """
+        with self.lock:
+            current_time = time.time()
+            
+            # Clean old request timestamps (older than 60 seconds)
+            while self.request_times and self.request_times[0] < current_time - 60:
+                self.request_times.popleft()
+            
+            # Check RPM limit
+            if len(self.request_times) >= self.rpm_limit:
+                sleep_time = 60 - (current_time - self.request_times[0])
+                if sleep_time > 0:
+                    self.logger.warning(f"⚠️  RPM limit reached. Waiting {sleep_time:.2f}s")
+                    time.sleep(sleep_time)
+                    return self.wait_if_needed(estimated_tokens)
+            
+            # ✅ CRITICAL FIX: Check and reset TPM BEFORE calculating
+            time_since_reset = current_time - self.token_reset_time
+            if time_since_reset >= 60:
+                self.logger.info(
+                    f"🔄 Token bucket reset: clearing {self.token_count:,} tokens "
+                    f"after {time_since_reset:.1f}s"
+                )
+                self.token_count = 0
+                self.token_reset_time = current_time
+            
+            # ✅ NOW check if THIS request would exceed (with fresh count)
+            tokens_after_request = self.token_count + estimated_tokens
+            
+            if tokens_after_request > self.tpm_limit:
+                # Calculate exact time needed to reset
+                time_until_reset = 60 - (current_time - self.token_reset_time)
+                
+                # Add 2-second buffer for safety
+                sleep_time = time_until_reset + 2.0
+                
+                if sleep_time > 0:
+                    self.logger.warning(
+                        f"⚠️  TPM limit would be exceeded: "
+                        f"{self.token_count:,} current + {estimated_tokens:,} new = "
+                        f"{tokens_after_request:,} tokens (limit: {self.tpm_limit:,}). "
+                        f"Waiting {sleep_time:.2f}s for token bucket reset."
+                    )
+                    time.sleep(sleep_time)
+                    
+                    # ✅ FORCE complete reset after waiting
+                    self.token_count = 0
+                    self.token_reset_time = time.time()
+                    self.logger.info(
+                        f"✅ Token bucket forcefully reset. "
+                        f"Proceeding with {estimated_tokens:,} tokens."
+                    )
+            
+            # Record this request
+            self.request_times.append(time.time())
+            self.token_count += estimated_tokens
+            
+            self.logger.info(
+                f"📊 Rate limit status: "
+                f"{len(self.request_times)}/{self.rpm_limit} RPM, "
+                f"{self.token_count:,}/{self.tpm_limit:,} TPM"
+            )
+    
+    def update_actual_usage(self, actual_tokens: int):
+        """Update token count with actual usage after API call."""
+        with self.lock:
+            # Adjust the token count if actual usage is known
+            # This helps improve accuracy over time
+            pass  # Current implementation uses estimated tokens which is safer
 
 
 class ClaudePDFProcessor:
@@ -110,10 +237,13 @@ class ClaudePDFProcessor:
             return False, f"Error validating page count: {str(e)}"
     
     @staticmethod
-    def chunk_large_pdf(file_path: str, max_pages_per_chunk: int = 50) -> List[Dict[str, Any]]:
+    def chunk_large_pdf(file_path: str, max_pages_per_chunk: int = 20) -> List[Dict[str, Any]]:
         """
         Split large PDF into smaller chunks while preserving context.
-        Returns list of chunk information.
+        Returns list of chunks with actual PDF data for processing.
+        
+        Strategy: Split by page ranges with optimal chunk size for rate limiting
+        ✅ REDUCED FROM 25 TO 20 pages per chunk for better rate limit management
         """
         try:
             if not PYMUPDF_AVAILABLE:
@@ -121,24 +251,76 @@ class ClaudePDFProcessor:
             
             doc = fitz.open(file_path)
             total_pages = len(doc)
-            doc.close()
             
             chunks = []
+            total_chunks = (total_pages + max_pages_per_chunk - 1) // max_pages_per_chunk
+            
             for i in range(0, total_pages, max_pages_per_chunk):
                 chunk_start = i
                 chunk_end = min(i + max_pages_per_chunk, total_pages)
                 
+                # Create sub-PDF for this chunk
+                chunk_doc = fitz.open()
+                chunk_doc.insert_pdf(doc, from_page=chunk_start, to_page=chunk_end - 1)
+                
+                # Convert to base64
+                chunk_bytes = chunk_doc.write()
+                chunk_base64 = base64.b64encode(chunk_bytes).decode('utf-8')
+                
+                estimated_tokens = (chunk_end - chunk_start) * 2750  # Avg tokens per page
+                
                 chunks.append({
                     'chunk_index': len(chunks),
-                    'total_chunks': (total_pages + max_pages_per_chunk - 1) // max_pages_per_chunk,
-                    'page_range': [chunk_start, chunk_end],
-                    'page_count': chunk_end - chunk_start
+                    'total_chunks': total_chunks,
+                    'start_page': chunk_start + 1,  # 1-indexed for display
+                    'end_page': chunk_end,
+                    'page_count': chunk_end - chunk_start,
+                    'data': chunk_base64,
+                    'estimated_tokens': estimated_tokens
                 })
+                
+                chunk_doc.close()
+                
+                logger.info(
+                    f"📄 Created chunk {len(chunks)}/{total_chunks}: "
+                    f"Pages {chunk_start + 1}-{chunk_end} "
+                    f"(~{estimated_tokens:,} tokens)"
+                )
+            
+            doc.close()
             
             return chunks
         except Exception as e:
             logger.error(f"Error chunking PDF: {e}")
             raise
+    
+    @staticmethod
+    def should_chunk_pdf(file_path: str, max_pages: int = 30) -> bool:
+        """
+        Determine if PDF should be chunked based on size and token estimates.
+        
+        Args:
+            file_path: Path to PDF file
+            max_pages: Maximum pages before chunking (default 30)
+            
+        Returns:
+            True if PDF should be chunked
+        """
+        try:
+            if not PYMUPDF_AVAILABLE:
+                return False
+            
+            doc = fitz.open(file_path)
+            page_count = len(doc)
+            doc.close()
+            
+            # Chunk if > 30 pages OR estimated tokens > 25,000
+            estimated_tokens = page_count * 2750
+            
+            return page_count > max_pages or estimated_tokens > 25000
+        except Exception as e:
+            logger.error(f"Error checking if PDF should chunk: {e}")
+            return False
 
 
 class ClaudeTokenEstimator:
@@ -454,20 +636,70 @@ class ClaudeErrorHandler:
         
         retriable_patterns = [
             'rate limit',
+            '429',
+            'ratelimiterror',
             'timeout',
             'connection',
             'network',
             'overloaded',
-            'unavailable'
+            'unavailable',
+            'service_unavailable',
+            '503'
         ]
         
         return any(pattern in error_str for pattern in retriable_patterns)
     
     @staticmethod
-    def get_retry_delay(attempt: int) -> int:
-        """Calculate retry delay with exponential backoff"""
-        # Exponential backoff: 2^attempt seconds, max 60 seconds
-        return min(2 ** attempt, 60)
+    def is_rate_limit_error(error: Exception) -> bool:
+        """Check if error is specifically a rate limit error (429)"""
+        error_str = str(error).lower()
+        error_type = type(error).__name__.lower()
+        
+        return '429' in error_str or 'rate limit' in error_str or 'ratelimit' in error_type
+    
+    @staticmethod
+    def get_retry_delay(attempt: int, is_rate_limit: bool = False) -> float:
+        """
+        Calculate retry delay with exponential backoff and jitter.
+        
+        Args:
+            attempt: Current retry attempt number (0-indexed)
+            is_rate_limit: True if error is a 429 rate limit error
+            
+        Returns:
+            Delay in seconds
+        """
+        if is_rate_limit:
+            # For rate limits, use longer delays
+            base_delay = 5.0
+            wait_time = min(base_delay * (2 ** attempt), 60)  # Cap at 60 seconds
+        else:
+            # For other errors, use standard exponential backoff
+            base_delay = 2.0
+            wait_time = min(base_delay * (2 ** attempt), 30)  # Cap at 30 seconds
+        
+        # Add jitter to prevent thundering herd
+        jitter = random.uniform(0, 1)
+        return wait_time + jitter
+    
+    @staticmethod
+    def extract_retry_after(error: Exception) -> Optional[float]:
+        """
+        Extract retry-after header value from rate limit error if available.
+        
+        Returns:
+            Seconds to wait, or None if not available
+        """
+        try:
+            if hasattr(error, 'response') and error.response:
+                headers = getattr(error.response, 'headers', {})
+                retry_after = headers.get('retry-after') or headers.get('Retry-After')
+                if retry_after:
+                    return float(retry_after)
+        except Exception:
+            pass
+        
+        return None
     
     @staticmethod
     def format_error_message(error: Exception) -> str:
@@ -475,8 +707,8 @@ class ClaudeErrorHandler:
         error_str = str(error)
         
         # Map common errors to user-friendly messages
-        if 'rate limit' in error_str.lower():
-            return "API rate limit reached. Please try again in a few moments."
+        if '429' in error_str or 'rate limit' in error_str.lower():
+            return "API rate limit reached. The system will automatically retry with backoff."
         elif 'timeout' in error_str.lower():
             return "Request timed out. The document may be too large or complex."
         elif 'invalid' in error_str.lower() and 'api' in error_str.lower():

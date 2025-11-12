@@ -33,6 +33,13 @@ interface Statement {
   edited_tables?: any;
   final_data?: any;
   field_config?: any;
+  field_mapping?: Record<string, string> | null;
+  // Automation metadata
+  automated_approval?: boolean;
+  automation_timestamp?: string;
+  total_amount_match?: boolean | null;
+  extracted_total?: number;  // Earned commission total extracted from document
+  extracted_invoice_total?: number;  // Invoice total calculated from table data
 }
 
 interface Carrier {

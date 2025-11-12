@@ -21,19 +21,24 @@ type Statement = {
   file_name: string;
   uploaded_at: string;
   status: string;
-  final_data?: any[];  // Array of tables with rows
-  field_config?: any[];  // Field configuration/mappings
-  field_mapping?: Record<string, string> | null;  // Field mappings saved during approval
-  raw_data?: any[];
+  carrier_id?: string;  // Insurance carrier ID
   rejection_reason?: string;
   selected_statement_date?: any;
+  raw_data?: any;
+  edited_tables?: any;
+  final_data?: any[];  // Array of commission records (tables with rows)
+  field_config?: any[];  // Field configuration/mappings
+  field_mapping?: Record<string, string> | null;  // Field mappings saved during approval
   uploaded_by_email?: string;
   uploaded_by_name?: string;
   // NEW: Automation metadata
   automated_approval?: boolean;
   automation_timestamp?: string;
   total_amount_match?: boolean | null;
-  extracted_total?: number;  // Total extracted from document
+  extracted_total?: number;  // Earned commission total extracted from document
+  extracted_invoice_total?: number;  // Invoice total calculated from table data
+  gcs_key?: string;
+  gcs_url?: string;
 };
 
 interface CommissionStats {

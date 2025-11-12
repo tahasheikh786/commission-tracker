@@ -130,6 +130,60 @@ async def save_tables(request: SaveTablesRequest, db: AsyncSession = Depends(get
         await update_upload_tables(db, request.upload_id, tables_data, request.selected_statement_date, carrier_id)
         logger.info(f"🎯 Table Editor API: Successfully updated upload with statement date and carrier")
         
+        # ✨ NORMALIZE FILENAME: Rename file in GCS to carrier_YYYY-MM.pdf format
+        # This happens after carrier and statement date are assigned
+        if carrier_id and request.selected_statement_date and request.extracted_carrier:
+            try:
+                from app.utils.filename_utils import get_normalized_filename_for_upload
+                from app.services.gcs_utils import rename_gcs_file
+                from uuid import UUID
+                
+                logger.info(f"📝 Normalizing filename for upload {request.upload_id}")
+                
+                # Get current upload to retrieve original filename
+                upload = await crud.get_statement_upload_by_id(db, UUID(request.upload_id))
+                if upload and upload.file_name:
+                    old_gcs_key = upload.file_name
+                    logger.info(f"📝 Current filename: {old_gcs_key}")
+                    
+                    # Extract just the filename (last part of path)
+                    original_filename = old_gcs_key.split('/')[-1]
+                    
+                    # Generate normalized filename (pass current path to preserve folder structure)
+                    new_gcs_key = await get_normalized_filename_for_upload(
+                        db=db,
+                        carrier_id=UUID(str(carrier_id)),
+                        carrier_name=request.extracted_carrier,
+                        statement_date=request.selected_statement_date,
+                        original_filename=original_filename,
+                        upload_id=UUID(request.upload_id),
+                        current_file_path=old_gcs_key
+                    )
+                    
+                    logger.info(f"📝 New normalized filename: {new_gcs_key}")
+                    
+                    # Only rename if the filename actually changed
+                    if old_gcs_key != new_gcs_key:
+                        # Rename file in GCS
+                        rename_success = rename_gcs_file(old_gcs_key, new_gcs_key)
+                        
+                        if rename_success:
+                            # Update database with new filename
+                            upload.file_name = new_gcs_key
+                            await db.commit()
+                            logger.info(f"✅ Successfully normalized filename: {original_filename} -> {new_gcs_key.split('/')[-1]}")
+                        else:
+                            logger.warning(f"⚠️ Failed to rename file in GCS, keeping original filename")
+                    else:
+                        logger.info(f"📝 Filename already normalized, no changes needed")
+                else:
+                    logger.warning(f"⚠️ Could not retrieve upload record for filename normalization")
+                    
+            except Exception as e:
+                logger.error(f"❌ Error normalizing filename: {e}")
+                # Don't fail the save operation if filename normalization fails
+                logger.warning(f"⚠️ Continuing with original filename due to normalization error")
+        
         # Learn format patterns from the edited tables (use carrier_id for carrier-specific learning)
         if request.tables and len(request.tables) > 0 and carrier_id:
             try:

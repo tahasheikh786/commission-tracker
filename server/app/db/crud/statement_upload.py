@@ -399,44 +399,51 @@ async def save_statement_review(
                         print(f"    Row {row_idx}: SKIPPED (summary row)")
                         continue
                     
-                    if isinstance(row, list) and len(row) > commission_col_idx:
+                    # ✅ CRITICAL FIX: Support both DICT and LIST row formats
+                    raw_value = None
+                    if isinstance(row, dict):
+                        # Row is a dictionary - access by key (field name)
+                        raw_value = row.get(commission_source_field)
+                        print(f"    Row {row_idx}: [DICT] raw_value = '{raw_value}' (type: {type(raw_value)})")
+                    elif isinstance(row, list) and len(row) > commission_col_idx:
+                        # Row is a list - access by index
                         raw_value = row[commission_col_idx]
-                        print(f"    Row {row_idx}: raw_value = '{raw_value}' (type: {type(raw_value)})")
-                        
-                        if raw_value is None or raw_value == '':
-                            print(f"    Row {row_idx}: SKIPPED (empty value)")
-                            continue
-                        
-                        # Parse numeric value
-                        try:
-                            if isinstance(raw_value, (int, float)):
-                                numeric_value = float(raw_value)
-                            elif isinstance(raw_value, str):
-                                # ✅ Handle negative numbers in parentheses format: ($141.14) = -141.14
-                                value_str = raw_value.strip()
-                                is_negative = value_str.startswith('(') and value_str.endswith(')')
-                                if is_negative:
-                                    value_str = value_str[1:-1]  # Remove parentheses
-                                
-                                cleaned = value_str.replace('$', '').replace(',', '').strip()
-                                numeric_value = float(cleaned) if cleaned else 0
-                                
-                                # Apply negative sign if needed
-                                if is_negative:
-                                    numeric_value = -numeric_value
-                            else:
-                                numeric_value = 0
+                        print(f"    Row {row_idx}: [LIST] raw_value = '{raw_value}' (type: {type(raw_value)})")
+                    
+                    if raw_value is None or raw_value == '':
+                        print(f"    Row {row_idx}: SKIPPED (empty value)")
+                        continue
+                    
+                    # Parse numeric value
+                    try:
+                        if isinstance(raw_value, (int, float)):
+                            numeric_value = float(raw_value)
+                        elif isinstance(raw_value, str):
+                            # ✅ Handle negative numbers in parentheses format: ($141.14) = -141.14
+                            value_str = raw_value.strip()
+                            is_negative = value_str.startswith('(') and value_str.endswith(')')
+                            if is_negative:
+                                value_str = value_str[1:-1]  # Remove parentheses
                             
-                            if numeric_value != 0:
-                                table_total += numeric_value
-                                calculated_total += numeric_value
-                                processed_count += 1
-                                print(f"    Row {row_idx}: Added ${numeric_value:.2f} (running total: ${calculated_total:.2f})")
-                            else:
-                                print(f"    Row {row_idx}: Value is zero, skipped")
-                        except (ValueError, TypeError) as e:
-                            print(f"    Row {row_idx}: FAILED to parse '{raw_value}': {e}")
-                            continue
+                            cleaned = value_str.replace('$', '').replace(',', '').strip()
+                            numeric_value = float(cleaned) if cleaned else 0
+                            
+                            # Apply negative sign if needed
+                            if is_negative:
+                                numeric_value = -numeric_value
+                        else:
+                            numeric_value = 0
+                        
+                        if numeric_value != 0:
+                            table_total += numeric_value
+                            calculated_total += numeric_value
+                            processed_count += 1
+                            print(f"    Row {row_idx}: Added ${numeric_value:.2f} (running total: ${calculated_total:.2f})")
+                        else:
+                            print(f"    Row {row_idx}: Value is zero, skipped")
+                    except (ValueError, TypeError) as e:
+                        print(f"    Row {row_idx}: FAILED to parse '{raw_value}': {e}")
+                        continue
                 
                 print(f"  ✅ Table {table_idx} total: ${table_total:.2f}")
             
@@ -523,37 +530,46 @@ async def save_statement_review(
                     if row_idx in summary_rows_set:
                         continue
                     
-                    if isinstance(row, list) and len(row) > invoice_col_idx:
+                    # ✅ CRITICAL FIX: Support both DICT and LIST row formats
+                    raw_value = None
+                    if isinstance(row, dict):
+                        # Row is a dictionary - access by key (field name)
+                        raw_value = row.get(invoice_source_field)
+                        print(f"    Row {row_idx}: [DICT] invoice_value = '{raw_value}'")
+                    elif isinstance(row, list) and len(row) > invoice_col_idx:
+                        # Row is a list - access by index
                         raw_value = row[invoice_col_idx]
-                        
-                        if raw_value is None or raw_value == '':
-                            continue
-                        
-                        # Parse numeric value
-                        try:
-                            if isinstance(raw_value, (int, float)):
-                                numeric_value = float(raw_value)
-                            elif isinstance(raw_value, str):
-                                # ✅ Handle negative numbers in parentheses format: ($627.27) = -627.27
-                                value_str = raw_value.strip()
-                                is_negative = value_str.startswith('(') and value_str.endswith(')')
-                                if is_negative:
-                                    value_str = value_str[1:-1]  # Remove parentheses
-                                
-                                cleaned = value_str.replace('$', '').replace(',', '').strip()
-                                numeric_value = float(cleaned) if cleaned else 0
-                                
-                                # Apply negative sign if needed
-                                if is_negative:
-                                    numeric_value = -numeric_value
-                            else:
-                                numeric_value = 0
+                        print(f"    Row {row_idx}: [LIST] invoice_value = '{raw_value}'")
+                    
+                    if raw_value is None or raw_value == '':
+                        continue
+                    
+                    # Parse numeric value
+                    try:
+                        if isinstance(raw_value, (int, float)):
+                            numeric_value = float(raw_value)
+                        elif isinstance(raw_value, str):
+                            # ✅ Handle negative numbers in parentheses format: ($627.27) = -627.27
+                            value_str = raw_value.strip()
+                            is_negative = value_str.startswith('(') and value_str.endswith(')')
+                            if is_negative:
+                                value_str = value_str[1:-1]  # Remove parentheses
                             
-                            if numeric_value != 0:
-                                table_total += numeric_value
-                                calculated_invoice += numeric_value
-                        except (ValueError, TypeError):
-                            continue
+                            cleaned = value_str.replace('$', '').replace(',', '').strip()
+                            numeric_value = float(cleaned) if cleaned else 0
+                            
+                            # Apply negative sign if needed
+                            if is_negative:
+                                numeric_value = -numeric_value
+                        else:
+                            numeric_value = 0
+                        
+                        if numeric_value != 0:
+                            table_total += numeric_value
+                            calculated_invoice += numeric_value
+                            print(f"    Row {row_idx}: Added ${numeric_value:.2f} to invoice (running total: ${calculated_invoice:.2f})")
+                    except (ValueError, TypeError):
+                        continue
                 
                 print(f"  ✅ Table {table_idx} invoice total: ${table_total:.2f}")
             
