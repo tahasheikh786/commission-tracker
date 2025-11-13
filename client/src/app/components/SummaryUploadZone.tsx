@@ -722,13 +722,8 @@ export default function SummaryUploadZone({
               <AlertCircle className="w-6 h-6 text-red-500 flex-shrink-0 mt-1" />
               <div className="flex-1">
                 <p className="text-red-800 dark:text-red-200 font-semibold mb-2 text-lg">Upload Error</p>
-                <p className="text-red-700 dark:text-red-300 mb-4">{error}</p>
-                <button
-                  onClick={handleRetry}
-                  className="px-4 py-2 bg-red-100 dark:bg-red-800/30 text-red-700 dark:text-red-200 rounded-lg text-sm hover:bg-red-200 dark:hover:bg-red-800/50 transition-colors"
-                >
-                  Try Again
-                </button>
+                <p className="text-red-700 dark:text-red-300">{error}</p>
+                <p className="text-red-600 dark:text-red-400 text-sm mt-2">Please upload your file again to retry.</p>
               </div>
             </div>
           </motion.div>

@@ -993,7 +993,7 @@ class ClaudeDocumentAIService:
                 # Calculate the difference
                 token_diff = actual_input_tokens - estimated_tokens
                 
-                self.logger.info(
+                logger.info(
                     f"📊 Token tracking: "
                     f"Estimated={estimated_tokens:,}, "
                     f"Actual={actual_input_tokens:,}, "
@@ -1010,7 +1010,7 @@ class ClaudeDocumentAIService:
                         self.rate_limiter.token_count - estimated_tokens + actual_input_tokens
                     )
                     
-                    self.logger.info(
+                    logger.info(
                         f"🔧 Token bucket adjusted: "
                         f"{old_count:,} → {self.rate_limiter.token_count:,}"
                     )

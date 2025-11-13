@@ -1347,27 +1347,46 @@ async def extract_tables_smart(
     except Exception as e:
         logger.error(f"Smart extraction error: {str(e)}")
         
-        # Update failed upload status instead of deleting
+        # CRITICAL FIX: Delete the upload record and files to allow re-upload
+        # When extraction fails, we must remove ALL traces to prevent 409 duplicate conflicts
         try:
             if upload_id_uuid:
-                update_data = schemas.StatementUploadUpdate(
-                    status="failed",
-                    progress_data={
-                        'extraction_method': extraction_method,
-                        'file_type': file_ext,
-                        'start_time': start_time.isoformat(),
-                        'failed_at': datetime.utcnow().isoformat(),
-                        'error': str(e)
-                    }
+                from sqlalchemy import select, delete
+                from app.db.models import StatementUpload
+                from app.services.gcs_utils import delete_gcs_file
+                
+                # Find the upload record to get GCS key
+                query_result = await db.execute(
+                    select(StatementUpload).where(StatementUpload.id == upload_id_uuid)
                 )
-                await with_db_retry(db, crud.update_statement, statement_id=str(upload_id_uuid), statement_update=update_data)
-                logger.info(f"✅ Updated failed upload status: {upload_id_uuid}")
-        except Exception as update_error:
-            logger.error(f"Failed to update upload record after error: {update_error}")
+                upload_record = query_result.scalar_one_or_none()
+                
+                if upload_record:
+                    # Delete GCS file if it exists
+                    if upload_record.file_name:
+                        try:
+                            delete_gcs_file(upload_record.file_name)
+                            logger.info(f"🗑️ Deleted GCS file: {upload_record.file_name}")
+                        except Exception as gcs_error:
+                            logger.error(f"Failed to delete GCS file: {gcs_error}")
+                    
+                    # Delete database record to allow re-upload
+                    await db.execute(
+                        delete(StatementUpload).where(StatementUpload.id == upload_id_uuid)
+                    )
+                    await db.commit()
+                    logger.info(f"✅ Deleted failed upload record: {upload_id_uuid} - file can now be re-uploaded")
+                else:
+                    logger.warning(f"⚠️ Upload record not found for cleanup: {upload_id_uuid}")
+        except Exception as cleanup_error:
+            logger.error(f"Failed to cleanup failed upload: {cleanup_error}")
+            await db.rollback()
         
-        # Clean up file on error
+        # Clean up local file on error
         if os.path.exists(file_path):
             os.remove(file_path)
+            logger.info(f"🗑️ Deleted local file: {file_path}")
+        
         raise HTTPException(status_code=500, detail=f"Smart extraction failed: {str(e)}")
 
 
