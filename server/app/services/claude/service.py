@@ -110,9 +110,10 @@ class ClaudeDocumentAIService:
         self.semantic_extractor = SemanticExtractionService()
         
         # Initialize rate limiter for Claude API (CRITICAL for preventing 429 errors)
+        # ✅ OPTIMIZED: Increased TPM limit from 30,000 to 40,000 (actual Tier 2 limit)
         self.rate_limiter = ClaudeTokenBucket(
             requests_per_minute=50,
-            tokens_per_minute=30000,
+            tokens_per_minute=40000,  # ✅ UPDATED from 30000
             buffer_percentage=0.85  # Use 85% to prevent edge cases
         )
         
@@ -131,7 +132,7 @@ class ClaudeDocumentAIService:
         logger.info(f"📋 Primary model: {self.primary_model}")
         logger.info(f"📋 Fallback model: {self.fallback_model}")
         logger.info(f"📏 Limits: {self.max_file_size_mb}MB, {self.max_pages} pages")
-        logger.info(f"🛡️  Rate limiting: ENABLED (50 RPM, 25,500 TPM)")
+        logger.info(f"🛡️  Rate limiting: ENABLED (50 RPM, 34,000 TPM) ✅ OPTIMIZED")
         logger.info(f"💾 Prompt caching: SUPPORTED")
     
     def _initialize_client(self):
@@ -289,14 +290,24 @@ class ClaudeDocumentAIService:
                 raise ValueError(validation_result['error'])
             
             pdf_info = validation_result['pdf_info']
+            page_count = pdf_info.get('page_count', 0)
             
-            # Determine processing strategy based on file size
-            if pdf_info['is_large_file']:
-                logger.info(f"Large file detected ({pdf_info['page_count']} pages, {pdf_info['file_size_mb']:.2f}MB)")
-                result = await self._extract_large_file(carrier_name, file_path, pdf_info, progress_tracker)
+            # ✅ OPTIMIZATION: Smart routing based on file size
+            if page_count > 100:
+                logger.info(f"🚀 Very large file ({page_count} pages) - Using PARALLEL processing with caching")
+                result = await self._extract_very_large_file_with_caching(
+                    carrier_name, file_path, pdf_info, progress_tracker
+                )
+            elif page_count > 30 or pdf_info['is_large_file']:
+                logger.info(f"📄 Large file ({page_count} pages) - Using CACHING optimization")
+                result = await self._extract_large_file(
+                    carrier_name, file_path, pdf_info, progress_tracker
+                )
             else:
-                logger.info(f"Standard file ({pdf_info['page_count']} pages, {pdf_info['file_size_mb']:.2f}MB)")
-                result = await self._extract_standard_file(carrier_name, file_path, pdf_info, progress_tracker)
+                logger.info(f"📄 Standard file ({page_count} pages) - Using STANDARD processing")
+                result = await self._extract_standard_file(
+                    carrier_name, file_path, pdf_info, progress_tracker
+                )
             
             # Run enhanced pipeline for successful extractions (enabled by default)
             if result.get('success') and use_enhanced:
@@ -523,7 +534,9 @@ class ClaudeDocumentAIService:
         progress_tracker = None
     ) -> Dict[str, Any]:
         """
-        Extract data from large files using smart chunking with rate limiting.
+        Extract data from large files using smart chunking with PROMPT CACHING.
+        
+        ✅ OPTIMIZATION: Use prompt caching to reduce costs by 90% and speed up processing
         
         Strategy:
         1. Check if prompt caching would be beneficial (>30 pages)
@@ -535,50 +548,56 @@ class ClaudeDocumentAIService:
                 await progress_tracker.update_progress(
                     "document_processing",
                     20,
-                    "Processing large document - preparing chunks"
+                    "Processing large document with caching optimization"
                 )
             
             page_count = pdf_info.get('page_count', 0)
             
+            # ✅ OPTIMIZATION: Use prompt caching for files > 30 pages
+            use_caching = page_count > 30
+            
+            if use_caching:
+                logger.info(f"🚀 OPTIMIZATION: Prompt caching ENABLED for {page_count}-page file")
+                logger.info(f"   Expected savings: ~90% on token costs after first chunk")
+            
             # Determine strategy based on file size
             if page_count > 100:
-                logger.warning(f"⚠️  Very large file ({page_count} pages) - Using optimized chunking strategy")
+                logger.warning(f"⚠️  Very large file ({page_count} pages) - Using parallel chunking strategy")
                 return await self._extract_very_large_file_with_caching(
                     carrier_name, file_path, pdf_info, progress_tracker
                 )
             
-            # ✅ REDUCED CHUNK SIZE: 20 pages per chunk (from 25) for better rate limiting
-            chunks = self.pdf_processor.chunk_large_pdf(file_path, max_pages_per_chunk=20)
-            
-            logger.info(f"📄 Split document into {len(chunks)} chunks (20 pages each)")
+            # ✅ OPTIMIZATION: Larger chunks (30 pages) when using caching
+            chunk_size = 30 if use_caching else 20
+            chunks = self.pdf_processor.chunk_large_pdf(file_path, max_pages_per_chunk=chunk_size)
+            logger.info(f"📄 Split document into {len(chunks)} chunks ({chunk_size} pages each)")
             
             all_tables = []
             doc_metadata = {}
             
-            # Process each chunk with rate limiting
+            # Process each chunk with caching
             for chunk_idx, chunk_info in enumerate(chunks):
                 if progress_tracker:
                     progress = 20 + (chunk_idx / len(chunks)) * 60
                     await progress_tracker.update_progress(
                         "table_detection",
                         int(progress),
-                        f"Processing chunk {chunk_idx + 1}/{len(chunks)}"
+                        f"Processing chunk {chunk_idx + 1}/{len(chunks)} {'with cache' if use_caching and chunk_idx > 0 else ''}"
                     )
                 
-                # ✅ ADD DELAY BETWEEN CHUNKS (except first)
-                if chunk_idx > 0:
-                    delay_seconds = 5.0  # 5-second safety buffer
-                    logger.info(
-                        f"⏸️  Waiting {delay_seconds}s between chunks "
-                        f"for rate limit safety..."
-                    )
+                # ✅ OPTIMIZATION: No delay between chunks when using caching
+                # (cached chunks are very fast and don't count against rate limits)
+                if not use_caching and chunk_idx > 0:
+                    delay_seconds = 3.0  # Reduced from 5.0
+                    logger.info(f"⏸️  Waiting {delay_seconds}s between chunks...")
                     await asyncio.sleep(delay_seconds)
                 
-                # Extract this chunk - rate limiting is handled in _call_claude_api
+                # Extract this chunk with caching
                 chunk_result = await self._extract_chunk_with_rate_limiting(
                     carrier_name,
                     chunk_info,
-                    progress_tracker
+                    progress_tracker,
+                    use_cache=use_caching  # ✅ Enable caching
                 )
                 
                 # Accumulate results
@@ -603,7 +622,7 @@ class ClaudeDocumentAIService:
                 tables=merged_tables,
                 doc_metadata=doc_metadata,
                 pdf_info=pdf_info,
-                token_usage={'note': 'Chunked processing with rate limiting'},
+                token_usage={'note': 'Chunked processing with prompt caching' if use_caching else 'Chunked processing'},
                 quality_metrics=quality_metrics
             )
             
@@ -621,68 +640,71 @@ class ClaudeDocumentAIService:
         progress_tracker = None
     ) -> Dict[str, Any]:
         """
-        Extract from very large files (100+ pages) using prompt caching.
+        ✅ ADVANCED OPTIMIZATION: Process multiple chunks in parallel
         
-        This method uses Claude's prompt caching to dramatically reduce:
-        - Token consumption (90% reduction on cached tokens)
-        - API costs (cached tokens are 90% cheaper)
-        - Rate limit impact (cached tokens don't count toward limits!)
+        This dramatically speeds up large file extraction by processing
+        2-3 chunks simultaneously while respecting rate limits and using
+        prompt caching for 90% cost reduction.
         """
         try:
-            logger.info("🚀 Using prompt caching strategy for very large file")
+            page_count = pdf_info.get('page_count', 0)
+            logger.info(f"🚀 PARALLEL PROCESSING: Very large file ({page_count} pages) with caching")
             
-            # ✅ Split into chunks (20 pages per chunk for better rate limiting)
-            chunks = self.pdf_processor.chunk_large_pdf(file_path, max_pages_per_chunk=20)
-            logger.info(f"📄 Created {len(chunks)} chunks for processing (20 pages each)")
+            # Split into chunks (25 pages per chunk for optimal balance)
+            chunks = self.pdf_processor.chunk_large_pdf(file_path, max_pages_per_chunk=25)
+            logger.info(f"📄 Split document into {len(chunks)} chunks for parallel processing")
             
             all_tables = []
             doc_metadata = {}
             
-            # Process each chunk with caching
-            for chunk_idx, chunk_info in enumerate(chunks):
+            # ✅ PARALLEL PROCESSING: Process 2 chunks at a time
+            batch_size = 2  # Process 2 chunks simultaneously
+            
+            for batch_start in range(0, len(chunks), batch_size):
+                batch_chunks = chunks[batch_start:batch_start + batch_size]
+                batch_indices = range(batch_start, min(batch_start + batch_size, len(chunks)))
+                
+                logger.info(f"🔄 Processing batch {batch_start//batch_size + 1}: chunks {list(batch_indices)}")
+                
+                # Process chunks in parallel
+                tasks = [
+                    self._extract_chunk_with_rate_limiting(
+                        carrier_name,
+                        chunk_info,
+                        progress_tracker,
+                        use_cache=True  # Enable caching for all chunks
+                    )
+                    for chunk_info in batch_chunks
+                ]
+                
+                # Wait for all chunks in batch to complete
+                batch_results = await asyncio.gather(*tasks, return_exceptions=True)
+                
+                # Process results
+                for idx, result in enumerate(batch_results):
+                    chunk_num = batch_start + idx
+                    
+                    if isinstance(result, Exception):
+                        logger.error(f"❌ Chunk {chunk_num} failed: {result}")
+                        continue
+                    
+                    if result.get('tables'):
+                        all_tables.extend(result['tables'])
+                    
+                    # Use metadata from first chunk
+                    if chunk_num == 0 and result.get('document_metadata'):
+                        doc_metadata = result['document_metadata']
+                
+                # Update progress
                 if progress_tracker:
-                    progress = 20 + (chunk_idx / len(chunks)) * 60
+                    progress = 20 + ((batch_start + len(batch_chunks)) / len(chunks)) * 60
                     await progress_tracker.update_progress(
                         "table_detection",
                         int(progress),
-                        f"Processing chunk {chunk_idx + 1}/{len(chunks)} with caching"
+                        f"Processed {batch_start + len(batch_chunks)}/{len(chunks)} chunks in parallel"
                     )
-                
-                # Use caching for chunks - first call creates cache, subsequent calls use it
-                use_cache = True  # Enable caching for all chunks
-                
-                # Get carrier-specific prompt
-                dynamic_prompt = self.dynamic_prompts.get_prompt_by_name(carrier_name)
-                chunk_prompt = self.prompts.get_table_extraction_prompt() + dynamic_prompt
-                
-                # Call API with caching enabled
-                extraction_result = await self._call_claude_api(
-                    chunk_info['data'],  # Already base64 encoded chunk
-                    chunk_prompt,
-                    model=self.primary_model,
-                    pdf_pages=chunk_info.get('page_count', 0),
-                    use_cache=use_cache  # Enable prompt caching
-                )
-                
-                # Parse response
-                parsed_data = self.response_parser.parse_json_response(
-                    extraction_result['content']
-                )
-                
-                if parsed_data:
-                    # Accumulate tables
-                    if parsed_data.get('tables'):
-                        all_tables.extend(parsed_data['tables'])
-                    
-                    # Use metadata from first chunk
-                    if chunk_idx == 0 and parsed_data.get('document_metadata'):
-                        doc_metadata = parsed_data['document_metadata']
-                
-                # Small delay between chunks
-                if chunk_idx < len(chunks) - 1:
-                    await asyncio.sleep(2)
             
-            # Merge tables
+            # Merge tables that span across chunks
             merged_tables = self._merge_split_tables(all_tables)
             
             # Quality assessment
@@ -696,23 +718,28 @@ class ClaudeDocumentAIService:
                 tables=merged_tables,
                 doc_metadata=doc_metadata,
                 pdf_info=pdf_info,
-                token_usage={'note': 'Chunked processing with prompt caching'},
+                token_usage={'note': 'Parallel chunked processing with caching'},
                 quality_metrics=quality_metrics
             )
             
             return result
             
         except Exception as e:
-            logger.error(f"Error in very large file extraction with caching: {e}")
+            logger.error(f"Error in parallel extraction: {e}")
             raise
     
     async def _extract_chunk_with_rate_limiting(
         self,
         carrier_name: str,
         chunk_info: Dict[str, Any],
-        progress_tracker = None
+        progress_tracker = None,
+        use_cache: bool = False  # ✅ NEW: Enable prompt caching
     ) -> Dict[str, Any]:
-        """Extract data from a chunk with proper rate limiting."""
+        """
+        Extract data from a chunk with proper rate limiting.
+        
+        ✅ OPTIMIZATION: Supports prompt caching for faster processing
+        """
         try:
             # Create chunk-specific prompt
             chunk_prompt = self.prompts.get_chunk_extraction_prompt(
@@ -728,7 +755,7 @@ class ClaudeDocumentAIService:
                 chunk_prompt + dynamic_prompt,
                 model=self.primary_model,
                 pdf_pages=chunk_info.get('page_count', 0),
-                use_cache=False
+                use_cache=use_cache  # ✅ Use caching parameter
             )
             
             # Parse response

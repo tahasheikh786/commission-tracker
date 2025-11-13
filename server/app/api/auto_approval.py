@@ -242,17 +242,34 @@ async def auto_approve_statement(
         # This happens for auto-approved statements that bypass the table editor
         try:
             from app.utils.filename_utils import get_normalized_filename_for_upload
-            from app.services.gcs_utils import rename_gcs_file
+            from app.services.gcs_utils import rename_gcs_file, gcs_service
             
             # Get carrier name
             carrier = await with_db_retry(db, crud.get_company_by_id, company_id=request.carrier_id)
             if carrier and carrier.name and upload.file_name:
                 logger.info(f"📝 Auto-approval: Normalizing filename for upload {request.upload_id}")
                 
-                old_gcs_key = upload.file_name
-                original_filename = old_gcs_key.split('/')[-1]
+                # ✅ FIX: Use CURRENT path from upload record
+                current_gcs_key = upload.file_name
+                original_filename = current_gcs_key.split('/')[-1]
                 
-                # Generate normalized filename (pass current path to preserve folder structure)
+                logger.info(f"📝 Auto-approval: Current GCS path: {current_gcs_key}")
+                
+                # ✅ FIX: Verify file exists before rename attempt
+                if not gcs_service.file_exists(current_gcs_key):
+                    logger.error(f"❌ Auto-approval: Source file not found: {current_gcs_key}")
+                    # Try carrier folder path
+                    carrier_folder_path = f"statements/{carrier.id}/{original_filename}"
+                    if gcs_service.file_exists(carrier_folder_path):
+                        logger.info(f"✅ Auto-approval: Found file at carrier folder: {carrier_folder_path}")
+                        current_gcs_key = carrier_folder_path
+                        upload.file_name = current_gcs_key
+                        await db.commit()
+                    else:
+                        logger.warning(f"⚠️ Auto-approval: Cannot find file in GCS, skipping rename")
+                        raise FileNotFoundError("Source file not found in GCS")
+                
+                # Generate normalized filename
                 new_gcs_key = await get_normalized_filename_for_upload(
                     db=db,
                     carrier_id=UUID(request.carrier_id),
@@ -260,25 +277,24 @@ async def auto_approve_statement(
                     statement_date={"date": request.statement_date},
                     original_filename=original_filename,
                     upload_id=UUID(request.upload_id),
-                    current_file_path=old_gcs_key
+                    current_file_path=current_gcs_key  # ✅ PASS CURRENT PATH
                 )
                 
-                # Only rename if the filename actually changed
-                if old_gcs_key != new_gcs_key:
-                    rename_success = rename_gcs_file(old_gcs_key, new_gcs_key)
+                # Only rename if filename changed
+                if current_gcs_key != new_gcs_key:
+                    rename_success = rename_gcs_file(current_gcs_key, new_gcs_key)
                     
                     if rename_success:
-                        # Update database with new filename
                         upload.file_name = new_gcs_key
                         await db.commit()
-                        logger.info(f"✅ Auto-approval: Successfully normalized filename to {new_gcs_key.split('/')[-1]}")
+                        logger.info(f"✅ Auto-approval: Successfully normalized filename")
                     else:
-                        logger.warning(f"⚠️ Auto-approval: Failed to rename file in GCS")
+                        logger.warning(f"⚠️ Auto-approval: Failed to rename file")
                 else:
                     logger.info(f"📝 Auto-approval: Filename already normalized")
         except Exception as e:
             logger.error(f"❌ Auto-approval: Error normalizing filename: {e}")
-            # Don't fail the approval if filename normalization fails
+            # Don't fail auto-approval if filename normalization fails
         
         # Step 4: Get extracted total from document (from Claude) and calculate from tables
         actual_extracted_total = request.extracted_total

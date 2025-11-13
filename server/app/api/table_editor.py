@@ -135,7 +135,7 @@ async def save_tables(request: SaveTablesRequest, db: AsyncSession = Depends(get
         if carrier_id and request.selected_statement_date and request.extracted_carrier:
             try:
                 from app.utils.filename_utils import get_normalized_filename_for_upload
-                from app.services.gcs_utils import rename_gcs_file
+                from app.services.gcs_utils import rename_gcs_file, gcs_service
                 from uuid import UUID
                 
                 logger.info(f"📝 Normalizing filename for upload {request.upload_id}")
@@ -143,11 +143,30 @@ async def save_tables(request: SaveTablesRequest, db: AsyncSession = Depends(get
                 # Get current upload to retrieve original filename
                 upload = await crud.get_statement_upload_by_id(db, UUID(request.upload_id))
                 if upload and upload.file_name:
-                    old_gcs_key = upload.file_name
-                    logger.info(f"📝 Current filename: {old_gcs_key}")
+                    # ✅ FIX: Use CURRENT file path from upload record (not old path)
+                    current_gcs_key = upload.file_name  # This is the CURRENT location after carrier reassignment
+                    original_filename = current_gcs_key.split('/')[-1]
                     
-                    # Extract just the filename (last part of path)
-                    original_filename = old_gcs_key.split('/')[-1]
+                    logger.info(f"📝 Current GCS path: {current_gcs_key}")
+                    logger.info(f"📝 Original filename: {original_filename}")
+                    
+                    # ✅ FIX: Check if source file exists BEFORE attempting rename
+                    if not gcs_service.file_exists(current_gcs_key):
+                        logger.error(f"❌ Source file not found at: {current_gcs_key}")
+                        logger.error(f"   Upload record may be out of sync")
+                        # Attempt to find the file in carrier folder
+                        carrier = await with_db_retry(db, crud.get_company_by_id, company_id=carrier_id)
+                        if carrier:
+                            carrier_folder_path = f"statements/{carrier.id}/{original_filename}"
+                            if gcs_service.file_exists(carrier_folder_path):
+                                logger.info(f"✅ Found file at carrier folder: {carrier_folder_path}")
+                                current_gcs_key = carrier_folder_path
+                                # Update upload record with correct path
+                                upload.file_name = current_gcs_key
+                                await db.commit()
+                            else:
+                                logger.warning(f"⚠️ Cannot find file in GCS, skipping rename")
+                                raise FileNotFoundError("Source file not found in GCS")
                     
                     # Generate normalized filename (pass current path to preserve folder structure)
                     new_gcs_key = await get_normalized_filename_for_upload(
@@ -157,25 +176,25 @@ async def save_tables(request: SaveTablesRequest, db: AsyncSession = Depends(get
                         statement_date=request.selected_statement_date,
                         original_filename=original_filename,
                         upload_id=UUID(request.upload_id),
-                        current_file_path=old_gcs_key
+                        current_file_path=current_gcs_key  # ✅ PASS CURRENT PATH
                     )
                     
-                    logger.info(f"📝 New normalized filename: {new_gcs_key}")
+                    logger.info(f"📝 New normalized path: {new_gcs_key}")
                     
                     # Only rename if the filename actually changed
-                    if old_gcs_key != new_gcs_key:
+                    if current_gcs_key != new_gcs_key:
                         # Rename file in GCS
-                        rename_success = rename_gcs_file(old_gcs_key, new_gcs_key)
+                        rename_success = rename_gcs_file(current_gcs_key, new_gcs_key)
                         
                         if rename_success:
                             # Update database with new filename
                             upload.file_name = new_gcs_key
                             await db.commit()
-                            logger.info(f"✅ Successfully normalized filename: {original_filename} -> {new_gcs_key.split('/')[-1]}")
+                            logger.info(f"✅ Successfully normalized filename to {new_gcs_key.split('/')[-1]}")
                         else:
-                            logger.warning(f"⚠️ Failed to rename file in GCS, keeping original filename")
+                            logger.warning(f"⚠️ Failed to rename file in GCS")
                     else:
-                        logger.info(f"📝 Filename already normalized, no changes needed")
+                        logger.info(f"📝 Filename already normalized")
                 else:
                     logger.warning(f"⚠️ Could not retrieve upload record for filename normalization")
                     
