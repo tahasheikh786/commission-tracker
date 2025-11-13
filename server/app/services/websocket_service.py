@@ -119,66 +119,148 @@ class ConnectionManager:
                 del self.keepalive_tasks[keepalive_key]
     
     def disconnect(self, upload_id: str, session_id: str):
-        """Remove a WebSocket connection and cleanup keepalive task."""
+        """Remove a WebSocket connection and cleanup keepalive task with idempotency."""
+        # Make disconnect idempotent - safe to call multiple times
+        cleanup_performed = False
+        
         # Cancel keepalive task
         keepalive_key = f"{upload_id}:{session_id}"
         if keepalive_key in self.keepalive_tasks:
-            self.keepalive_tasks[keepalive_key].cancel()
-            del self.keepalive_tasks[keepalive_key]
+            try:
+                self.keepalive_tasks[keepalive_key].cancel()
+                del self.keepalive_tasks[keepalive_key]
+                cleanup_performed = True
+            except Exception as e:
+                logger.warning(f"Error cancelling keepalive task: {e}")
         
-        if upload_id in self.active_connections and session_id in self.active_connections[upload_id]:
-            del self.active_connections[upload_id][session_id]
-            
-            # Clean up empty upload_id entries
-            if not self.active_connections[upload_id]:
-                del self.active_connections[upload_id]
-        
-        if session_id in self.connection_metadata:
-            del self.connection_metadata[session_id]
-        
-        logger.info(f"WebSocket disconnected: upload_id={upload_id}, session_id={session_id}")
-    
-    async def send_personal_message(self, message: Dict[str, Any], upload_id: str, session_id: str):
-        """Send a message to a specific connection."""
+        # Remove from active connections
         if upload_id in self.active_connections and session_id in self.active_connections[upload_id]:
             try:
+                # Try to close the websocket gracefully if still connected
                 websocket = self.active_connections[upload_id][session_id]
-                # Check if the WebSocket is still open before sending
-                if websocket.client_state.name == 'CONNECTED':
-                    await websocket.send_text(json.dumps(message))
-                else:
-                    logger.warning(f"WebSocket not connected for upload_id={upload_id}, session_id={session_id}")
-                    self.disconnect(upload_id, session_id)
+                if hasattr(websocket, 'client_state'):
+                    try:
+                        if websocket.client_state.name == 'CONNECTED':
+                            # Close without waiting to avoid blocking
+                            asyncio.create_task(websocket.close(code=1000))
+                    except Exception:
+                        pass  # Socket already closed or closing
+                
+                del self.active_connections[upload_id][session_id]
+                cleanup_performed = True
+                
+                # Clean up empty upload_id entries
+                if not self.active_connections[upload_id]:
+                    del self.active_connections[upload_id]
             except Exception as e:
-                logger.error(f"Error sending personal message: {e}")
+                logger.warning(f"Error removing connection: {e}")
+        
+        # Remove metadata
+        if session_id in self.connection_metadata:
+            try:
+                del self.connection_metadata[session_id]
+                cleanup_performed = True
+            except Exception as e:
+                logger.warning(f"Error removing metadata: {e}")
+        
+        if cleanup_performed:
+            logger.info(f"WebSocket disconnected: upload_id={upload_id}, session_id={session_id}")
+        else:
+            logger.debug(f"Disconnect called but connection already cleaned up: upload_id={upload_id}, session_id={session_id}")
+    
+    async def send_personal_message(self, message: Dict[str, Any], upload_id: str, session_id: str):
+        """Send a message to a specific connection with robust state checking."""
+        if upload_id not in self.active_connections or session_id not in self.active_connections[upload_id]:
+            logger.debug(f"Connection not found: upload_id={upload_id}, session_id={session_id}")
+            return  # Connection already cleaned up
+        
+        websocket = self.active_connections[upload_id][session_id]
+        
+        # Multi-layer state check
+        try:
+            # Check application state (FastAPI level)
+            if websocket.application_state.name != 'CONNECTED':
+                logger.warning(f"WebSocket application not connected: upload_id={upload_id}, session_id={session_id}")
                 self.disconnect(upload_id, session_id)
+                return
+            
+            # Check client state (Starlette level)
+            if websocket.client_state.name != 'CONNECTED':
+                logger.warning(f"WebSocket client not connected: upload_id={upload_id}, session_id={session_id}")
+                self.disconnect(upload_id, session_id)
+                return
+            
+            # Attempt to send with timeout to prevent hanging
+            await asyncio.wait_for(
+                websocket.send_text(json.dumps(message)),
+                timeout=5.0  # 5 second timeout for send operation
+            )
+            
+        except asyncio.TimeoutError:
+            logger.error(f"Timeout sending message to upload_id={upload_id}, session_id={session_id}")
+            self.disconnect(upload_id, session_id)
+        except RuntimeError as e:
+            # This catches "WebSocket is not connected" errors
+            if "not connected" in str(e).lower() or "accept" in str(e).lower():
+                logger.warning(f"WebSocket already disconnected: {e}")
+                self.disconnect(upload_id, session_id)
+            else:
+                logger.error(f"RuntimeError sending message: {e}")
+                self.disconnect(upload_id, session_id)
+        except Exception as e:
+            logger.error(f"Error sending personal message: {e}", exc_info=True)
+            self.disconnect(upload_id, session_id)
     
     async def broadcast_to_upload(self, message: Dict[str, Any], upload_id: str):
-        """Broadcast a message to all connections for a specific upload."""
+        """Broadcast a message to all connections for a specific upload with safe iteration."""
         logger.info(f"Broadcasting message to upload_id {upload_id}: {message.get('type', 'unknown')}")
         
-        if upload_id in self.active_connections:
-            logger.info(f"Found {len(self.active_connections[upload_id])} connections for upload_id {upload_id}")
-            disconnected_sessions = []
-            
-            for session_id, websocket in self.active_connections[upload_id].items():
-                try:
-                    # Check if the WebSocket is still open before sending
-                    if websocket.client_state.name == 'CONNECTED':
-                        await websocket.send_text(json.dumps(message))
-                        logger.debug(f"Message sent to session {session_id} for upload_id {upload_id}")
-                    else:
-                        logger.warning(f"WebSocket not connected for session {session_id}")
-                        disconnected_sessions.append(session_id)
-                except Exception as e:
-                    logger.error(f"Error broadcasting to session {session_id}: {e}")
-                    disconnected_sessions.append(session_id)
-            
-            # Clean up disconnected sessions
-            for session_id in disconnected_sessions:
-                self.disconnect(upload_id, session_id)
-        else:
+        if upload_id not in self.active_connections:
             logger.warning(f"No active connections found for upload_id {upload_id}")
+            return
+        
+        # Create a copy of the dict items to prevent modification during iteration
+        connections_snapshot = list(self.active_connections[upload_id].items())
+        logger.info(f"Found {len(connections_snapshot)} connections for upload_id {upload_id}")
+        
+        disconnected_sessions = []
+        
+        for session_id, websocket in connections_snapshot:
+            # Skip if already disconnected by another task
+            if upload_id not in self.active_connections or session_id not in self.active_connections[upload_id]:
+                continue
+            
+            try:
+                # Multi-layer state validation
+                if (websocket.application_state.name != 'CONNECTED' or 
+                    websocket.client_state.name != 'CONNECTED'):
+                    logger.debug(f"WebSocket not connected for session {session_id}")
+                    disconnected_sessions.append(session_id)
+                    continue
+                
+                # Send with timeout
+                await asyncio.wait_for(
+                    websocket.send_text(json.dumps(message)),
+                    timeout=5.0
+                )
+                logger.debug(f"Message sent to session {session_id} for upload_id {upload_id}")
+                
+            except asyncio.TimeoutError:
+                logger.error(f"Timeout broadcasting to session {session_id}")
+                disconnected_sessions.append(session_id)
+            except RuntimeError as e:
+                if "not connected" in str(e).lower() or "accept" in str(e).lower():
+                    logger.debug(f"WebSocket already disconnected for session {session_id}: {e}")
+                else:
+                    logger.error(f"RuntimeError broadcasting to session {session_id}: {e}")
+                disconnected_sessions.append(session_id)
+            except Exception as e:
+                logger.error(f"Error broadcasting to session {session_id}: {e}", exc_info=True)
+                disconnected_sessions.append(session_id)
+        
+        # Clean up disconnected sessions
+        for session_id in disconnected_sessions:
+            self.disconnect(upload_id, session_id)
     
     async def send_progress_update(self, upload_id: str, progress_data: Dict[str, Any]):
         """Send a progress update to all connections for an upload."""

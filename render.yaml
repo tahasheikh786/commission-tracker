@@ -48,3 +48,32 @@ services:
         value: "1"
       - key: MALLOC_ARENA_MAX
         value: "2"
+      # Additional timeout configuration for large file processing
+      - key: WEBSOCKET_TIMEOUT
+        value: "7200"
+      - key: WEBSOCKET_PING_INTERVAL
+        value: "30"
+      - key: WEBSOCKET_KEEPALIVE
+        value: "300"
+      - key: MISTRAL_TIMEOUT
+        value: "1800"
+      - key: GPT_TIMEOUT
+        value: "300"
+      - key: EXTRACTION_TIMEOUT
+        value: "1800"
+      - key: DOCUMENT_PROCESSING_TIMEOUT
+        value: "600"
+      - key: TABLE_EXTRACTION_TIMEOUT
+        value: "1200"
+      - key: METADATA_EXTRACTION_TIMEOUT
+        value: "300"
+      - key: POST_PROCESSING_TIMEOUT
+        value: "300"
+      - key: SMALL_DOC_TIMEOUT
+        value: "300"
+      - key: MEDIUM_DOC_TIMEOUT
+        value: "600"
+      - key: LARGE_DOC_TIMEOUT
+        value: "1200"
+      - key: MAX_TIMEOUT
+        value: "1800"

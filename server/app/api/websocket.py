@@ -105,6 +105,15 @@ async def websocket_progress_endpoint(
         # Keep the connection alive and handle incoming messages
         while True:
             try:
+                # Validate connection state before attempting to receive
+                if websocket.application_state.name != 'CONNECTED':
+                    logger.info(f"WebSocket application state not CONNECTED for upload_id={upload_id}")
+                    break
+                
+                if websocket.client_state.name != 'CONNECTED':
+                    logger.info(f"WebSocket client state not CONNECTED for upload_id={upload_id}")
+                    break
+                
                 # Wait for messages from the client with timeout
                 # Increased to 10 minutes for large document processing
                 data = await asyncio.wait_for(websocket.receive_text(), timeout=600)
@@ -152,18 +161,20 @@ async def websocket_progress_endpoint(
                 except Exception as send_error:
                     logger.error(f"Failed to send JSON error message: {send_error}")
                     break
-            except Exception as e:
-                logger.error(f"Error handling WebSocket message: {e}")
-                # Don't try to send error message if connection is already closed
-                try:
-                    await connection_manager.send_personal_message({
-                        'type': 'error',
-                        'error': 'Internal server error'
-                    }, upload_id, session_id)
-                except Exception as send_error:
-                    logger.error(f"Failed to send error message: {send_error}")
-                    # If we can't send the error message, break the loop to prevent infinite errors
+            except RuntimeError as e:
+                # Handle "WebSocket is not connected" errors specifically
+                if "not connected" in str(e).lower() or "accept" in str(e).lower():
+                    logger.warning(f"WebSocket disconnected during message handling: {e}")
+                    # Don't try to send anything, just break the loop
                     break
+                else:
+                    logger.error(f"RuntimeError handling WebSocket message: {e}", exc_info=True)
+                    break  # Break on any RuntimeError to prevent loop
+            except Exception as e:
+                logger.error(f"Error handling WebSocket message: {e}", exc_info=True)
+                # NEVER try to send error messages in the exception handler
+                # This prevents infinite error loops when connection is dead
+                break  # Always break the loop on unhandled exceptions
                 
     except WebSocketDisconnect:
         logger.info(f"WebSocket disconnected during connection: upload_id={upload_id}")
