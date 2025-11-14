@@ -235,7 +235,8 @@ async def auto_approve_statement(
         )
         
         # Call approve_statement with the payload object
-        approve_response = await approve_statement(approve_payload, db=db)
+        # ✅ CRITICAL FIX: Pass current_user to avoid 'Depends' object error
+        approve_response = await approve_statement(approve_payload, db=db, current_user=current_user)
         
         # NOTE: Filename normalization is handled by approve_statement
         # The old filename normalization code that was here has been removed

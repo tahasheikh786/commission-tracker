@@ -421,19 +421,64 @@ class ClaudeDocumentAIService:
             pdf_info = validation_result['pdf_info']
             page_count = pdf_info.get('page_count', 0)
             
-            # ✅ OPTIMAL: Smart routing based on file size with adaptive chunking
-            # Uses dynamic chunk sizing (2-8 pages) based on file complexity
-            # With 32K TPM limit, chunks are calculated optimally per file
-            if page_count > 8:  # ✅ CORRECT: 8+ pages need chunking with adaptive strategy
-                logger.info(f"📄 Large file ({page_count} pages) - Using ADAPTIVE CHUNKED processing")
-                result = await self._extract_large_file(
-                    carrier_name, file_path, pdf_info, progress_tracker
+            # ✅ CRITICAL FIX: Use adaptive chunking with token estimation
+            # Instead of hardcoded page threshold (>8), estimate tokens first
+            # This prevents 36K token limit errors on 7-page files with dense content
+            
+            # Get prompts for extraction
+            dynamic_prompt = self.dynamic_prompts.get_prompt_by_name(carrier_name)
+            critical_carrier_instructions = self.prompts.get_table_extraction_prompt()
+            base_extraction_prompt = self.enhanced_prompts.get_document_intelligence_extraction_prompt()
+            full_prompt = base_extraction_prompt + "\n\n" + critical_carrier_instructions + dynamic_prompt
+            system_prompt = self.prompts.get_base_extraction_instructions()
+            
+            # Use adaptive chunking for ALL files (it will decide single vs chunked internally)
+            logger.info(f"📄 Processing {page_count}-page file with ADAPTIVE CHUNKING strategy")
+            result = await self._extract_with_adaptive_chunking(
+                carrier_name=carrier_name,
+                pdf_path=file_path,
+                num_pages=page_count,
+                prompt=full_prompt,
+                system_prompt=system_prompt,
+                progress_tracker=progress_tracker
+            )
+            
+            # Format the result properly
+            if result.get('success'):
+                # Extract entities
+                groups_and_companies = result.get('groups_and_companies', [])
+                writing_agents = result.get('writing_agents', [])
+                business_intelligence = result.get('business_intelligence', {})
+                
+                # Normalize headers for all tables
+                for table in result.get('tables', []):
+                    if 'headers' in table and 'rows' in table:
+                        normalized_headers = normalize_multi_line_headers(
+                            table['headers'],
+                            table['rows']
+                        )
+                        table['headers'] = normalized_headers
+                
+                # Assess quality
+                quality_metrics = self.quality_assessor.assess_extraction_quality(
+                    result.get('tables', []),
+                    result.get('document_metadata', {})
+                )
+                
+                # Format response
+                result = self._format_response(
+                    tables=result.get('tables', []),
+                    doc_metadata=result.get('document_metadata', {}),
+                    pdf_info=pdf_info,
+                    token_usage=result.get('token_usage', {}),
+                    quality_metrics=quality_metrics,
+                    groups_and_companies=groups_and_companies,
+                    writing_agents=writing_agents,
+                    business_intelligence=business_intelligence
                 )
             else:
-                logger.info(f"📄 Standard file ({page_count} pages) - Using STANDARD processing")
-                result = await self._extract_standard_file(
-                    carrier_name, file_path, pdf_info, progress_tracker
-                )
+                # Extraction failed, return error
+                raise ValueError(result.get('error', 'Extraction failed'))
             
             # Run enhanced pipeline for successful extractions (enabled by default)
             if result.get('success') and use_enhanced:
@@ -504,376 +549,542 @@ class ClaudeDocumentAIService:
         except Exception as e:
             return {'valid': False, 'error': f'Validation error: {str(e)}'}
     
-    async def _extract_standard_file(
+    def _transform_carrier_broker_metadata(self, parsed_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Transform enhanced prompt format to standard metadata format.
+        
+        Converts:
+        - carrier: {name: "...", confidence: 0.9} → carrier_name, carrier_confidence
+        - broker_agent: {company_name: "...", confidence: 0.8} → broker_company, broker_confidence
+        
+        Args:
+            parsed_data: Parsed Claude response with enhanced format
+            
+        Returns:
+            Transformed document_metadata dict
+        """
+        doc_metadata = parsed_data.get('document_metadata', {})
+        
+        # Transform carrier from enhanced format
+        if 'carrier' in parsed_data and isinstance(parsed_data['carrier'], dict):
+            doc_metadata['carrier_name'] = parsed_data['carrier'].get('name')
+            doc_metadata['carrier_confidence'] = parsed_data['carrier'].get('confidence', 0.9)
+        
+        # Transform broker from enhanced format
+        if 'broker_agent' in parsed_data and isinstance(parsed_data['broker_agent'], dict):
+            doc_metadata['broker_company'] = parsed_data['broker_agent'].get('company_name')
+            doc_metadata['broker_confidence'] = parsed_data['broker_agent'].get('confidence', 0.8)
+        
+        return doc_metadata
+    
+    async def _estimate_total_tokens(
         self,
-        carrier_name,
-        file_path: str,
-        pdf_info: Dict[str, Any],
-        progress_tracker = None
+        pdf_path: str,
+        num_pages: int,
+        estimate_mode: str = "standard"
     ) -> Dict[str, Any]:
-        """Extract data from standard-sized files (< 50 pages, < 20MB)"""
+        """
+        Estimate total tokens for extraction with safety margins.
+        
+        ✅ CRITICAL FIX: Pre-flight token estimation to prevent rate limit errors.
+        
+        Returns: {
+            'estimated_input_tokens': int,
+            'estimated_output_tokens': int,
+            'safe_limit': 32400,  # 90% of 36000 for safety buffer
+            'will_fit': bool,
+            'recommended_chunk_size': int,
+            'risk_level': 'safe' | 'warning' | 'critical'
+        }
+        """
+        
+        # Constants (from Anthropic docs and empirical testing)
+        # ✅ CRITICAL: Increased from 1200 to 5000 based on real-world data
+        # User's 7-page PDF had 36,640 tokens ≈ 5,234 tokens/page
+        # This accounts for dense content, images, tables, and formatting
+        TOKENS_PER_PAGE = 5000  # Realistic for dense commission statements with images
+        PROMPT_TOKENS = 3000  # System + extraction instructions
+        OUTPUT_TOKENS = 6000  # Allow generous output
+        SAFETY_BUFFER = 0.90  # Use only 90% of limit
+        TPM_LIMIT = 36000  # Input tokens per minute (90% of 40K)
+        
+        safe_limit = int(TPM_LIMIT * SAFETY_BUFFER)  # 32,400
+        
+        # Estimate input tokens
+        estimated_input = (num_pages * TOKENS_PER_PAGE) + PROMPT_TOKENS
+        estimated_output = OUTPUT_TOKENS
+        
+        total_estimated = estimated_input + estimated_output
+        
+        # Determine if safe
+        will_fit = total_estimated <= safe_limit
+        
+        # Calculate recommended chunk size
+        max_pages_per_chunk = max(1, (safe_limit - PROMPT_TOKENS) // TOKENS_PER_PAGE)
+        
+        # Determine risk level
+        if will_fit:
+            risk = 'safe'
+        elif estimated_input <= safe_limit:
+            risk = 'warning'
+        else:
+            risk = 'critical'
+        
+        logger.info(f"📊 Token Estimation:")
+        logger.info(f"   - Pages: {num_pages}")
+        logger.info(f"   - Estimated input: {estimated_input:,} tokens")
+        logger.info(f"   - Safe limit: {safe_limit:,} tokens (90% of {TPM_LIMIT:,})")
+        logger.info(f"   - Will fit: {will_fit}")
+        logger.info(f"   - Recommended chunk size: {max_pages_per_chunk} pages/chunk")
+        logger.info(f"   - Risk level: {risk}")
+        
+        return {
+            'estimated_input_tokens': estimated_input,
+            'estimated_output_tokens': estimated_output,
+            'safe_limit': safe_limit,
+            'will_fit': will_fit,
+            'recommended_chunk_size': max(1, max_pages_per_chunk),  # At least 1 page
+            'risk_level': risk,
+            'reason': (
+                'Fits safely in single call' if will_fit
+                else f'Would need {max_pages_per_chunk} pages/chunk to stay under limit'
+            )
+        }
+    
+    async def _extract_pdf_chunk(
+        self,
+        pdf_doc,
+        start_page: int,
+        end_page: int,
+        original_path: str
+    ) -> str:
+        """
+        Extract a subset of pages from PDF document.
+        
+        Returns path to new temporary PDF with only the selected pages.
+        """
+        
+        import tempfile
+        from pathlib import Path
+        
+        # Create temporary file
+        temp_dir = tempfile.gettempdir()
+        chunk_filename = f"chunk_{start_page}_{end_page}_{Path(original_path).stem}.pdf"
+        chunk_path = Path(temp_dir) / chunk_filename
+        
+        # Create new PDF with selected pages
         try:
-            # Stage 1: Prepare document
-            if progress_tracker:
-                await progress_tracker.update_progress(
-                    "document_processing",
-                    30,
-                    "Encoding PDF for Claude AI"
-                )
+            import fitz  # PyMuPDF
+        except ImportError:
+            logger.error("PyMuPDF (fitz) not available for chunking")
+            raise ImportError("PyMuPDF required for PDF chunking. Install with: pip install pymupdf")
+        
+        new_pdf = fitz.open()
+        for page_num in range(start_page, end_page):
+            new_pdf.insert_pdf(pdf_doc, from_page=page_num, to_page=page_num)
+        
+        new_pdf.save(str(chunk_path))
+        new_pdf.close()
+        
+        logger.debug(f"Created chunk PDF: {chunk_path} (pages {start_page + 1}-{end_page})")
+        
+        return str(chunk_path)
+    
+    def _get_table_signature(self, table: Dict[str, Any]) -> str:
+        """
+        Create unique signature for table to detect duplicates across chunks.
+        
+        Uses: header names + first row values + row count
+        """
+        
+        headers = tuple(table.get('headers', []) or table.get('header', []))
+        rows = table.get('rows', [])
+        first_row = tuple(rows[0]) if rows else ()
+        row_count = len(rows)
+        
+        signature = f"{headers}|{first_row}|{row_count}"
+        import hashlib
+        return hashlib.md5(signature.encode()).hexdigest()
+    
+    def _merge_chunk_results(
+        self,
+        all_results: Dict[str, Any],
+        chunk_result: Dict[str, Any],
+        chunk_info: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Intelligently merge chunk results avoiding duplicates.
+        
+        Handles:
+        - Deduplication of tables across chunks
+        - Merging metadata (take most confident)
+        - Combining entities
+        - Tracking chunk boundaries
+        """
+        
+        # Merge tables (with deduplication)
+        for table in chunk_result.get('tables', []):
+            # Check if table already in results (by header + row count signature)
+            table_signature = self._get_table_signature(table)
             
-            pdf_base64 = self.pdf_processor.encode_pdf_to_base64(file_path)
-            
-            if progress_tracker:
-                await progress_tracker.complete_stage(
-                    "document_processing",
-                    "Document prepared for Claude AI"
-                )
-            
-            # Stage 2: Extract metadata and tables
-            if progress_tracker:
-                await progress_tracker.start_stage(
-                    "table_detection",
-                    "Analyzing document with Claude AI"
-                )
-                await progress_tracker.update_progress(
-                    "table_detection",
-                    20,
-                    "Sending to Claude for analysis"
-                )
-            
-            # Single API call for both metadata and tables (more efficient)
-            # Get carrier-specific prompt if available
-            dynamic_prompt = self.dynamic_prompts.get_prompt_by_name(carrier_name)
-            if dynamic_prompt:
-                logger.info(f"🎯 Using carrier-specific dynamic prompt for: {carrier_name}")
-            else:
-                logger.info(f"📋 No carrier-specific prompt for '{carrier_name}', using standard prompt only")
-            
-            # ✅ CRITICAL FIX: Include ALL critical requirements
-            # - enhanced_prompts: provides comprehensive extraction strategy
-            # - prompts.get_table_extraction_prompt(): provides critical logo/top/bottom weightage for carrier extraction
-            # - dynamic_prompt: provides carrier-specific rules
-            critical_carrier_instructions = self.prompts.get_table_extraction_prompt()
-            base_extraction_prompt = self.enhanced_prompts.get_document_intelligence_extraction_prompt()
-            
-            # Combine: base + critical requirements + carrier-specific
-            full_prompt = base_extraction_prompt + "\n\n" + critical_carrier_instructions + dynamic_prompt
-            
-            extraction_result = await self._call_claude_api(
-                pdf_base64,
-                full_prompt,
-                model=self.primary_model,
-                pdf_pages=pdf_info.get('page_count', 0),
-                use_cache=False  # Standard files don't need caching
+            is_duplicate = any(
+                self._get_table_signature(existing) == table_signature
+                for existing in all_results['tables']
             )
             
-            if progress_tracker:
-                await progress_tracker.update_progress(
-                    "table_detection",
-                    70,
-                    "Processing Claude response"
-                )
+            if not is_duplicate:
+                # Add chunk tracking metadata
+                table['_chunk_index'] = chunk_info['index']
+                table['_chunk_pages'] = f"{chunk_info['start_page'] + 1}-{chunk_info['end_page']}"
+                all_results['tables'].append(table)
+                logger.debug(f"   Added table (signature: {table_signature[:50]})")
+            else:
+                logger.debug(f"   Skipped duplicate table (signature: {table_signature[:50]})")
+        
+        # Merge document metadata (take highest confidence values)
+        chunk_metadata = chunk_result.get('document_metadata', {})
+        for key, value in chunk_metadata.items():
+            if key.endswith('_confidence'):
+                # Metadata with confidence - take highest
+                base_key = key.replace('_confidence', '')
+                current_confidence = all_results['document_metadata'].get(key, 0)
+                new_confidence = value
+                
+                if new_confidence > current_confidence:
+                    all_results['document_metadata'][base_key] = chunk_metadata.get(base_key)
+                    all_results['document_metadata'][key] = new_confidence
+                    logger.debug(f"   Updated {key}: confidence {current_confidence} -> {new_confidence}")
+            elif key not in all_results['document_metadata']:
+                all_results['document_metadata'][key] = value
+        
+        # Merge entities (from chunk_result which now has proper structure)
+        # Store groups_and_companies, writing_agents, business_intelligence
+        if 'groups_and_companies' not in all_results['entities']:
+            all_results['entities']['groups_and_companies'] = []
+        if 'writing_agents' not in all_results['entities']:
+            all_results['entities']['writing_agents'] = []
+        if 'business_intelligence' not in all_results['entities']:
+            all_results['entities']['business_intelligence'] = {}
+        
+        # Merge from chunk
+        all_results['entities']['groups_and_companies'].extend(
+            chunk_result.get('groups_and_companies', [])
+        )
+        all_results['entities']['writing_agents'].extend(
+            chunk_result.get('writing_agents', [])
+        )
+        # Business intelligence merging would need more sophisticated logic
+        all_results['entities']['business_intelligence'].update(
+            chunk_result.get('business_intelligence', {})
+        )
+        
+        # Track chunk
+        all_results['chunk_metadata'].append({
+            'chunk_index': chunk_info['index'],
+            'pages': f"{chunk_info['start_page'] + 1}-{chunk_info['end_page']}",
+            'tables_found': len(chunk_result.get('tables', [])),
+            'success': chunk_result.get('success', False)
+        })
+        
+        return all_results
+    
+    async def _extract_single_call(
+        self,
+        carrier_name: str,
+        pdf_path: str,
+        prompt: str,
+        system_prompt: str,
+        pdf_pages: int,
+        is_chunk: bool = False,
+        chunk_info: Dict[str, Any] = None
+    ) -> Dict[str, Any]:
+        """
+        Single Claude API call with fallback.
+        
+        This is called either for:
+        1. Small files (fit in one call)
+        2. Individual chunks of larger files
+        """
+        
+        try:
+            logger.info(f"🔄 Calling Claude API {'for chunk' if is_chunk else 'for full document'}")
+            
+            # Encode PDF
+            pdf_base64 = self.pdf_processor.encode_pdf_to_base64(pdf_path)
+            
+            # Make API call
+            extraction_result = await self._call_claude_api(
+                pdf_base64=pdf_base64,
+                prompt=prompt,
+                model=self.primary_model,
+                pdf_pages=pdf_pages,
+                use_cache=is_chunk  # Use cache for chunks
+            )
             
             # Parse response
-            parsed_data = self.response_parser.parse_json_response(extraction_result['content'])
+            parsed_data = self.response_parser.parse_json_response(
+                extraction_result['content']
+            )
             
             if not parsed_data:
-                raise ValueError("Failed to parse Claude response as JSON")
+                return {
+                    'success': False,
+                    'tables': [],
+                    'document_metadata': {},
+                    'groups_and_companies': [],
+                    'writing_agents': [],
+                    'business_intelligence': {}
+                }
             
-            # ✅ CRITICAL FIX: Transform enhanced prompt format to standard format
-            # Enhanced prompt returns: carrier: {name: "..."}, broker_agent: {company_name: "..."}
-            # We need: document_metadata: {carrier_name: "...", broker_company: "..."}
-            doc_metadata = parsed_data.get('document_metadata', {})
+            # Transform format
+            doc_metadata = self._transform_carrier_broker_metadata(parsed_data)
+            parsed_data['document_metadata'] = doc_metadata
             
-            # Transform carrier from enhanced format
-            if 'carrier' in parsed_data and isinstance(parsed_data['carrier'], dict):
-                carrier_data = parsed_data['carrier']
-                doc_metadata['carrier_name'] = carrier_data.get('name')
-                doc_metadata['carrier_confidence'] = carrier_data.get('confidence', 0.9)
-                logger.info(f"🔄 Transformed carrier from enhanced format: {doc_metadata.get('carrier_name')}")
-            
-            # Transform broker from enhanced format
-            if 'broker_agent' in parsed_data and isinstance(parsed_data['broker_agent'], dict):
-                broker_data = parsed_data['broker_agent']
-                doc_metadata['broker_company'] = broker_data.get('company_name')
-                doc_metadata['broker_confidence'] = broker_data.get('confidence', 0.8)
-                logger.info(f"🔄 Transformed broker from enhanced format: {doc_metadata.get('broker_company')}")
-            
-            # Extract tables
-            tables = parsed_data.get('tables', [])
-            
-            # ✅ CRITICAL FIX: Extract groups_and_companies and other entities from Claude response
-            # These need to be passed through so semantic extractor can use Claude's filtered data
-            groups_and_companies = parsed_data.get('groups_and_companies', [])
-            writing_agents = parsed_data.get('writing_agents', [])
-            business_intelligence = parsed_data.get('business_intelligence', {})
-            
-            logger.info(f"📊 Claude returned {len(groups_and_companies)} groups/companies (before semantic filtering)")
-            
-            # Validate carrier extraction to prevent duplicates
-            carrier_name_extracted = doc_metadata.get('carrier_name', '')
-            if carrier_name_extracted:
-                carrier_validation = self.response_parser.validate_carrier_extraction(carrier_name_extracted)
-                
-                # Add validation metadata to doc_metadata
-                doc_metadata['carrier_validation'] = carrier_validation
-                
-                # Log validation issues if any
-                if carrier_validation.get('warnings'):
-                    logger.warning(f"Carrier extraction validation warnings: {carrier_validation['warnings']}")
-                    
-                # If validation quality is very low, log critical warning
-                if carrier_validation.get('quality_score', 1.0) < 0.5:
-                    logger.critical(f"LOW QUALITY carrier extraction detected for '{carrier_name_extracted}' - possible hallucination or addition")
-            
-            # Normalize headers
-            for table in tables:
-                if 'headers' in table and 'rows' in table:
-                    normalized_headers = normalize_multi_line_headers(
-                        table['headers'],
-                        table['rows']
-                    )
-                    table['headers'] = normalized_headers
-            
-            if progress_tracker:
-                await progress_tracker.complete_stage(
-                    "table_detection",
-                    f"Extracted {len(tables)} tables with Claude AI"
-                )
-            
-            # Stage 3: Quality assessment
-            if progress_tracker:
-                await progress_tracker.start_stage(
-                    "validation",
-                    "Assessing extraction quality"
-                )
-            
-            quality_metrics = self.quality_assessor.assess_extraction_quality(
-                tables,
-                doc_metadata
-            )
-            
-            if progress_tracker:
-                await progress_tracker.complete_stage(
-                    "validation",
-                    f"Quality score: {quality_metrics.get('quality_grade', 'N/A')}"
-                )
-            
-            # Format response
-            result = self._format_response(
-                tables=tables,
-                doc_metadata=doc_metadata,
-                pdf_info=pdf_info,
-                token_usage=extraction_result.get('usage', {}),
-                quality_metrics=quality_metrics,
-                groups_and_companies=groups_and_companies,  # ✅ Pass through Claude's extracted entities
-                writing_agents=writing_agents,
-                business_intelligence=business_intelligence
-            )
+            # Ensure entities are preserved
+            result = {
+                'success': True,
+                'tables': parsed_data.get('tables', []),
+                'document_metadata': doc_metadata,
+                'groups_and_companies': parsed_data.get('groups_and_companies', []),
+                'writing_agents': parsed_data.get('writing_agents', []),
+                'business_intelligence': parsed_data.get('business_intelligence', {}),
+                'token_usage': extraction_result.get('usage', {})
+            }
             
             return result
-        
-        except Exception as e:
-            logger.error(f"Error in standard file extraction: {e}")
             
-            # Try fallback model if primary fails
-            if hasattr(e, '__str__') and 'model' not in str(e).lower():
-                logger.info("Attempting extraction with fallback model...")
+        except Exception as e:
+            logger.error(f"Single call failed: {e}")
+            
+            # Try fallback model if available
+            if not is_chunk and hasattr(e, '__str__') and 'model' not in str(e).lower():
+                logger.info("Attempting with fallback model...")
                 try:
-                    return await self._extract_with_fallback(
-                        carrier_name,
-                        file_path,
-                        pdf_info,
-                        progress_tracker
+                    pdf_base64 = self.pdf_processor.encode_pdf_to_base64(pdf_path)
+                    fallback_result = await self._call_claude_api(
+                        pdf_base64=pdf_base64,
+                        prompt=prompt,
+                        model=self.fallback_model,
+                        pdf_pages=pdf_pages,
+                        use_cache=False
                     )
+                    
+                    parsed_data = self.response_parser.parse_json_response(
+                        fallback_result['content']
+                    )
+                    
+                    if parsed_data:
+                        # Transform format
+                        doc_metadata = self._transform_carrier_broker_metadata(parsed_data)
+                        parsed_data['document_metadata'] = doc_metadata
+                        
+                        # Return with proper format
+                        return {
+                            'success': True,
+                            'tables': parsed_data.get('tables', []),
+                            'document_metadata': doc_metadata,
+                            'groups_and_companies': parsed_data.get('groups_and_companies', []),
+                            'writing_agents': parsed_data.get('writing_agents', []),
+                            'business_intelligence': parsed_data.get('business_intelligence', {}),
+                            'token_usage': fallback_result.get('usage', {})
+                        }
+                        
                 except Exception as fallback_error:
-                    logger.error(f"Fallback extraction also failed: {fallback_error}")
+                    logger.error(f"Fallback also failed: {fallback_error}")
             
             raise
     
-    async def _extract_large_file(
+    async def _extract_chunked(
         self,
-        carrier_name,
-        file_path: str,
-        pdf_info: Dict[str, Any],
+        carrier_name: str,
+        pdf_path: str,
+        num_pages: int,
+        chunk_size: int,
+        prompt: str,
+        system_prompt: str,
+        estimation: Dict[str, Any],
         progress_tracker = None
     ) -> Dict[str, Any]:
         """
-        PARALLEL EXTRACTION: Process large PDFs with concurrent chunk processing.
+        Extract from PDF in chunks and merge results.
         
-        Algorithm:
-        1. Calculate optimal chunk size dynamically
-        2. Split PDF into chunks
-        3. Process chunks in PARALLEL (6 concurrent) with rate limiting
-        4. Merge successful chunks and return complete result
-        
-        Performance: 70-80% faster than sequential processing
+        Chunks are processed sequentially (respecting 36K ITPM limit)
+        but intelligently merged to avoid duplication.
         """
-        try:
-            page_count = pdf_info.get("page_count", 0)
-            logger.info(f"[LARGE FILE] Starting PARALLEL extraction for {page_count}-page document")
-            
-            # Calculate optimal chunk size dynamically
-            chunk_size = self.calculate_optimal_chunk_size(page_count)
-            
-            # Split PDF into chunks
-            chunks = self.pdf_processor.chunk_large_pdf(
-                file_path,
-                max_pages_per_chunk=chunk_size
-            )
-            
-            num_chunks = len(chunks)
-            logger.info(f"[PARALLEL] Split into {num_chunks} chunks of {chunk_size} pages each")
-            
-            # Optimal concurrency: 6 concurrent chunks (leaves headroom for retries)
-            # Claude API: 50 RPM, 40K TPM (Tier 2) → with 90% buffer: 45 RPM, 36K TPM
-            MAX_CONCURRENT_CHUNKS = 6
-            
-            # Create semaphore for concurrency control
-            semaphore = asyncio.Semaphore(MAX_CONCURRENT_CHUNKS)
-            
-            async def process_chunk_with_semaphore(chunk_idx, chunk_info):
-                """Process single chunk with concurrency control."""
-                async with semaphore:
-                    try:
-                        # ✅ CRITICAL FIX: Estimate BOTH input and output tokens
-                        estimated_input_tokens = self.rate_limiter.estimate_tokens(
-                            text="", images=0, pdf_pages=chunk_info.get("page_count", 6)
-                        )
-                        estimated_output_tokens = min(int(estimated_input_tokens * 0.4), 6000)
-                        
-                        # Wait for rate limit availability (checks both input and output limits)
-                        await self.rate_limiter.wait_if_needed(estimated_input_tokens, estimated_output_tokens)
-                        
-                        # Update progress
-                        if progress_tracker:
-                            progress_pct = 20 + int((chunk_idx / num_chunks) * 60)
-                            await progress_tracker.update_progress(
-                                "table_detection",
-                                progress_pct,
-                                f"Processing chunk {chunk_idx + 1}/{num_chunks}"
-                            )
-                        
-                        # Process chunk
-                        result = await self._extract_chunk_with_rate_limiting(
-                            carrier_name, chunk_info, progress_tracker,
-                            use_cache=(chunk_idx > 0)  # Cache for chunks after first
-                        )
-                        
-                        return {"success": True, "chunk_idx": chunk_idx, "result": result}
-                        
-                    except Exception as e:
-                        logger.error(f"Chunk {chunk_idx} failed: {e}")
-                        return {"success": False, "chunk_idx": chunk_idx, "error": str(e)}
-            
-            # Create all chunk tasks
-            tasks = [
-                process_chunk_with_semaphore(idx, chunk) 
-                for idx, chunk in enumerate(chunks)
-            ]
-            
-            # Process all chunks concurrently
-            logger.info(f"🚀 Starting PARALLEL processing of {len(chunks)} chunks with max {MAX_CONCURRENT_CHUNKS} concurrent")
-            start_time = time.time()
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-            parallel_time = time.time() - start_time
-            
-            # Aggregate results
-            all_tables = []
-            doc_metadata = None
-            failed_chunks = []
-            successful_chunks = []  # ✅ Track successful chunks for entity extraction
-            
-            for result in results:
-                if isinstance(result, Exception):
-                    logger.error(f"Chunk processing exception: {result}")
-                    continue
-                    
-                if result.get("success"):
-                    chunk_result = result.get("result", {})
-                    chunk_tables = chunk_result.get("tables", [])
-                    all_tables.extend(chunk_tables)
-                    successful_chunks.append(chunk_result)  # ✅ Store for entity extraction
-                    
-                    # Store metadata from first successful chunk
-                    if doc_metadata is None:
-                        doc_metadata = chunk_result.get("document_metadata", {})
-                else:
-                    failed_chunks.append(result.get("chunk_idx"))
-            
-            # Retry failed chunks sequentially (if any)
-            if failed_chunks:
-                logger.warning(f"Retrying {len(failed_chunks)} failed chunks sequentially")
-                for chunk_idx in failed_chunks:
-                    retry_result = await self._extract_chunk_with_rate_limiting(
-                        carrier_name, chunks[chunk_idx], progress_tracker,
-                        use_cache=True
-                    )
-                    retry_tables = retry_result.get("tables", [])
-                    all_tables.extend(retry_tables)
-            
-            # Merge tables that split across chunks
-            merged_tables = self._merge_split_tables(all_tables)
-            
-            # Assess quality
-            quality_metrics = self.quality_assessor.assess_extraction_quality(
-                merged_tables,
-                doc_metadata or {}
-            )
-            
-            # Performance metrics
-            logger.info(f"📊 PERFORMANCE METRICS:")
-            logger.info(f"   Total time: {parallel_time:.1f}s")
-            logger.info(f"   Chunks processed: {len(chunks)}")
-            logger.info(f"   Avg time per chunk: {parallel_time / len(chunks):.1f}s")
-            logger.info(f"   Tables extracted: {len(merged_tables)}")
-            logger.info(f"   Quality grade: {quality_metrics.get('quality_grade', 'U')}")
-            
-            # ✅ Extract entities from merged chunks (if available)
-            groups_and_companies = []
-            writing_agents = []
-            business_intelligence = {}
-            
-            # Try to merge entities from successful chunks
-            for chunk_result in successful_chunks:
-                if 'groups_and_companies' in chunk_result:
-                    groups_and_companies.extend(chunk_result.get('groups_and_companies', []))
-                if 'writing_agents' in chunk_result:
-                    writing_agents.extend(chunk_result.get('writing_agents', []))
-                # Business intelligence would need more sophisticated merging
-            
-            if successful_chunks:
-                logger.info(f"📦 Merged {len(groups_and_companies)} groups/companies from {len(successful_chunks)} chunks")
-            
-            return self._format_response(
-                tables=merged_tables,
-                doc_metadata=doc_metadata or {},
-                pdf_info=pdf_info,
-                token_usage={
-                    'note': (
-                        f"Parallel extraction: {num_chunks} chunks × "
-                        f"{chunk_size} pages/chunk, "
-                        f"processed in {parallel_time:.1f}s"
-                    )
-                },
-                quality_metrics=quality_metrics,
-                groups_and_companies=groups_and_companies,
-                writing_agents=writing_agents,
-                business_intelligence=business_intelligence
-            )
         
-        except Exception as e:
-            logger.exception(f"[CRITICAL] Large file extraction error: {e}")
-            return {
-                "success": False,
-                "error": f"Large file extraction failed: {str(e)}",
-                "tables": [],
-                "extraction_quality": {
-                    "quality_grade": "F",
-                    "issues_detected": [str(e)]
-                }
-            }
+        try:
+            import fitz  # PyMuPDF
+        except ImportError:
+            logger.error("PyMuPDF not available for chunking")
+            raise ImportError("PyMuPDF required for PDF chunking. Install with: pip install pymupdf")
+        
+        logger.info(f"🔄 Starting chunked extraction: {num_pages} pages, {chunk_size} pages/chunk")
+        
+        # Open PDF
+        pdf_doc = fitz.open(pdf_path)
+        
+        all_results = {
+            'tables': [],
+            'entities': {},
+            'document_metadata': {},
+            'text_content': [],
+            'chunk_metadata': []
+        }
+        
+        # Calculate chunks
+        chunks = []
+        for chunk_start in range(0, num_pages, chunk_size):
+            chunk_end = min(chunk_start + chunk_size, num_pages)
+            chunks.append({
+                'index': len(chunks),
+                'start_page': chunk_start,
+                'end_page': chunk_end,
+                'page_count': chunk_end - chunk_start
+            })
+            logger.info(f"  Chunk {len(chunks)}: Pages {chunk_start + 1}-{chunk_end}")
+        
+        # Process each chunk
+        for chunk_info in chunks:
+            logger.info(f"📖 Processing chunk {chunk_info['index'] + 1}/{len(chunks)}: Pages {chunk_info['start_page'] + 1}-{chunk_info['end_page']}")
+            
+            # Update progress
+            if progress_tracker:
+                progress_pct = 20 + int((chunk_info['index'] / len(chunks)) * 60)
+                await progress_tracker.update_progress(
+                    "table_detection",
+                    progress_pct,
+                    f"Processing chunk {chunk_info['index'] + 1}/{len(chunks)}"
+                )
+            
+            # Extract pages for this chunk
+            chunk_path = await self._extract_pdf_chunk(
+                pdf_doc=pdf_doc,
+                start_page=chunk_info['start_page'],
+                end_page=chunk_info['end_page'],
+                original_path=pdf_path
+            )
+            
+            try:
+                # Re-estimate tokens for chunk
+                chunk_estimation = await self._estimate_total_tokens(
+                    chunk_path,
+                    chunk_info['page_count'],
+                    "chunk"
+                )
+                
+                logger.info(f"   Chunk tokens: {chunk_estimation['estimated_input_tokens']:,} (safe: {chunk_estimation['will_fit']})")
+                
+                # Extract chunk
+                chunk_prompt = f"Extract commission data from this section of the document. Page range: {chunk_info['start_page'] + 1}-{chunk_info['end_page']}.\n\n{prompt}"
+                
+                chunk_result = await self._extract_single_call(
+                    carrier_name=carrier_name,
+                    pdf_path=chunk_path,
+                    prompt=chunk_prompt,
+                    system_prompt=system_prompt,
+                    pdf_pages=chunk_info['page_count'],
+                    is_chunk=True,
+                    chunk_info=chunk_info
+                )
+                
+                # Merge chunk results
+                all_results = self._merge_chunk_results(all_results, chunk_result, chunk_info)
+                
+                logger.info(f"   ✅ Chunk processed: {len(chunk_result.get('tables', []))} tables extracted")
+                
+            finally:
+                # Clean up chunk file
+                try:
+                    import os
+                    if os.path.exists(chunk_path):
+                        os.remove(chunk_path)
+                except Exception as e:
+                    logger.warning(f"Failed to cleanup chunk file: {e}")
+        
+        pdf_doc.close()
+        
+        logger.info(f"✅ Chunked extraction complete:")
+        logger.info(f"   - Total tables: {len(all_results['tables'])}")
+        logger.info(f"   - Chunks processed: {len(chunks)}")
+        
+        # Extract groups_and_companies from chunk_metadata
+        groups_and_companies = []
+        writing_agents = []
+        business_intelligence = {}
+        
+        # Merge entities from all chunks (stored in all_results['entities'])
+        if all_results.get('entities'):
+            groups_and_companies = all_results['entities'].get('groups_and_companies', [])
+            writing_agents = all_results['entities'].get('writing_agents', [])
+            business_intelligence = all_results['entities'].get('business_intelligence', {})
+        
+        return {
+            'success': True,
+            'tables': all_results['tables'],
+            'document_metadata': all_results['document_metadata'],
+            'groups_and_companies': groups_and_companies,
+            'writing_agents': writing_agents,
+            'business_intelligence': business_intelligence,
+            'extraction_method': 'claude_chunked',
+            'chunk_count': len(chunks),
+            'chunk_metadata': all_results['chunk_metadata']
+        }
     
+    async def _extract_with_adaptive_chunking(
+        self,
+        carrier_name: str,
+        pdf_path: str,
+        num_pages: int,
+        prompt: str,
+        system_prompt: str,
+        progress_tracker = None
+    ) -> Dict[str, Any]:
+        """
+        Extract from multi-page PDFs using adaptive chunking.
+        
+        Strategy:
+        1. Estimate tokens needed
+        2. If fits: extract as single call
+        3. If doesn't fit: split into chunks
+        4. Process chunks sequentially (respecting rate limits)
+        5. Merge results intelligently
+        """
+        
+        # Step 1: Estimate tokens
+        estimation = await self._estimate_total_tokens(pdf_path, num_pages, "standard")
+        
+        logger.info(f"🔍 Adaptive Chunking Analysis:")
+        logger.info(f"   - Will fit in single call: {estimation['will_fit']}")
+        logger.info(f"   - Recommended chunk size: {estimation['recommended_chunk_size']} pages")
+        
+        # Step 2: Determine if chunking needed
+        if estimation['will_fit']:
+            # Single call is safe
+            logger.info(f"✅ Single-call extraction safe for {num_pages} pages")
+            return await self._extract_single_call(
+                carrier_name=carrier_name,
+                pdf_path=pdf_path,
+                prompt=prompt,
+                system_prompt=system_prompt,
+                pdf_pages=num_pages,
+                is_chunk=False,
+                chunk_info=None
+            )
+        else:
+            # Need chunking
+            chunk_size = estimation['recommended_chunk_size']
+            logger.info(f"📋 Chunking {num_pages} pages into chunks of {chunk_size} pages")
+            
+            return await self._extract_chunked(
+                carrier_name=carrier_name,
+                pdf_path=pdf_path,
+                num_pages=num_pages,
+                chunk_size=chunk_size,
+                prompt=prompt,
+                system_prompt=system_prompt,
+                estimation=estimation,
+                progress_tracker=progress_tracker
+            )
     
     async def _extract_chunk_with_rate_limiting(
         self,
@@ -917,69 +1128,7 @@ class ClaudeDocumentAIService:
                 return {'tables': [], 'document_metadata': {}}
             
             # ✅ Transform format for chunks too
-            doc_metadata = parsed_data.get('document_metadata', {})
-            if 'carrier' in parsed_data and isinstance(parsed_data['carrier'], dict):
-                doc_metadata['carrier_name'] = parsed_data['carrier'].get('name')
-                doc_metadata['carrier_confidence'] = parsed_data['carrier'].get('confidence', 0.9)
-            if 'broker_agent' in parsed_data and isinstance(parsed_data['broker_agent'], dict):
-                doc_metadata['broker_company'] = parsed_data['broker_agent'].get('company_name')
-                doc_metadata['broker_confidence'] = parsed_data['broker_agent'].get('confidence', 0.8)
-            parsed_data['document_metadata'] = doc_metadata
-            
-            return parsed_data
-        
-        except Exception as e:
-            logger.error(f"Error extracting chunk: {e}")
-            return {'tables': [], 'document_metadata': {}}
-    
-    async def _extract_chunk(
-        self,
-        carrier_name,
-        file_path: str,
-        chunk_info: Dict[str, Any],
-        progress_tracker = None
-    ) -> Dict[str, Any]:
-        """Extract data from a specific chunk of the document"""
-        try:
-            # For now, encode entire PDF (Claude handles page ranges internally)
-            # In production, you might want to extract specific pages to temp file
-            pdf_base64 = self.pdf_processor.encode_pdf_to_base64(file_path)
-            
-            # ✅ Use enhanced prompt + critical carrier instructions for chunks
-            critical_carrier_instructions = self.prompts.get_table_extraction_prompt()
-            base_prompt = self.enhanced_prompts.get_document_intelligence_extraction_prompt()
-            chunk_context = f"\n\n[Note: This is chunk {chunk_info['chunk_index'] + 1}/{chunk_info['total_chunks']} of a larger document]"
-            
-            # Call Claude API with carrier-specific prompt if available
-            dynamic_prompt = self.dynamic_prompts.get_prompt_by_name(carrier_name)
-            
-            # Combine: base + critical requirements + chunk context + carrier-specific
-            full_prompt = base_prompt + "\n\n" + critical_carrier_instructions + chunk_context + dynamic_prompt
-            
-            extraction_result = await self._call_claude_api(
-                pdf_base64,
-                full_prompt,
-                model=self.primary_model,
-                pdf_pages=chunk_info.get('page_count', 0),
-                use_cache=False  # Chunks are processed individually
-            )
-            
-            # Parse response
-            parsed_data = self.response_parser.parse_json_response(
-                extraction_result['content']
-            )
-            
-            if not parsed_data:
-                return {'tables': [], 'document_metadata': {}}
-            
-            # ✅ Transform format for chunks
-            doc_metadata = parsed_data.get('document_metadata', {})
-            if 'carrier' in parsed_data and isinstance(parsed_data['carrier'], dict):
-                doc_metadata['carrier_name'] = parsed_data['carrier'].get('name')
-                doc_metadata['carrier_confidence'] = parsed_data['carrier'].get('confidence', 0.9)
-            if 'broker_agent' in parsed_data and isinstance(parsed_data['broker_agent'], dict):
-                doc_metadata['broker_company'] = parsed_data['broker_agent'].get('company_name')
-                doc_metadata['broker_confidence'] = parsed_data['broker_agent'].get('confidence', 0.8)
+            doc_metadata = self._transform_carrier_broker_metadata(parsed_data)
             parsed_data['document_metadata'] = doc_metadata
             
             return parsed_data
@@ -1036,21 +1185,8 @@ class ClaudeDocumentAIService:
             raise ValueError("Fallback extraction also failed to parse response")
         
         # ✅ CRITICAL FIX: Transform enhanced prompt format to standard format
-        doc_metadata = parsed_data.get('document_metadata', {})
-        
-        # Transform carrier from enhanced format
-        if 'carrier' in parsed_data and isinstance(parsed_data['carrier'], dict):
-            carrier_data = parsed_data['carrier']
-            doc_metadata['carrier_name'] = carrier_data.get('name')
-            doc_metadata['carrier_confidence'] = carrier_data.get('confidence', 0.9)
-            logger.info(f"🔄 Fallback: Transformed carrier from enhanced format: {doc_metadata.get('carrier_name')}")
-        
-        # Transform broker from enhanced format
-        if 'broker_agent' in parsed_data and isinstance(parsed_data['broker_agent'], dict):
-            broker_data = parsed_data['broker_agent']
-            doc_metadata['broker_company'] = broker_data.get('company_name')
-            doc_metadata['broker_confidence'] = broker_data.get('confidence', 0.8)
-            logger.info(f"🔄 Fallback: Transformed broker from enhanced format: {doc_metadata.get('broker_company')}")
+        doc_metadata = self._transform_carrier_broker_metadata(parsed_data)
+        logger.info(f"🔄 Fallback: Transformed metadata - Carrier: {doc_metadata.get('carrier_name')}, Broker: {doc_metadata.get('broker_company')}")
         
         tables = parsed_data.get('tables', [])
         

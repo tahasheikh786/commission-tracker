@@ -12,6 +12,9 @@ from datetime import datetime
 import anthropic
 import os
 
+# ✅ CRITICAL FIX: Import rate limiter to prevent 429 errors
+from app.services.claude.utils import ClaudeTokenBucket
+
 logger = logging.getLogger(__name__)
 
 
@@ -20,6 +23,8 @@ class ConversationalSummaryService:
     Generates conversational, non-technical summaries from structured extraction data.
     
     Inspired by Google Gemini's natural language approach to document summarization.
+    
+    ✅ CRITICAL FIX: Now includes rate limiting for output tokens.
     """
     
     def __init__(self):
@@ -27,6 +32,15 @@ class ConversationalSummaryService:
         self.client = anthropic.AsyncAnthropic(api_key=os.getenv("CLAUDE_API_KEY"))
         # CRITICAL FIX: Fixed typo in model name (was missing hyphen between 4 and 5)
         self.model = "claude-sonnet-4-5-20250929"  # Claude Sonnet 4.5 - Fast, high-quality model
+        
+        # ✅ CRITICAL FIX: Initialize rate limiter to prevent 429 errors
+        self.rate_limiter = ClaudeTokenBucket(
+            requests_per_minute=50,
+            input_tokens_per_minute=40000,
+            output_tokens_per_minute=8000,
+            buffer_percentage=0.90
+        )
+        logger.info("✅ ConversationalSummaryService initialized with rate limiting")
         
     def is_available(self) -> bool:
         """Check if service is ready"""
@@ -194,17 +208,33 @@ class ConversationalSummaryService:
             # Get appropriate system prompt
             system_prompt = self._get_system_prompt(use_enhanced)
             
+            # ✅ CRITICAL FIX: Estimate tokens and check rate limits BEFORE calling API
+            # Reduced max_tokens to stay well within 8K OTPM limit (was 1200/1000, now 800/600)
+            max_output_tokens = 800 if use_enhanced else 600
+            
+            # Estimate input tokens (prompt + system prompt, ~4 chars per token)
+            estimated_input_tokens = (len(prompt) + len(system_prompt)) // 4
+            # Estimate output tokens (use max_tokens as estimate)
+            estimated_output_tokens = max_output_tokens
+            
+            logger.info(f"📊 Estimated tokens - Input: {estimated_input_tokens:,}, Output: {estimated_output_tokens:,}")
+            
+            # Wait if needed to respect rate limits
+            wait_time = await self.rate_limiter.wait_if_needed(estimated_input_tokens, estimated_output_tokens)
+            if wait_time > 1:
+                logger.info(f"⏱️  Waited {wait_time:.2f}s for rate limit compliance")
+            
             # Call Claude with optimized parameters for natural language
             # Using assistant prefill to force consistent output format (Anthropic best practice)
             logger.info(f"🚀 Calling Claude API for summary generation...")
             logger.info(f"   Model: {self.model}")
-            logger.info(f"   Max tokens: {1200 if use_enhanced else 1000}")
+            logger.info(f"   Max tokens: {max_output_tokens}")
             logger.info(f"   Prompt length: {len(prompt)} chars")
             logger.info(f"   System prompt length: {len(system_prompt)} chars")
             
             response = await self.client.messages.create(
                 model=self.model,
-                max_tokens=1200 if use_enhanced else 1000,  # More tokens for enhanced summaries
+                max_tokens=max_output_tokens,  # More tokens for enhanced summaries
                 temperature=0.7,  # Balanced creativity for natural language
                 system=system_prompt,
                 messages=[
@@ -212,6 +242,22 @@ class ConversationalSummaryService:
                     {"role": "assistant", "content": "This is"}  # ← PREFILL: Forces consistent start (NO trailing space!)
                 ]
             )
+            
+            # ✅ CRITICAL FIX: Track actual token usage after API call
+            actual_input_tokens = response.usage.input_tokens if hasattr(response, 'usage') else estimated_input_tokens
+            actual_output_tokens = response.usage.output_tokens if hasattr(response, 'usage') else estimated_output_tokens
+            
+            # Update rate limiter with actual usage
+            async with self.rate_limiter.lock:
+                # Correct the estimates with actual values
+                self.rate_limiter.input_token_count = (
+                    self.rate_limiter.input_token_count - estimated_input_tokens + actual_input_tokens
+                )
+                self.rate_limiter.output_token_count = (
+                    self.rate_limiter.output_token_count - estimated_output_tokens + actual_output_tokens
+                )
+            
+            logger.info(f"📊 Actual usage - Input: {actual_input_tokens:,}, Output: {actual_output_tokens:,}")
             
             logger.info(f"✅ Claude API call successful")
             logger.info(f"   Response content blocks: {len(response.content)}")

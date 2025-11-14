@@ -1,6 +1,7 @@
 from ..models import StatementUpload as StatementUploadModel
 from ..schemas import StatementUpload, StatementUploadCreate, StatementUploadUpdate, PendingFile
 from sqlalchemy.future import select
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime
 from uuid import UUID
@@ -344,6 +345,31 @@ async def save_statement_review(
         environment_id_to_use = current_environment_id
         if not environment_id_to_use and upload_metadata and upload_metadata.get('environment_id'):
             environment_id_to_use = UUID(upload_metadata.get('environment_id'))
+        
+        # CRITICAL FIX: If still no environment_id, fetch user's default environment
+        if not environment_id_to_use and user_id_to_use:
+            try:
+                from app.db.crud.environment import get_or_create_default_environment
+                # Get company_id from upload_metadata
+                company_id = None
+                if upload_metadata and upload_metadata.get('company_id'):
+                    company_id = UUID(upload_metadata.get('company_id'))
+                elif upload_metadata and upload_metadata.get('carrier_id'):
+                    # Fallback: Use first company user belongs to
+                    result_user_company = await db.execute(
+                        text("SELECT company_id FROM users WHERE id = :user_id"),
+                        {"user_id": str(user_id_to_use)}
+                    )
+                    row = result_user_company.fetchone()
+                    if row:
+                        company_id = row[0]
+                
+                if company_id and user_id_to_use:
+                    default_env = await get_or_create_default_environment(db, company_id, user_id_to_use)
+                    environment_id_to_use = default_env.id
+                    logger.info(f"✅ Using user's default environment_id {environment_id_to_use}")
+            except Exception as e:
+                logger.warning(f"⚠️ Could not get default environment: {e}")
         
         db_upload = StatementUploadModel(
             id=upload_id_uuid,
