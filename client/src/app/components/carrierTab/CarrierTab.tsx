@@ -22,6 +22,8 @@ type Statement = {
   uploaded_at: string;
   status: string;
   carrier_id?: string;  // Insurance carrier ID
+  user_id?: string;  // User who uploaded the statement
+  environment_id?: string;  // Environment context for data isolation
   rejection_reason?: string;
   selected_statement_date?: any;
   raw_data?: any;

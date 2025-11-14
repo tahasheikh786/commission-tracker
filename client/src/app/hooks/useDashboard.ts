@@ -27,6 +27,8 @@ interface Statement {
   completed_at?: string;
   rejection_reason?: string;
   plan_types?: string[];
+  user_id?: string;  // User who uploaded the statement
+  environment_id?: string;  // Environment context for data isolation
   raw_data?: any;
   edited_tables?: any;
   final_data?: any;

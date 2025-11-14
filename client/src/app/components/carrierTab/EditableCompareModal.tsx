@@ -24,6 +24,8 @@ interface Statement {
   uploaded_at: string;
   status: string;
   carrier_id?: string;  // Insurance carrier ID
+  user_id?: string;  // User who uploaded the statement
+  environment_id?: string;  // Environment context for data isolation
   selected_statement_date?: any;
   raw_data?: any;
   edited_tables?: any;
@@ -635,6 +637,8 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
       const upload_metadata = {
         company_id: statement.carrier_id,
         carrier_id: statement.carrier_id,
+        user_id: statement.user_id,  // Include user_id for data isolation
+        environment_id: statement.environment_id,  // Include environment_id for environment isolation
         file_name: statement.file_name,
         file_hash: null,  // Not available in existing statements
         file_size: null,  // Not available in existing statements

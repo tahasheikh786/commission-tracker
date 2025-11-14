@@ -1005,6 +1005,15 @@ async def extract_tables_smart(
             "extracted_date": extracted_date,
             "document_metadata": document_metadata,
             
+            # CRITICAL FIX: Include upload_metadata so frontend has access to environment_id
+            "upload_metadata": upload_metadata,
+            # Also add environment_id at top level for easier access
+            "environment_id": str(target_env.id),
+            "user_id": str(current_user.id),
+            "uploaded_at": upload_metadata.get('uploaded_at'),
+            "file_hash": upload_metadata.get('file_hash'),
+            "file_size": upload_metadata.get('file_size'),
+            
             # ===== AI INTELLIGENCE - BOTH PLAN TYPE AND FIELD MAPPING DURING EXTRACTION =====
             # Both plan type detection and field mapping happen during extraction
             "ai_intelligence": {
@@ -1017,10 +1026,6 @@ async def extract_tables_smart(
                     ai_field_mapping_data.get('confidence', 0.0) if ai_field_mapping_data else 0.0
                 )
             },
-            
-            # CRITICAL: Include upload_metadata so frontend can pass it to approval endpoint
-            "upload_metadata": upload_metadata,
-            
             "message": f"Successfully extracted {len(extraction_result.get('tables', []))} tables using {extraction_method} method."
         }
         
