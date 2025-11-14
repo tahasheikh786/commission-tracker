@@ -239,6 +239,25 @@ class ClaudeDocumentAIService:
         """Check if Claude service is available"""
         return ANTHROPIC_AVAILABLE and self.client is not None
     
+    async def cleanup_models(self):
+        """
+        CRITICAL FIX: Release memory after extraction completes.
+        This helps prevent OOM errors on resource-constrained environments like Render Pro (4GB).
+        """
+        try:
+            # Release heavy objects
+            if hasattr(self, 'pdf_processor') and self.pdf_processor:
+                del self.pdf_processor
+            if hasattr(self, 'semantic_extractor') and self.semantic_extractor:
+                del self.semantic_extractor
+            
+            # Force garbage collection
+            import gc
+            gc.collect()
+            logger.info("✅ Cleaned up Claude service models and freed memory")
+        except Exception as e:
+            logger.warning(f"⚠️ Cleanup error (non-critical): {e}")
+    
     async def extract_metadata_only(
         self,
         file_path: str

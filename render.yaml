@@ -10,7 +10,7 @@ services:
       pip install --upgrade pip
       pip install -r server/requirements.txt
     startCommand: |
-      cd server && uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1 --timeout-keep-alive 7200 --timeout-graceful-shutdown 300 --access-log --loop asyncio
+      cd server && uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1 --timeout-keep-alive 1800 --timeout-graceful-shutdown 1800 --access-log --loop asyncio
     healthCheckPath: /health
     envVars:
       - key: PYTHON_VERSION
@@ -48,16 +48,16 @@ services:
       - key: DOCLING_CACHE_DIR
         value: "/tmp/model_cache/docling"
       - key: UVICORN_TIMEOUT_KEEP_ALIVE
-        value: "7200"
+        value: "1800"
       - key: UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN
-        value: "300"
+        value: "1800"
       - key: PYTHONUNBUFFERED
         value: "1"
       - key: MALLOC_ARENA_MAX
-        value: "2"
+        value: "4"
       # Additional timeout configuration for large file processing
       - key: WEBSOCKET_TIMEOUT
-        value: "7200"
+        value: "1800"
       - key: WEBSOCKET_PING_INTERVAL
         value: "30"
       - key: WEBSOCKET_KEEPALIVE

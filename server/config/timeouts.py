@@ -30,7 +30,7 @@ class TimeoutSettings:
     
     # Server timeouts
     uvicorn_keepalive: int = 1800  # 30 minutes
-    uvicorn_graceful_shutdown: int = 60  # 60 seconds
+    uvicorn_graceful_shutdown: int = 1800  # 30 minutes (CRITICAL: Must exceed total_extraction)
     
     # Document size-based timeouts
     small_document_timeout: int = 300  # 5 minutes for < 10 pages
@@ -53,7 +53,7 @@ class TimeoutSettings:
             metadata_extraction=int(os.getenv('METADATA_EXTRACTION_TIMEOUT', '300')),
             post_processing=int(os.getenv('POST_PROCESSING_TIMEOUT', '300')),
             uvicorn_keepalive=int(os.getenv('UVICORN_TIMEOUT_KEEP_ALIVE', '1800')),
-            uvicorn_graceful_shutdown=int(os.getenv('UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN', '60')),
+            uvicorn_graceful_shutdown=int(os.getenv('UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN', '1800')),
             small_document_timeout=int(os.getenv('SMALL_DOC_TIMEOUT', '300')),
             medium_document_timeout=int(os.getenv('MEDIUM_DOC_TIMEOUT', '600')),
             large_document_timeout=int(os.getenv('LARGE_DOC_TIMEOUT', '1200')),

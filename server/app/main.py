@@ -333,7 +333,7 @@ if __name__ == "__main__":
         "host": "0.0.0.0",
         "port": 8000,
         "timeout_keep_alive": timeout_settings.uvicorn_keepalive,  # 30 minutes keep-alive
-        "timeout_graceful_shutdown": timeout_settings.uvicorn_graceful_shutdown,  # 60 seconds graceful shutdown
+        "timeout_graceful_shutdown": timeout_settings.uvicorn_graceful_shutdown,  # 30 minutes graceful shutdown (CRITICAL FIX)
         "limit_concurrency": 100,  # Adjust based on your needs
         "limit_max_requests": 1000,  # Prevent memory leaks from long-running processes
         "workers": 1,  # Single worker for debugging, increase for production

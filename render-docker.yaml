@@ -64,7 +64,7 @@ services:
       - key: UVICORN_TIMEOUT_KEEP_ALIVE
         value: "1800"
       - key: UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN
-        value: "60"
+        value: "1800"
       - key: SMALL_DOC_TIMEOUT
         value: "300"
       - key: MEDIUM_DOC_TIMEOUT

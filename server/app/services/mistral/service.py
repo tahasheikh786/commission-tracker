@@ -352,6 +352,27 @@ Focus on achieving 99%+ extraction completeness with superior vision processing.
         # Client is initialized, service is available
         return True
     
+    async def cleanup_models(self):
+        """
+        CRITICAL FIX: Release memory after extraction completes.
+        This helps prevent OOM errors on resource-constrained environments like Render Pro (4GB).
+        """
+        try:
+            # Release heavy utility objects
+            if hasattr(self, 'pdf_processor') and self.pdf_processor:
+                del self.pdf_processor
+            if hasattr(self, 'quality_validator') and self.quality_validator:
+                del self.quality_validator
+            if hasattr(self, 'performance_optimizer') and self.performance_optimizer:
+                del self.performance_optimizer
+            
+            # Force garbage collection
+            import gc
+            gc.collect()
+            logger.info("✅ Cleaned up Mistral service models and freed memory")
+        except Exception as e:
+            logger.warning(f"⚠️ Cleanup error (non-critical): {e}")
+    
     def _call_mistral_ocr(
         self,
         pdf_base64: str,

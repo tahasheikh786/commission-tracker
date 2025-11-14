@@ -10,7 +10,7 @@ fi
 # Enhanced timeout configuration for large file processing
 # Use environment variables with fallback defaults
 UVICORN_TIMEOUT_KEEP_ALIVE=${UVICORN_TIMEOUT_KEEP_ALIVE:-1800}  # 30 minutes default
-UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN=${UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN:-60}  # 60 seconds default
+UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN=${UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN:-1800}  # 30 minutes default (CRITICAL FIX)
 UVICORN_WORKERS=${UVICORN_WORKERS:-1}  # Single worker default for stability
 
 echo "🚀 Starting server with timeout configuration:"

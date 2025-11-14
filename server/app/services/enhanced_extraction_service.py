@@ -240,6 +240,16 @@ class EnhancedExtractionService:
                 "EXTRACTION_ERROR"
             )
             raise
+        finally:
+            # CRITICAL FIX: Clean up models and free memory after extraction
+            try:
+                if hasattr(self.claude_service, 'cleanup_models'):
+                    await self.claude_service.cleanup_models()
+                import gc
+                gc.collect()
+                logger.debug("✅ Cleanup completed and memory freed")
+            except Exception as cleanup_error:
+                logger.warning(f"⚠️ Cleanup error (non-critical): {cleanup_error}")
     
     async def _extract_excel_with_progress(
         self,
@@ -645,6 +655,18 @@ class EnhancedExtractionService:
                 status_code=408,
                 detail=error_msg
             )
+        finally:
+            # CRITICAL FIX: Clean up models and free memory
+            try:
+                if hasattr(self.claude_service, 'cleanup_models'):
+                    await self.claude_service.cleanup_models()
+                if hasattr(self.mistral_service, 'cleanup_models'):
+                    await self.mistral_service.cleanup_models()
+                import gc
+                gc.collect()
+                logger.debug("✅ Mistral extraction cleanup completed")
+            except Exception as cleanup_error:
+                logger.warning(f"⚠️ Cleanup error (non-critical): {cleanup_error}")
     
     async def _extract_with_phase_timeouts(
         self,
@@ -1131,6 +1153,16 @@ class EnhancedExtractionService:
             except Exception as fallback_error:
                 logger.error(f"Fallback to Mistral also failed: {fallback_error}")
                 raise
+        finally:
+            # CRITICAL FIX: Clean up models and free memory
+            try:
+                if hasattr(self.claude_service, 'cleanup_models'):
+                    await self.claude_service.cleanup_models()
+                import gc
+                gc.collect()
+                logger.debug("✅ Claude extraction cleanup completed")
+            except Exception as cleanup_error:
+                logger.warning(f"⚠️ Cleanup error (non-critical): {cleanup_error}")
 
     # Helper methods (consolidated from duplicates)
     def _detect_file_type(self, file_path: str) -> str:

@@ -226,12 +226,14 @@ async def auto_approve_statement(
         from app.api.review import approve_statement, ApprovePayload
         
         # Create ApprovePayload object
+        # CRITICAL FIX: Include upload_metadata so the approval can create the DB record
         approve_payload = ApprovePayload(
             upload_id=UUID(request.upload_id),
             final_data=final_data,
             field_config=field_config_list,
             plan_types=[],  # Plan types can be detected from learned format if needed
-            selected_statement_date={"date": request.statement_date}
+            selected_statement_date={"date": request.statement_date},
+            upload_metadata=request.upload_metadata  # CRITICAL: Pass metadata for DB record creation
         )
         
         # Call approve_statement with the payload object

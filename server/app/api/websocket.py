@@ -115,13 +115,19 @@ async def websocket_progress_endpoint(
                     break
                 
                 # Wait for messages from the client with timeout
-                # Increased to 10 minutes for large document processing
-                data = await asyncio.wait_for(websocket.receive_text(), timeout=600)
+                # CRITICAL FIX: Extended to 30 minutes (1800s) for large document processing
+                # Must match EXTRACTION_TIMEOUT to prevent premature disconnection
+                from config.timeouts import timeout_settings
+                data = await asyncio.wait_for(
+                    websocket.receive_text(), 
+                    timeout=timeout_settings.websocket_connection
+                )
                 message = json.loads(data)
                 
                 # Handle different message types from client
-                if message.get('type') == 'ping':
-                    # Respond to ping with pong
+                # CRITICAL FIX: Handle both "ping" and "heartbeat" message types
+                if message.get('type') in ['ping', 'heartbeat']:
+                    # Respond to ping/heartbeat with pong
                     await connection_manager.send_personal_message({
                         'type': 'pong',
                         'timestamp': message.get('timestamp')
@@ -144,8 +150,9 @@ async def websocket_progress_endpoint(
                     logger.info(f"Received unknown message type: {message.get('type')}")
             
             except asyncio.TimeoutError:
-                logger.warning(f"WebSocket receive timeout for upload_id={upload_id}, connection may be stale")
-                # Don't break on timeout - keepalive will maintain connection
+                logger.warning(f"WebSocket receive timeout for upload_id={upload_id} after {timeout_settings.websocket_connection}s")
+                # CRITICAL FIX: Don't break on timeout - connection is still valid, keepalive maintains it
+                # This prevents premature disconnection during long-running extractions
                 continue
                     
             except WebSocketDisconnect:
