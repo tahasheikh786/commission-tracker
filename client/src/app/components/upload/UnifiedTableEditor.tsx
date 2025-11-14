@@ -34,6 +34,13 @@ export interface ExtractedData {
   upload_id?: string;
   company_id?: string;
   carrier_id?: string;
+  // CRITICAL: Environment and user data for proper isolation
+  environment_id?: string;
+  user_id?: string;
+  uploaded_at?: string;
+  file_hash?: string;
+  file_size?: number;
+  upload_metadata?: any;
   document_metadata?: {
     carrier_name?: string;
     carrier_confidence?: number;
@@ -764,14 +771,21 @@ export default function UnifiedTableEditor({
       const upload_metadata = {
         company_id: extractedData?.company_id || updatedCarrierId,
         carrier_id: extractedData?.carrier_id || updatedCarrierId,
-        user_id: uploadData?.user_id,
-        environment_id: uploadData?.environment_id,
+        user_id: uploadData?.user_id || extractedData?.user_id,
+        environment_id: uploadData?.environment_id || extractedData?.environment_id || uploadData?.upload_metadata?.environment_id,
         file_name: extractedData?.file_name || uploadData?.file_name,
-        file_hash: uploadData?.file_hash,
-        file_size: uploadData?.file_size,
-        uploaded_at: uploadData?.uploaded_at || new Date().toISOString(),
+        file_hash: uploadData?.file_hash || extractedData?.file_hash || uploadData?.upload_metadata?.file_hash,
+        file_size: uploadData?.file_size || extractedData?.file_size || uploadData?.upload_metadata?.file_size,
+        uploaded_at: uploadData?.uploaded_at || extractedData?.uploaded_at || uploadData?.upload_metadata?.uploaded_at || new Date().toISOString(),
         raw_data: finalData
       };
+
+      console.log('🔍 Upload metadata being sent:', {
+        has_user_id: !!upload_metadata.user_id,
+        has_environment_id: !!upload_metadata.environment_id,
+        environment_id: upload_metadata.environment_id,
+        user_id: upload_metadata.user_id
+      });
 
       await axios.post(
         `${process.env.NEXT_PUBLIC_API_URL}/api/review/approve/`,

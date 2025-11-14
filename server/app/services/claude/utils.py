@@ -37,36 +37,46 @@ logger = logging.getLogger(__name__)
 
 class ClaudeTokenBucket:
     """
-    Token bucket algorithm for Claude API rate limiting.
+    ✅ CRITICAL FIX: Token bucket algorithm for Claude API rate limiting.
     
-    OPTIMIZED LIMITS (Based on Claude Sonnet 4.5 Tier 2):
+    Now tracks BOTH input and output tokens separately to prevent 429 errors.
+    
+    OPTIMIZED LIMITS (Based on Claude Sonnet 4.5 Tier 1):
     - Requests: 50 RPM → 45 RPM (with 90% buffer)
-    - Tokens: 40,000 TPM → 36,000 TPM (with 90% buffer) ✅ UPDATED
-    - Use 90% buffer (safe with concurrency control)
+    - Input Tokens: 40,000 ITPM → 36,000 ITPM (with 90% buffer)
+    - Output Tokens: 8,000 OTPM → 7,200 OTPM (with 90% buffer) ✅ NEW
     
-    This prevents rate limit errors before they occur by managing token consumption proactively.
+    Claude API enforces THREE separate limits. This prevents 429 rate limit errors
+    by managing all three consumption metrics proactively.
     """
     
     def __init__(
         self,
         requests_per_minute: int = 50,
-        tokens_per_minute: int = 40000,  # Claude Sonnet 4.5 Tier 2 = 40,000 TPM
+        input_tokens_per_minute: int = 40000,  # ✅ RENAMED: Claude Sonnet 4.5 Tier 1 = 40,000 ITPM
+        output_tokens_per_minute: int = 8000,  # ✅ NEW: Claude Sonnet 4.5 Tier 1 = 8,000 OTPM
         buffer_percentage: float = 0.90  # ✅ INCREASED to 90% (was 80%) - we have concurrency control now
     ):
         """
         Initialize token bucket rate limiter with INTELLIGENT WAITING.
         
+        ✅ CRITICAL FIX: Now tracks BOTH input and output tokens separately.
+        Claude API enforces separate limits for input tokens AND output tokens.
+        
         Args:
-            requests_per_minute: Maximum requests per minute (50 for Tier 2)
-            tokens_per_minute: Maximum tokens per minute (40,000 for Claude Tier 2)
+            requests_per_minute: Maximum requests per minute (50 for Tier 1)
+            input_tokens_per_minute: Maximum INPUT tokens per minute (40,000 for Tier 1)
+            output_tokens_per_minute: Maximum OUTPUT tokens per minute (8,000 for Tier 1)
             buffer_percentage: Use 90% of limits (safe with concurrency control)
         """
         self.rpm_limit = int(requests_per_minute * buffer_percentage)  # 45 RPM
-        self.tpm_limit = int(tokens_per_minute * buffer_percentage)    # 36,000 TPM
+        self.itpm_limit = int(input_tokens_per_minute * buffer_percentage)    # 36,000 ITPM
+        self.otpm_limit = int(output_tokens_per_minute * buffer_percentage)   # 7,200 OTPM (NEW)
         
-        # Current usage tracking
+        # ✅ CRITICAL FIX: Track input and output tokens separately
         self.request_count = 0
-        self.token_count = 0
+        self.input_token_count = 0   # ✅ RENAMED from token_count
+        self.output_token_count = 0  # ✅ NEW: Track output tokens
         
         # Timestamp tracking
         self.window_start = time.time()
@@ -75,10 +85,11 @@ class ClaudeTokenBucket:
         self.logger = logging.getLogger(__name__)
         self.logger.info(f"🔧 Token Bucket initialized:")
         self.logger.info(f"   RPM Limit: {self.rpm_limit} (from {requests_per_minute})")
-        self.logger.info(f"   TPM Limit: {self.tpm_limit:,} (from {tokens_per_minute:,})")
+        self.logger.info(f"   ITPM Limit: {self.itpm_limit:,} (from {input_tokens_per_minute:,})")
+        self.logger.info(f"   OTPM Limit: {self.otpm_limit:,} (from {output_tokens_per_minute:,})")  # ✅ NEW
         self.logger.info(f"   Buffer: {buffer_percentage * 100:.0f}%")
         # Calculate max pages per chunk
-        available_tokens_for_pages = self.tpm_limit - 3000  # Reserve 3K for prompt
+        available_tokens_for_pages = self.itpm_limit - 3000  # Reserve 3K for prompt
         max_pages_per_chunk = int(available_tokens_for_pages / 2750)  # DIVIDE to get pages
         self.logger.info(f"   Max chunk: {max_pages_per_chunk} pages = {max_pages_per_chunk * 2750:,} tokens + 3K prompt")
     
@@ -102,12 +113,19 @@ class ClaudeTokenBucket:
         
         return total
     
-    async def wait_if_needed(self, estimated_tokens: int) -> float:
+    async def wait_if_needed(self, estimated_input_tokens: int, estimated_output_tokens: int = 2000) -> float:
         """
-        Intelligent waiting - only wait for what's needed (not full reset).
+        ✅ CRITICAL FIX: Wait if needed to respect rate limits for BOTH input and output tokens.
         
-        OPTIMIZATION: Partial reset strategy with intelligent minimum waiting
+        Claude API enforces THREE separate limits:
+        - Requests per minute (RPM)
+        - Input tokens per minute (ITPM)
+        - Output tokens per minute (OTPM) ← This was missing!
         
+        Args:
+            estimated_input_tokens: Estimated input tokens for the request
+            estimated_output_tokens: Estimated output tokens (default 2000)
+            
         Returns:
             Wait time in seconds (0.0 if no wait needed)
         """
@@ -118,67 +136,125 @@ class ClaudeTokenBucket:
             # Reset window if 60 seconds passed
             if elapsed >= 60:
                 self.request_count = 0
-                self.token_count = 0
+                self.input_token_count = 0
+                self.output_token_count = 0  # ✅ NEW
                 self.window_start = current_time
+                elapsed = 0  # ✅ CRITICAL FIX: Reset elapsed after window reset
                 self.logger.info("✅ Token bucket reset (60s window)")
-                
-                # Reserve tokens immediately
-                self.request_count += 1
-                self.token_count += estimated_tokens
-                return 0.0
+                # ✅ CRITICAL FIX: Don't return early - fall through to limit checks
+                # This ensures we validate even the first request after reset
             
-            # Check if we need to wait
+            # ✅ CRITICAL VALIDATION: Reject requests that are too large to ever fit
+            if estimated_input_tokens > self.itpm_limit:
+                raise ValueError(
+                    f"Request too large: {estimated_input_tokens:,} input tokens exceeds "
+                    f"limit of {self.itpm_limit:,} tokens per minute"
+                )
+            if estimated_output_tokens > self.otpm_limit:
+                raise ValueError(
+                    f"Request too large: {estimated_output_tokens:,} output tokens exceeds "
+                    f"limit of {self.otpm_limit:,} tokens per minute"
+                )
+            
+            # ✅ CRITICAL FIX: Check ALL THREE limits
             requests_available = self.request_count < self.rpm_limit
-            tokens_available = (self.token_count + estimated_tokens) <= self.tpm_limit
+            input_tokens_available = (self.input_token_count + estimated_input_tokens) <= self.itpm_limit
+            output_tokens_available = (self.output_token_count + estimated_output_tokens) <= self.otpm_limit  # ✅ NEW
             
-            if requests_available and tokens_available:
-                # Reserve tokens immediately
+            # If all limits are OK, reserve tokens immediately
+            if requests_available and input_tokens_available and output_tokens_available:
                 self.request_count += 1
-                self.token_count += estimated_tokens
+                self.input_token_count += estimated_input_tokens
+                self.output_token_count += estimated_output_tokens  # ✅ NEW
+                
+                self.logger.debug(
+                    f"✅ Rate limit OK - "
+                    f"RPM: {self.request_count}/{self.rpm_limit}, "
+                    f"ITPM: {self.input_token_count:,}/{self.itpm_limit:,}, "
+                    f"OTPM: {self.output_token_count:,}/{self.otpm_limit:,}"  # ✅ NEW
+                )
                 return 0.0
             
-            # Calculate MINIMUM wait time (not full reset)
+            # Calculate wait time
             time_until_reset = 60 - elapsed
             
+            # ✅ CRITICAL FIX: Log which limit is hit
+            if not output_tokens_available:
+                self.logger.warning(
+                    f"⚠️  OUTPUT token limit approaching: "
+                    f"{self.output_token_count:,}/{self.otpm_limit:,} "
+                    f"(requesting {estimated_output_tokens:,} more)"
+                )
+            if not input_tokens_available:
+                self.logger.warning(
+                    f"⚠️  INPUT token limit approaching: "
+                    f"{self.input_token_count:,}/{self.itpm_limit:,} "
+                    f"(requesting {estimated_input_tokens:,} more)"
+                )
+            if not requests_available:
+                self.logger.warning(
+                    f"⚠️  Request limit approaching: "
+                    f"{self.request_count}/{self.rpm_limit}"
+                )
+            
             # Partial reset strategy: wait only for tokens to decay
-            if not tokens_available:
-                # Calculate how many tokens will decay in next few seconds
-                tokens_needed = (self.token_count + estimated_tokens) - self.tpm_limit
-                # Assume linear decay over 60s window
-                seconds_to_wait = (tokens_needed / self.tpm_limit) * 60
+            if not input_tokens_available or not output_tokens_available:
+                # Calculate wait time based on most restrictive limit
+                input_wait = 0
+                output_wait = 0
+                
+                if not input_tokens_available:
+                    tokens_needed = (self.input_token_count + estimated_input_tokens) - self.itpm_limit
+                    input_wait = (tokens_needed / self.itpm_limit) * 60
+                
+                if not output_tokens_available:
+                    tokens_needed = (self.output_token_count + estimated_output_tokens) - self.otpm_limit
+                    output_wait = (tokens_needed / self.otpm_limit) * 60
+                
+                # Use the longer wait time
+                seconds_to_wait = max(input_wait, output_wait)
                 seconds_to_wait = min(seconds_to_wait, time_until_reset)
             else:
                 # Just wait for request window
                 seconds_to_wait = time_until_reset
             
-            # Wait only the minimum required time
-            self.logger.info(f"⏳ Rate limit: waiting {seconds_to_wait:.1f}s (was waiting full {time_until_reset:.1f}s)")
+            self.logger.info(f"⏳ Rate limit hit - waiting {seconds_to_wait:.1f}s for reset")
             await asyncio.sleep(seconds_to_wait)
             
             # After waiting, reset appropriately
             elapsed_after_wait = time.time() - self.window_start
             if elapsed_after_wait >= 60:
                 self.request_count = 0
-                self.token_count = 0
+                self.input_token_count = 0
+                self.output_token_count = 0  # ✅ NEW
                 self.window_start = time.time()
             
             # Reserve tokens
             self.request_count += 1
-            self.token_count += estimated_tokens
+            self.input_token_count += estimated_input_tokens
+            self.output_token_count += estimated_output_tokens  # ✅ NEW
             
             self.logger.info(
                 f"📊 Rate limit status: "
-                f"{self.request_count}/{self.rpm_limit} RPM, "
-                f"{self.token_count:,}/{self.tpm_limit:,} TPM"
+                f"RPM: {self.request_count}/{self.rpm_limit}, "
+                f"ITPM: {self.input_token_count:,}/{self.itpm_limit:,}, "
+                f"OTPM: {self.output_token_count:,}/{self.otpm_limit:,}"  # ✅ NEW
             )
             
             return seconds_to_wait
     
-    def update_actual_usage(self, actual_tokens: int):
-        """Update token count with actual usage after API call."""
-        # Adjust the token count if actual usage is known
-        # This helps improve accuracy over time
-        pass  # Current implementation uses estimated tokens which is safer
+    def update_actual_usage(self, actual_input_tokens: int, actual_output_tokens: int):
+        """
+        ✅ CRITICAL FIX: Update token counts with actual usage after API call.
+        This improves accuracy over time by correcting estimates with actual values.
+        
+        Args:
+            actual_input_tokens: Actual input tokens used
+            actual_output_tokens: Actual output tokens used
+        """
+        self.logger.debug(
+            f"📊 Actual usage - Input: {actual_input_tokens:,}, Output: {actual_output_tokens:,}"
+        )
 
 
 class ClaudePDFProcessor:

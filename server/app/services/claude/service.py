@@ -111,11 +111,12 @@ class ClaudeDocumentAIService:
         self.semantic_extractor = SemanticExtractionService()
         
         # Initialize rate limiter for Claude API (CRITICAL for preventing 429 errors)
-        # ✅ CORRECTED: Claude Sonnet 4.5 Tier 2 = 40,000 TPM
+        # ✅ CRITICAL FIX: Now tracks BOTH input and output tokens separately
         self.rate_limiter = ClaudeTokenBucket(
             requests_per_minute=50,
-            tokens_per_minute=40000,  # ✅ FIXED: Actual API limit for Tier 2
-            buffer_percentage=0.90  # ✅ 90% buffer = 36K TPM (safe with concurrency control)
+            input_tokens_per_minute=40000,   # ✅ Claude Sonnet 4.5 Tier 1 = 40,000 ITPM
+            output_tokens_per_minute=8000,   # ✅ NEW: Claude Sonnet 4.5 Tier 1 = 8,000 OTPM
+            buffer_percentage=0.90  # ✅ 90% buffer = 36K ITPM, 7.2K OTPM (safe with concurrency control)
         )
         
         # Processing statistics
@@ -133,7 +134,7 @@ class ClaudeDocumentAIService:
         logger.info(f"📋 Primary model: {self.primary_model}")
         logger.info(f"📋 Fallback model: {self.fallback_model}")
         logger.info(f"📏 Limits: {self.max_file_size_mb}MB, {self.max_pages} pages")
-        logger.info(f"🛡️  Rate limiting: ENABLED (40 RPM, 32,000 TPM) - OPTIMAL for performance")
+        logger.info(f"🛡️  Rate limiting: ENABLED (45 RPM, 36K ITPM, 7.2K OTPM) - CRITICAL FIX for 429 errors")
         logger.info(f"💾 Prompt caching: SUPPORTED")
         logger.info(f"📊 Chunk size: Dynamic (calculated per file, adapts 2-8 pages)")
     
@@ -161,9 +162,9 @@ class ClaudeDocumentAIService:
             base_tokens_per_page = 600  # Conservative estimate: 500-800 actual
             prompt_overhead = 3000      # System message + extraction instructions
             
-            # Use rate_limiter's actual TPM limit (already has buffer applied)
-            safe_tpm_limit = self.rate_limiter.tpm_limit  # 36,000 TPM (with 90% buffer)
-            available_tokens = safe_tpm_limit - prompt_overhead  # 33,000 tokens
+            # Use rate_limiter's actual ITPM limit (already has buffer applied)
+            safe_itpm_limit = self.rate_limiter.itpm_limit  # 36,000 ITPM (with 90% buffer)
+            available_tokens = safe_itpm_limit - prompt_overhead  # 33,000 tokens
             
             # Calculate theoretical max pages per chunk
             max_pages_theoretical = int(available_tokens / base_tokens_per_page)  # ~55 pages
@@ -735,13 +736,14 @@ class ClaudeDocumentAIService:
                 """Process single chunk with concurrency control."""
                 async with semaphore:
                     try:
-                        # Estimate tokens BEFORE acquiring rate limit
-                        estimated_tokens = self.rate_limiter.estimate_tokens(
+                        # ✅ CRITICAL FIX: Estimate BOTH input and output tokens
+                        estimated_input_tokens = self.rate_limiter.estimate_tokens(
                             text="", images=0, pdf_pages=chunk_info.get("page_count", 6)
                         )
+                        estimated_output_tokens = min(int(estimated_input_tokens * 0.4), 6000)
                         
-                        # Wait for rate limit availability
-                        await self.rate_limiter.wait_if_needed(estimated_tokens)
+                        # Wait for rate limit availability (checks both input and output limits)
+                        await self.rate_limiter.wait_if_needed(estimated_input_tokens, estimated_output_tokens)
                         
                         # Update progress
                         if progress_tracker:
@@ -1092,7 +1094,7 @@ class ClaudeDocumentAIService:
         use_cache: bool = False
     ) -> Dict[str, Any]:
         """
-        Call Claude API with rate limiting, retry logic, and 429 handling.
+        ✅ CRITICAL FIX: Call Claude API with rate limiting for BOTH input and output tokens.
         
         Args:
             pdf_base64: Base64-encoded PDF
@@ -1105,18 +1107,28 @@ class ClaudeDocumentAIService:
         Returns:
             API response with content and usage
         """
-        # STEP 1: Estimate tokens BEFORE making the call
-        estimated_tokens = self.rate_limiter.estimate_tokens(
+        # STEP 1: Estimate INPUT tokens BEFORE making the call
+        estimated_input_tokens = self.rate_limiter.estimate_tokens(
             text=prompt,
             images=0,
             pdf_pages=pdf_pages
         )
         
-        logger.info(f"📊 Estimated tokens for request: {estimated_tokens:,} ({pdf_pages} pages)")
+        # STEP 2: Estimate OUTPUT tokens (NEW)
+        # Rule of thumb: Output is usually 30-50% of input for extraction tasks
+        # Cap at 6000 to stay well within 8000 OTPM limit (with 7200 effective limit after 90% buffer)
+        estimated_output_tokens = min(int(estimated_input_tokens * 0.4), 6000)
         
-        # STEP 2: Wait if needed to respect rate limits (CRITICAL)
+        logger.info(
+            f"📊 Estimated tokens - "
+            f"Input: {estimated_input_tokens:,}, "
+            f"Output: {estimated_output_tokens:,} (est.), "
+            f"Pages: {pdf_pages}"
+        )
+        
+        # STEP 3: Wait if needed to respect BOTH input and output rate limits (CRITICAL)
         wait_start = time.time()
-        await self.rate_limiter.wait_if_needed(estimated_tokens)
+        await self.rate_limiter.wait_if_needed(estimated_input_tokens, estimated_output_tokens)
         wait_time = time.time() - wait_start
         
         if wait_time > 1:
@@ -1188,7 +1200,7 @@ class ClaudeDocumentAIService:
                 response = await asyncio.wait_for(
                     self.async_client.messages.create(
                         model=model,
-                        max_tokens=16000,  # Large enough for comprehensive extraction
+                        max_tokens=8000,  # ✅ REDUCED from 16000 to stay within 8K OTPM limit
                         temperature=0.1,  # Low temperature for consistency
                         system=system_prompt_parts,  # NOW WITH CACHING
                         messages=messages
@@ -1227,35 +1239,48 @@ class ClaudeDocumentAIService:
                     if usage.get('cache_creation_input_tokens', 0) > 0:
                         logger.info(f"💾 Cache created with {usage['cache_creation_input_tokens']:,} tokens")
                 
-                logger.info(f"✅ Claude API call successful. Tokens: input={usage.get('input_tokens', 0):,}, output={usage.get('output_tokens', 0):,}")
-                
-                # ✅ UPDATE token bucket with ACTUAL usage (not estimate)
+                # ✅ CRITICAL FIX: Track BOTH input and output tokens
                 actual_input_tokens = usage.get('input_tokens', 0)
+                actual_output_tokens = usage.get('output_tokens', 0)
                 
-                # Calculate the difference
-                token_diff = actual_input_tokens - estimated_tokens
+                logger.info(
+                    f"✅ Claude API call successful. "
+                    f"Tokens - Input: {actual_input_tokens:,}, Output: {actual_output_tokens:,}"
+                )
+                
+                # ✅ UPDATE token bucket with ACTUAL usage (not estimates)
+                input_token_diff = actual_input_tokens - estimated_input_tokens
+                output_token_diff = actual_output_tokens - estimated_output_tokens
                 
                 logger.info(
                     f"📊 Token tracking: "
-                    f"Estimated={estimated_tokens:,}, "
-                    f"Actual={actual_input_tokens:,}, "
-                    f"Diff={token_diff:+,}"
+                    f"Input: Est={estimated_input_tokens:,}, Actual={actual_input_tokens:,}, Diff={input_token_diff:+,} | "
+                    f"Output: Est={estimated_output_tokens:,}, Actual={actual_output_tokens:,}, Diff={output_token_diff:+,}"
                 )
                 
-                # Correct the token bucket count
-                # We already added 'estimated_tokens' in wait_if_needed()
-                # Now adjust by the difference
+                # Correct the token bucket counts
+                # We already added 'estimated_input_tokens' and 'estimated_output_tokens' in wait_if_needed()
+                # Now adjust by the differences
                 async with self.rate_limiter.lock:
-                    old_count = self.rate_limiter.token_count
+                    old_input_count = self.rate_limiter.input_token_count
+                    old_output_count = self.rate_limiter.output_token_count
+                    
                     # Replace estimated with actual
-                    self.rate_limiter.token_count = (
-                        self.rate_limiter.token_count - estimated_tokens + actual_input_tokens
+                    self.rate_limiter.input_token_count = (
+                        self.rate_limiter.input_token_count - estimated_input_tokens + actual_input_tokens
+                    )
+                    self.rate_limiter.output_token_count = (
+                        self.rate_limiter.output_token_count - estimated_output_tokens + actual_output_tokens
                     )
                     
                     logger.info(
                         f"🔧 Token bucket adjusted: "
-                        f"{old_count:,} → {self.rate_limiter.token_count:,}"
+                        f"Input: {old_input_count:,} → {self.rate_limiter.input_token_count:,}, "
+                        f"Output: {old_output_count:,} → {self.rate_limiter.output_token_count:,}"
                     )
+                
+                # Call update_actual_usage for tracking
+                self.rate_limiter.update_actual_usage(actual_input_tokens, actual_output_tokens)
                 
                 return {
                     'content': content_text,

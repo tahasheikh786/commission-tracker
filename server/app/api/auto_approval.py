@@ -453,7 +453,6 @@ async def auto_approve_statement(
         # CRITICAL CHANGE: CREATE DB record now (not update)
         # This is the ONLY place where statements enter the database
         from app.db.models import StatementUpload as StatementUploadModel
-        from uuid import UUID
         
         # Parse metadata from request
         metadata = request.upload_metadata

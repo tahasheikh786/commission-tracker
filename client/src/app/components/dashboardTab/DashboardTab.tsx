@@ -154,13 +154,14 @@ export default function DashboardTab({ showAnalytics = false, environmentId }: D
 
 
   // Handle upload result - MANUAL FLOW ONLY (automation is handled by SummaryUploadZone)
-  function handleUploadResult({ tables, upload_id, extraction_id, file_name, file, plan_types, extracted_carrier, extracted_date, gcs_url, gcs_key, document_metadata, ai_intelligence, carrier_id, company_id, format_learning, can_automate }: any) {
+  function handleUploadResult({ tables, upload_id, extraction_id, file_name, file, plan_types, extracted_carrier, extracted_date, gcs_url, gcs_key, document_metadata, ai_intelligence, carrier_id, company_id, format_learning, can_automate, environment_id, user_id, uploaded_at, file_hash, file_size, upload_metadata }: any) {
     
     // NOTE: Automation is now handled entirely by SummaryUploadZone
     // This function only handles the manual review flow
     console.log("📋 Opening manual editor for review...");
     
     // Set uploaded data with AI intelligence and carrier information
+    // CRITICAL FIX: Include all metadata needed for approval
     setUploaded({ 
       tables, 
       upload_id, 
@@ -176,7 +177,14 @@ export default function DashboardTab({ showAnalytics = false, environmentId }: D
       ai_intelligence,
       carrier_id,  // CRITICAL: Include carrier_id for AI field mapping
       company_id,  // CRITICAL: Include company_id as fallback
-      format_learning  // IMPORTANT: Include format learning for field mappings
+      format_learning,  // IMPORTANT: Include format learning for field mappings
+      // CRITICAL FIX: Include environment and user data for proper isolation
+      environment_id,
+      user_id,
+      uploaded_at,
+      file_hash,
+      file_size,
+      upload_metadata
     });
     
     // Handle carrier detection and auto-creation
@@ -323,6 +331,13 @@ export default function DashboardTab({ showAnalytics = false, environmentId }: D
             // Don't use company?.id as it might be 'auto-detected' which is not a valid UUID
             company_id: uploaded.carrier_id || uploaded.company_id || (company?.id !== 'auto-detected' ? company?.id : undefined),
             carrier_id: uploaded.carrier_id || uploaded.company_id,
+            // CRITICAL FIX: Pass environment and user data for proper isolation
+            environment_id: uploaded.environment_id,
+            user_id: uploaded.user_id,
+            uploaded_at: uploaded.uploaded_at,
+            file_hash: uploaded.file_hash,
+            file_size: uploaded.file_size,
+            upload_metadata: uploaded.upload_metadata,
             document_metadata: uploaded.document_metadata,
             ai_intelligence: uploaded.ai_intelligence,
             format_learning: uploaded.format_learning  // Pass format learning data

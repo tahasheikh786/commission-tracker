@@ -195,16 +195,26 @@ async def update_company_mapping(
             logger.info(f"🎯 Mapping API: Processing commission data with statement date")
             logger.info(f"🎯 Mapping API: Statement date object: {config.selected_statement_date}")
             
-            # Get environment_id from upload if available
+            # Get environment_id from upload if available (statement may not exist yet)
             environment_id = None
             if upload_id:
                 try:
-                    upload_record = await crud.get_statement_upload(db, upload_id)
+                    upload_record = await crud.get_statement_by_id(db, upload_id)
                     if upload_record:
                         environment_id = upload_record.environment_id
                         logger.info(f"🎯 Mapping API: Retrieved environment_id {environment_id} from upload {upload_id}")
                 except Exception as env_error:
-                    logger.warning(f"🎯 Mapping API: Could not retrieve environment_id: {env_error}")
+                    logger.debug(f"🎯 Mapping API: Upload not found (expected if not yet approved): {env_error}")
+            
+            # If no environment_id from upload, use user's default environment
+            if environment_id is None:
+                try:
+                    from app.db.crud.environment import get_or_create_default_environment
+                    default_env = await get_or_create_default_environment(db, current_user.company_id, current_user.id)
+                    environment_id = default_env.id
+                    logger.info(f"🎯 Mapping API: Using user's default environment_id {environment_id}")
+                except Exception as env_error:
+                    logger.warning(f"🎯 Mapping API: Could not get default environment: {env_error}")
             
             await process_commission_data_with_date(
                 db=db,
