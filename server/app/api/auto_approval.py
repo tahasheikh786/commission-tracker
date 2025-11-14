@@ -453,66 +453,31 @@ async def auto_approve_statement(
             needs_review = False
             logger.warning("No extracted total - skipping validation")
         
-        # CRITICAL CHANGE: CREATE DB record now (not update)
-        # This is the ONLY place where statements enter the database
+        # ✅ FIX: The DB record was already created by approve_statement() above (line 241)
+        # We just need to retrieve it and update it if needed
         from app.db.models import StatementUpload as StatementUploadModel
+        from sqlalchemy import select
         
-        # Parse metadata from request
-        metadata = request.upload_metadata
-        final_status = "Approved" if not needs_review else "needs_review"
-        
-        # Parse uploaded_at and convert to timezone-naive UTC datetime
-        uploaded_at_value = datetime.utcnow()
-        if metadata.get('uploaded_at'):
-            try:
-                parsed_dt = datetime.fromisoformat(metadata.get('uploaded_at').replace('Z', '+00:00'))
-                # Convert to UTC and remove timezone info (database expects timezone-naive)
-                uploaded_at_value = parsed_dt.replace(tzinfo=None) if parsed_dt.tzinfo else parsed_dt
-            except (ValueError, AttributeError) as e:
-                logger.warning(f"⚠️ Could not parse uploaded_at '{metadata.get('uploaded_at')}': {e}")
-                uploaded_at_value = datetime.utcnow()
-        
-        # Create the DB record with final status
-        db_upload = StatementUploadModel(
-            id=UUID(request.upload_id),
-            company_id=UUID(metadata.get('company_id')) if metadata.get('company_id') else UUID(request.carrier_id),
-            carrier_id=UUID(metadata.get('carrier_id', request.carrier_id)),
-            user_id=UUID(metadata.get('user_id', str(current_user.id))),
-            environment_id=UUID(metadata.get('environment_id')) if metadata.get('environment_id') else None,
-            file_name=metadata.get('file_name', ''),
-            file_hash=metadata.get('file_hash'),
-            file_size=metadata.get('file_size'),
-            uploaded_at=uploaded_at_value,
-            status=final_status,  # CRITICAL: Only Approved or needs_review
-            current_step='completed',
-            raw_data=tables,  # Original extracted tables
-            edited_tables=commission_tables,  # Filtered commission tables
-            final_data=commission_tables,  # Same as edited for auto-approval
-            field_mapping=field_mapping,
-            field_config=field_config_list,
-            plan_types=[],
-            selected_statement_date={"month": request.statement_date},
-            automated_approval=True,
-            automation_timestamp=datetime.utcnow(),
-            total_amount_match=total_validation.get("matches", False) if total_validation else None,
-            extracted_total=round(actual_extracted_total, 2) if actual_extracted_total else 0,
-            extracted_invoice_total=round(calculated_invoice_total, 2) if calculated_invoice_total else 0,
-            completed_at=datetime.utcnow(),
-            last_updated=datetime.utcnow()
+        # Get the upload record that was created by approve_statement
+        result = await db.execute(
+            select(StatementUploadModel).where(StatementUploadModel.id == UUID(request.upload_id))
         )
+        db_upload = result.scalar_one_or_none()
         
-        db.add(db_upload)
+        if not db_upload:
+            raise HTTPException(status_code=500, detail="Upload record not found after approval")
         
-        # If approved, process commission data
-        if final_status == "Approved":
-            logger.info(f"✅ Auto-approved, processing commission data...")
-            from app.db.crud.earned_commission import bulk_process_commissions
-            await bulk_process_commissions(db, db_upload)
+        # Update the record with additional auto-approval metadata
+        db_upload.automated_approval = True
+        db_upload.automation_timestamp = datetime.utcnow()
+        db_upload.total_amount_match = total_validation.get("matches", False) if total_validation else None
+        db_upload.extracted_total = round(actual_extracted_total, 2) if actual_extracted_total else 0
+        db_upload.extracted_invoice_total = round(calculated_invoice_total, 2) if calculated_invoice_total else 0
         
         await db.commit()
         await db.refresh(db_upload)
         
-        logger.info(f"✅ Created DB record with status: {final_status}")
+        logger.info(f"✅ Updated DB record with auto-approval metadata")
         
         # Record user contribution now that the statement is persisted
         try:
@@ -523,8 +488,8 @@ async def auto_approve_statement(
                 upload_id=UUID(request.upload_id),
                 contribution_type="auto_approval",
                 contribution_data={
-                    "file_name": metadata.get('file_name'),
-                    "status": final_status,
+                    "file_name": request.upload_metadata.get('file_name') if request.upload_metadata else None,
+                    "status": db_upload.status,
                     "auto_approved": True,
                     "carrier_id": request.carrier_id,
                     "statement_date": request.statement_date
