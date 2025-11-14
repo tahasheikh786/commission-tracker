@@ -768,9 +768,11 @@ export default function UnifiedTableEditor({
       // planTypes already defined above in Step 3
 
       // CRITICAL FIX: Include upload_metadata for backend to create DB record
+      // company_id = USER'S company (who uploaded the statement)
+      // carrier_id = INSURANCE CARRIER (Allied Benefit Systems, etc.)
       const upload_metadata = {
-        company_id: extractedData?.company_id || updatedCarrierId,
-        carrier_id: extractedData?.carrier_id || updatedCarrierId,
+        company_id: extractedData?.company_id || uploadData?.company_id || uploadData?.user_company_id,  // NEVER use carrier_id here!
+        carrier_id: updatedCarrierId,  // This is the insurance carrier (Allied, etc.)
         user_id: uploadData?.user_id || extractedData?.user_id,
         environment_id: uploadData?.environment_id || extractedData?.environment_id || uploadData?.upload_metadata?.environment_id,
         file_name: extractedData?.file_name || uploadData?.file_name,

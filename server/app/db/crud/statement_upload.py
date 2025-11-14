@@ -342,20 +342,18 @@ async def save_statement_review(
         if not user_id_to_use and upload_metadata and upload_metadata.get('user_id'):
             user_id_to_use = UUID(upload_metadata.get('user_id'))
         
-        environment_id_to_use = current_environment_id
-        if not environment_id_to_use and upload_metadata and upload_metadata.get('environment_id'):
-            environment_id_to_use = UUID(upload_metadata.get('environment_id'))
-        
-        # CRITICAL FIX: If still no environment_id, fetch user's default environment
-        if not environment_id_to_use and user_id_to_use:
+        # CRITICAL: ALWAYS use user's default environment, NEVER accept environment_id from metadata
+        # This prevents environment mismatches and ensures all uploads go to the default environment
+        environment_id_to_use = None
+        if user_id_to_use:
             try:
                 from app.db.crud.environment import get_or_create_default_environment
-                # Get company_id from upload_metadata
+                # CRITICAL: Get user's company_id from upload_metadata OR from user record
                 company_id = None
                 if upload_metadata and upload_metadata.get('company_id'):
                     company_id = UUID(upload_metadata.get('company_id'))
-                elif upload_metadata and upload_metadata.get('carrier_id'):
-                    # Fallback: Use first company user belongs to
+                else:
+                    # Fallback: Get company_id from user record
                     result_user_company = await db.execute(
                         text("SELECT company_id FROM users WHERE id = :user_id"),
                         {"user_id": str(user_id_to_use)}
@@ -365,11 +363,18 @@ async def save_statement_review(
                         company_id = row[0]
                 
                 if company_id and user_id_to_use:
+                    # ALWAYS get/create the default environment for this user
                     default_env = await get_or_create_default_environment(db, company_id, user_id_to_use)
                     environment_id_to_use = default_env.id
-                    logger.info(f"✅ Using user's default environment_id {environment_id_to_use}")
+                    logger.info(f"✅ ALWAYS using user's default environment_id {environment_id_to_use} for consistency")
             except Exception as e:
-                logger.warning(f"⚠️ Could not get default environment: {e}")
+                logger.error(f"❌ Could not get default environment: {e}")
+        
+        # Safeguard: Log if someone tried to pass a different environment_id
+        if current_environment_id and current_environment_id != environment_id_to_use:
+            logger.warning(f"⚠️  Ignoring passed environment_id {current_environment_id}, using default {environment_id_to_use}")
+        if upload_metadata and upload_metadata.get('environment_id') and UUID(upload_metadata.get('environment_id')) != environment_id_to_use:
+            logger.warning(f"⚠️  Ignoring metadata environment_id {upload_metadata.get('environment_id')}, using default {environment_id_to_use}")
         
         db_upload = StatementUploadModel(
             id=upload_id_uuid,

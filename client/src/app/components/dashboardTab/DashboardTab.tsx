@@ -327,9 +327,9 @@ export default function DashboardTab({ showAnalytics = false, environmentId }: D
             extracted_carrier: uploaded.extracted_carrier,
             extracted_date: uploaded.extracted_date,
             upload_id: uploaded.upload_id || uploaded.id,
-            // CRITICAL FIX: Use uploaded.carrier_id (from backend) first, fallback to uploaded.company_id
-            // Don't use company?.id as it might be 'auto-detected' which is not a valid UUID
-            company_id: uploaded.carrier_id || uploaded.company_id || (company?.id !== 'auto-detected' ? company?.id : undefined),
+            // CRITICAL FIX: company_id should ALWAYS be user's company (from upload data), NOT the carrier
+            // carrier_id is the insurance carrier (Allied, etc.)
+            company_id: uploaded.user_company_id || uploaded.company_id || (company?.id !== 'auto-detected' ? company?.id : undefined),
             carrier_id: uploaded.carrier_id || uploaded.company_id,
             // CRITICAL FIX: Pass environment and user data for proper isolation
             environment_id: uploaded.environment_id,

@@ -213,23 +213,26 @@ async def extract_tables_smart(
         # Get or create environment
         from app.db.crud.environment import get_or_create_default_environment, get_environment_by_id
         
-        if environment_id:
-            try:
-                env_uuid = UUID(environment_id)
-                target_env = await get_environment_by_id(db, env_uuid, current_user.company_id, current_user.id)
-            except (ValueError, Exception) as e:
-                logger.warning(f"Invalid environment_id {environment_id}, using default")
-                target_env = await get_or_create_default_environment(db, current_user.company_id, current_user.id)
-        else:
-            target_env = await get_or_create_default_environment(db, current_user.company_id, current_user.id)
+        # CRITICAL: ALWAYS use user's default environment for ALL uploads
+        # This ensures consistency and prevents environment mismatches
+        # We ignore any environment_id parameter to maintain data integrity
+        target_env = await get_or_create_default_environment(db, current_user.company_id, current_user.id)
+        
+        # Log if someone tried to specify a different environment
+        if environment_id and environment_id != str(target_env.id):
+            logger.warning(f"⚠️  Ignoring specified environment_id {environment_id}, using user's default environment {target_env.id}")
+        
+        logger.info(f"✅ Using user's default environment {target_env.id} for upload consistency")
         
         # CRITICAL CHANGE: DO NOT create DB record here!
         # Records are ONLY created during approval (auto or manual)
         # Store metadata for later use during approval
+        # CRITICAL FIX: company_id should be USER's company, carrier_id should be the insurance carrier
         upload_metadata = {
             'upload_id': str(upload_id_uuid),
-            'company_id': company_id,
-            'carrier_id': company_id,
+            'company_id': str(current_user.company_id),  # USER's company (who owns the data)
+            'carrier_id': company_id,  # CARRIER/Insurance company (Allied Benefit Systems, etc.)
+            'user_company_id': str(current_user.company_id),  # Explicit user company for frontend
             'user_id': str(current_user.id),
             'environment_id': str(target_env.id),
             'file_name': gcs_key,
