@@ -7,14 +7,11 @@ maintaining compatibility with the existing server structure.
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import crud, schemas
-from app.services.new_extraction_service import get_new_extraction_service
 from app.services.enhanced_extraction_service import EnhancedExtractionService
-from app.services.claude.service import ClaudeDocumentAIService
 from app.config import get_db
 from app.utils.db_retry import with_db_retry
 from app.dependencies.auth_dependencies import get_current_user_hybrid
 from app.db.models import User
-from app.services.duplicate_detection_service import DuplicateDetectionService
 from app.services.user_profile_service import UserProfileService
 from app.services.audit_logging_service import AuditLoggingService
 import asyncio
@@ -22,12 +19,10 @@ import os
 from datetime import datetime
 from uuid import uuid4, UUID
 from app.services.gcs_utils import upload_file_to_gcs, get_gcs_file_url, download_file_from_gcs, generate_gcs_signed_url
-from app.services.extraction_utils import stitch_multipage_tables
 from app.services.websocket_service import connection_manager
 import logging
 from typing import Optional, Dict, Any
 from fastapi.responses import JSONResponse
-import uuid
 import re
 import hashlib
 from app.services.cancellation_manager import cancellation_manager
@@ -38,97 +33,8 @@ logger = logging.getLogger(__name__)
 UPLOAD_DIR = "pdfs"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-
-def transform_gpt_extraction_response_to_client_format(gpt_result: Dict[str, Any], filename: str, company_id: str) -> Dict[str, Any]:
-    """
-    Transform GPT extraction result to client format.
-    
-    Args:
-        gpt_result: Result from GPT4oVisionService.extract_commission_data
-        filename: Original filename
-        company_id: Company ID
-        
-    Returns:
-        Client-formatted response
-    """
-    try:
-        if not gpt_result.get("success"):
-            return {
-                "status": "error",
-                "error": gpt_result.get("error", "GPT extraction failed"),
-                "tables": []
-            }
-        
-        tables = gpt_result.get("tables", [])
-        if not tables:
-            return {
-                "status": "error", 
-                "error": "No tables found in GPT extraction result",
-                "tables": []
-            }
-        
-        # Transform tables to client format
-        client_tables = []
-        for table in tables:
-            # GPT service returns tables with 'headers' and 'rows' keys
-            headers = table.get("headers", [])
-            rows = table.get("rows", [])
-            
-            # Convert to client format (header array, rows as array of arrays)
-            client_table = {
-                "header": headers,
-                "rows": rows,
-                "extractor": table.get("extractor", "gpt4o_vision"),
-                # CRITICAL FIX: Include summaryRows for frontend display
-                "summaryRows": table.get("summaryRows", []),
-                "summary_detection": table.get("summary_detection", {}),
-                "metadata": {
-                    "extraction_method": "gpt4o_vision",
-                    "processing_notes": table.get("processing_notes", ""),
-                    "company_detection_applied": gpt_result.get("company_detection_applied", False)
-                }
-            }
-            client_tables.append(client_table)
-        
-        # Get extraction metadata
-        extraction_metadata = gpt_result.get("extraction_metadata", {})
-        
-        return {
-            "status": "success",
-            "job_id": str(uuid.uuid4()),
-            "file_name": filename,
-            "tables": client_tables,
-            "extraction_metrics": {
-                "total_tables": len(client_tables),
-                "extraction_time": 1.0,  # GPT doesn't provide timing info
-                "confidence": extraction_metadata.get("confidence", 0.9),
-                "method": extraction_metadata.get("method", "gpt4o_vision")
-            },
-            "extraction_config": {
-                "method": "gpt4o_vision",
-                "description": "OpenAI GPT-4 Vision extraction for scanned PDFs"
-            }
-        }
-        
-    except Exception as e:
-        logger.error(f"Error transforming GPT extraction result: {e}")
-        return {
-            "status": "error",
-            "error": f"Failed to transform GPT extraction result: {str(e)}",
-            "tables": []
-        }
-
-# Initialize the new extraction service
-new_extraction_service = None
+# Initialize the enhanced extraction service
 enhanced_extraction_service = None
-
-async def get_new_extraction_service_instance():
-    """Get or create the new extraction service instance."""
-    global new_extraction_service
-    if new_extraction_service is None:
-        config_path = "configs/new_extraction_config.yaml"
-        new_extraction_service = get_new_extraction_service(config_path)
-    return new_extraction_service
 
 async def get_enhanced_extraction_service_instance(use_enhanced: bool = None):
     """
@@ -209,23 +115,19 @@ async def extract_tables_smart(
     # Calculate file size and hash for duplicate detection
     file_size = len(file_content)
     file_hash = hashlib.sha256(file_content).hexdigest()
+    logger.info(f"📁 File: {file.filename}, Size: {file_size} bytes, User: {current_user.id}")
     
-    logger.info(f"📁 File: {file.filename}")
-    logger.info(f"🔑 Hash: {file_hash}")
-    logger.info(f"📏 Size: {file_size} bytes")
-    logger.info(f"👤 User: {current_user.id}")
-    
-    # Check for duplicates
-    duplicate_service = DuplicateDetectionService(db)
-    duplicate_check = await duplicate_service.check_duplicate(
+    # Check for duplicates ONLY in successfully extracted files
+    # This allows re-upload of failed/cancelled/processing files
+    # CRITICAL: Exclude 'pending' status to allow re-upload of failed/stuck uploads
+    existing_upload = await crud.get_statement_by_file_hash_and_status(
+        db=db,
         file_hash=file_hash,
-        user_id=current_user.id,
-        file_name=file.filename
+        valid_statuses=['approved', 'needsreview', 'rejected']
     )
     
-    if duplicate_check['is_duplicate']:
+    if existing_upload:
         # Return 409 Conflict with duplicate information
-        existing_upload = duplicate_check['existing_upload']
         
         # Generate GCS URL for the existing file
         existing_gcs_url = None
@@ -248,7 +150,7 @@ async def extract_tables_smart(
                 "error": f"This file has already been uploaded on {upload_date}.",
                 "message": f"Duplicate file detected. This file was previously uploaded on {upload_date}. Please upload a different file or use the existing one.",
                 "duplicate_info": {
-                    "type": duplicate_check['duplicate_type'],
+                    "type": existing_upload.status,  # Fixed: use existing_upload.status instead of undefined duplicate_check
                     "existing_upload_id": str(existing_upload.id),
                     "existing_file_name": existing_upload.file_name,
                     "existing_upload_date": existing_upload.uploaded_at.isoformat() if existing_upload.uploaded_at else None,
@@ -261,16 +163,11 @@ async def extract_tables_smart(
         )
     
     try:
-        logger.info(f"🚀 Starting extract-tables-smart for file: {file.filename}")
-        logger.info(f"📁 File path: {file_path}")
-        logger.info(f"📊 File size: {file_size} bytes")
-        logger.info(f"🆔 Upload ID: {upload_id_str}")
+        logger.info(f"🚀 Starting extraction: {file.filename} (ID: {upload_id_str})")
         
         # Save uploaded file
-        logger.info("💾 Saving uploaded file...")
         with open(file_path, "wb") as buffer:
             buffer.write(file_content)
-        logger.info("✅ File saved successfully")
 
         # Handle company_id - if not provided, we'll extract it from the document
         if not company_id:
@@ -292,30 +189,16 @@ async def extract_tables_smart(
             os.remove(file_path)
             raise HTTPException(status_code=404, detail="Company not found")
 
-        # Upload to GCS using upload_id for consistent path (not company_id which changes with carrier detection)
+        # Upload to GCS
         gcs_key = f"statements/{upload_id_uuid}/{file.filename}"
-        logger.info(f"📤 Uploading file to GCS: {gcs_key}")
-        
-        # Verify GCS is available before uploading
         from app.services.gcs_utils import gcs_service
         if not gcs_service.is_available():
-            logger.error("❌ GCS service is not available. Check GOOGLE_APPLICATION_CREDENTIALS.")
-            raise HTTPException(
-                status_code=503, 
-                detail="Cloud storage service is not available. Please contact support."
-            )
+            raise HTTPException(status_code=503, detail="Cloud storage service is not available. Please contact support.")
         
-        uploaded = upload_file_to_gcs(file_path, gcs_key)
-        if not uploaded:
-            logger.error(f"❌ Failed to upload file to GCS: {gcs_key}")
+        if not upload_file_to_gcs(file_path, gcs_key) or not gcs_service.file_exists(gcs_key):
             raise HTTPException(status_code=500, detail="Failed to upload file to GCS.")
         
-        # Verify file was actually uploaded
-        if not gcs_service.file_exists(gcs_key):
-            logger.error(f"❌ File upload verification failed - file not found in GCS: {gcs_key}")
-            raise HTTPException(status_code=500, detail="File upload verification failed.")
-        
-        logger.info(f"✅ Successfully uploaded and verified file in GCS: {gcs_key}")
+        logger.info(f"✅ Uploaded to GCS: {gcs_key}")
         
         # Generate signed URL for PDF preview
         gcs_url = generate_gcs_signed_url(gcs_key)
@@ -327,54 +210,37 @@ async def extract_tables_smart(
         if upload_id:
             await connection_manager.emit_upload_step(upload_id, 'upload', 10)
         
-        # Get or create default environment for the user's company
+        # Get or create environment
         from app.db.crud.environment import get_or_create_default_environment, get_environment_by_id
         
-        # Use provided environment_id if available, otherwise get/create default
         if environment_id:
             try:
                 env_uuid = UUID(environment_id)
                 target_env = await get_environment_by_id(db, env_uuid, current_user.company_id, current_user.id)
-                logger.info(f"Using specified environment {target_env.id} ({target_env.name}) for upload")
             except (ValueError, Exception) as e:
-                logger.warning(f"Invalid or inaccessible environment_id {environment_id}: {e}. Using default.")
-                target_env = await get_or_create_default_environment(
-                    db=db,
-                    company_id=current_user.company_id,
-                    user_id=current_user.id
-                )
+                logger.warning(f"Invalid environment_id {environment_id}, using default")
+                target_env = await get_or_create_default_environment(db, current_user.company_id, current_user.id)
         else:
-            target_env = await get_or_create_default_environment(
-                db=db,
-                company_id=current_user.company_id,
-                user_id=current_user.id
-            )
-            logger.info(f"Using default environment {target_env.id} ({target_env.name}) for upload")
+            target_env = await get_or_create_default_environment(db, current_user.company_id, current_user.id)
         
-        # Create statement upload record for progress tracking
-        # NOTE: company_id is used for the carrier here (legacy behavior)
-        # We'll set carrier_id explicitly after extraction for proper carrier association
-        db_upload = schemas.StatementUpload(
-            id=upload_id_uuid,
-            company_id=company_id,
-            carrier_id=company_id,  # Set carrier_id to the same value for now
-            user_id=current_user.id,
-            environment_id=target_env.id,  # Use the determined environment (either specified or default)
-            file_name=gcs_key,
-            file_hash=file_hash,
-            file_size=file_size,
-            uploaded_at=datetime.utcnow(),
-            status="pending",  # Changed from "processing" to "pending"
-            current_step="extraction",
-            progress_data={
-                'extraction_method': extraction_method,
-                'file_type': file_ext,
-                'start_time': start_time.isoformat()
-            }
-        )
-        
-        # Save statement upload with retry
-        await with_db_retry(db, crud.save_statement_upload, upload=db_upload)
+        # CRITICAL CHANGE: DO NOT create DB record here!
+        # Records are ONLY created during approval (auto or manual)
+        # Store metadata for later use during approval
+        upload_metadata = {
+            'upload_id': str(upload_id_uuid),
+            'company_id': company_id,
+            'carrier_id': company_id,
+            'user_id': str(current_user.id),
+            'environment_id': str(target_env.id),
+            'file_name': gcs_key,
+            'file_hash': file_hash,
+            'file_size': file_size,
+            'uploaded_at': datetime.utcnow().isoformat(),
+            'extraction_method': extraction_method,
+            'file_type': file_ext,
+            'start_time': start_time.isoformat()
+        }
+        logger.info(f"📝 Upload metadata prepared (NOT saved to DB): {upload_id_uuid}")
         
         # Log the extraction start
         audit_service = AuditLoggingService(db)
@@ -386,103 +252,86 @@ async def extract_tables_smart(
             upload_id=upload_id_uuid
         )
         
-        # Get enhanced extraction service with websocket progress tracking
-        logger.info("🔧 Getting enhanced extraction service...")
+        # Get extraction service
         enhanced_service = await get_enhanced_extraction_service_instance(use_enhanced=use_enhanced)
-        logger.info(f"✅ Enhanced extraction service obtained (enhanced_mode={enhanced_service.use_enhanced})")
         
-        # Create extraction task for cancellation support
-        logger.info("🚀 Starting extraction task...")
+        # Create extraction task
         async def extraction_task():
             try:
-                logger.info("📊 Calling extract_tables_with_progress...")
                 result = await enhanced_service.extract_tables_with_progress(
                     file_path=file_path,
                     company_id=company_id,
                     upload_id=upload_id_str,
                     file_type=file_ext,
                     extraction_method=extraction_method,
-                    upload_id_uuid=str(upload_id_uuid)  # Pass UUID for WebSocket completion message
+                    upload_id_uuid=str(upload_id_uuid)
                 )
-                logger.info(f"✅ Extraction completed successfully: {result}")
+                logger.info("✅ Extraction completed")
                 return result
             except Exception as e:
-                logger.error(f"❌ Error in extraction task: {str(e)}")
-                import traceback
-                logger.error(f"❌ Traceback: {traceback.format_exc()}")
-                raise e
+                logger.error(f"❌ Extraction error: {str(e)}")
+                raise
         
         # Store the task for potential cancellation
         task = asyncio.create_task(extraction_task())
         running_extractions[upload_id_str] = task
         
         try:
-            # Perform extraction with progress tracking
             extraction_result = await task
         except asyncio.CancelledError:
-            logger.info(f"Extraction cancelled for upload {upload_id_str}")
-            
-            # Send WebSocket notification about cancellation (not as error, but as completion)
+            logger.info(f"🛑 Extraction cancelled: {upload_id_str}")
             try:
-                await connection_manager.send_upload_complete(
-                    upload_id_str, 
-                    {"status": "cancelled", "message": "Upload cancelled by user"}
-                )
+                await cleanup_failed_upload(db, upload_id_uuid)
+                await connection_manager.send_upload_complete(upload_id_str, {"status": "cancelled", "message": "Upload cancelled"})
             except Exception as e:
-                logger.warning(f"Failed to send WebSocket cancellation notification: {e}")
-            
-            # Update the upload status to 'cancelled' instead of deleting
-            try:
-                update_data = schemas.StatementUploadUpdate(
-                    status="rejected",  # Use 'rejected' for cancelled uploads
-                    rejection_reason="Cancelled by user",  # Distinguish from actual rejections
-                    progress_data={
-                        'extraction_method': extraction_method,
-                        'file_type': file_ext,
-                        'start_time': start_time.isoformat(),
-                        'cancelled_at': datetime.utcnow().isoformat(),
-                        'cancellation_reason': 'User cancelled'
-                    }
-                )
-                await with_db_retry(db, crud.update_statement, statement_id=str(upload_id_uuid), statement_update=update_data)
-                logger.info(f"✅ Updated cancelled upload status: {upload_id_uuid}")
-            except Exception as update_error:
-                logger.error(f"Failed to update cancelled upload status: {update_error}")
+                logger.warning(f"Cleanup error: {e}")
             raise HTTPException(status_code=499, detail="Extraction cancelled by user")
         finally:
-            # Clean up the task from running extractions
             running_extractions.pop(upload_id_str, None)
-            # Clear from cancellation manager
             await cancellation_manager.clear_cancelled(upload_id_str)
         
-        # Update upload record with results - set to 'pending' for review
-        logger.info("💾 Updating upload record with results...")
-        
-        # Get format learning data from extraction result
+        # CRITICAL CHANGE: DO NOT update DB record - it doesn't exist yet!
+        # Extraction data will be passed to frontend and then to approval endpoint
+        # Update upload_metadata with extraction results for logging/tracking
         format_learning_info = extraction_result.get('format_learning', {})
+        field_mapping = format_learning_info.get('suggested_mapping', {}) if format_learning_info and format_learning_info.get('found_match') else None
         
-        # Include field_mapping if format learning found a match
-        field_mapping = None
-        if format_learning_info and format_learning_info.get('found_match'):
-            field_mapping = format_learning_info.get('suggested_mapping', {})
-            logger.info(f"💾 Saving field_mapping from format learning: {field_mapping}")
+        upload_metadata.update({
+            'extraction_completed': True,
+            'completion_time': datetime.utcnow().isoformat(),
+            'tables_count': len(extraction_result.get('tables', [])),
+            'extraction_method_used': extraction_method,
+            'raw_data': extraction_result.get('tables', []),
+            'field_mapping': field_mapping
+        })
+        logger.info(f"✅ Extraction completed (data NOT saved to DB, will be saved on approval)")
         
-        update_data = schemas.StatementUploadUpdate(
-            status="pending",  # Changed from "extracted" to "pending" for review workflow
-            current_step="extracted",
-            raw_data=extraction_result.get('tables', []),
-            field_mapping=field_mapping,  # Save field mapping from format learning
-            progress_data={
-                **db_upload.progress_data,
-                'extraction_completed': True,
-                'completion_time': datetime.utcnow().isoformat(),
-                'tables_count': len(extraction_result.get('tables', [])),
-                'extraction_method_used': extraction_method
-            }
-        )
-        
-        await with_db_retry(db, crud.update_statement_upload, upload_id=upload_id_uuid, update_data=update_data)
-        logger.info("✅ Upload record updated successfully")
+        # ===== DATA QUALITY VALIDATION =====
+        # Validate extracted company count to catch potential summary row inclusion
+        try:
+            # Extract entities from result
+            entities = extraction_result.get('entities', {})
+            groups_and_companies = entities.get('groups_and_companies', [])
+            extracted_company_count = len(groups_and_companies)
+            
+            # Calculate total rows across all tables
+            tables = extraction_result.get('tables', [])
+            total_rows = sum(len(table.get('rows', [])) for table in tables)
+            
+            # Sanity check: warn if company count is suspiciously high
+            # Heuristic: If extracted companies > 50% of total rows, likely includes summary rows
+            if total_rows > 0 and extracted_company_count > (total_rows * 0.5):
+                logger.warning(
+                    f"⚠️ DATA QUALITY WARNING: High company extraction ratio detected!\n"
+                    f"   - Extracted companies: {extracted_company_count}\n"
+                    f"   - Total table rows: {total_rows}\n"
+                    f"   - Ratio: {(extracted_company_count / total_rows * 100):.1f}%\n"
+                    f"   This may indicate summary rows being extracted as companies.\n"
+                    f"   Semantic filtering should have caught this. Investigate if issue persists."
+                )
+        except Exception as validation_error:
+            # Don't fail the extraction if validation has errors
+            logger.debug(f"Data quality validation error (non-critical): {validation_error}")
         
         # Log successful extraction
         processing_time = (datetime.now() - start_time).total_seconds()
@@ -552,36 +401,34 @@ async def extract_tables_smart(
                             gcs_url = generate_gcs_signed_url(gcs_key) or get_gcs_file_url(gcs_key)
                             logger.info(f"✅ File moved to correct carrier folder in GCS: {new_gcs_key}")
                             
-                            # CRITICAL FIX: Update carrier_id (not company_id) AND new file location
+                            # CRITICAL CHANGE: Update metadata only (no DB record yet)
                             # carrier_id = insurance carrier (what we extracted)
                             # company_id = user's broker company (keep as is)
-                            carrier_update_data = schemas.StatementUploadUpdate(
-                                carrier_id=carrier.id,  # Set carrier_id to extracted carrier
-                                company_id=carrier.id,  # Also set company_id for backwards compatibility
-                                file_name=new_gcs_key  # Update with new GCS path
-                            )
-                            await with_db_retry(db, crud.update_statement_upload, upload_id=upload_id_uuid, update_data=carrier_update_data)
-                            logger.info(f"✅ Updated statement upload: carrier_id={carrier.id}, company_id={carrier.id}")
+                            upload_metadata.update({
+                                'carrier_id': str(carrier.id),
+                                'company_id': str(carrier.id),
+                                'file_name': new_gcs_key
+                            })
+                            logger.info(f"✅ Updated upload metadata: carrier_id={carrier.id}, company_id={carrier.id}")
                         else:
                             logger.warning(f"⚠️ Failed to move file in GCS, keeping original location")
-                            # Still update carrier_id even if file move failed
-                            carrier_update_data = schemas.StatementUploadUpdate(
-                                carrier_id=carrier.id,  # Set carrier_id to extracted carrier
-                                company_id=carrier.id   # Also set company_id for backwards compatibility
-                            )
-                            await with_db_retry(db, crud.update_statement_upload, upload_id=upload_id_uuid, update_data=carrier_update_data)
-                            logger.info(f"✅ Updated statement upload: carrier_id={carrier.id}, company_id={carrier.id}")
+                            # CRITICAL CHANGE: Update metadata only (no DB record yet)
+                            upload_metadata.update({
+                                'carrier_id': str(carrier.id),
+                                'company_id': str(carrier.id)
+                            })
+                            logger.info(f"✅ Updated upload metadata: carrier_id={carrier.id}, company_id={carrier.id}")
                         
                         # Update company_id for all subsequent operations
                         company_id = str(carrier.id)
                     else:
-                        # Even if carrier matches, ensure carrier_id is set
+                        # Even if carrier matches, ensure carrier_id is set in metadata
                         logger.info(f"✅ Carrier matches upload: {carrier.name} ({carrier.id})")
-                        carrier_update_data = schemas.StatementUploadUpdate(
-                            carrier_id=carrier.id  # Ensure carrier_id is always set
-                        )
-                        await with_db_retry(db, crud.update_statement_upload, upload_id=upload_id_uuid, update_data=carrier_update_data)
-                        logger.info(f"✅ Ensured carrier_id is set: {carrier.id}")
+                        # CRITICAL CHANGE: Update metadata only (no DB record yet)
+                        upload_metadata.update({
+                            'carrier_id': str(carrier.id)
+                        })
+                        logger.info(f"✅ Ensured carrier_id in metadata: {carrier.id}")
                     
                     # ===== INTELLIGENT TABLE SELECTION =====
                     # Use AI to select the best table for field mapping when multiple tables exist
@@ -1006,7 +853,6 @@ async def extract_tables_smart(
                         
                         # Call the enhanced extraction analysis endpoint for both field mapping and plan detection
                         from app.api.ai_intelligent_mapping import enhanced_extraction_analysis
-                        from fastapi import Body
                         
                         # Prepare request data
                         analysis_request = {
@@ -1172,25 +1018,39 @@ async def extract_tables_smart(
                 )
             },
             
+            # CRITICAL: Include upload_metadata so frontend can pass it to approval endpoint
+            "upload_metadata": upload_metadata,
+            
             "message": f"Successfully extracted {len(extraction_result.get('tables', []))} tables using {extraction_method} method."
         }
         
-        # Record user contribution
-        profile_service = UserProfileService(db)
-        await profile_service.record_user_contribution(
-            user_id=current_user.id,
-            upload_id=upload_id_uuid,
-            contribution_type="upload",
-            contribution_data={
-                "file_name": file.filename,
-                "file_size": file_size,
-                "file_hash": file_hash,
-                "extraction_method": extraction_method,
-                "confidence_threshold": 0.6,
-                "enable_ocr": True,
-                "enable_multipage": True
-            }
-        )
+        # Record user contribution (deferred until approval)
+        # CRITICAL CHANGE: User contributions are now recorded during approval, not extraction
+        # This is because statement_uploads records are only created after approval
+        # to prevent ghost/orphan records. The contribution will be recorded when
+        # the user approves the statement via review.py or auto_approval.py
+        try:
+            profile_service = UserProfileService(db)
+            await profile_service.record_user_contribution(
+                user_id=current_user.id,
+                upload_id=upload_id_uuid,
+                contribution_type="upload",
+                contribution_data={
+                    "file_name": file.filename,
+                    "file_size": file_size,
+                    "file_hash": file_hash,
+                    "extraction_method": extraction_method,
+                    "confidence_threshold": 0.6,
+                    "enable_ocr": True,
+                    "enable_multipage": True
+                }
+            )
+            logger.info(f"✅ User contribution recorded for upload {upload_id_uuid}")
+        except Exception as e:
+            # Expected: Foreign key constraint will fail since statement_upload doesn't exist yet
+            # This is by design - contributions will be recorded during approval instead
+            logger.info(f"ℹ️ User contribution deferred until approval (statement not yet persisted): {str(e)}")
+            # Don't fail the extraction - contribution can be recorded later
         
         # Log file upload for audit
         await audit_service.log_file_upload(
@@ -1322,65 +1182,33 @@ async def extract_tables_smart(
         return client_response
         
     except HTTPException as he:
-        # Update failed upload status instead of deleting
+        # CRITICAL CHANGE: No DB record to cleanup anymore
+        # Just clean up GCS files and local files
         try:
-            if upload_id_uuid:
-                update_data = schemas.StatementUploadUpdate(
-                    status="failed",
-                    progress_data={
-                        'extraction_method': extraction_method,
-                        'file_type': file_ext,
-                        'start_time': start_time.isoformat(),
-                        'failed_at': datetime.utcnow().isoformat(),
-                        'error': str(he.detail)
-                    }
-                )
-                await with_db_retry(db, crud.update_statement, statement_id=str(upload_id_uuid), statement_update=update_data)
-                logger.info(f"✅ Updated failed upload status: {upload_id_uuid}")
-        except Exception as update_error:
-            logger.error(f"Failed to update upload record after error: {update_error}")
+            if gcs_key:
+                from app.services.gcs_utils import delete_gcs_file
+                delete_gcs_file(gcs_key)
+                logger.info(f"🗑️ Deleted GCS file: {gcs_key}")
+        except Exception as gcs_error:
+            logger.warning(f"⚠️ Failed to delete GCS file: {gcs_error}")
         
-        # Clean up file on error
+        # Clean up local file on error
         if os.path.exists(file_path):
             os.remove(file_path)
+            logger.info(f"🗑️ Deleted local file: {file_path}")
         raise
     except Exception as e:
-        logger.error(f"Smart extraction error: {str(e)}")
+        logger.error(f"❌ Smart extraction error: {str(e)}")
         
-        # CRITICAL FIX: Delete the upload record and files to allow re-upload
-        # When extraction fails, we must remove ALL traces to prevent 409 duplicate conflicts
+        # CRITICAL CHANGE: No DB record to cleanup anymore
+        # Just clean up GCS files and local files
         try:
-            if upload_id_uuid:
-                from sqlalchemy import select, delete
-                from app.db.models import StatementUpload
+            if gcs_key:
                 from app.services.gcs_utils import delete_gcs_file
-                
-                # Find the upload record to get GCS key
-                query_result = await db.execute(
-                    select(StatementUpload).where(StatementUpload.id == upload_id_uuid)
-                )
-                upload_record = query_result.scalar_one_or_none()
-                
-                if upload_record:
-                    # Delete GCS file if it exists
-                    if upload_record.file_name:
-                        try:
-                            delete_gcs_file(upload_record.file_name)
-                            logger.info(f"🗑️ Deleted GCS file: {upload_record.file_name}")
-                        except Exception as gcs_error:
-                            logger.error(f"Failed to delete GCS file: {gcs_error}")
-                    
-                    # Delete database record to allow re-upload
-                    await db.execute(
-                        delete(StatementUpload).where(StatementUpload.id == upload_id_uuid)
-                    )
-                    await db.commit()
-                    logger.info(f"✅ Deleted failed upload record: {upload_id_uuid} - file can now be re-uploaded")
-                else:
-                    logger.warning(f"⚠️ Upload record not found for cleanup: {upload_id_uuid}")
-        except Exception as cleanup_error:
-            logger.error(f"Failed to cleanup failed upload: {cleanup_error}")
-            await db.rollback()
+                delete_gcs_file(gcs_key)
+                logger.info(f"🗑️ Deleted GCS file: {gcs_key}")
+        except Exception as gcs_error:
+            logger.warning(f"⚠️ Failed to delete GCS file: {gcs_error}")
         
         # Clean up local file on error
         if os.path.exists(file_path):
@@ -1388,6 +1216,62 @@ async def extract_tables_smart(
             logger.info(f"🗑️ Deleted local file: {file_path}")
         
         raise HTTPException(status_code=500, detail=f"Smart extraction failed: {str(e)}")
+
+
+async def cleanup_failed_upload(db: AsyncSession, upload_id: UUID):
+    """
+    Complete cleanup of failed/cancelled upload.
+    - Deletes DB record
+    - Deletes GCS files
+    - Allows file to be re-uploaded
+    
+    Args:
+        db: Database session
+        upload_id: UUID of the upload to clean up
+    """
+    from sqlalchemy import select, delete
+    from app.db.models import StatementUpload
+    from app.services.gcs_utils import delete_gcs_file
+    
+    try:
+        # Get upload record
+        result = await db.execute(
+            select(StatementUpload).where(StatementUpload.id == upload_id)
+        )
+        upload_record = result.scalar_one_or_none()
+        
+        if not upload_record:
+            logger.warning(f"⚠️ Upload record not found for cleanup: {upload_id}")
+            return
+        
+        logger.info(f"🗑️ Cleaning up failed upload: {upload_id} (file: {upload_record.file_name})")
+        
+        # Delete GCS files
+        if upload_record.gcs_key:
+            try:
+                delete_gcs_file(upload_record.gcs_key)
+                logger.info(f"✅ Deleted GCS file: {upload_record.gcs_key}")
+            except Exception as gcs_error:
+                logger.error(f"❌ Failed to delete GCS file: {gcs_error}")
+        
+        if upload_record.file_name and upload_record.file_name != upload_record.gcs_key:
+            try:
+                delete_gcs_file(upload_record.file_name)
+                logger.info(f"✅ Deleted GCS file: {upload_record.file_name}")
+            except Exception as gcs_error:
+                logger.error(f"❌ Failed to delete GCS file: {gcs_error}")
+        
+        # Delete DB record - CRITICAL for allowing re-upload
+        await db.execute(
+            delete(StatementUpload).where(StatementUpload.id == upload_id)
+        )
+        await db.commit()
+        logger.info(f"✅ Deleted failed upload record {upload_id} - file can now be re-uploaded")
+        
+    except Exception as e:
+        logger.error(f"❌ Error in cleanup_failed_upload: {e}")
+        await db.rollback()
+        raise
 
 
 @router.post("/cancel-extraction/{upload_id}")
@@ -1415,51 +1299,20 @@ async def cancel_extraction(
     """
     logger.info(f"🛑 Cancellation requested for upload {upload_id}")
     
-    # Define cleanup callback
+    try:
+        upload_uuid = UUID(upload_id)
+    except ValueError:
+        logger.error(f"❌ Invalid upload ID format: {upload_id}")
+        raise HTTPException(status_code=400, detail="Invalid upload ID")
+    
+    # Define cleanup callback - uses reusable cleanup function
     async def cleanup_cancelled_upload():
         """Cleanup database and files for cancelled upload."""
         try:
-            from sqlalchemy import select, delete
-            from app.db.models import StatementUpload
-            from app.services.gcs_utils import delete_gcs_file
-            
-            # Find the upload record
-            try:
-                upload_uuid = UUID(upload_id)
-            except ValueError:
-                logger.error(f"Invalid upload ID format: {upload_id}")
-                return
-            
-            # Delete from database (or mark as cancelled)
-            delete_result = await db.execute(
-                select(StatementUpload).where(StatementUpload.id == upload_uuid)
-            )
-            upload_record = delete_result.scalar_one_or_none()
-            
-            if upload_record:
-                # Delete GCS file
-                if upload_record.gcs_key:
-                    try:
-                        delete_gcs_file(upload_record.gcs_key)
-                        logger.info(f"🗑️ Deleted GCS file: {upload_record.gcs_key}")
-                    except Exception as gcs_error:
-                        logger.error(f"Failed to delete GCS file: {gcs_error}")
-                
-                # Delete database record
-                await db.delete(upload_record)
-                await db.commit()
-                logger.info(f"✅ Deleted database record for upload {upload_id}")
-            
-            # Delete local file if exists
-            if upload_record and upload_record.filename:
-                local_path = os.path.join("pdfs", upload_record.filename)
-                if os.path.exists(local_path):
-                    os.remove(local_path)
-                    logger.info(f"🗑️ Deleted local file: {local_path}")
-                    
+            await cleanup_failed_upload(db, upload_uuid)
+            logger.info(f"✅ Cleanup completed for cancelled upload {upload_id}")
         except Exception as cleanup_error:
-            logger.error(f"Cleanup failed for {upload_id}: {cleanup_error}")
-            await db.rollback()
+            logger.error(f"❌ Failed to cleanup cancelled upload: {cleanup_error}")
     
     try:
         # Mark as cancelled immediately with cleanup callback
@@ -1495,21 +1348,21 @@ async def cancel_extraction(
         except Exception as ws_error:
             logger.warning(f"Failed to send WebSocket notification: {ws_error}")
         
+        # Clear from cancellation manager
+        await cancellation_manager.clear_cancelled(upload_id)
+        
         return JSONResponse(
             status_code=200,
             content={
                 "success": True,
-                "message": f"Extraction cancelled successfully for upload {upload_id}",
+                "message": f"Extraction cancelled and cleaned up successfully for upload {upload_id}",
                 "upload_id": upload_id
             }
         )
         
     except Exception as e:
-        logger.error(f"Error cancelling extraction: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        # Clear from cancellation manager
-        await cancellation_manager.clear_cancelled(upload_id)
+        logger.error(f"❌ Cancellation error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to cancel extraction: {str(e)}")
 
 
 @router.post("/extract-tables-gpt/")
@@ -1818,7 +1671,7 @@ async def extract_tables_gpt(
             "status": "success",
             "success": True,
                             "message": f"Successfully extracted tables with GPT-5 Vision using high quality image processing and intelligent table merging",
-            "job_id": str(uuid.uuid4()),
+            "job_id": str(uuid4()),
             "upload_id": upload_id,
             "extraction_id": upload_id,
             "tables": frontend_tables,
@@ -1896,758 +1749,3 @@ async def extract_tables_gpt(
             status_code=500,
             detail=f"GPT extraction failed: {str(e)}"
         )
-
-
-@router.post("/extract-tables-google-docai/")
-async def extract_tables_google_docai(
-    upload_id: str = Form(...),
-    company_id: str = Form(...),
-    db: AsyncSession = Depends(get_db)
-):
-    """
-    Extract tables using Google Document AI.
-    This endpoint uses the same format as the default extraction for consistency.
-    """
-    start_time = datetime.now()
-    logger.info(f"Starting Google DOC AI extraction for upload_id: {upload_id}")
-    
-    try:
-        # Get upload information
-        upload_info = await crud.get_upload_by_id(db, upload_id)
-        if not upload_info:
-            raise HTTPException(status_code=404, detail="Upload not found")
-        
-        # Get PDF file from GCS
-        gcs_key = upload_info.file_name
-        logger.info(f"Using GCS key: {gcs_key}")
-        
-        # Download PDF from GCS to temporary file
-        temp_pdf_path = download_file_from_gcs(gcs_key)
-        if not temp_pdf_path:
-            raise HTTPException(
-                status_code=404, 
-                detail=f"Failed to download PDF from GCS: {gcs_key}"
-            )
-        
-        logger.info(f"Processing PDF: {temp_pdf_path} (downloaded from GCS)")
-        
-        # Use Google DOC AI extractor
-        from app.services.extractor_google_docai import GoogleDocAIExtractor
-        extractor = GoogleDocAIExtractor()
-        
-        if not extractor.is_available():
-            raise HTTPException(
-                status_code=503, 
-                detail="Google Document AI not available or not properly configured"
-            )
-        
-        # Extract tables using Google DOC AI
-        logger.info("Starting Google DOC AI table extraction...")
-        extraction_result = await extractor.extract_tables_async(temp_pdf_path)
-        
-        if not extraction_result.get("success"):
-            raise HTTPException(
-                status_code=500,
-                detail=f"Google DOC AI extraction failed: {extraction_result.get('error', 'Unknown error')}"
-            )
-        
-        logger.info("Google DOC AI table extraction completed successfully")
-        
-        # Step 3: Transform to client format
-        extracted_tables = extraction_result.get("tables", [])
-        
-        # Transform tables to the format expected by TableEditor
-        frontend_tables = []
-        total_rows = 0
-        total_cells = 0
-        all_headers = []
-        all_table_data = []
-        
-        for i, table in enumerate(extracted_tables):
-            rows = table.get("rows", [])
-            headers = table.get("header", [])
-            
-            # Calculate metrics
-            total_rows += len(rows)
-            total_cells += sum(len(row) for row in rows) if rows else 0
-            
-            # Collect headers (use the most comprehensive set)
-            if len(headers) > len(all_headers):
-                all_headers = headers
-            
-            # Convert rows to table_data format for backward compatibility
-            for row in rows:
-                row_dict = {}
-                for j, header in enumerate(headers):
-                    header_key = header.lower().replace(" ", "_").replace("-", "_")
-                    value = str(row[j]) if j < len(row) else ""
-                    row_dict[header_key] = value
-                all_table_data.append(row_dict)
-            
-            table_data = {
-                "name": table.get("name", f"Google DOC AI Table {i + 1}"),
-                "header": headers,
-                "rows": rows,
-                "extractor": "google_docai",
-                # CRITICAL FIX: Include summaryRows for frontend display
-                "summaryRows": table.get("summaryRows", []),
-                "summary_detection": table.get("summary_detection", {}),
-                "metadata": {
-                    "extraction_method": "google_docai",
-                    "timestamp": datetime.now().isoformat(),
-                    "processing_notes": "Google Document AI table extraction",
-                    "confidence": table.get("confidence", 0.8)
-                }
-            }
-            frontend_tables.append(table_data)
-        
-        # Calculate processing time
-        processing_time = (datetime.now() - start_time).total_seconds()
-        
-        # Add format learning (same as PDF flow)
-        format_learning_data = None
-        if frontend_tables and len(frontend_tables) > 0:
-            try:
-                from app.services.format_learning_service import FormatLearningService
-                format_learning_service = FormatLearningService()
-                
-                # Get first table for format learning
-                first_table = frontend_tables[0]
-                headers = first_table.get("header", [])
-                
-                # Generate table structure for format learning
-                table_structure = {
-                    "row_count": len(first_table.get("rows", [])),
-                    "column_count": len(headers),
-                    "has_financial_data": any(keyword in ' '.join(headers).lower() for keyword in [
-                        'premium', 'commission', 'billed', 'group', 'client', 'invoice',
-                        'total', 'amount', 'due', 'paid', 'rate', 'percentage', 'period'
-                    ])
-                }
-                
-                # Find matching format
-                learned_format, match_score = await format_learning_service.find_matching_format(
-                    db=db,
-                    company_id=company_id,
-                    headers=headers,
-                    table_structure=table_structure
-                )
-                
-                if learned_format and match_score > 0.5:
-                    logger.info(f"🎯 Google DocAI: Found matching format with score {match_score}")
-                    format_learning_data = {
-                        "found_match": True,
-                        "match_score": match_score,
-                        "learned_format": learned_format,
-                        "suggested_mapping": learned_format.get("field_mapping", {}),
-                        "table_editor_settings": learned_format.get("table_editor_settings")
-                    }
-                    
-                    # CRITICAL FIX: Auto-apply learned settings
-                    table_editor_settings = learned_format.get('table_editor_settings', {})
-                    
-                    # Auto-apply table deletions from learned format
-                    if table_editor_settings.get('deleted_tables') or table_editor_settings.get('table_deletions'):
-                        deleted_tables = table_editor_settings.get('deleted_tables') or table_editor_settings.get('table_deletions', [])
-                        if deleted_tables:
-                            logger.info(f"🎯 DocAI Format Learning: Auto-applying table deletions: {deleted_tables}")
-                            format_learning_data['auto_delete_tables'] = deleted_tables
-                    
-                    # Auto-apply row deletions from learned format
-                    if table_editor_settings.get('deleted_rows') or table_editor_settings.get('row_deletions'):
-                        deleted_rows = table_editor_settings.get('deleted_rows') or table_editor_settings.get('row_deletions', [])
-                        if deleted_rows:
-                            logger.info(f"🎯 DocAI Format Learning: Auto-applying row deletions: {len(deleted_rows)} rows")
-                            format_learning_data['auto_delete_rows'] = deleted_rows
-                else:
-                    format_learning_data = {
-                        "found_match": False,
-                        "match_score": match_score or 0,
-                        "learned_format": None,
-                        "suggested_mapping": {},
-                        "table_editor_settings": None
-                    }
-                    
-            except Exception as e:
-                logger.warning(f"Google DocAI: Format learning failed: {str(e)}")
-                format_learning_data = {
-                    "found_match": False,
-                    "match_score": 0,
-                    "learned_format": None,
-                    "suggested_mapping": {},
-                    "table_editor_settings": None
-                }
-        
-        # Prepare response in the exact same format as extraction API
-        response_data = {
-            "status": "success",
-            "success": True,
-            "message": f"Successfully extracted tables with Google Document AI",
-            "job_id": str(uuid.uuid4()),
-            "upload_id": upload_id,
-            "extraction_id": upload_id,
-            "tables": frontend_tables,
-            "table_headers": all_headers,
-            "table_data": all_table_data,
-            "processing_time_seconds": processing_time,
-            "extraction_time_seconds": processing_time,
-            "extraction_metrics": {
-                "total_text_elements": total_cells,
-                "extraction_time": processing_time,
-                "table_confidence": 0.8,
-                "model_used": "google_docai"
-            },
-            "document_info": {
-                "pdf_type": "commission_statement",
-                "total_tables": len(frontend_tables)
-            },
-            "quality_summary": {
-                "total_tables": len(frontend_tables),
-                "valid_tables": len(frontend_tables),
-                "average_quality_score": 80.0,
-                "overall_confidence": "HIGH",
-                "issues_found": [],
-                "recommendations": ["Google Document AI extraction completed successfully"]
-            },
-            "quality_metrics": {
-                "table_confidence": 0.8,
-                "text_elements_extracted": total_cells,
-                "table_rows_extracted": total_rows,
-                "extraction_completeness": "complete",
-                "data_quality": "good"
-            },
-            "extraction_log": [
-                {
-                    "extractor": "google_docai",
-                    "pdf_type": "commission_statement",
-                    "timestamp": datetime.now().isoformat(),
-                    "processing_method": "Google Document AI table extraction",
-                    "format_accuracy": "≥80%"
-                }
-            ],
-            "pipeline_metadata": {
-                "extraction_methods_used": ["google_docai"],
-                "pdf_type": "commission_statement",
-                "extraction_errors": [],
-                "processing_notes": "Google Document AI table extraction",
-                "format_accuracy": "≥80%"
-            },
-            "gcs_key": upload_info.file_name,
-            "gcs_url": generate_gcs_signed_url(upload_info.file_name) or f"https://text-extraction-pdf.s3.us-east-1.amazonaws.com/{upload_info.file_name}",
-            "file_name": upload_info.file_name,  # Use full GCS path for PDF preview
-            "timestamp": datetime.now().isoformat(),
-            "format_learning": format_learning_data
-        }
-        
-        logger.info(f"Google DOC AI extraction completed successfully in {processing_time:.2f} seconds")
-        
-        return JSONResponse(response_data)
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error in Google DOC AI extraction: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Google DOC AI extraction failed: {str(e)}"
-        )
-
-
-def transform_new_extraction_response_to_client_format(
-    extraction_result: Dict[str, Any], 
-    filename: str, 
-    company_id: str
-) -> Dict[str, Any]:
-    """
-    Transform the new extraction result to the client-expected format
-    Compatible with TableEditor component and existing frontend structure
-    """
-    import uuid
-    from datetime import datetime
-    
-    tables = extraction_result.get("tables", [])
-    
-    if not tables:
-        return {
-            "success": True,
-            "upload_id": str(uuid.uuid4()),
-            "file_name": filename,
-            "tables": [],
-            "quality_summary": {
-                "total_tables": 0,
-                "valid_tables": 0,
-                "average_quality_score": 0.0,
-                "overall_confidence": "LOW",
-                "issues_found": ["No tables found"],
-                "recommendations": ["Check PDF quality and extraction parameters"]
-            },
-            "extraction_method": "new_advanced_pipeline"
-        }
-    
-    # Transform tables to the frontend-expected format
-    frontend_tables = []
-    total_rows = 0
-    total_cells = 0
-    all_valid = True
-    
-    for i, table in enumerate(tables):
-
-        
-        headers = table.get("headers", [])
-        rows = table.get("rows", [])
-        
-        # Handle case where headers might be in a different field
-        if not headers and "data" in table:
-            # Try to extract headers from data structure
-            data = table.get("data", {})
-            if isinstance(data, dict) and "headers" in data:
-                headers = data["headers"]
-            elif isinstance(data, list) and len(data) > 0:
-                # Assume first row is headers
-                headers = data[0] if isinstance(data[0], list) else []
-                rows = data[1:] if len(data) > 1 else []
-        
-        # Ensure headers and rows are properly formatted
-        if not headers and rows:
-            # Generate headers if missing
-            max_cols = max(len(row) for row in rows) if rows else 1
-            headers = [f"Column_{j+1}" for j in range(max_cols)]
-        
-        # Ensure all rows have the same number of columns as headers
-        normalized_rows = []
-        for row in rows:
-            if not isinstance(row, list):
-                continue  # Skip non-list rows
-            normalized_row = []
-            for j in range(len(headers)):
-                if j < len(row):
-                    normalized_row.append(str(row[j]))
-                else:
-                    normalized_row.append("")
-            normalized_rows.append(normalized_row)
-        
-        # Create frontend table format
-        frontend_table = {
-            "header": headers,
-            "rows": normalized_rows,
-            "name": table.get("name", f"Table_{i+1}"),
-            "id": table.get("id", str(i)),
-            "extractor": "new_advanced_pipeline",
-            # CRITICAL FIX: Include summaryRows for frontend display
-            "summaryRows": table.get("summaryRows", []),
-            "summary_detection": table.get("summary_detection", {}),
-            "metadata": {
-                "extraction_method": "new_advanced_pipeline",
-                "confidence": table.get("confidence", 0.0),
-                "page_number": table.get("page_number", 1),
-                "bbox": table.get("bbox", [0, 0, 0, 0]),
-                "table_type": table.get("table_type", "unknown"),
-                "row_count": len(normalized_rows),
-                "column_count": len(headers)
-            }
-        }
-        
-        frontend_tables.append(frontend_table)
-        total_rows += len(normalized_rows)
-        total_cells += sum(len(row) for row in normalized_rows)
-        
-        # Check if table is valid
-        validation = table.get("validation", {})
-        if not validation.get("is_valid", True):
-            all_valid = False
-    
-    # **ENHANCED LOGGING: Track transformation results**
-    print(f"✅ Transformation completed: {len(tables)} backend tables → {len(frontend_tables)} frontend tables")
-    print(f"📊 Total rows: {total_rows}, Total cells: {total_cells}")
-    
-    # Calculate quality metrics
-    confidence = 1.0 if all_valid else 0.5
-    quality_score = 100.0 if all_valid else 50.0
-    
-    return {
-        "success": True,
-        "upload_id": str(uuid.uuid4()),
-        "file_name": filename,
-        "tables": frontend_tables,
-        "quality_summary": {
-            "total_tables": len(frontend_tables),
-            "valid_tables": len(frontend_tables) if all_valid else 0,
-            "average_quality_score": quality_score,
-            "overall_confidence": "HIGH" if all_valid else "MEDIUM",
-            "issues_found": [] if all_valid else ["Some tables may have extraction issues"],
-            "recommendations": ["Extraction completed successfully"] if all_valid else ["Review extracted data for accuracy"]
-        },
-        "extraction_metrics": {
-            "total_text_elements": total_cells,
-            "extraction_time": extraction_result.get("processing_time", 0.0),
-            "table_confidence": confidence,
-            "model_used": "new_advanced_pipeline"
-        },
-        "extraction_method": "new_advanced_pipeline",
-        "processing_time": extraction_result.get("processing_time", 0),
-        "confidence_scores": extraction_result.get("confidence_scores", {"overall": confidence}),
-        "warnings": extraction_result.get("warnings", []),
-        "errors": extraction_result.get("errors", [])
-    }
-
-@router.post("/extract-intelligent/")
-async def extract_with_intelligence(
-    file: UploadFile = File(...),
-    company_id: str = Form(...)
-):
-    """
-    INTELLIGENT extraction endpoint with enhanced response structure
-    
-    This endpoint implements the revolutionary two-phase extraction architecture:
-    1. Document Intelligence Analysis - Uses LLM reasoning to identify carriers, dates, and entities
-    2. Table Structure Intelligence - Extracts tables with business context understanding
-    3. Cross-validation and Quality Assessment - Validates extraction using business logic
-    4. Intelligent Response Formatting - Separates document metadata from table data
-    """
-    start_time = datetime.now()
-    logger.info(f"Starting intelligent extraction for file: {file.filename}")
-    
-    try:
-        # Validate file
-        if not file.filename:
-            raise HTTPException(status_code=400, detail="No file uploaded")
-        
-        # Determine file type
-        file_ext = file.filename.lower().split('.')[-1]
-        if file_ext != 'pdf':
-            raise HTTPException(
-                status_code=400, 
-                detail="Intelligent extraction currently supports PDF files only"
-            )
-        
-        # Save uploaded file temporarily
-        temp_file_path = os.path.join(UPLOAD_DIR, f"temp_{uuid4()}_{file.filename}")
-        file_content = await file.read()
-        
-        with open(temp_file_path, "wb") as buffer:
-            buffer.write(file_content)
-        
-        # Use intelligent extraction service
-        from app.services.mistral.service import MistralDocumentAIService
-        extraction_service = MistralDocumentAIService()
-        
-        if not extraction_service.is_available():
-            raise HTTPException(
-                status_code=503, 
-                detail="Intelligent extraction service not available. Please check MISTRAL_API_KEY configuration."
-            )
-        
-        # Test connection first
-        connection_test = extraction_service.test_connection()
-        if not connection_test.get("success"):
-            logger.warning(f"Intelligent service connection test failed: {connection_test.get('error')}")
-        
-        # Perform intelligent extraction
-        logger.info("Starting intelligent extraction with two-phase architecture...")
-        result = await extraction_service.extract_commission_data_intelligently(temp_file_path)
-        
-        # Clean up temporary file
-        try:
-            os.remove(temp_file_path)
-            logger.info(f"Cleaned up temporary file: {temp_file_path}")
-        except Exception as cleanup_error:
-            logger.warning(f"Failed to clean up temporary file: {cleanup_error}")
-        
-        # Validate intelligence quality
-        if result.get('extraction_intelligence', {}).get('overall_confidence', 0) < 0.7:
-            # Flag for human review
-            result['requires_human_review'] = True
-            result['review_reasons'] = extraction_service.service.get_low_confidence_reasons(result)
-        
-        # Add processing metadata
-        processing_time = (datetime.now() - start_time).total_seconds()
-        result['processing_metadata'] = {
-            "file_name": file.filename,
-            "company_id": company_id,
-            "processing_time": processing_time,
-            "intelligent_extraction_version": "2.0.0",
-            "timestamp": datetime.now().isoformat()
-        }
-        
-        logger.info(f"Intelligent extraction completed successfully in {processing_time:.2f} seconds")
-        return result
-        
-    except HTTPException:
-        # Clean up file on error
-        if 'temp_file_path' in locals() and os.path.exists(temp_file_path):
-            os.remove(temp_file_path)
-        raise
-    except Exception as e:
-        logger.error(f"Intelligent extraction error: {str(e)}")
-        # Clean up file on error
-        if 'temp_file_path' in locals() and os.path.exists(temp_file_path):
-            os.remove(temp_file_path)
-        raise HTTPException(status_code=500, detail=f"Intelligent extraction failed: {str(e)}")
-
-
-@router.post("/extract-tables-mistral-frontend/")
-async def extract_tables_mistral_frontend(
-    upload_id: str = Form(...),
-    company_id: str = Form(...),
-    db: AsyncSession = Depends(get_db)
-):
-    """
-    Extract tables using INTELLIGENT Mistral Document AI with frontend-compatible response format.
-    This endpoint now uses the intelligent two-phase extraction architecture.
-    """
-    start_time = datetime.now()
-    logger.info(f"Starting INTELLIGENT Mistral Document AI frontend extraction for upload_id: {upload_id}")
-    
-    try:
-        # Get upload information
-        upload_info = await crud.get_upload_by_id(db, upload_id)
-        if not upload_info:
-            raise HTTPException(status_code=404, detail="Upload not found")
-        
-        # Get PDF file from GCS
-        gcs_key = upload_info.file_name
-        logger.info(f"Using GCS key: {gcs_key}")
-        
-        # Download PDF from GCS to temporary file
-        temp_pdf_path = download_file_from_gcs(gcs_key)
-        if not temp_pdf_path:
-            raise HTTPException(
-                status_code=404, 
-                detail=f"Failed to download PDF from GCS: {gcs_key}"
-            )
-        
-        logger.info(f"Processing PDF: {temp_pdf_path} (downloaded from GCS)")
-        
-        # Use the INTELLIGENT Mistral Document AI service for extraction
-        from app.services.mistral.service import MistralDocumentAIService
-        mistral_service = MistralDocumentAIService()
-        
-        if not mistral_service.is_available():
-            raise HTTPException(
-                status_code=503, 
-                detail="Intelligent Mistral Document AI service not available. Please check MISTRAL_API_KEY configuration."
-            )
-        
-        # Test connection first
-        connection_test = mistral_service.test_connection()
-        if not connection_test.get("success"):
-            logger.warning(f"Intelligent Mistral connection test failed: {connection_test.get('error')}")
-        
-        # Use INTELLIGENT extraction instead of legacy method
-        logger.info("Starting INTELLIGENT Mistral Document AI extraction with two-phase architecture...")
-        extraction_result = await mistral_service.extract_commission_data_intelligently(temp_pdf_path)
-        
-        # Calculate processing time
-        processing_time = (datetime.now() - start_time).total_seconds()
-        
-        # Clean up temporary file
-        try:
-            os.remove(temp_pdf_path)
-            logger.info(f"Cleaned up temporary file: {temp_pdf_path}")
-        except Exception as cleanup_error:
-            logger.warning(f"Failed to clean up temporary file: {cleanup_error}")
-        
-        # Check if extraction was successful
-        if not extraction_result.get("success"):
-            logger.error(f"Intelligent Mistral Document AI extraction failed: {extraction_result.get('error')}")
-            raise HTTPException(
-                status_code=500,
-                detail=f"Intelligent Mistral Document AI extraction failed: {extraction_result.get('error')}"
-            )
-        
-        # Get extracted tables from intelligent response
-        extracted_tables = extraction_result.get("tables", [])
-        document_metadata = extraction_result.get("document_metadata", {})
-        extraction_quality = extraction_result.get("extraction_quality", {})
-        extraction_intelligence = extraction_result.get("extraction_intelligence", {})
-        
-        if not extracted_tables:
-            logger.warning("No tables extracted from intelligent Mistral analysis")
-            return JSONResponse(
-                status_code=422,  # Unprocessable Entity
-                content={
-                    "success": False,
-                    "error": "No tables found in document",
-                    "message": "Intelligent Mistral could not identify any tables in the document. This may be due to document format or content issues. Please try with a different document or contact support.",
-                    "upload_id": upload_id,
-                    "timestamp": datetime.now().isoformat()
-                }
-            )
-        
-        # Log successful extraction
-        tables_count = len(extracted_tables)
-        overall_confidence = extraction_intelligence.get("overall_confidence", 0.0)
-        logger.info(f"INTELLIGENT Mistral Document AI extraction completed successfully. Found {tables_count} tables with {overall_confidence:.2f} confidence in {processing_time:.2f} seconds")
-        
-        # Transform tables to frontend format (TableData structure)
-        frontend_tables = []
-        
-        for i, table in enumerate(extracted_tables):
-            headers = table.get("headers", [])
-            rows = table.get("rows", [])
-            
-            # Clean headers - remove empty strings and trim
-            cleaned_headers = [h.strip() for h in headers if h.strip()]
-            
-            # Clean rows - ensure all rows are arrays of strings
-            cleaned_rows = []
-            for row in rows:
-                if isinstance(row, list):
-                    # Clean each cell in the row
-                    cleaned_row = [str(cell).strip() if cell else "" for cell in row]
-                    cleaned_rows.append(cleaned_row)
-                else:
-                    # If row is not a list, skip it
-                    logger.warning(f"Skipping invalid row format: {row}")
-                    continue
-            
-            # Create frontend table structure matching TableData type
-            frontend_table = {
-                "id": f"table_{i + 1}",
-                "name": f"Table_{i + 1}",
-                "header": cleaned_headers,
-                "rows": cleaned_rows,
-                "extractor": "intelligent_mistral_document_ai",
-                "table_type": table.get("table_type", "commission_table"),
-                "company_name": table.get("company_name"),
-                # CRITICAL FIX: Include summaryRows for frontend display
-                "summaryRows": table.get("summaryRows", []),
-                "summary_detection": table.get("summary_detection", {}),
-                "metadata": {
-                    "extraction_method": "intelligent_mistral_document_ai",
-                    "timestamp": datetime.now().isoformat(),
-                    "confidence": overall_confidence,
-                    "intelligent_metadata": {
-                        "document_understanding": extraction_intelligence.get("document_understanding", 0.0),
-                        "table_understanding": extraction_intelligence.get("table_understanding", 0.0),
-                        "overall_confidence": overall_confidence,
-                        "requires_human_review": extraction_quality.get("requires_human_review", False)
-                    }
-                }
-            }
-            logger.info(f"✓ Table {i+1}: Added summaryRows field with {len(table.get('summaryRows', []))} summary rows")
-            frontend_tables.append(frontend_table)
-        
-        # Prepare INTELLIGENT response in the exact format expected by TableEditor
-        response_data = {
-            "success": True,
-            "tables": frontend_tables,
-            "filename": upload_info.file_name.split('/')[-1] if '/' in upload_info.file_name else upload_info.file_name,
-            "company_id": company_id,
-            "extraction_method": "intelligent_mistral_document_ai",
-            "processing_time": processing_time,
-            "intelligent_metadata": {
-                "document_metadata": document_metadata,
-                "extraction_quality": extraction_quality,
-                "extraction_intelligence": extraction_intelligence
-            },
-            "message": f"Successfully extracted {len(frontend_tables)} tables using INTELLIGENT Mistral Document AI with {overall_confidence:.2f} confidence"
-        }
-        
-        logger.info(f"INTELLIGENT Mistral Document AI frontend extraction completed successfully in {processing_time:.2f} seconds")
-        return response_data
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"INTELLIGENT Mistral Document AI frontend extraction failed: {str(e)}")
-        
-        # Clean up temporary file if it exists
-        try:
-            if 'temp_pdf_path' in locals() and os.path.exists(temp_pdf_path):
-                os.remove(temp_pdf_path)
-        except:
-            pass
-        
-        raise HTTPException(
-            status_code=500,
-            detail=f"INTELLIGENT Mistral Document AI frontend extraction failed: {str(e)}"
-        )
-
-
-@router.post("/extract-summarize-data-via-claude/")
-async def extract_summarize_data_via_claude(
-    file: UploadFile = File(...),
-    current_user: User = Depends(get_current_user_hybrid)
-):
-    """
-    Extract and summarize data using Claude AI service.
-    - Uses Claude's vision capabilities for document analysis
-    - Returns structured markdown summary of document content
-    - Simple endpoint without database storage or GCS upload
-    """
-    start_time = datetime.now()
-    
-    # Validate file
-    if not file.filename:
-        raise HTTPException(status_code=400, detail="No file uploaded")
-    
-    # Determine file type
-    file_ext = file.filename.lower().split('.')[-1]
-    allowed_extensions = ['pdf', 'png', 'jpg', 'jpeg', 'tiff', 'bmp']
-    if file_ext not in allowed_extensions:
-        raise HTTPException(
-            status_code=400, 
-            detail=f"Unsupported file type. Allowed: {', '.join(allowed_extensions)}"
-        )
-    
-    # Create temporary file path
-    import tempfile
-    temp_dir = tempfile.gettempdir()
-    file_path = os.path.join(temp_dir, f"temp_{uuid4()}_{file.filename}")
-    
-    try:
-        # Save uploaded file to temporary location
-        file_content = await file.read()
-        with open(file_path, "wb") as buffer:
-            buffer.write(file_content)
-        
-        logger.info(f"📁 Saved file to temporary location: {file_path}")
-        
-        # Initialize Claude service
-        claude_service = ClaudeDocumentAIService()
-        
-        # Perform summarization
-        logger.info("🤖 Starting Claude summarization...")
-        summarization_result = await claude_service.extract_summarize_data_via_claude(file_path)
-        
-        # Check if summarization was successful
-        if not summarization_result.get('success', False):
-            raise HTTPException(
-                status_code=500, 
-                detail=f"Claude summarization failed: {summarization_result.get('error', 'Unknown error')}"
-            )
-        
-        # Calculate processing time
-        processing_time = (datetime.now() - start_time).total_seconds()
-        
-        # Prepare simple response
-        response = {
-            "success": True,
-            "summary": summarization_result.get('result', ''),
-            "file_name": file.filename,
-            "file_type": file_ext,
-            "processing_time": processing_time,
-            "claude_processing_time": summarization_result.get('processing_time', 0),
-            "file_info": summarization_result.get('file_info', {}),
-            "message": f"Successfully summarized document using Claude AI in {processing_time:.2f}s"
-        }
-        
-        logger.info(f"✅ Summarization completed in {processing_time:.2f}s")
-        return response
-        
-    except HTTPException:
-        # Re-raise HTTP exceptions
-        raise
-    except Exception as e:
-        logger.error(f"Claude summarization error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Claude summarization failed: {str(e)}")
-    finally:
-        # Clean up temporary file
-        if os.path.exists(file_path):
-            try:
-                os.remove(file_path)
-                logger.info(f"🗑️  Cleaned up temporary file: {file_path}")
-            except Exception as cleanup_error:
-                logger.warning(f"Failed to clean up temporary file: {cleanup_error}")
-

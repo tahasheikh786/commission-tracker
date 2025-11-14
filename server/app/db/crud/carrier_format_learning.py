@@ -6,13 +6,45 @@ from datetime import datetime
 from uuid import UUID
 from typing import List, Optional
 from difflib import SequenceMatcher
+from app.constants.statuses import VALID_PERSISTENT_STATUSES, is_valid_persistent_status
 import re
+import logging
+
+logger = logging.getLogger(__name__)
 
 
-async def save_carrier_format_learning(db: AsyncSession, format_learning: CarrierFormatLearningCreate):
+async def save_carrier_format_learning(db: AsyncSession, format_learning: CarrierFormatLearningCreate, statement_status: Optional[str] = None):
     """
     Save or update carrier format learning data.
+    
+    CRITICAL: Format learning should only be saved when the associated statement has a valid status.
+    This prevents format learning from being created for failed/abandoned uploads.
+    
+    Args:
+        db: Database session
+        format_learning: Format learning data to save
+        statement_status: Status of the associated statement (optional but recommended)
+        
+    Returns:
+        Saved CarrierFormatLearning if successful, None if status validation fails
     """
+    # CRITICAL STATUS GATE: Only save format learning if statement has valid status
+    if statement_status and not is_valid_persistent_status(statement_status):
+        logger.warning(
+            f"❌ REJECTED: Attempted to save format learning for company {format_learning.company_id} "
+            f"with invalid statement status '{statement_status}'. "
+            f"Only {VALID_PERSISTENT_STATUSES} are allowed. Format learning will not be persisted."
+        )
+        return None
+    
+    if statement_status:
+        logger.info(f"✅ Saving format learning for company {format_learning.company_id} with valid statement status: {statement_status}")
+    else:
+        logger.warning(
+            f"⚠️ Saving format learning for company {format_learning.company_id} without status validation. "
+            f"This should only happen in special cases (e.g., manual format creation)."
+        )
+    
     now = datetime.utcnow()
     
     # Check if format already exists for this company

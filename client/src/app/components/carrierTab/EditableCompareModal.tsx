@@ -631,6 +631,16 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
       console.log(`📤 Sending ${finalData.length} tables to approve endpoint with summaryRows:`, 
         finalData.map(t => ({ name: t.name, rowCount: t.rows.length, summaryRowCount: t.summaryRows?.length || 0 })));
 
+      // CRITICAL FIX: Include upload_metadata for backend to create DB record
+      const upload_metadata = {
+        company_id: statement.carrier_id,
+        carrier_id: statement.carrier_id,
+        file_name: statement.file_name,
+        file_hash: null,  // Not available in existing statements
+        file_size: null,  // Not available in existing statements
+        uploaded_at: statement.uploaded_at,
+        raw_data: finalData
+      };
 
       await axios.post(
         `${process.env.NEXT_PUBLIC_API_URL}/api/review/approve`,
@@ -639,7 +649,8 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
           final_data: finalData,
           field_config: fieldConfig,
           plan_types: [],
-          selected_statement_date: statement.selected_statement_date
+          selected_statement_date: statement.selected_statement_date,
+          upload_metadata: upload_metadata  // NEW: Include metadata for DB record creation
         },
         { withCredentials: true }
       );

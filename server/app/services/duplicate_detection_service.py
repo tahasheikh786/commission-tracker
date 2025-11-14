@@ -110,8 +110,9 @@ class DuplicateDetectionService:
                     StatementUpload.file_hash == file_hash,
                     StatementUpload.file_hash.isnot(None),  # Exclude NULL hashes
                     StatementUpload.user_id == user_id,
-                    # Only include valid uploads in duplicate check (exclude cancelled/failed)
-                    StatementUpload.status.in_(['pending', 'approved', 'rejected', 'processing'])
+                    # ✅ ORPHAN FIX: Only check successfully extracted files
+                    # Exclude 'processing', 'failed', 'cancelled' to allow re-upload after errors
+                    StatementUpload.status.in_(['pending', 'approved', 'rejected', 'needsreview'])
                 )
             )
             .order_by(StatementUpload.uploaded_at.desc())
@@ -134,8 +135,9 @@ class DuplicateDetectionService:
                     StatementUpload.file_hash == file_hash,
                     StatementUpload.file_hash.isnot(None),  # Exclude NULL hashes
                     StatementUpload.user_id != user_id,
-                    # Only include valid uploads in duplicate check (exclude cancelled/failed)
-                    StatementUpload.status.in_(['pending', 'approved', 'rejected', 'processing'])
+                    # ✅ ORPHAN FIX: Only check successfully extracted files
+                    # Exclude 'processing', 'failed', 'cancelled' to allow re-upload after errors
+                    StatementUpload.status.in_(['pending', 'approved', 'rejected', 'needsreview'])
                 )
             )
             .order_by(StatementUpload.uploaded_at.desc())

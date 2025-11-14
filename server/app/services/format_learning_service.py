@@ -388,10 +388,31 @@ class FormatLearningService:
         statement_date: Optional[str] = None,
         extracted_total_amount: Optional[float] = None,  # NEW
         total_amount_field_name: Optional[str] = None,   # NEW
+        statement_status: Optional[str] = None,  # CRITICAL: Add status validation
     ) -> bool:
         """
         Learn from a processed file and save the format information.
+        
+        CRITICAL: Format learning should only be saved when the associated statement has a valid status.
+        This prevents format learning from being created for failed/abandoned uploads.
+        
+        Args:
+            statement_status: Status of the associated statement (should be Approved or needs_review)
         """
+        from app.constants.statuses import is_valid_persistent_status, VALID_PERSISTENT_STATUSES
+        import logging
+        
+        logger = logging.getLogger(__name__)
+        
+        # CRITICAL STATUS GATE: Validate status before saving format learning
+        if statement_status and not is_valid_persistent_status(statement_status):
+            logger.warning(
+                f"❌ REJECTED: Cannot save format learning for company {company_id} "
+                f"with invalid statement status '{statement_status}'. "
+                f"Only {VALID_PERSISTENT_STATUSES} are allowed."
+            )
+            return False
+        
         try:
             print(f"🎯 FormatLearningService: Learning from processed file for company {company_id}")
             print(f"🎯 FormatLearningService: Headers: {headers}")
@@ -526,11 +547,20 @@ class FormatLearningService:
                 usage_count=1
             )
             
-            # Save to database
-            await with_db_retry(db, crud.save_carrier_format_learning, format_learning=format_learning)
+            # Save to database with status validation
+            result = await with_db_retry(
+                db, 
+                crud.save_carrier_format_learning, 
+                format_learning=format_learning,
+                statement_status=statement_status  # Pass status for validation
+            )
             
-            print(f"🎯 FormatLearningService: Successfully learned format for company {company_id}")
-            return True
+            if result:
+                print(f"🎯 FormatLearningService: Successfully learned format for company {company_id}")
+                return True
+            else:
+                logger.warning(f"⚠️ Format learning was rejected due to invalid statement status")
+                return False
             
         except Exception as e:
             print(f"Error learning from processed file: {e}")

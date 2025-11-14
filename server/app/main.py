@@ -304,6 +304,13 @@ async def startup_event():
     background_tasks.add(task)
     task.add_done_callback(background_tasks.discard)
     
+    # ✅ ORPHAN FIX: Start orphan cleanup background task
+    from app.services.orphan_cleanup_service import start_orphan_cleanup_scheduler
+    orphan_cleanup_task = asyncio.create_task(start_orphan_cleanup_scheduler())
+    background_tasks.add(orphan_cleanup_task)
+    orphan_cleanup_task.add_done_callback(background_tasks.discard)
+    logger.info("✅ Orphan cleanup scheduler started (runs every 3 minutes)")
+    
     # Start process monitoring for long-running document extractions
     from app.services.process_monitor import process_monitor
     await process_monitor.start_monitoring()

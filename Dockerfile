@@ -23,6 +23,9 @@ ENV PYTHONUNBUFFERED=1 \
     MISTRAL_API_KEY="" \
     # Anthropic/Claude AI configuration (PRIMARY - Superior accuracy)
     ANTHROPIC_API_KEY="" \
+    CLAUDE_MODEL_PRIMARY="claude-sonnet-4-5-20250929" \
+    CLAUDE_MODEL_FALLBACK="claude-opus-4-1-20250805" \
+    CLAUDE_TIMEOUT_SECONDS="300" \
     # Database configuration
     RENDER_DB_KEY="" \
     SUPABASE_DB_KEY="" \

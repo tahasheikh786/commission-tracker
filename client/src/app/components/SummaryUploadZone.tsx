@@ -128,7 +128,7 @@ export default function SummaryUploadZone({
         setAutomationProgress(prev => Math.min(prev + 20, 90));
       }, 500);
       
-      // Call auto-approval API
+      // CRITICAL: Pass ALL extraction data since DB record doesn't exist yet
       const response = await axios.post(
         `${process.env.NEXT_PUBLIC_API_URL}/api/auto-approve/process`,
         {
@@ -136,7 +136,12 @@ export default function SummaryUploadZone({
           carrier_id: params.carrierId,
           learned_format: params.learnedFormat,
           extracted_total: params.extractedTotal,
-          statement_date: params.statementDate
+          statement_date: params.statementDate,
+          // CRITICAL: Include all data from extraction
+          upload_metadata: params.fullResults?.upload_metadata || {},
+          raw_data: params.fullResults?.tables || [],
+          document_metadata: params.fullResults?.document_metadata || {},
+          format_learning: params.fullResults?.format_learning || {}
         },
         { withCredentials: true }
       );
@@ -316,6 +321,22 @@ export default function SummaryUploadZone({
 
   // handleFileUpload is passed directly to PremiumUploadZone component
 
+  // ✅ ORPHAN FIX: Prevent accidental page refresh during upload
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isUploading) {
+        e.preventDefault();
+        e.returnValue = 'Extraction in progress. Are you sure you want to leave?';
+        return e.returnValue;
+      }
+    };
+    
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [isUploading]);
 
   // Commission-specific error handling
   const getCommissionSpecificErrorMessage = (error: string, fileName: string) => {

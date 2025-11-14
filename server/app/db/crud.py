@@ -16,11 +16,12 @@ __all__ = [
     
     # Statement upload operations
     'save_statement_upload', 'create_statement_upload', 'update_statement_upload',
-    'get_pending_files_for_company', 'get_statement_upload_by_id', 'save_progress_data',
+    'get_pending_files_for_company', 'get_pending_files_for_company_by_user', 'get_statement_upload_by_id', 'save_progress_data',
     'get_progress_data', 'resume_upload_session', 'delete_pending_upload',
     'save_statement_review', 'get_all_statement_reviews', 'get_statements_for_company',
-    'get_statement_by_id', 'delete_statement', 'save_edited_tables', 'get_edited_tables',
+    'get_statements_for_carrier', 'get_statement_by_id', 'delete_statement', 'save_edited_tables', 'get_edited_tables',
     'update_upload_tables', 'delete_edited_tables', 'get_upload_by_id', 'get_progress_summary',
+    'get_statement_by_file_hash_and_status',  # ✅ ORPHAN FIX: Export new duplicate check function
     
     # Extraction operations
     'create_extraction',

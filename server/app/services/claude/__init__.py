@@ -1,8 +1,8 @@
 """
 Claude Document AI Service - Superior PDF Table Extraction
 
-This service provides intelligent document extraction capabilities using Claude 3.5 Sonnet
-or Claude 4 for commission statement processing with excellent accuracy.
+This service provides intelligent document extraction capabilities using Claude Sonnet 4.5
+for commission statement processing with excellent accuracy.
 
 Enhanced Features:
 - Enhanced prompts for Google Gemini-quality summaries

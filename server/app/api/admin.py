@@ -72,6 +72,114 @@ async def delete_user_related_data(db: AsyncSession, user_id: UUID, operation_na
     
     return len(upload_ids)
 
+@router.post("/admin/cleanup-orphaned-statements")
+async def cleanup_orphaned_statements(
+    current_user: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    CRITICAL CLEANUP ENDPOINT: Remove all orphaned statement records.
+    
+    Deletes statements with statuses other than 'Approved' or 'needs_review'.
+    These are incomplete uploads that were never finalized (pending, processing, extracted, etc.).
+    
+    Only admin users can access this endpoint.
+    
+    Returns:
+        - deleted_count: Number of orphaned statements deleted
+        - deleted_ids: List of deleted statement IDs
+        - summary: Breakdown by status
+    """
+    try:
+        print("🧹 Starting cleanup of orphaned statement records...")
+        
+        # CRITICAL: Only keep Approved and needs_review statements
+        VALID_STATUSES = ['Approved', 'needs_review']
+        
+        # Find all orphaned statements (those with invalid statuses)
+        orphaned_query = select(StatementUpload).where(
+            ~StatementUpload.status.in_(VALID_STATUSES)
+        )
+        orphaned_result = await db.execute(orphaned_query)
+        orphaned_statements = orphaned_result.scalars().all()
+        
+        if not orphaned_statements:
+            print("✅ No orphaned statements found - database is clean!")
+            return {
+                "success": True,
+                "deleted_count": 0,
+                "deleted_ids": [],
+                "summary": {},
+                "message": "No orphaned statements found"
+            }
+        
+        # Group by status for summary
+        status_summary = {}
+        deleted_ids = []
+        
+        for stmt in orphaned_statements:
+            status = stmt.status or "null"
+            status_summary[status] = status_summary.get(status, 0) + 1
+            deleted_ids.append(str(stmt.id))
+        
+        print(f"🗑️  Found {len(orphaned_statements)} orphaned statements:")
+        for status, count in status_summary.items():
+            print(f"   - {status}: {count} statements")
+        
+        # Delete related data first (to avoid foreign key constraints)
+        if deleted_ids:
+            # 1. Delete edited tables
+            await db.execute(
+                text("DELETE FROM edited_tables WHERE upload_id = ANY(:upload_ids)"),
+                {"upload_ids": deleted_ids}
+            )
+            
+            # 2. Remove from earned commission records
+            from app.db.crud.earned_commission import remove_upload_from_earned_commissions
+            for upload_id in deleted_ids:
+                try:
+                    await remove_upload_from_earned_commissions(db, upload_id)
+                except Exception as e:
+                    print(f"⚠️  Warning: Failed to remove upload {upload_id} from earned commissions: {e}")
+            
+            # 3. Delete user data contributions
+            await db.execute(
+                text("DELETE FROM user_data_contributions WHERE upload_id = ANY(:upload_ids)"),
+                {"upload_ids": deleted_ids}
+            )
+            
+            # 4. Delete file duplicates
+            await db.execute(
+                text("DELETE FROM file_duplicates WHERE original_upload_id = ANY(:upload_ids) OR duplicate_upload_id = ANY(:upload_ids)"),
+                {"upload_ids": deleted_ids}
+            )
+            
+            # 5. Delete the orphaned statements themselves
+            await db.execute(
+                delete(StatementUpload).where(
+                    ~StatementUpload.status.in_(VALID_STATUSES)
+                )
+            )
+            
+            await db.commit()
+            print(f"✅ Successfully deleted {len(orphaned_statements)} orphaned statements")
+        
+        return {
+            "success": True,
+            "deleted_count": len(orphaned_statements),
+            "deleted_ids": deleted_ids,
+            "summary": status_summary,
+            "message": f"Successfully cleaned up {len(orphaned_statements)} orphaned statements"
+        }
+        
+    except Exception as e:
+        await db.rollback()
+        print(f"❌ Cleanup failed: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to cleanup orphaned statements: {str(e)}"
+        )
+
 @router.get("/admin/dashboard")
 async def get_admin_dashboard(
     current_user: User = Depends(get_admin_user),

@@ -760,6 +760,19 @@ export default function UnifiedTableEditor({
 
       // planTypes already defined above in Step 3
 
+      // CRITICAL FIX: Include upload_metadata for backend to create DB record
+      const upload_metadata = {
+        company_id: extractedData?.company_id || updatedCarrierId,
+        carrier_id: extractedData?.carrier_id || updatedCarrierId,
+        user_id: uploadData?.user_id,
+        environment_id: uploadData?.environment_id,
+        file_name: extractedData?.file_name || uploadData?.file_name,
+        file_hash: uploadData?.file_hash,
+        file_size: uploadData?.file_size,
+        uploaded_at: uploadData?.uploaded_at || new Date().toISOString(),
+        raw_data: finalData
+      };
+
       await axios.post(
         `${process.env.NEXT_PUBLIC_API_URL}/api/review/approve/`,
         {
@@ -767,7 +780,8 @@ export default function UnifiedTableEditor({
           final_data: finalData,
           field_config: fieldConfig,
           plan_types: planTypes,
-          selected_statement_date: statementDateObj
+          selected_statement_date: statementDateObj,
+          upload_metadata: upload_metadata  // NEW: Include metadata for DB record creation
         },
         { withCredentials: true }
       );

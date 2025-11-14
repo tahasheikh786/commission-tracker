@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from app.services.gcs_utils import generate_gcs_signed_url, gcs_service
 from app.dependencies.auth_dependencies import get_current_user_hybrid
 from app.db.models import User
+from app.constants.statuses import VALID_PERSISTENT_STATUSES
 import logging
 
 router = APIRouter(prefix="/api")
@@ -24,30 +25,43 @@ async def get_statements_for_company(
     current_user: User = Depends(get_current_user_hybrid),
     db: AsyncSession = Depends(get_db)
 ):
-    """Returns all uploads/statements for a given carrier - ALL DATA (admin or all users' data)"""
+    """
+    Returns all uploads/statements for a given carrier - ALL DATA (admin or all users' data).
+    
+    CRITICAL: Only returns statements with valid persistent statuses (Approved, needs_review).
+    This prevents orphaned/ghost records from appearing in the UI.
+    """
     # IMPORTANT: This endpoint fetches ALL statements for a carrier (all users)
     # For user-specific data, use /api/companies/user-specific/{company_id}/statements
     # NOTE: Support both old (company_id) and new (carrier_id) format for backwards compatibility
     from app.db.models import StatementUpload
     
+    logger.info(f"📋 Fetching statements for carrier {company_id} with status filter: {VALID_PERSISTENT_STATUSES}")
+    
     # Admin can see all statements, regular users should use the user-specific endpoint
     # But for backward compatibility, we'll return all statements here
     # Join with User table to get uploader information
+    # CRITICAL: Only return statements with valid persistent statuses
     result = await db.execute(
         select(StatementUpload, User)
         .join(User, StatementUpload.user_id == User.id)
         .where(
-            or_(
-                StatementUpload.carrier_id == company_id,
-                and_(
-                    StatementUpload.company_id == company_id,
-                    StatementUpload.carrier_id.is_(None)
-                )
+            and_(
+                or_(
+                    StatementUpload.carrier_id == company_id,
+                    and_(
+                        StatementUpload.company_id == company_id,
+                        StatementUpload.carrier_id.is_(None)
+                    )
+                ),
+                StatementUpload.status.in_(VALID_PERSISTENT_STATUSES)  # CRITICAL STATUS FILTER
             )
         )
         .order_by(StatementUpload.uploaded_at.desc())
     )
     statements_with_users = result.all()
+    
+    logger.info(f"✅ Found {len(statements_with_users)} statements with valid statuses")
     
     # Convert ORM objects to dict format with gcs_key and user info included
     formatted_statements = []
@@ -89,20 +103,29 @@ async def get_statements_for_company(
 
 # CRUD function kept for backward compatibility - now unused
 async def get_statements_for_company(db, company_id):
+    """
+    DEPRECATED: This function is kept for backward compatibility only.
+    
+    CRITICAL: Only returns statements with valid persistent statuses.
+    """
     from app.db.models import StatementUpload
     # NOTE: This function is deprecated - user info is now included in the endpoint directly
     # NOTE: Support both old and new format
     # Old format: carrier stored in company_id, carrier_id is NULL
     # New format: carrier stored in carrier_id
+    # CRITICAL: Only return statements with valid persistent statuses
     result = await db.execute(
         select(StatementUpload)
         .where(
-            or_(
-                StatementUpload.carrier_id == company_id,
-                and_(
-                    StatementUpload.company_id == company_id,
-                    StatementUpload.carrier_id.is_(None)
-                )
+            and_(
+                or_(
+                    StatementUpload.carrier_id == company_id,
+                    and_(
+                        StatementUpload.company_id == company_id,
+                        StatementUpload.carrier_id.is_(None)
+                    )
+                ),
+                StatementUpload.status.in_(VALID_PERSISTENT_STATUSES)  # CRITICAL STATUS FILTER
             )
         )
         .order_by(StatementUpload.uploaded_at.desc())

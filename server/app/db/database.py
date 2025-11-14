@@ -33,21 +33,21 @@ else:
 
 engine = create_async_engine(
     DATABASE_URL,
+    pool_size=20,              # ✅ Increased from 10 to 20 for concurrent processing
+    max_overflow=10,           # Allow burst capacity
+    pool_timeout=60,           # Wait up to 60s for connection
+    pool_recycle=3600,         # ✅ Recycle connections every hour (was 1800 = 30 min)
+    pool_pre_ping=True,        # Verify connections before use
     connect_args={
         "statement_cache_size": 0,
-        # Database timeout settings for long-running operations
         "server_settings": {
-            "statement_timeout": "600000",  # 10 minutes in milliseconds
-            "idle_in_transaction_session_timeout": "600000",  # 10 minutes
-        }
+            "application_name": "commission_tracker_extraction",
+            "statement_timeout": "1800000"  # ✅ 30 min statement timeout (was 10 min)
+        },
+        "timeout": 60,          # Connection timeout
+        "command_timeout": 60   # Command timeout
     },
-    # SQLAlchemy pool settings for long-running operations
-    pool_pre_ping=True,
-    pool_recycle=1800,  # Recycle connections every 30 minutes (more frequent)
-    pool_timeout=60,    # Wait up to 60 seconds for a connection
-    max_overflow=20,    # Allow up to 20 extra connections
-    pool_size=10,       # Maintain 10 connections in the pool
-    echo=False,         # Set to True for debugging SQL queries
+    echo=False,  # Set to True for debugging SQL queries
 )
 AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 

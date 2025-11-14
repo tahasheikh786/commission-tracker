@@ -137,22 +137,15 @@ async def extract_tables_excel(
         # Convert to client format
         response_data = excel_service.convert_to_client_format(extraction_result, file.filename)
         
-        # Create statement upload record for database (same as PDF flow)
+        # Generate upload_id for tracking (but don't persist to DB yet)
+        # CRITICAL CHANGE: Do NOT save extraction records to database
+        # Only Approved/needs_review statuses should be persisted
+        # The extracted data will be returned to frontend and saved only after approval
         upload_id = uuid.uuid4()
-        db_upload = schemas.StatementUpload(
-            id=upload_id,
-            company_id=company_id,
-            carrier_id=company_id,  # Set carrier_id for proper carrier association
-            file_name=gcs_key,
-            uploaded_at=datetime.utcnow(),
-            status="extracted",
-            current_step="extracted",
-            raw_data=response_data.get("tables", []),
-            mapping_used=None
-        )
         
-        # Save statement upload with retry
-        await with_db_retry(db, crud.save_statement_upload, upload=db_upload)
+        # NOTE: Removed save_statement_upload() call here
+        # Database record will be created ONLY when user approves (via review.py)
+        # or when auto-approval runs (via auto_approval.py)
         
         # Add format learning (same as PDF flow)
         format_learning_data = None
@@ -387,20 +380,13 @@ async def extract_tables_excel_bytes(
             response_data = excel_service.convert_to_client_format(extraction_result, file.filename)
             
             # Create statement upload record for database (same as PDF flow)
+            # Generate upload_id for tracking (but don't persist to DB yet)
+            # CRITICAL CHANGE: Do NOT save extraction records to database
+            # Only Approved/needs_review statuses should be persisted
             upload_id = uuid.uuid4()
-            db_upload = schemas.StatementUpload(
-                id=upload_id,
-                company_id=company_id,
-                file_name=file.filename,
-                uploaded_at=datetime.utcnow(),
-                status="extracted",
-                current_step="extracted",
-                raw_data=response_data.get("tables", []),
-                mapping_used=None
-            )
             
-            # Save statement upload with retry
-            await with_db_retry(db, crud.save_statement_upload, upload=db_upload)
+            # NOTE: Removed save_statement_upload() call here
+            # Database record will be created ONLY when user approves
             
             # Add format learning (same as PDF flow)
             format_learning_data = None
@@ -683,21 +669,13 @@ async def extract_tables_excel_s3(
             # Convert to client format
             response_data = excel_service.convert_to_client_format(extraction_result, file_name)
             
-            # Create statement upload record for database (same as PDF flow)
+            # Generate upload_id for tracking (but don't persist to DB yet)
+            # CRITICAL CHANGE: Do NOT save extraction records to database
+            # Only Approved/needs_review statuses should be persisted
             upload_id = uuid.uuid4()
-            db_upload = schemas.StatementUpload(
-                id=upload_id,
-                company_id=company_id,
-                file_name=gcs_key,
-                uploaded_at=datetime.utcnow(),
-                status="extracted",
-                current_step="extracted",
-                raw_data=response_data.get("tables", []),
-                mapping_used=None
-            )
             
-            # Save statement upload with retry
-            await with_db_retry(db, crud.save_statement_upload, upload=db_upload)
+            # NOTE: Removed save_statement_upload() call here
+            # Database record will be created ONLY when user approves
             
             # Add format learning (same as PDF flow)
             format_learning_data = None

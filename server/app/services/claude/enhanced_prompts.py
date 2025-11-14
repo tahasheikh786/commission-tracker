@@ -10,6 +10,10 @@ This module implements research-backed prompt engineering techniques:
 Based on the Cursor AI Implementation Guide for matching Google Gemini quality.
 """
 
+from .carrier_extraction_rules import CarrierExtractionRules
+from .total_amount_extraction_rules import TotalAmountExtractionRules
+from .summary_row_filtering_rules import SummaryRowFilteringRules
+
 
 class EnhancedClaudePrompts:
     """Enhanced prompts for intelligent document understanding"""
@@ -42,8 +46,17 @@ Critical operating rules:
         
         Comprehensive prompt for extracting entities, relationships, and
         business intelligence from commission statements.
+        
+        Uses unified carrier extraction, total amount extraction, and summary row filtering rules
+        to ensure consistency across all extraction pipelines.
         """
-        return """<task>
+        # Get unified rules
+        carrier_rules = CarrierExtractionRules.get_critical_requirements()
+        total_amount_rules = TotalAmountExtractionRules.get_extraction_strategy()
+        filtering_rules = SummaryRowFilteringRules.get_prompt_instructions()
+        
+        # Use string concatenation instead of f-string to avoid nesting issues
+        prompt = """<task>
 Perform comprehensive intelligent extraction from this commission statement PDF using your vision-language understanding.
 </task>
 
@@ -57,18 +70,10 @@ Examine the document visually to understand:
 • Visual relationships between elements
 
 **STEP 2: Entity Extraction with Visual Context**
+
+""" + carrier_rules + """
+
 <entities_to_extract>
-<carrier>
-• Name: The insurance company EXACTLY as written in the document (look in headers, logos, footers)
-  **CRITICAL**: Extract the carrier name EXACTLY character-for-character as it appears. DO NOT:
-  - Add abbreviations (e.g., don't add "(ABSF)" if not in document)
-  - Remove text
-  - Standardize or normalize
-  - Add clarifying notes
-  Example: If document shows "Allied Benefit Systems", extract "Allied Benefit Systems" NOT "Allied Benefit Systems (ABSF)"
-• Confidence: Your certainty level (0.0-1.0)
-• Evidence: Where you found it (e.g., "Header logo and letterhead")
-</carrier>
 
 <broker_agent>
 • Company Name: The receiving broker/agent organization
@@ -93,58 +98,16 @@ For each unique agent mentioned:
 • Report Date: If different from statement date
 • Date Range: If period-based (start and end dates)
 • Total Pages: Document length
-• Total Amount: **🔴 CRITICAL PRIORITY #1** - Extract the TOTAL commission/compensation amount
 
-  **EXTRACTION STRATEGY - Multi-Level Search:**
-  
-  1. **PRIMARY SEARCH - Document Summary Section (Check FIRST):**
-     - Look for summary rows at the BOTTOM of tables or END of document
-     - Common labels (case-insensitive):
-       * "Total for Vendor" ← **COMMON IN ALLIED BENEFIT**
-       * "Total for Group"
-       * "Total Compensation"
-       * "Total Amount"
-       * "Total Commission"
-       * "Grand Total"
-       * "Net Payment"
-       * "EFT Amount"
-       * "Amount Due"
-       * "Total Paid Amount"
-       * "Net Compensation"
-     - These are usually in BOLD or highlighted sections
-     - May appear in a separate summary box or final row
-  
-  2. **SECONDARY SEARCH - Table Footer Rows:**
-     - If no summary section found, look for totals in last few rows of main table
-     - Check for rows with "Total" or "Subtotal" keywords
-     - Validate it's a sum row (not a data row)
-  
-  3. **TERTIARY SEARCH - Calculate from Data:**
-     - If no explicit total found, SUM all "Paid Amount" or "Commission" column values
-     - Only use data rows (exclude headers and subtotals)
-     - Return calculated total with confidence = 0.7
-  
-  **EXTRACTION FORMAT:**
-  - Extract as NUMERIC VALUE: 1027.20 (NO dollar sign, NO commas)
-  - Store label separately: "Total for Vendor"
-  - Include confidence: 0.95 (explicit) or 0.7 (calculated)
-  
-  **VALIDATION:**
-  - Total should be > $0 (if document has data)
-  - If multiple "total" rows found, use the HIGHEST level summary (e.g., "Total for Vendor" > "Total for Group")
-  - Cross-check: Does it match sum of individual line items?
-  
-  **EXAMPLES:**
-  - Document shows "Total for Vendor: $1,027.20" → Extract: 1027.20
-  - Document shows "Net Payment   $3,604.95" → Extract: 3604.95
-  - No explicit total found, 4 rows sum to $1,027.20 → Extract: 1027.20 (confidence: 0.7)
+""" + total_amount_rules + """
 
-• Total Amount Label: The exact label text used (e.g., "Total for Vendor", "Total Compensation")
-• Total Amount Confidence: 0.95 if explicit, 0.7 if calculated, 0.5 if uncertain
 </document_metadata>
 
 <groups_and_companies>
-For each group/company found:
+
+""" + filtering_rules + """
+
+For each ACTUAL group/company found (NOT summary rows):
 • Group Number: Identifier
 • Group Name: Full company/group name
 • Billing Period: Date range
@@ -395,6 +358,8 @@ Action: Extract both current and adjustment period dates
 </examples>
 
 Analyze the provided PDF images and return the complete JSON extraction following this structure."""
+        
+        return prompt
 
     @staticmethod
     def get_relationship_mapping_prompt(extracted_data: str) -> str:

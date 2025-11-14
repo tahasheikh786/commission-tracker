@@ -49,41 +49,72 @@ async def get_dashboard_stats(
         if environment_id:
             base_conditions.append(StatementUpload.environment_id == environment_id)
         
+        # CRITICAL FIX: Only count statements with valid statuses (Approved or needs_review)
+        VALID_STATUSES = ['Approved', 'needs_review']
+        
         # Legacy variables for backward compatibility
         user_condition = and_(*base_conditions) if base_conditions else True
         environment_condition = True  # Already handled in base_conditions
         
-        # Get total statements count
+        # Get total statements count - ONLY finalized statements
         total_statements_result = await db.execute(
             select(func.count(StatementUpload.id))
-            .where(user_condition)
+            .where(and_(
+                user_condition,
+                StatementUpload.status.in_(VALID_STATUSES)  # Only count finalized statements
+            ))
         )
         total_statements = total_statements_result.scalar() or 0
 
-        # Get total carriers count
+        # Get total carriers count - ONLY from finalized statements
         # NOTE: Use COALESCE to support both old (company_id) and new (carrier_id) data
+        # CRITICAL FIX: Exclude user companies (companies that have users) from carrier count
+        # CRITICAL FIX: Only count carriers from finalized statements
+        # Get distinct carrier IDs first
         if view_mode == "all_data":
             # All Data: Count all unique carriers from users in the same company
-            total_carriers_result = await db.execute(
-                select(func.count(func.distinct(
+            carrier_ids_result = await db.execute(
+                select(func.distinct(
                     func.coalesce(StatementUpload.carrier_id, StatementUpload.company_id)
-                )))
-                .where(user_condition)
+                ))
+                .where(and_(
+                    user_condition,
+                    StatementUpload.status.in_(VALID_STATUSES)  # Only count from finalized statements
+                ))
             )
         else:
             # My Data: Count only carriers the user has worked with
-            total_carriers_result = await db.execute(
-                select(func.count(func.distinct(
+            carrier_ids_result = await db.execute(
+                select(func.distinct(
                     func.coalesce(StatementUpload.carrier_id, StatementUpload.company_id)
-                )))
-                .where(user_condition)
+                ))
+                .where(and_(
+                    user_condition,
+                    StatementUpload.status.in_(VALID_STATUSES)  # Only count from finalized statements
+                ))
             )
-        total_carriers = total_carriers_result.scalar() or 0
+        
+        # Filter out user companies (companies that have users)
+        all_carrier_ids = [row[0] for row in carrier_ids_result.all() if row[0] is not None]
+        
+        if all_carrier_ids:
+            # Count only companies that have NO users (i.e., are actual carriers)
+            carrier_check_result = await db.execute(
+                select(Company.id)
+                .outerjoin(User, Company.id == User.company_id)
+                .where(Company.id.in_(all_carrier_ids))
+                .where(User.id.is_(None))  # Only companies with no users (carriers)
+            )
+            actual_carriers = carrier_check_result.scalars().all()
+            total_carriers = len(actual_carriers)
+        else:
+            total_carriers = 0
 
-        # Get pending reviews count (extracted and success are considered pending for review)
+        # CRITICAL FIX: Get pending reviews count - only needs_review status
+        # Removed 'extracted', 'success' as those are intermediate states that shouldn't be shown
         pending_query = select(func.count(StatementUpload.id)).where(
             and_(
-                StatementUpload.status.in_(['extracted', 'success']),
+                StatementUpload.status == 'needs_review',  # Only needs_review status
                 user_condition,
                 environment_condition
             )
@@ -91,10 +122,10 @@ async def get_dashboard_stats(
         pending_reviews_result = await db.execute(pending_query)
         pending_reviews = pending_reviews_result.scalar() or 0
 
-        # Get approved statements count (completed and Approved are considered approved)
+        # Get approved statements count - only Approved status
         approved_query = select(func.count(StatementUpload.id)).where(
             and_(
-                StatementUpload.status.in_(['completed', 'Approved']),
+                StatementUpload.status == 'Approved',  # Only Approved status
                 user_condition,
                 environment_condition
             )
@@ -102,16 +133,9 @@ async def get_dashboard_stats(
         approved_statements_result = await db.execute(approved_query)
         approved_statements = approved_statements_result.scalar() or 0
 
-        # Get rejected statements count
-        rejected_query = select(func.count(StatementUpload.id)).where(
-            and_(
-                StatementUpload.status == 'rejected',
-                user_condition,
-                environment_condition
-            )
-        )
-        rejected_statements_result = await db.execute(rejected_query)
-        rejected_statements = rejected_statements_result.scalar() or 0
+        # CRITICAL FIX: Rejected statements are no longer stored in DB
+        # Set to 0 as we only keep Approved and needs_review
+        rejected_statements = 0
 
         return {
             "total_statements": total_statements,
@@ -131,14 +155,25 @@ async def get_all_statements(
     current_user: User = Depends(get_current_user_hybrid),
     db: AsyncSession = Depends(get_db)
 ):
-    """Get all statements with company information - automatically filters by user data for regular users"""
+    """Get all statements with company information - automatically filters by user data for regular users
+    
+    CRITICAL: Only returns statements with status 'Approved' or 'needs_review'.
+    Pending/processing statements are NOT shown to users.
+    """
     try:
         # For admin users, show all statements. For regular users, show only their statements
         is_admin = current_user.role == 'admin'
         
+        # CRITICAL FIX: Only show completed statements (Approved or needs_review)
+        # Don't show pending, processing, or any other intermediate statuses
+        VALID_STATUSES = ['Approved', 'needs_review']
+        
         # Build query with user filter
         query = select(StatementUpload, Company.name.label('company_name'))
         query = query.join(Company, StatementUpload.company_id == Company.id)
+        
+        # CRITICAL: Filter by valid statuses only
+        query = query.where(StatementUpload.status.in_(VALID_STATUSES))
         
         # Apply user filter - admin sees all, regular users see only their data
         if not is_admin:
@@ -183,19 +218,31 @@ async def get_statements_by_status(
     current_user: User = Depends(get_current_user_hybrid),
     db: AsyncSession = Depends(get_db)
 ):
-    """Get statements filtered by status (pending, approved, rejected) - automatically filters by user data"""
+    """Get statements filtered by status - automatically filters by user data
+    
+    CRITICAL: Only returns finalized statements ('Approved' or 'needs_review').
+    Status mapping:
+    - 'approved' -> 'Approved' status in DB
+    - 'pending' -> 'needs_review' status in DB (awaiting manual review)
+    - 'rejected' -> NOT SUPPORTED (we don't store rejected statements)
+    
+    Pending/processing uploads are NOT shown in ANY view.
+    """
     try:
-        if status not in ['pending', 'approved', 'rejected']:
-            raise HTTPException(status_code=400, detail="Invalid status. Must be pending, approved, or rejected")
+        # CRITICAL FIX: Only allow approved and pending (needs_review) statuses
+        # Removed 'rejected' as we don't store rejected statements
+        if status not in ['approved', 'pending']:
+            raise HTTPException(status_code=400, detail="Invalid status. Must be 'approved' or 'pending'")
         
         # For admin users, show all statements. For regular users, show only their statements
         is_admin = current_user.role == 'admin'
         
-        # Map frontend status to database statuses
+        # CRITICAL FIX: Map frontend status to ONLY finalized database statuses
+        # 'pending' means needs_review (awaiting manual approval)
+        # 'approved' means Approved (auto or manually approved)
         status_mapping = {
-            'pending': ['extracted', 'success'],
-            'approved': ['completed', 'Approved'],
-            'rejected': ['rejected']
+            'pending': ['needs_review'],  # Only needs_review, NOT extracted/success/processing
+            'approved': ['Approved'],      # Only Approved status
         }
         
         db_statuses = status_mapping.get(status, [])
@@ -254,16 +301,22 @@ async def get_carriers_with_statement_counts(
     """
     try:
         # Base query setup
+        # CRITICAL FIX: Only count statements with valid statuses (Approved or needs_review)
+        VALID_STATUSES = ['Approved', 'needs_review']
+        
         query = select(
             Company.id,
             Company.name,
             func.count(StatementUpload.id).label('statement_count')
-        ).outerjoin(StatementUpload, or_(
-            Company.id == StatementUpload.carrier_id,
-            and_(
-                Company.id == StatementUpload.company_id,
-                StatementUpload.carrier_id.is_(None)
-            )
+        ).outerjoin(StatementUpload, and_(
+            or_(
+                Company.id == StatementUpload.carrier_id,
+                and_(
+                    Company.id == StatementUpload.company_id,
+                    StatementUpload.carrier_id.is_(None)
+                )
+            ),
+            StatementUpload.status.in_(VALID_STATUSES)  # Only count finalized statements
         ))
         
         # Apply filter based on view mode
@@ -331,7 +384,11 @@ async def get_statements_by_carrier(
     environment_id: Optional[UUID] = Query(None, description="Filter by environment ID"),
     db: AsyncSession = Depends(get_db)
 ):
-    """Get all statements for a specific carrier"""
+    """Get all statements for a specific carrier
+    
+    CRITICAL: Only returns statements with status 'Approved' or 'needs_review'.
+    Pending/processing statements are NOT shown to users.
+    """
     try:
         # Get carrier name
         carrier_result = await db.execute(
@@ -342,15 +399,21 @@ async def get_statements_by_carrier(
         if not carrier_name:
             raise HTTPException(status_code=404, detail="Carrier not found")
         
+        # CRITICAL FIX: Only show completed statements (Approved or needs_review)
+        VALID_STATUSES = ['Approved', 'needs_review']
+        
         # Get statements for this carrier
         # NOTE: Support both old (company_id) and new (carrier_id) format
         query = select(StatementUpload).where(
-            or_(
-                StatementUpload.carrier_id == carrier_id,
-                and_(
-                    StatementUpload.company_id == carrier_id,
-                    StatementUpload.carrier_id.is_(None)
-                )
+            and_(
+                or_(
+                    StatementUpload.carrier_id == carrier_id,
+                    and_(
+                        StatementUpload.company_id == carrier_id,
+                        StatementUpload.carrier_id.is_(None)
+                    )
+                ),
+                StatementUpload.status.in_(VALID_STATUSES)  # Only finalized statements
             )
         )
         
@@ -391,10 +454,17 @@ async def get_statements_by_carrier_and_status(
     environment_id: Optional[UUID] = Query(None, description="Filter by environment ID"),
     db: AsyncSession = Depends(get_db)
 ):
-    """Get statements for a specific carrier filtered by status"""
+    """Get statements for a specific carrier filtered by status
+    
+    CRITICAL: Only returns finalized statements ('Approved' or 'needs_review').
+    Status mapping:
+    - 'approved' -> 'Approved' status in DB
+    - 'pending' -> 'needs_review' status in DB (awaiting manual review)
+    """
     try:
-        if status not in ['pending', 'approved', 'rejected']:
-            raise HTTPException(status_code=400, detail="Invalid status. Must be pending, approved, or rejected")
+        # CRITICAL FIX: Only allow approved and pending (needs_review) statuses
+        if status not in ['approved', 'pending']:
+            raise HTTPException(status_code=400, detail="Invalid status. Must be 'approved' or 'pending'")
         
         # Get carrier name
         carrier_result = await db.execute(
@@ -405,11 +475,10 @@ async def get_statements_by_carrier_and_status(
         if not carrier_name:
             raise HTTPException(status_code=404, detail="Carrier not found")
         
-        # Map frontend status to database statuses
+        # CRITICAL FIX: Map frontend status to ONLY finalized database statuses
         status_mapping = {
-            'pending': ['extracted', 'success', 'pending'],
-            'approved': ['completed', 'Approved'],
-            'rejected': ['rejected']
+            'pending': ['needs_review'],  # Only needs_review, NOT extracted/success/processing
+            'approved': ['Approved'],      # Only Approved status
         }
         
         db_statuses = status_mapping.get(status, [])
@@ -417,14 +486,17 @@ async def get_statements_by_carrier_and_status(
         # Get statements for this carrier with status filter
         # NOTE: Support both old (company_id) and new (carrier_id) format
         query = select(StatementUpload).where(
-            or_(
-                StatementUpload.carrier_id == carrier_id,
-                and_(
-                    StatementUpload.company_id == carrier_id,
-                    StatementUpload.carrier_id.is_(None)
-                )
+            and_(
+                or_(
+                    StatementUpload.carrier_id == carrier_id,
+                    and_(
+                        StatementUpload.company_id == carrier_id,
+                        StatementUpload.carrier_id.is_(None)
+                    )
+                ),
+                StatementUpload.status.in_(db_statuses)  # Only finalized statements
             )
-        ).where(StatementUpload.status.in_(db_statuses))
+        )
         
         # Add environment filter if provided
         if environment_id:
@@ -512,6 +584,9 @@ async def get_user_specific_company_statements(
 ):
     """Get statements for a specific carrier that the current user has uploaded"""
     try:
+        # CRITICAL: Only return statements with valid persistent statuses
+        from app.constants.statuses import VALID_PERSISTENT_STATUSES
+        
         # Get statements for this carrier that the user has uploaded
         # NOTE: Support both old (company_id) and new (carrier_id) format
         query = select(StatementUpload).where(
@@ -523,7 +598,8 @@ async def get_user_specific_company_statements(
                         StatementUpload.carrier_id.is_(None)
                     )
                 ),
-                StatementUpload.user_id == current_user.id
+                StatementUpload.user_id == current_user.id,
+                StatementUpload.status.in_(VALID_PERSISTENT_STATUSES)  # CRITICAL STATUS FILTER
             )
         )
         

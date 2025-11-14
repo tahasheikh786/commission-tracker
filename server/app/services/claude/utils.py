@@ -39,10 +39,10 @@ class ClaudeTokenBucket:
     """
     Token bucket algorithm for Claude API rate limiting.
     
-    OPTIMIZED LIMITS (Based on Claude Sonnet 4 Tier 2):
-    - Requests: 50 RPM (correct)
-    - Tokens: 40,000 TPM (increased from 30,000) ✅ CRITICAL FIX
-    - Use 85% buffer to prevent edge cases
+    OPTIMIZED LIMITS (Based on Claude Sonnet 4.5 Tier 2):
+    - Requests: 50 RPM → 45 RPM (with 90% buffer)
+    - Tokens: 40,000 TPM → 36,000 TPM (with 90% buffer) ✅ UPDATED
+    - Use 90% buffer (safe with concurrency control)
     
     This prevents rate limit errors before they occur by managing token consumption proactively.
     """
@@ -50,19 +50,19 @@ class ClaudeTokenBucket:
     def __init__(
         self,
         requests_per_minute: int = 50,
-        tokens_per_minute: int = 40000,  # ✅ FIX: Increased from 30000 to actual limit
-        buffer_percentage: float = 0.85  # Use only 85% to be safe
+        tokens_per_minute: int = 40000,  # Claude Sonnet 4.5 Tier 2 = 40,000 TPM
+        buffer_percentage: float = 0.90  # ✅ INCREASED to 90% (was 80%) - we have concurrency control now
     ):
         """
-        Initialize token bucket rate limiter.
+        Initialize token bucket rate limiter with INTELLIGENT WAITING.
         
         Args:
             requests_per_minute: Maximum requests per minute (50 for Tier 2)
-            tokens_per_minute: Maximum tokens per minute (40,000 for Tier 2) ✅ UPDATED
-            buffer_percentage: Use only this percentage of limits (default 85%)
+            tokens_per_minute: Maximum tokens per minute (40,000 for Claude Tier 2)
+            buffer_percentage: Use 90% of limits (safe with concurrency control)
         """
-        self.rpm_limit = int(requests_per_minute * buffer_percentage)  # 42 RPM
-        self.tpm_limit = int(tokens_per_minute * buffer_percentage)    # 34,000 TPM ✅ UPDATED
+        self.rpm_limit = int(requests_per_minute * buffer_percentage)  # 45 RPM
+        self.tpm_limit = int(tokens_per_minute * buffer_percentage)    # 36,000 TPM
         
         # Current usage tracking
         self.request_count = 0
@@ -70,13 +70,17 @@ class ClaudeTokenBucket:
         
         # Timestamp tracking
         self.window_start = time.time()
-        self.lock = threading.Lock()
+        self.lock = asyncio.Lock()  # ✅ Changed to asyncio.Lock for async compatibility
         
         self.logger = logging.getLogger(__name__)
         self.logger.info(f"🔧 Token Bucket initialized:")
         self.logger.info(f"   RPM Limit: {self.rpm_limit} (from {requests_per_minute})")
-        self.logger.info(f"   TPM Limit: {self.tpm_limit:,} (from {tokens_per_minute:,})")  # ✅ UPDATED
+        self.logger.info(f"   TPM Limit: {self.tpm_limit:,} (from {tokens_per_minute:,})")
         self.logger.info(f"   Buffer: {buffer_percentage * 100:.0f}%")
+        # Calculate max pages per chunk
+        available_tokens_for_pages = self.tpm_limit - 3000  # Reserve 3K for prompt
+        max_pages_per_chunk = int(available_tokens_for_pages / 2750)  # DIVIDE to get pages
+        self.logger.info(f"   Max chunk: {max_pages_per_chunk} pages = {max_pages_per_chunk * 2750:,} tokens + 3K prompt")
     
     def estimate_tokens(self, text: str, images: int = 0, pdf_pages: int = 0) -> int:
         """
@@ -98,69 +102,67 @@ class ClaudeTokenBucket:
         
         return total
     
-    def wait_if_needed(self, estimated_tokens: int) -> float:
+    async def wait_if_needed(self, estimated_tokens: int) -> float:
         """
-        Check rate limits and wait if necessary.
+        Intelligent waiting - only wait for what's needed (not full reset).
         
-        ✅ OPTIMIZATION: More aggressive token bucket reset
+        OPTIMIZATION: Partial reset strategy with intelligent minimum waiting
         
         Returns:
             Wait time in seconds (0.0 if no wait needed)
         """
-        with self.lock:
-            now = time.time()
-            elapsed = now - self.window_start
+        async with self.lock:
+            current_time = time.time()
+            elapsed = current_time - self.window_start
             
-            # ✅ FIX: Reset bucket every 60 seconds (not 65)
-            if elapsed >= 60.0:
-                self.logger.info(f"🔄 Token bucket reset (60s elapsed)")
+            # Reset window if 60 seconds passed
+            if elapsed >= 60:
                 self.request_count = 0
                 self.token_count = 0
-                self.window_start = now
+                self.window_start = current_time
+                self.logger.info("✅ Token bucket reset (60s window)")
                 
-                # Record this request and proceed
+                # Reserve tokens immediately
                 self.request_count += 1
                 self.token_count += estimated_tokens
-                self.logger.info(
-                    f"📊 Rate limit status: "
-                    f"{self.request_count}/{self.rpm_limit} RPM, "
-                    f"{self.token_count:,}/{self.tpm_limit:,} TPM"
-                )
                 return 0.0
             
-            # ✅ FIX: More lenient TPM check with better calculation
-            new_token_count = self.token_count + estimated_tokens
+            # Check if we need to wait
+            requests_available = self.request_count < self.rpm_limit
+            tokens_available = (self.token_count + estimated_tokens) <= self.tpm_limit
             
-            if new_token_count > self.tpm_limit:
-                # Calculate wait time based on token overflow
-                overflow_tokens = new_token_count - self.tpm_limit
-                tokens_per_second = self.tpm_limit / 60.0
-                wait_time = (overflow_tokens / tokens_per_second) + 2.0  # +2s safety buffer
-                
-                # ✅ OPTIMIZATION: Cap maximum wait time at 30s (not 60+s)
-                wait_time = min(wait_time, 30.0)
-                
-                self.logger.warning(
-                    f"⚠️  TPM limit would be exceeded: "
-                    f"{self.token_count:,} current + {estimated_tokens:,} new = {new_token_count:,} tokens "
-                    f"(limit: {self.tpm_limit:,}). Waiting {wait_time:.1f}s."
-                )
-                
-                # ✅ FIX: Don't wait, just reset and proceed
-                # For large files, waiting 60+ seconds per chunk is too slow
-                self.logger.info(f"✅ Token bucket forcefully reset. Proceeding with {estimated_tokens:,} tokens.")
-                self.request_count = 1  # Start fresh with this request
-                self.token_count = estimated_tokens
+            if requests_available and tokens_available:
+                # Reserve tokens immediately
+                self.request_count += 1
+                self.token_count += estimated_tokens
+                return 0.0
+            
+            # Calculate MINIMUM wait time (not full reset)
+            time_until_reset = 60 - elapsed
+            
+            # Partial reset strategy: wait only for tokens to decay
+            if not tokens_available:
+                # Calculate how many tokens will decay in next few seconds
+                tokens_needed = (self.token_count + estimated_tokens) - self.tpm_limit
+                # Assume linear decay over 60s window
+                seconds_to_wait = (tokens_needed / self.tpm_limit) * 60
+                seconds_to_wait = min(seconds_to_wait, time_until_reset)
+            else:
+                # Just wait for request window
+                seconds_to_wait = time_until_reset
+            
+            # Wait only the minimum required time
+            self.logger.info(f"⏳ Rate limit: waiting {seconds_to_wait:.1f}s (was waiting full {time_until_reset:.1f}s)")
+            await asyncio.sleep(seconds_to_wait)
+            
+            # After waiting, reset appropriately
+            elapsed_after_wait = time.time() - self.window_start
+            if elapsed_after_wait >= 60:
+                self.request_count = 0
+                self.token_count = 0
                 self.window_start = time.time()
-                
-                self.logger.info(
-                    f"📊 Rate limit status: "
-                    f"{self.request_count}/{self.rpm_limit} RPM, "
-                    f"{self.token_count:,}/{self.tpm_limit:,} TPM"
-                )
-                return 0.0  # ✅ FIX: Don't wait, just reset
             
-            # Update counters
+            # Reserve tokens
             self.request_count += 1
             self.token_count += estimated_tokens
             
@@ -170,14 +172,13 @@ class ClaudeTokenBucket:
                 f"{self.token_count:,}/{self.tpm_limit:,} TPM"
             )
             
-            return 0.0  # No wait needed
+            return seconds_to_wait
     
     def update_actual_usage(self, actual_tokens: int):
         """Update token count with actual usage after API call."""
-        with self.lock:
-            # Adjust the token count if actual usage is known
-            # This helps improve accuracy over time
-            pass  # Current implementation uses estimated tokens which is safer
+        # Adjust the token count if actual usage is known
+        # This helps improve accuracy over time
+        pass  # Current implementation uses estimated tokens which is safer
 
 
 class ClaudePDFProcessor:
@@ -397,40 +398,154 @@ class ClaudeResponseParser:
     
     @staticmethod
     def parse_json_response(response_text: str) -> Optional[Dict[str, Any]]:
-        """Parse JSON response from Claude, handling various formats"""
+        """
+        Parse JSON response from Claude - ROBUST HANDLING of multiple formats.
+        
+        Handles:
+        - Pure JSON: {"key": "value"}
+        - Markdown wrapped: ```json\n{...}\n```
+        - Conversational with JSON: "Here's the data:\n```json\n{...}\n```"
+        - Markdown tables (fallback)
+        
+        Returns empty structure on failure to prevent downstream errors
+        """
+        if not response_text:
+            logger.error("Empty response from Claude")
+            return ClaudeResponseParser._create_empty_structure()
+        
+        # Try 1: Parse as pure JSON
         try:
-            # Clean response text
-            cleaned = response_text.strip()
-            
-            # Remove markdown code blocks if present
-            if cleaned.startswith('```json'):
-                cleaned = cleaned[7:]
-            elif cleaned.startswith('```'):
-                cleaned = cleaned[3:]
-            
-            if cleaned.endswith('```'):
-                cleaned = cleaned[:-3]
-            
-            cleaned = cleaned.strip()
-            
-            # Parse JSON
-            return json.loads(cleaned)
-        except json.JSONDecodeError as e:
-            logger.error(f"JSON decode error: {e}")
-            logger.error(f"Response text: {response_text[:500]}")
-            
-            # Try to extract JSON using regex as fallback
+            return json.loads(response_text.strip())
+        except json.JSONDecodeError:
+            pass
+        
+        # Try 2: Extract JSON from markdown code blocks
+        # Pattern: ```json\n{...}\n```
+        json_pattern = r'```(?:json)?\s*\n?(.*?)\n?```'
+        matches = re.findall(json_pattern, response_text, re.DOTALL)
+        
+        for match in matches:
             try:
-                json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
-                if json_match:
-                    return json.loads(json_match.group(0))
-            except Exception as regex_error:
-                logger.error(f"Regex extraction also failed: {regex_error}")
+                parsed = json.loads(match.strip())
+                return ClaudeResponseParser._validate_and_fix_structure(parsed)
+            except json.JSONDecodeError:
+                continue
+        
+        # Try 3: Find JSON object anywhere in response
+        # Look for {..."tables"...}
+        json_obj_pattern = r'\{(?:[^{}]|(?:\{(?:[^{}]|(?:\{[^{}]*\}))*\}))*\}'
+        matches = re.findall(json_obj_pattern, response_text, re.DOTALL)
+        
+        for match in matches:
+            try:
+                data = json.loads(match)
+                if "tables" in data:  # Validate it's our expected format
+                    return ClaudeResponseParser._validate_and_fix_structure(data)
+            except json.JSONDecodeError:
+                continue
+        
+        # Try 4: Extract tables from markdown format
+        logger.warning("Could not find JSON, attempting to parse markdown tables")
+        markdown_result = ClaudeResponseParser._parse_markdown_tables(response_text)
+        if markdown_result and markdown_result.get("tables"):
+            return markdown_result
+        
+        # All strategies failed - return empty structure
+        logger.error("All parsing strategies failed")
+        logger.error(f"Response text (first 500 chars): {response_text[:500]}")
+        if len(response_text) > 500:
+            logger.error(f"Response text (last 200 chars): ...{response_text[-200:]}")
+        return ClaudeResponseParser._create_empty_structure()
+    
+    @staticmethod
+    def _parse_markdown_tables(response_text: str) -> Dict[str, Any]:
+        """Fallback: Parse markdown tables into JSON format."""
+        tables = []
+        
+        # Pattern for markdown tables: | header | header |\n|---|---|\n| data | data |
+        table_pattern = r'\|(.+?)\|(?:\n\|[-:| ]+\|)?\n((?:\|.+?\|\n?)+)'
+        matches = re.findall(table_pattern, response_text, re.MULTILINE)
+        
+        for header_row, data_rows in matches:
+            headers = [h.strip() for h in header_row.split('|') if h.strip()]
             
-            return None
-        except Exception as e:
-            logger.error(f"Error parsing response: {e}")
-            return None
+            rows = []
+            for row in data_rows.strip().split('\n'):
+                if row.strip():
+                    cells = [c.strip() for c in row.split('|')[1:-1]]  # Skip first/last empty
+                    if cells:
+                        rows.append(cells)
+            
+            if headers and rows:
+                tables.append({
+                    "headers": headers,
+                    "rows": rows,
+                    "incomplete": False
+                })
+        
+        return {"tables": tables, "document_metadata": {}} if tables else ClaudeResponseParser._create_empty_structure()
+    
+    @staticmethod
+    def _validate_and_fix_structure(parsed: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Validate and fix parsed JSON structure to ensure it has required fields.
+        """
+        # Ensure tables field exists and is a list
+        if 'tables' not in parsed:
+            parsed['tables'] = []
+        elif not isinstance(parsed['tables'], list):
+            logger.warning(f"'tables' field is not a list, converting: {type(parsed['tables'])}")
+            parsed['tables'] = []
+        
+        # Ensure document_metadata field exists
+        if 'document_metadata' not in parsed:
+            parsed['document_metadata'] = {}
+        elif not isinstance(parsed['document_metadata'], dict):
+            logger.warning(f"'document_metadata' field is not a dict, resetting")
+            parsed['document_metadata'] = {}
+        
+        # Validate each table has required fields
+        valid_tables = []
+        for idx, table in enumerate(parsed['tables']):
+            if not isinstance(table, dict):
+                logger.warning(f"Table {idx} is not a dict, skipping")
+                continue
+            
+            # Ensure headers and rows exist
+            if 'headers' not in table:
+                table['headers'] = []
+            if 'rows' not in table:
+                table['rows'] = []
+            
+            # Only include tables with actual content
+            if table['headers'] or table['rows']:
+                valid_tables.append(table)
+        
+        parsed['tables'] = valid_tables
+        return parsed
+    
+    @staticmethod
+    def _create_empty_structure() -> Dict[str, Any]:
+        """
+        Create a valid empty extraction structure.
+        This prevents None values from causing downstream errors.
+        """
+        return {
+            'tables': [],
+            'document_metadata': {
+                'carrier_name': None,
+                'carrier_confidence': 0.0,
+                'statement_date': None,
+                'date_confidence': 0.0,
+                'broker_company': None,
+                'broker_confidence': 0.0
+            },
+            'extraction_quality': {
+                'overall_confidence': 0.0,
+                'quality_grade': 'F',
+                'issues_detected': ['Failed to parse Claude response - no valid JSON found']
+            }
+        }
     
     @staticmethod
     def validate_carrier_extraction(extracted_name: str, pdf_text: str = None) -> Dict[str, Any]:

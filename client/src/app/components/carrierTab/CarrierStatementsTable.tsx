@@ -49,25 +49,36 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
   const [currentPage, setCurrentPage] = useState(1);
   const [tableViewerOpen, setTableViewerOpen] = useState(false);
   const [selectedStatementId, setSelectedStatementId] = useState<string>('');
-  const [activeStatusTab, setActiveStatusTab] = useState<'all' | 'approved' | 'pending' | 'rejected'>('all');
+  // CRITICAL FIX: Removed 'rejected' - only Approved and needs_review statements are stored
+  const [activeStatusTab, setActiveStatusTab] = useState<'all' | 'approved' | 'pending'>('all');
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
   const [reviewStatement, setReviewStatement] = useState<Statement | null>(null);
   const itemsPerPage = 10;
   const router = useRouter();
 
-  // Filter statements based on active status tab
-  const filteredStatements = (statements || []).filter(statement => {
+  // CRITICAL STATUS FILTERING (Defense in Depth)
+  // 1. Backend should only return 'Approved' or 'needs_review' statuses
+  // 2. Frontend adds defensive filtering to ensure no ghost records appear
+  // 3. This prevents orphaned/failed extractions from cluttering the UI
+  
+  // Valid statuses that should be displayed (matches backend VALID_PERSISTENT_STATUSES)
+  const VALID_DISPLAY_STATUSES = ['Approved', 'needs_review'];
+  
+  // First filter: Remove any statements with invalid statuses (defensive layer)
+  const validStatements = (statements || []).filter(statement => 
+    VALID_DISPLAY_STATUSES.includes(statement.status)
+  );
+  
+  // Second filter: Apply user-selected status tab filter
+  const filteredStatements = validStatements.filter(statement => {
     if (activeStatusTab === 'all') return true;
     
-    const status = statement.status.toLowerCase();
+    const status = statement.status;  // Don't lowercase - backend returns exact case
     switch (activeStatusTab) {
       case 'approved':
-        return status === 'approved' || status === 'completed';
+        return status === 'Approved';  // Exact match for backend status
       case 'pending':
-        // ✅ FIX: Include 'needs_review' status in pending filter
-        return ['pending', 'extracted', 'success', 'processing', 'needs_review'].includes(status);
-      case 'rejected':
-        return status === 'rejected';
+        return status === 'needs_review';  // Exact match for backend status
       default:
         return true;
     }
@@ -84,7 +95,7 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
     setSelectAll(false);
   };
 
-  const handleStatusTabChange = (tab: 'all' | 'approved' | 'pending' | 'rejected') => {
+  const handleStatusTabChange = (tab: 'all' | 'approved' | 'pending') => {
     setActiveStatusTab(tab);
     setCurrentPage(1); // Reset to first page when changing tabs
     setSelectedStatements(new Set()); // Clear selections when changing tabs
@@ -445,6 +456,56 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
         </div>
       )}
 
+      {/* ✅ ORPHAN FIX: Show incomplete extractions with delete option */}
+      {(() => {
+        const orphanFiles = (statements || []).filter(statement => 
+          ['failed', 'processing'].includes(statement.status.toLowerCase())
+        );
+        
+        if (orphanFiles.length === 0) return null;
+        
+        return (
+          <div className="mb-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-600 rounded-xl">
+            <div className="flex items-center gap-3 mb-3">
+              <AlertTriangle className="text-yellow-600 dark:text-yellow-400" size={20} />
+              <h3 className="text-sm font-semibold text-yellow-800 dark:text-yellow-200">
+                ⚠️ Incomplete Extractions ({orphanFiles.length})
+              </h3>
+            </div>
+            <p className="text-xs text-yellow-700 dark:text-yellow-300 mb-3">
+              These files did not complete extraction. You can delete them to re-upload.
+            </p>
+            <div className="space-y-2">
+              {orphanFiles.map(file => (
+                <div key={file.id} className="flex items-center justify-between bg-white dark:bg-slate-800 p-2 rounded border border-yellow-200 dark:border-yellow-700">
+                  <div className="flex items-center gap-2 flex-1">
+                    <FileText size={16} className="text-yellow-600 dark:text-yellow-400 flex-shrink-0" />
+                    <span className="text-sm text-slate-700 dark:text-slate-300 truncate">{file.file_name}</span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${
+                      file.status.toLowerCase() === 'failed' 
+                        ? 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300' 
+                        : 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300'
+                    }`}>
+                      {file.status}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (window.confirm(`Delete ${file.file_name}? This will allow you to re-upload it.`)) {
+                        onDelete([file.id]);
+                      }
+                    }}
+                    className="text-xs px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600 transition-colors flex-shrink-0 ml-2"
+                  >
+                    Delete
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Status Tabs */}
       <div className="mb-6">
         <div className="flex items-center gap-2 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-1">
@@ -458,7 +519,8 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
           >
             <span>All</span>
             <span className="text-xs bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-300 px-2 py-1 rounded-full">
-              {statements?.length || 0}
+              {/* Use validStatements (filtered for valid statuses) */}
+              {validStatements.length}
             </span>
           </button>
           <button
@@ -472,7 +534,8 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
             <CheckCircle2 size={16} />
             <span>Approved</span>
             <span className="text-xs bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-300 px-2 py-1 rounded-full">
-              {(statements || []).filter(s => s.status.toLowerCase() === 'approved' || s.status.toLowerCase() === 'completed').length}
+              {/* Count only valid Approved statements */}
+              {validStatements.filter(s => s.status === 'Approved').length}
             </span>
           </button>
           <button
@@ -484,23 +547,10 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
             }`}
           >
             <Clock size={16} />
-            <span>Pending</span>
+            <span>Pending Review</span>
             <span className="text-xs bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-300 px-2 py-1 rounded-full">
-              {(statements || []).filter(s => ['pending', 'extracted', 'success', 'processing', 'needs_review'].includes(s.status.toLowerCase())).length}
-            </span>
-          </button>
-          <button
-            onClick={() => handleStatusTabChange('rejected')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
-              activeStatusTab === 'rejected'
-                ? 'bg-red-500 text-white shadow-sm'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
-            }`}
-          >
-            <XCircle size={16} />
-            <span>Rejected</span>
-            <span className="text-xs bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-300 px-2 py-1 rounded-full">
-              {(statements || []).filter(s => s.status.toLowerCase() === 'rejected').length}
+              {/* Count only valid needs_review statements */}
+              {validStatements.filter(s => s.status === 'needs_review').length}
             </span>
           </button>
         </div>

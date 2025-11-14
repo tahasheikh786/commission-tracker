@@ -19,6 +19,11 @@ class AutoApprovalRequest(BaseModel):
     learned_format: Dict[str, Any]
     extracted_total: float
     statement_date: str
+    # CRITICAL: Add all upload metadata since DB record doesn't exist yet
+    upload_metadata: Dict[str, Any]  # Contains all data from extraction
+    raw_data: list  # The extracted tables
+    document_metadata: Dict[str, Any] = {}  # Carrier, date, etc.
+    format_learning: Dict[str, Any] = {}  # Format learning data
 
 @router.post("/process")
 async def auto_approve_statement(
@@ -54,22 +59,16 @@ async def auto_approve_statement(
             f"🤖 Starting automated approval for carrier: {request.learned_format.get('carrier_name', 'Unknown')}"
         )
         
-        # Get upload record
-        upload = await with_db_retry(db, crud.get_upload_by_id, upload_id=request.upload_id)
-        if not upload:
-            raise HTTPException(status_code=404, detail="Upload not found")
-        
-        # Verify upload belongs to current user or user has access
-        if upload.user_id != current_user.id:
-            # Check if user has access to this carrier
-            carrier = await with_db_retry(db, crud.get_company_by_id, company_id=request.carrier_id)
-            if not carrier:
-                raise HTTPException(status_code=403, detail="Access denied")
-        
-        # Get tables from upload
-        tables = upload.raw_data or []
+        # CRITICAL CHANGE: No DB record exists yet!
+        # Get tables from request data instead of DB
+        tables = request.raw_data or []
         if not tables:
-            raise HTTPException(status_code=400, detail="No tables found in upload")
+            raise HTTPException(status_code=400, detail="No tables found in request")
+        
+        # Verify user has access to this carrier
+        carrier = await with_db_retry(db, crud.get_company_by_id, company_id=request.carrier_id)
+        if not carrier:
+            raise HTTPException(status_code=403, detail="Carrier not found")
         
         # Emit progress update
         await connection_manager.send_stage_update(
@@ -238,63 +237,9 @@ async def auto_approve_statement(
         # Call approve_statement with the payload object
         approve_response = await approve_statement(approve_payload, db=db)
         
-        # ✨ NORMALIZE FILENAME: Rename file in GCS to carrier_YYYY-MM.pdf format
-        # This happens for auto-approved statements that bypass the table editor
-        try:
-            from app.utils.filename_utils import get_normalized_filename_for_upload
-            from app.services.gcs_utils import rename_gcs_file, gcs_service
-            
-            # Get carrier name
-            carrier = await with_db_retry(db, crud.get_company_by_id, company_id=request.carrier_id)
-            if carrier and carrier.name and upload.file_name:
-                logger.info(f"📝 Auto-approval: Normalizing filename for upload {request.upload_id}")
-                
-                # ✅ FIX: Use CURRENT path from upload record
-                current_gcs_key = upload.file_name
-                original_filename = current_gcs_key.split('/')[-1]
-                
-                logger.info(f"📝 Auto-approval: Current GCS path: {current_gcs_key}")
-                
-                # ✅ FIX: Verify file exists before rename attempt
-                if not gcs_service.file_exists(current_gcs_key):
-                    logger.error(f"❌ Auto-approval: Source file not found: {current_gcs_key}")
-                    # Try carrier folder path
-                    carrier_folder_path = f"statements/{carrier.id}/{original_filename}"
-                    if gcs_service.file_exists(carrier_folder_path):
-                        logger.info(f"✅ Auto-approval: Found file at carrier folder: {carrier_folder_path}")
-                        current_gcs_key = carrier_folder_path
-                        upload.file_name = current_gcs_key
-                        await db.commit()
-                    else:
-                        logger.warning(f"⚠️ Auto-approval: Cannot find file in GCS, skipping rename")
-                        raise FileNotFoundError("Source file not found in GCS")
-                
-                # Generate normalized filename
-                new_gcs_key = await get_normalized_filename_for_upload(
-                    db=db,
-                    carrier_id=UUID(request.carrier_id),
-                    carrier_name=carrier.name,
-                    statement_date={"date": request.statement_date},
-                    original_filename=original_filename,
-                    upload_id=UUID(request.upload_id),
-                    current_file_path=current_gcs_key  # ✅ PASS CURRENT PATH
-                )
-                
-                # Only rename if filename changed
-                if current_gcs_key != new_gcs_key:
-                    rename_success = rename_gcs_file(current_gcs_key, new_gcs_key)
-                    
-                    if rename_success:
-                        upload.file_name = new_gcs_key
-                        await db.commit()
-                        logger.info(f"✅ Auto-approval: Successfully normalized filename")
-                    else:
-                        logger.warning(f"⚠️ Auto-approval: Failed to rename file")
-                else:
-                    logger.info(f"📝 Auto-approval: Filename already normalized")
-        except Exception as e:
-            logger.error(f"❌ Auto-approval: Error normalizing filename: {e}")
-            # Don't fail auto-approval if filename normalization fails
+        # NOTE: Filename normalization is handled by approve_statement
+        # The old filename normalization code that was here has been removed
+        # because it referenced an undefined 'upload' variable
         
         # Step 4: Get extracted total from document (from Claude) and calculate from tables
         actual_extracted_total = request.extracted_total
@@ -505,25 +450,89 @@ async def auto_approve_statement(
             needs_review = False
             logger.warning("No extracted total - skipping validation")
         
-        # Update upload with automation metadata
-        from app.db.schemas import StatementUploadUpdate
+        # CRITICAL CHANGE: CREATE DB record now (not update)
+        # This is the ONLY place where statements enter the database
+        from app.db.models import StatementUpload as StatementUploadModel
+        from uuid import UUID
         
-        update_data = StatementUploadUpdate(
-            status="approved" if not needs_review else "needs_review",
-            automated_approval=True,  # Set to True for boolean
+        # Parse metadata from request
+        metadata = request.upload_metadata
+        final_status = "Approved" if not needs_review else "needs_review"
+        
+        # Parse uploaded_at and convert to timezone-naive UTC datetime
+        uploaded_at_value = datetime.utcnow()
+        if metadata.get('uploaded_at'):
+            try:
+                parsed_dt = datetime.fromisoformat(metadata.get('uploaded_at').replace('Z', '+00:00'))
+                # Convert to UTC and remove timezone info (database expects timezone-naive)
+                uploaded_at_value = parsed_dt.replace(tzinfo=None) if parsed_dt.tzinfo else parsed_dt
+            except (ValueError, AttributeError) as e:
+                logger.warning(f"⚠️ Could not parse uploaded_at '{metadata.get('uploaded_at')}': {e}")
+                uploaded_at_value = datetime.utcnow()
+        
+        # Create the DB record with final status
+        db_upload = StatementUploadModel(
+            id=UUID(request.upload_id),
+            company_id=UUID(metadata.get('company_id')) if metadata.get('company_id') else UUID(request.carrier_id),
+            carrier_id=UUID(metadata.get('carrier_id', request.carrier_id)),
+            user_id=UUID(metadata.get('user_id', str(current_user.id))),
+            environment_id=UUID(metadata.get('environment_id')) if metadata.get('environment_id') else None,
+            file_name=metadata.get('file_name', ''),
+            file_hash=metadata.get('file_hash'),
+            file_size=metadata.get('file_size'),
+            uploaded_at=uploaded_at_value,
+            status=final_status,  # CRITICAL: Only Approved or needs_review
+            current_step='completed',
+            raw_data=tables,  # Original extracted tables
+            edited_tables=commission_tables,  # Filtered commission tables
+            final_data=commission_tables,  # Same as edited for auto-approval
+            field_mapping=field_mapping,
+            field_config=field_config_list,
+            plan_types=[],
+            selected_statement_date={"month": request.statement_date},
+            automated_approval=True,
             automation_timestamp=datetime.utcnow(),
-            total_amount_match=True if total_validation.get("matches", False) else False,
-            extracted_total=round(actual_extracted_total, 2) if actual_extracted_total else 0,  # Earned commission
-            extracted_invoice_total=round(calculated_invoice_total, 2) if calculated_invoice_total else 0,  # Invoice total
-            field_mapping=field_mapping  # Save the field mapping for review
+            total_amount_match=total_validation.get("matches", False) if total_validation else None,
+            extracted_total=round(actual_extracted_total, 2) if actual_extracted_total else 0,
+            extracted_invoice_total=round(calculated_invoice_total, 2) if calculated_invoice_total else 0,
+            completed_at=datetime.utcnow(),
+            last_updated=datetime.utcnow()
         )
         
-        await with_db_retry(
-            db, 
-            crud.update_statement_upload, 
-            upload_id=request.upload_id,
-            update_data=update_data
-        )
+        db.add(db_upload)
+        
+        # If approved, process commission data
+        if final_status == "Approved":
+            logger.info(f"✅ Auto-approved, processing commission data...")
+            from app.db.crud.earned_commission import bulk_process_commissions
+            await bulk_process_commissions(db, db_upload)
+        
+        await db.commit()
+        await db.refresh(db_upload)
+        
+        logger.info(f"✅ Created DB record with status: {final_status}")
+        
+        # Record user contribution now that the statement is persisted
+        try:
+            from app.services.user_profile_service import UserProfileService
+            profile_service = UserProfileService(db)
+            await profile_service.record_user_contribution(
+                user_id=current_user.id,
+                upload_id=UUID(request.upload_id),
+                contribution_type="auto_approval",
+                contribution_data={
+                    "file_name": metadata.get('file_name'),
+                    "status": final_status,
+                    "auto_approved": True,
+                    "carrier_id": request.carrier_id,
+                    "statement_date": request.statement_date
+                }
+            )
+            await db.commit()  # Commit the contribution
+            logger.info(f"✅ User contribution recorded for auto-approved statement {request.upload_id}")
+        except Exception as e:
+            logger.warning(f"⚠️ Could not record user contribution: {e}")
+            # Don't fail the auto-approval if contribution recording fails
         
         # Emit final progress update
         await connection_manager.send_stage_update(

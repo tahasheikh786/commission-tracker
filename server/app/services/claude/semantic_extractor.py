@@ -15,6 +15,7 @@ Key Capabilities:
 import logging
 from typing import Dict, Any, List, Optional
 import json
+from .summary_row_filtering_rules import SummaryRowFilteringRules
 
 logger = logging.getLogger(__name__)
 
@@ -225,10 +226,17 @@ class SemanticExtractionService:
         return agents
     
     def _extract_groups_companies(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Extract group/company information"""
-        # Try enhanced extraction first
+        """Extract group/company information with summary row filtering"""
+        # Try enhanced extraction first - USE CLAUDE'S EXTRACTED GROUPS
         if 'groups_and_companies' in data and isinstance(data['groups_and_companies'], list):
-            return data['groups_and_companies']
+            raw_groups = data['groups_and_companies']
+            logger.info(f"✅ Using Claude's extracted groups/companies (before filtering): {len(raw_groups)} groups")
+            # Apply post-processing filter to remove any summary rows that slipped through Claude's filter
+            filtered_groups = self._filter_summary_rows(raw_groups)
+            logger.info(f"📊 After semantic filtering: {len(raw_groups)} → {len(filtered_groups)} actual groups (removed {len(raw_groups) - len(filtered_groups)} summary rows)")
+            return filtered_groups
+        
+        logger.info("⚠️ No groups_and_companies from Claude - falling back to table extraction")
         
         # Extract from tables
         groups = []
@@ -237,6 +245,11 @@ class SemanticExtractionService:
         for table in tables:
             headers = table.get('headers', []) or table.get('header', [])
             rows = table.get('rows', [])
+            
+            # Get summary row indices if marked in table metadata
+            summary_row_indices = set(table.get('summary_rows', []) or table.get('summaryRows', []))
+            if summary_row_indices:
+                logger.debug(f"Table has {len(summary_row_indices)} rows marked as summary rows: {summary_row_indices}")
             
             # Find relevant columns
             group_name_idx = None
@@ -253,7 +266,11 @@ class SemanticExtractionService:
                     amount_idx = idx
             
             if group_name_idx is not None:
-                for row in rows:
+                for row_idx, row in enumerate(rows):
+                    # CRITICAL: Skip rows that are marked as summary rows
+                    if row_idx in summary_row_indices:
+                        logger.debug(f"Skipping row {row_idx} - marked as summary row")
+                        continue
                     if group_name_idx < len(row):
                         group_name = str(row[group_name_idx]).strip()
                         
@@ -261,16 +278,18 @@ class SemanticExtractionService:
                         if not group_name:
                             continue
                         
-                        # Skip metadata rows (Writing Agent, Total, etc.)
-                        skip_keywords = ['total', 'subtotal', 'grand', 'writing agent', 'agent number', 'agent name', 'agent 2']
-                        if any(kw in group_name.lower() for kw in skip_keywords):
+                        # Use unified filtering rules to check if this should be skipped
+                        # Get the group number early for filtering check
+                        group_no = str(row[group_no_idx]).strip() if group_no_idx is not None and group_no_idx < len(row) else ''
+                        
+                        # Use unified filtering logic
+                        if SummaryRowFilteringRules.should_filter_row(group_name, group_no):
+                            logger.debug(f"Skipping summary/metadata row: {group_no} - {group_name}")
                             continue
                         
                         # Require a group number to be valid (if group_no column exists)
-                        if group_no_idx is not None:
-                            group_no = str(row[group_no_idx]).strip() if group_no_idx < len(row) else ''
-                            if not group_no:
-                                continue  # Skip rows without a group number
+                        if group_no_idx is not None and not group_no:
+                            continue  # Skip rows without a group number
                         
                         # Extract paid amount
                         paid_amount = None
@@ -288,6 +307,34 @@ class SemanticExtractionService:
         
         logger.info(f"📊 Extracted {len(groups)} groups/companies")
         return groups
+    
+    def _filter_summary_rows(self, groups: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Filter out summary/total/subtotal rows from extracted groups.
+        
+        This is a critical safety net to catch any summary rows that Claude
+        might have included despite prompt instructions.
+        
+        Uses unified filtering rules from SummaryRowFilteringRules to ensure
+        consistency with prompt instructions.
+        """
+        if not groups:
+            return groups
+        
+        # Use unified filtering method
+        filtered_groups, excluded_groups = SummaryRowFilteringRules.filter_groups(groups)
+        
+        # Log filtering results
+        skipped_count = len(excluded_groups)
+        if skipped_count > 0:
+            logger.info(f"✅ _filter_summary_rows: Filtered out {skipped_count} summary/total rows from {len(groups)} total")
+            # Log what was filtered for debugging
+            for excluded in excluded_groups:
+                logger.debug(f"   FILTERED: {excluded.get('group_number', 'N/A')} - {excluded.get('group_name', 'N/A')} - Reason: {excluded.get('reason', 'Unknown')}")
+        else:
+            logger.info(f"✅ _filter_summary_rows: All {len(groups)} groups passed filtering (no summary rows detected)")
+        
+        return filtered_groups
     
     def _extract_document_metadata(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Extract document metadata"""

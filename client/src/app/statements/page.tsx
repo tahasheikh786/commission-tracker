@@ -50,7 +50,8 @@ interface Carrier {
 
 export default function StatementsPage() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'all' | 'approved' | 'rejected' | 'pending'>('all');
+  // CRITICAL FIX: Removed 'rejected' tab - we only store Approved and needs_review (pending) statements
+  const [activeTab, setActiveTab] = useState<'all' | 'approved' | 'pending'>('all');
   const [selectedCarrier, setSelectedCarrier] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -71,7 +72,8 @@ export default function StatementsPage() {
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const tabParam = urlParams.get('tab');
-    if (tabParam && ['all', 'approved', 'rejected', 'pending'].includes(tabParam)) {
+    // CRITICAL FIX: Removed 'rejected' - only allow all, approved, pending
+    if (tabParam && ['all', 'approved', 'pending'].includes(tabParam)) {
       setActiveTab(tabParam as any);
     }
   }, []);
@@ -84,11 +86,11 @@ export default function StatementsPage() {
         let endpoint = `${process.env.NEXT_PUBLIC_API_URL}/api/dashboard/statements`;
         
         // Use server-side filtering for better performance and accuracy
+        // CRITICAL FIX: Removed 'rejected' - backend only returns Approved and needs_review
         if (activeTab !== 'all') {
           const statusMapping = {
-            'pending': 'pending',
-            'approved': 'approved', 
-            'rejected': 'rejected'
+            'pending': 'pending',    // Maps to 'needs_review' on backend
+            'approved': 'approved'   // Maps to 'Approved' on backend
           };
           const statusParam = statusMapping[activeTab as keyof typeof statusMapping];
           if (statusParam) {
@@ -272,21 +274,22 @@ export default function StatementsPage() {
       ? allStatements 
       : allStatements.filter(s => s.company_name === carrierName);
     
+    // CRITICAL FIX: Updated to match new backend statuses
+    // Backend only returns 'Approved' or 'needs_review' - no more rejected/extracted/success/pending
     return {
       all: carrierStatements.length,
-      approved: carrierStatements.filter(s => ['completed', 'Approved'].includes(s.status)).length,
-      rejected: carrierStatements.filter(s => s.status === 'rejected').length,
-      pending: carrierStatements.filter(s => ['extracted', 'success', 'pending'].includes(s.status)).length,
+      approved: carrierStatements.filter(s => s.status === 'Approved').length,
+      pending: carrierStatements.filter(s => s.status === 'needs_review').length,
     };
   };
 
   const statusCounts = getStatusCounts(selectedCarrier);
 
+  // CRITICAL FIX: Removed 'rejected' tab - we only store Approved and needs_review statements
   const tabs = [
     { id: 'all', label: 'All', count: statusCounts.all },
     { id: 'approved', label: 'Approved', count: statusCounts.approved },
-    { id: 'rejected', label: 'Rejected', count: statusCounts.rejected },
-    { id: 'pending', label: 'Pending', count: statusCounts.pending },
+    { id: 'pending', label: 'Pending Review', count: statusCounts.pending },
   ];
 
   return (

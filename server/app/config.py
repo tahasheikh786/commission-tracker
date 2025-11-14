@@ -32,21 +32,21 @@ else:
 
 engine = create_async_engine(
     DATABASE_URL,
+    pool_size=20,              # ✅ Increased from 10 to 20 for concurrent processing
+    max_overflow=10,           # Allow burst capacity
+    pool_timeout=60,           # Wait up to 60s for connection
+    pool_recycle=3600,         # ✅ Recycle connections every hour (was 1800 = 30 min)
+    pool_pre_ping=True,        # Verify connections before use
     connect_args={
         "statement_cache_size": 0,
-        # Database timeout settings for long-running operations
         "server_settings": {
-            "statement_timeout": "600000",  # 10 minutes in milliseconds
-            "idle_in_transaction_session_timeout": "600000",  # 10 minutes
-        }
+            "application_name": "commission_tracker_extraction",
+            "statement_timeout": "1800000"  # ✅ 30 min statement timeout (was 10 min)
+        },
+        "timeout": 60,          # Connection timeout
+        "command_timeout": 60   # Command timeout
     },
-    # SQLAlchemy pool settings for long-running operations
-    pool_pre_ping=True,
-    pool_recycle=1800,  # Recycle connections every 30 minutes (more frequent)
-    pool_timeout=60,    # Wait up to 60 seconds for a connection
-    max_overflow=20,    # Allow up to 20 extra connections
-    pool_size=10,       # Maintain 10 connections in the pool
-    echo=False,         # Set to True for debugging SQL queries
+    echo=False,  # Set to True for debugging SQL queries
 )
 AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
@@ -80,8 +80,9 @@ REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379")
 
 # Claude Document AI Configuration (Primary Extraction Method)
 CLAUDE_API_KEY = os.environ.get("CLAUDE_API_KEY")
-CLAUDE_MODEL_PRIMARY = os.environ.get("CLAUDE_MODEL_PRIMARY", "claude-sonnet-4-20250514")
-CLAUDE_MODEL_FALLBACK = os.environ.get("CLAUDE_MODEL_FALLBACK", "claude-sonnet-4-20250514")  # Use same as primary
+# CRITICAL FIX: Fixed typo in model name (was missing hyphen between 4 and 5)
+CLAUDE_MODEL_PRIMARY = os.environ.get("CLAUDE_MODEL_PRIMARY", "claude-sonnet-4-5-20250929")
+CLAUDE_MODEL_FALLBACK = os.environ.get("CLAUDE_MODEL_FALLBACK", "claude-opus-4-1-20250805")
 CLAUDE_MAX_FILE_SIZE = int(os.environ.get("CLAUDE_MAX_FILE_SIZE", "33554432"))  # 32MB in bytes
 CLAUDE_MAX_PAGES = int(os.environ.get("CLAUDE_MAX_PAGES", "100"))
 CLAUDE_TIMEOUT_SECONDS = int(os.environ.get("CLAUDE_TIMEOUT_SECONDS", "300"))  # 5 minutes

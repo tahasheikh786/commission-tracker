@@ -4,6 +4,9 @@ Claude-specific prompts for PDF table extraction.
 This module contains sophisticated prompts optimized for Claude's document analysis capabilities.
 """
 
+from .carrier_extraction_rules import CarrierExtractionRules
+from .total_amount_extraction_rules import TotalAmountExtractionRules
+
 
 class ClaudePrompts:
     """Prompts for Claude Document AI extraction"""
@@ -13,8 +16,14 @@ class ClaudePrompts:
         """
         Main prompt for extracting tables from commission statements.
         Optimized for Claude 4 with XML structure and character-level precision.
+        
+        Uses unified carrier and total amount extraction rules to ensure consistency.
         """
-        return """<document_extraction_task>
+        # Get unified rules
+        carrier_rules_xml = CarrierExtractionRules.get_xml_format()
+        total_amount_rules_xml = TotalAmountExtractionRules.get_xml_format()
+        
+        return f"""<document_extraction_task>
 
 <role_context>
 You are analyzing an insurance commission statement PDF. Your extraction must be pixel-perfect accurate because this data feeds automated approval systems. Any modification or addition of text creates duplicate records and breaks automation.
@@ -25,96 +34,7 @@ You are analyzing an insurance commission statement PDF. Your extraction must be
 <!-- PHASE 1: DOCUMENT METADATA EXTRACTION -->
 <phase id="1" name="metadata_extraction" priority="critical">
 
-<carrier_name_extraction>
-  <objective>
-    Identify the insurance carrier (company) that issued this commission statement
-  </objective>
-  
-  <search_locations priority="sequential">
-    <location priority="1">
-      <name>Header Logo Area</name>
-      <description>Top 20% of first page - look for company logos and branding</description>
-      <visual_cues>Large text, distinctive branding, company letterhead</visual_cues>
-    </location>
-    
-    <location priority="2">
-      <name>Footer Branding</name>
-      <description>Bottom 15% of any page - footer logos and company names</description>
-    </location>
-    
-    <location priority="3">
-      <name>Document Title/Header</name>
-      <description>Main heading or title of document</description>
-    </location>
-  </search_locations>
-  
-  <extraction_protocol>
-    <critical_rule id="exact_text">
-      Extract the carrier name EXACTLY as it appears character-for-character.
-      This is CRITICAL for preventing duplicate carrier entries.
-    </critical_rule>
-    
-    <step number="1">
-      <action>Visually locate the carrier name in priority order above</action>
-    </step>
-    
-    <step number="2">
-      <action>Read the text character-by-character as displayed</action>
-      <examples>
-        <correct>
-          Document shows: "Allied Benefit Systems"
-          Extract: "Allied Benefit Systems"
-        </correct>
-        <incorrect>
-          Document shows: "Allied Benefit Systems"  
-          Extract: "Allied Benefit Systems (ABSF)" ❌ WRONG - abbreviation added
-        </incorrect>
-        <incorrect>
-          Document shows: "UnitedHealthcare"
-          Extract: "United Healthcare" ❌ WRONG - spacing modified
-        </incorrect>
-      </examples>
-    </step>
-    
-    <step number="3">
-      <action>Stop extraction at natural text boundary</action>
-      <boundaries>
-        - End of line
-        - Whitespace/line break
-        - Period or other sentence-ending punctuation
-        - Visual separation from other text
-      </boundaries>
-    </step>
-    
-    <step number="4">
-      <action>Verify extraction against source</action>
-      <verification_questions>
-        Q1: Is every character I extracted present in the source image? (Yes/No)
-        Q2: Did I add ANY characters not visible in the source? (Yes/No)  
-        Q3: Does the spacing and capitalization match exactly? (Yes/No)
-        
-        If ANY answer is wrong → Re-extract from source
-      </verification_questions>
-    </step>
-  </extraction_protocol>
-  
-  <forbidden_actions>
-    <do_not>Add abbreviations in parentheses (e.g., "(ABSF)", "(UHC)")</do_not>
-    <do_not>Add legal entity designations unless visible (e.g., "LLC", "Inc.")</do_not>
-    <do_not>Standardize or normalize carrier names</do_not>
-    <do_not>Add clarifying text or context</do_not>
-    <do_not>Infer full name from abbreviation</do_not>
-    <do_not>Extract carrier name from table data columns</do_not>
-  </forbidden_actions>
-  
-  <output_format>
-    {
-      "carrier_name": "Exact text as shown",
-      "carrier_confidence": 0.95,
-      "evidence": "Found in header logo area, page 1, top-left"
-    }
-  </output_format>
-</carrier_name_extraction>
+{carrier_rules_xml}
 
 <statement_date_extraction>
   <objective>
@@ -154,11 +74,11 @@ You are analyzing an insurance commission statement PDF. Your extraction must be
   </critical_instructions>
   
   <output_format>
-    {
+    {{
       "statement_date": "2025-01-31",
       "date_confidence": 0.92,
       "evidence": "Found as 'Report Date: 1/8/2025' in header"
-    }
+    }}
   </output_format>
 </statement_date_extraction>
 
@@ -180,63 +100,15 @@ You are analyzing an insurance commission statement PDF. Your extraction must be
   </extraction_rules>
   
   <output_format>
-    {
+    {{
       "broker_company": "INNOVATIVE BPS LLC",
       "broker_confidence": 0.90,
       "evidence": "Found after 'Producer Name:' label in header"
-    }
+    }}
   </output_format>
 </broker_company_extraction>
 
-<total_amount_extraction>
-  <priority>HIGHEST - This is critical for payment reconciliation</priority>
-  
-  <search_strategy priority="sequential">
-    <search_area priority="1">
-      <name>Document Summary Section</name>
-      <location>Bottom 20% of last page, or dedicated summary page</location>
-      <common_labels>
-        - "Total for Vendor" (PRIORITY - common in Allied Benefit)
-        - "Total for Group"  
-        - "Total Compensation"
-        - "Total Amount"
-        - "Total Commission"
-        - "Grand Total"
-        - "Net Payment"
-        - "EFT Amount"
-        - "Statement Total"
-      </common_labels>
-    </search_area>
-    
-    <search_area priority="2">
-      <name>Table Footer Rows</name>
-      <location>Last 3-5 rows of main commission table</location>
-      <indicators>Row with "Total" keyword + dollar amount</indicators>
-    </search_area>
-    
-    <search_area priority="3">
-      <name>Header Summary Box</name>
-      <location>Top of document in summary box</location>
-      <indicators>"Payment Amount", "Check Amount", "EFT Amount"</indicators>
-    </search_area>
-  </search_strategy>
-  
-  <extraction_rules>
-    <rule>Extract as numeric value only: 1027.20 (no $, no commas)</rule>
-    <rule>Store the exact label found: "Total for Vendor"</rule>
-    <rule>If multiple totals exist, use highest-level vendor/broker total</rule>
-    <rule>If NO explicit total found, calculate by summing "Paid Amount" column</rule>
-  </extraction_rules>
-  
-  <output_format>
-    {
-      "total_amount": 1027.20,
-      "total_amount_label": "Total for Vendor",
-      "total_amount_confidence": 0.95,
-      "total_calculation_method": "extracted"
-    }
-  </output_format>
-</total_amount_extraction>
+{total_amount_rules_xml}
 
 </phase>
 
@@ -283,23 +155,23 @@ You are analyzing an insurance commission statement PDF. Your extraction must be
       </document_structure>
       
       <extracted_table>
-        {
+        {{
           "headers": ["Company Name", "Cov Type", "Bill Eff Date", "Billed Premium", ...],
           "rows": [
             ["B &amp; B Lightning Protection", "Med", "10/01/2024", "($3,844.84)", ...],
             ["B &amp; B Lightning Protection", "Med", "10/01/2024", "$3,844.84", ...],
             ["MAMMOTH DELIVERY LLC", "Med", "12/01/2024", "$55.58", ...]
           ]
-        }
+        }}
       </extracted_table>
     </example>
   </scenario>
 </company_name_column_handling>
 
 <table_output_format>
-  {
+  {{
     "tables": [
-      {
+      {{
         "headers": ["Column 1", "Column 2", ...],
         "rows": [
           ["data1", "data2", ...],
@@ -309,9 +181,9 @@ You are analyzing an insurance commission statement PDF. Your extraction must be
         "page_number": 1,
         "confidence_score": 0.95,
         "summary_rows": [5, 10]
-      }
+      }}
     ]
-  }
+  }}
 </table_output_format>
 
 </phase>
@@ -321,8 +193,8 @@ You are analyzing an insurance commission statement PDF. Your extraction must be
 <!-- FINAL OUTPUT STRUCTURE -->
 <output_structure>
   <json_format>
-    {
-      "document_metadata": {
+    {{
+      "document_metadata": {{
         "carrier_name": "Exact carrier name",
         "carrier_confidence": 0.95,
         "statement_date": "2025-01-31",
@@ -332,10 +204,10 @@ You are analyzing an insurance commission statement PDF. Your extraction must be
         "total_amount": 1027.20,
         "total_amount_label": "Total for Vendor",
         "total_amount_confidence": 0.95
-      },
+      }},
       "tables": [...],
       "extraction_notes": "Any observations or challenges"
-    }
+    }}
   </json_format>
 </output_structure>
 
@@ -502,6 +374,35 @@ Extract the following information from the document:
 - Complete summary about the document (dont return tables)
 
 Format your response as structured markdown without code blocks. Dont return tables"""
+
+    @staticmethod
+    def get_base_extraction_instructions() -> str:
+        """Get static extraction instructions (for caching)."""
+        return """You are an expert at extracting tabular data from commission statements.
+
+EXTRACTION RULES:
+1. Extract ALL tables from the document
+2. Preserve exact text, numbers, and formatting
+3. Include table headers and all data rows
+4. Mark incomplete tables that span pages
+5. Return ONLY valid JSON in this format:
+
+{
+  "tables": [
+    {
+      "headers": ["Column1", "Column2"],
+      "rows": [["value1", "value2"]],
+      "incomplete": false
+    }
+  ],
+  "document_metadata": {
+    "carrier_name": "Exact carrier name as shown",
+    "statement_date": "YYYY-MM-DD",
+    "broker_company": "Broker name as shown"
+  }
+}
+
+CRITICAL: Return ONLY the JSON object. No markdown, no explanations."""
 
     @staticmethod
     def get_system_prompt() -> str:

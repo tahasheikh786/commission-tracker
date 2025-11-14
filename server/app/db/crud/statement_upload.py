@@ -5,8 +5,35 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime
 from uuid import UUID
 from typing import List, Optional, Dict, Any
+from app.constants.statuses import VALID_PERSISTENT_STATUSES, is_valid_persistent_status
+import logging
+
+logger = logging.getLogger(__name__)
 
 async def save_statement_upload(db, upload: StatementUpload):
+    """
+    Save a statement upload to the database.
+    
+    CRITICAL: Only statements with valid persistent statuses are saved.
+    This prevents orphaned/ghost records from appearing in the database.
+    
+    Args:
+        db: Database session
+        upload: StatementUpload object to save
+        
+    Returns:
+        Saved StatementUploadModel if status is valid, None otherwise
+    """
+    # CRITICAL STATUS GATE: Only persist if status is Approved or needs_review
+    if not is_valid_persistent_status(upload.status):
+        logger.warning(
+            f"❌ REJECTED: Attempted to save upload {upload.id} with invalid status '{upload.status}'. "
+            f"Only {VALID_PERSISTENT_STATUSES} are allowed to be persisted to the database."
+        )
+        return None
+    
+    logger.info(f"✅ Saving statement upload {upload.id} with valid status: {upload.status}")
+    
     db_upload = StatementUploadModel(
         id=upload.id,
         company_id=upload.company_id,
@@ -28,10 +55,34 @@ async def save_statement_upload(db, upload: StatementUpload):
     await db.refresh(db_upload)
     return db_upload
 
-async def create_statement_upload(db: AsyncSession, upload: StatementUploadCreate) -> StatementUploadModel:
+async def create_statement_upload(db: AsyncSession, upload: StatementUploadCreate) -> Optional[StatementUploadModel]:
     """
-    Create a new statement upload with pending status.
+    Create a new statement upload in the database.
+    
+    CRITICAL: This function should ONLY be called after approval/review determination.
+    Only statements with valid persistent statuses (Approved, needs_review) are created.
+    
+    DEPRECATED USAGE: Do not use this for "pending" or "processing" statuses.
+    Those states should exist only in-memory during the upload flow.
+    
+    Args:
+        db: Database session
+        upload: StatementUploadCreate object
+        
+    Returns:
+        Created StatementUploadModel if status is valid, None otherwise
     """
+    # CRITICAL STATUS GATE: Only persist if status is Approved or needs_review
+    if not is_valid_persistent_status(upload.status):
+        logger.warning(
+            f"❌ REJECTED: Attempted to create upload with invalid status '{upload.status}'. "
+            f"Only {VALID_PERSISTENT_STATUSES} are allowed to be persisted to the database. "
+            f"Pending/Processing states should NOT use this function."
+        )
+        return None
+    
+    logger.info(f"✅ Creating statement upload with valid status: {upload.status}")
+    
     db_upload = StatementUploadModel(
         company_id=upload.company_id,
         carrier_id=upload.carrier_id,  # Include carrier_id from schema
@@ -226,11 +277,29 @@ async def save_statement_review(
     field_config,
     rejection_reason: str = None,
     plan_types: list = None,
-    selected_statement_date: dict = None
+    selected_statement_date: dict = None,
+    upload_metadata: dict = None,  # CRITICAL: Add metadata for creating new records
+    current_user_id = None,  # NEW: Pass current user ID for record creation
+    current_environment_id = None  # NEW: Pass environment ID for record creation
 ):
     """
     Save statement review with updated status tracking.
+    
+    CRITICAL CHANGE: Now CREATES the DB record if it doesn't exist.
+    Records are only created during approval (Approved or needs_review status).
+    
+    STATUS VALIDATION: Only Approved or needs_review statuses are persisted.
     """
+    # CRITICAL STATUS GATE: Validate status before any database operations
+    if not is_valid_persistent_status(status):
+        logger.error(
+            f"❌ REJECTED: Attempted to save statement review for upload {upload_id} with invalid status '{status}'. "
+            f"Only {VALID_PERSISTENT_STATUSES} are allowed to be persisted to the database."
+        )
+        return None
+    
+    logger.info(f"✅ Saving statement review for upload {upload_id} with valid status: {status}")
+    
     # Convert string to UUID if needed
     try:
         if isinstance(upload_id, str):
@@ -238,15 +307,61 @@ async def save_statement_review(
         else:
             upload_id_uuid = upload_id
     except (ValueError, AttributeError):
-        print(f"💾 Invalid upload_id format: {upload_id}")
+        logger.error(f"💾 Invalid upload_id format: {upload_id}")
         return None
     
     result = await db.execute(select(StatementUploadModel).where(StatementUploadModel.id == upload_id_uuid))
     db_upload = result.scalar_one_or_none()
     
+    # CRITICAL CHANGE: CREATE record if it doesn't exist
     if not db_upload:
-        print(f"💾 Upload not found for ID: {upload_id_uuid}")
-        return None
+        print(f"💾 Upload not found for ID: {upload_id_uuid} - Creating new record")
+        
+        if not upload_metadata:
+            print(f"❌ Cannot create record without upload_metadata!")
+            return None
+        
+        # Create new record with provided metadata
+        from datetime import datetime
+        
+        # Parse uploaded_at and convert to timezone-naive UTC datetime
+        uploaded_at_value = datetime.utcnow()
+        if upload_metadata.get('uploaded_at'):
+            try:
+                parsed_dt = datetime.fromisoformat(upload_metadata.get('uploaded_at').replace('Z', '+00:00'))
+                # Convert to UTC and remove timezone info (database expects timezone-naive)
+                uploaded_at_value = parsed_dt.replace(tzinfo=None) if parsed_dt.tzinfo else parsed_dt
+            except (ValueError, AttributeError) as e:
+                logger.warning(f"⚠️ Could not parse uploaded_at '{upload_metadata.get('uploaded_at')}': {e}")
+                uploaded_at_value = datetime.utcnow()
+        
+        # CRITICAL FIX: Use current_user_id and current_environment_id if provided
+        # This ensures the record is associated with the user who approved it
+        user_id_to_use = current_user_id
+        if not user_id_to_use and upload_metadata and upload_metadata.get('user_id'):
+            user_id_to_use = UUID(upload_metadata.get('user_id'))
+        
+        environment_id_to_use = current_environment_id
+        if not environment_id_to_use and upload_metadata and upload_metadata.get('environment_id'):
+            environment_id_to_use = UUID(upload_metadata.get('environment_id'))
+        
+        db_upload = StatementUploadModel(
+            id=upload_id_uuid,
+            company_id=UUID(upload_metadata.get('company_id')) if upload_metadata.get('company_id') else None,
+            carrier_id=UUID(upload_metadata.get('carrier_id')) if upload_metadata.get('carrier_id') else None,
+            user_id=user_id_to_use,
+            environment_id=environment_id_to_use,
+            file_name=upload_metadata.get('file_name', ''),
+            file_hash=upload_metadata.get('file_hash'),
+            file_size=upload_metadata.get('file_size'),
+            uploaded_at=uploaded_at_value,
+            status=status,  # Will be set below
+            current_step='review',
+            raw_data=upload_metadata.get('raw_data', []),
+            last_updated=datetime.utcnow()
+        )
+        db.add(db_upload)
+        print(f"✅ Created new DB record for upload {upload_id_uuid}")
     
     print(f"💾 Saving statement review: upload_id={upload_id_uuid}, status={status}")
     print(f"📋 Field config being saved: {field_config}")
@@ -624,35 +739,67 @@ async def get_all_statement_reviews(db):
 
 async def get_statements_for_company(db, company_id):
     """
-    Get all statements for a company including pending files.
+    Get all statements for a company.
+    
+    CRITICAL: Only returns statements with valid persistent statuses (Approved, needs_review).
+    Pending files should NOT be persisted to the database.
     """
+    from sqlalchemy import and_
+    
+    logger.info(f"📋 Fetching statements for company {company_id} with status filter: {VALID_PERSISTENT_STATUSES}")
+    
+    # CRITICAL: Only return statements with valid persistent statuses
     result = await db.execute(
-        select(StatementUploadModel).where(StatementUploadModel.company_id == company_id)
+        select(StatementUploadModel).where(
+            and_(
+                StatementUploadModel.company_id == company_id,
+                StatementUploadModel.status.in_(VALID_PERSISTENT_STATUSES)  # CRITICAL STATUS FILTER
+            )
+        )
         .order_by(StatementUploadModel.last_updated.desc())
     )
-    return result.scalars().all()
+    statements = result.scalars().all()
+    
+    logger.info(f"✅ Found {len(statements)} statements with valid statuses for company {company_id}")
+    
+    return statements
 
 async def get_statements_for_carrier(db, carrier_id):
     """
     Get all statements for a specific carrier.
+    
+    CRITICAL: Only returns statements with valid persistent statuses (Approved, needs_review).
+    This prevents orphaned/ghost records from appearing in the UI.
+    
     NOTE: Support both old (company_id) and new (carrier_id) format for backwards compatibility.
     Old format: carrier stored in company_id, carrier_id is NULL
     New format: carrier stored in carrier_id
     """
     from sqlalchemy import or_, and_
+    
+    logger.info(f"📋 Fetching statements for carrier {carrier_id} with status filter: {VALID_PERSISTENT_STATUSES}")
+    
+    # CRITICAL: Only return statements with valid persistent statuses
     result = await db.execute(
         select(StatementUploadModel).where(
-            or_(
-                StatementUploadModel.carrier_id == carrier_id,
-                and_(
-                    StatementUploadModel.company_id == carrier_id,
-                    StatementUploadModel.carrier_id.is_(None)
-                )
+            and_(
+                or_(
+                    StatementUploadModel.carrier_id == carrier_id,
+                    and_(
+                        StatementUploadModel.company_id == carrier_id,
+                        StatementUploadModel.carrier_id.is_(None)
+                    )
+                ),
+                StatementUploadModel.status.in_(VALID_PERSISTENT_STATUSES)  # CRITICAL STATUS FILTER
             )
         )
         .order_by(StatementUploadModel.last_updated.desc())
     )
-    return result.scalars().all()
+    statements = result.scalars().all()
+    
+    logger.info(f"✅ Found {len(statements)} statements with valid statuses for carrier {carrier_id}")
+    
+    return statements
 
 async def get_statement_by_id(db: AsyncSession, statement_id: str):
     try:
@@ -885,6 +1032,36 @@ async def get_upload_by_id(db: AsyncSession, upload_id: str):
         return None
     
     result = await db.execute(select(StatementUploadModel).where(StatementUploadModel.id == upload_id_uuid))
+    return result.scalar_one_or_none()
+
+async def get_statement_by_file_hash_and_status(
+    db: AsyncSession, 
+    file_hash: str,
+    valid_statuses: List[str]
+) -> Optional[StatementUploadModel]:
+    """
+    Get statement by file hash, filtering by valid statuses.
+    Only checks against successfully extracted files to prevent
+    409 conflicts for failed/cancelled extractions.
+    
+    Args:
+        db: Database session
+        file_hash: SHA256 hash of the file
+        valid_statuses: List of statuses to check (e.g., ['pending', 'approved', 'needsreview', 'rejected'])
+    
+    Returns:
+        StatementUploadModel if found, None otherwise
+    """
+    from sqlalchemy import and_
+    
+    result = await db.execute(
+        select(StatementUploadModel).where(
+            and_(
+                StatementUploadModel.file_hash == file_hash,
+                StatementUploadModel.status.in_(valid_statuses)
+            )
+        )
+    )
     return result.scalar_one_or_none()
 
 def get_progress_summary(current_step: str, progress_data: Optional[dict]) -> str:

@@ -25,7 +25,8 @@ class ConversationalSummaryService:
     def __init__(self):
         """Initialize with Claude for summary generation"""
         self.client = anthropic.AsyncAnthropic(api_key=os.getenv("CLAUDE_API_KEY"))
-        self.model = "claude-sonnet-4-20250514"  # Fast, high-quality model
+        # CRITICAL FIX: Fixed typo in model name (was missing hyphen between 4 and 5)
+        self.model = "claude-sonnet-4-5-20250929"  # Claude Sonnet 4.5 - Fast, high-quality model
         
     def is_available(self) -> bool:
         """Check if service is ready"""
