@@ -38,7 +38,9 @@ function fixPercent(val: string): string {
 function downloadCSV(table: TableData, name: string) {
   const csv = [
     table.header.join(','),
-    ...table.rows.map(row => row.map(cell => '"' + (cell || '').replace(/"/g, '""') + '"').join(','))
+    ...(Array.isArray(table.rows) ? table.rows : []).map(row => 
+      (Array.isArray(row) ? row : []).map(cell => '"' + (cell || '').replace(/"/g, '""') + '"').join(',')
+    )
   ].join('\n');
   const blob = new Blob([csv], { type: 'text/csv' });
   const url = URL.createObjectURL(blob);
@@ -428,7 +430,7 @@ export default function ExtractedTables({ tables: backendTables, onTablesChange,
                 return (
                   <tr key={globalIdx} className="bg-blue-50">
                     <th className="py-3 px-4 border-b border-slate-200 align-top"></th>
-                    {row.map((val, i) => (
+                    {(Array.isArray(row) ? row : []).map((val, i) => (
                       <th key={i} className="py-3 px-4 border-b border-slate-200 align-top font-bold text-slate-800">{val}</th>
                     ))}
                     <th className="py-3 px-4 border-b border-slate-200 align-top"></th>
@@ -456,7 +458,7 @@ export default function ExtractedTables({ tables: backendTables, onTablesChange,
                       aria-label={`Select row ${globalIdx + 1}`}
                     />
                   </td>
-                  {row.map((val, i) => (
+                  {(Array.isArray(row) ? row : []).map((val, i) => (
                     <td
                       key={i}
                       className="py-3 px-4 border-b border-slate-200 align-top"

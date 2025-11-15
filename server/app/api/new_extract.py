@@ -406,21 +406,19 @@ async def extract_tables_smart(
                             
                             # CRITICAL CHANGE: Update metadata only (no DB record yet)
                             # carrier_id = insurance carrier (what we extracted)
-                            # company_id = user's broker company (keep as is)
+                            # company_id = user's broker company (DO NOT OVERWRITE!)
                             upload_metadata.update({
                                 'carrier_id': str(carrier.id),
-                                'company_id': str(carrier.id),
                                 'file_name': new_gcs_key
                             })
-                            logger.info(f"✅ Updated upload metadata: carrier_id={carrier.id}, company_id={carrier.id}")
+                            logger.info(f"✅ Updated upload metadata: carrier_id={carrier.id}, company_id stays as user's company={upload_metadata.get('company_id')}")
                         else:
                             logger.warning(f"⚠️ Failed to move file in GCS, keeping original location")
                             # CRITICAL CHANGE: Update metadata only (no DB record yet)
                             upload_metadata.update({
-                                'carrier_id': str(carrier.id),
-                                'company_id': str(carrier.id)
+                                'carrier_id': str(carrier.id)
                             })
-                            logger.info(f"✅ Updated upload metadata: carrier_id={carrier.id}, company_id={carrier.id}")
+                            logger.info(f"✅ Updated upload metadata: carrier_id={carrier.id}, company_id stays as user's company={upload_metadata.get('company_id')}")
                         
                         # Update company_id for all subsequent operations
                         company_id = str(carrier.id)

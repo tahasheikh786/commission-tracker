@@ -24,6 +24,7 @@ class ApprovePayload(BaseModel):
     selected_statement_date: Optional[Dict[str, Any]] = None
     # CRITICAL: Add upload metadata since DB record doesn't exist yet
     upload_metadata: Optional[Dict[str, Any]] = None
+    document_metadata: Optional[Dict[str, Any]] = None  # ✅ NEW: For total validation
 
 class RejectPayload(BaseModel):
     upload_id: UUID
@@ -51,6 +52,11 @@ async def approve_statement(
             except (ValueError, TypeError):
                 logger.warning(f"Invalid environment_id in upload_metadata: {payload.upload_metadata.get('environment_id')}")
         
+        # Extract document_metadata from upload_metadata if available
+        document_metadata = payload.document_metadata
+        if not document_metadata and payload.upload_metadata:
+            document_metadata = payload.upload_metadata.get('document_metadata')
+        
         # CRITICAL: Pass upload_metadata and current user info for creating new records
         updated = await crud.save_statement_review(
             db,
@@ -62,7 +68,8 @@ async def approve_statement(
             selected_statement_date=payload.selected_statement_date,
             upload_metadata=payload.upload_metadata,  # NEW: Pass metadata
             current_user_id=current_user.id,  # NEW: Pass current user ID
-            current_environment_id=environment_id  # NEW: Pass environment ID
+            current_environment_id=environment_id,  # NEW: Pass environment ID
+            document_metadata=document_metadata  # ✅ NEW: Pass document metadata for validation
         )
         
         if not updated:

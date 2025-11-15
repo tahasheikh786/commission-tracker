@@ -1209,6 +1209,8 @@ Start immediately with "This is a..." or "This document shows..." and provide th
         - Entities (carriers, brokers, agents, groups)
         - Relationships (entity connections)
         - Business Intelligence (patterns, insights)
+        
+        ⭐ CRITICAL FIX: Falls back to table data if entities are empty
         """
         import json
         
@@ -1219,19 +1221,41 @@ Start immediately with "This is a..." or "This document shows..." and provide th
         relationships = extraction_data.get('relationships', {})
         business_intel = extraction_data.get('business_intelligence', {})
         
-        logger.info(f"   - Entities: {list(entities.keys())}")
-        logger.info(f"   - Relationships: {list(relationships.keys())}")
-        logger.info(f"   - Business Intelligence: {list(business_intel.keys())}")
+        logger.info(f"   - Entities: {list(entities.keys()) if entities else []}")
+        logger.info(f"   - Relationships: {list(relationships.keys()) if relationships else []}")
+        logger.info(f"   - Business Intelligence: {list(business_intel.keys()) if business_intel else []}")
+        
+        # ⭐ CRITICAL FIX: Use root-level data if entities are empty
+        # This happens when Claude extracts tables but not semantic entities
+        groups_and_companies = entities.get('groups_and_companies', []) if entities else []
+        writing_agents = entities.get('writing_agents', []) if entities else []
+        
+        # Fallback to root level if empty
+        if not groups_and_companies:
+            groups_and_companies = extraction_data.get('groups_and_companies', [])
+            if groups_and_companies:
+                logger.info(f"✅ Using root-level groups_and_companies: {len(groups_and_companies)} items")
+        
+        if not writing_agents:
+            writing_agents = extraction_data.get('writing_agents', [])
+            if writing_agents:
+                logger.info(f"✅ Using root-level writing_agents: {len(writing_agents)} items")
+        
+        if not business_intel:
+            business_intel = extraction_data.get('business_intelligence', {})
+            if business_intel:
+                logger.info(f"✅ Using root-level business_intelligence: {list(business_intel.keys())}")
         
         # Build enhanced data structure for prompt
         enhanced_data = {
-            'carrier': entities.get('carrier', {}),
-            'broker': entities.get('broker', {}),
-            'document_metadata': entities.get('document_metadata', {}),
-            'writing_agents': entities.get('writing_agents', []),
-            'groups_and_companies': entities.get('groups_and_companies', []),
+            'carrier': entities.get('carrier', {}) if entities else {},
+            'broker': entities.get('broker', {}) if entities else {},
+            'document_metadata': entities.get('document_metadata', {}) if entities else extraction_data.get('document_metadata', {}),
+            'writing_agents': writing_agents,
+            'groups_and_companies': groups_and_companies,
             'business_intelligence': business_intel,
-            'relationships': relationships
+            'relationships': relationships,
+            'tables': extraction_data.get('tables', [])  # ← CRITICAL: Include tables for analysis
         }
         
         # Format for prompt

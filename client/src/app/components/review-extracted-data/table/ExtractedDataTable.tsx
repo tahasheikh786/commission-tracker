@@ -30,7 +30,21 @@ export default function ExtractedDataTable({
 }: ExtractedDataTableProps) {
   // Get headers
   const headers = table.header || table.headers || [];
-  const totalRows = table.rows.length;
+  // ✅ FIX: Ensure rows is always an array
+  const rows = Array.isArray(table.rows) ? table.rows : [];
+  const totalRows = rows.length;
+  
+  // ✅ DEBUG: Log table data structure
+  console.log('🔍 ExtractedDataTable Debug:', {
+    tableKeys: Object.keys(table),
+    headersLength: headers.length,
+    headers,
+    rowsLength: rows.length,
+    rowsIsArray: Array.isArray(rows),
+    firstRowSample: rows[0],
+    firstRowIsArray: Array.isArray(rows[0]),
+    tableObject: table
+  });
 
   // Hooks
   const selection = useTableSelection(totalRows);
@@ -43,13 +57,13 @@ export default function ExtractedDataTable({
   // Get visible rows
   const visibleRows = useMemo(() => {
     if (showSummaryRows) {
-      return table.rows.map((row, idx) => ({ row, originalIdx: idx }));
+      return rows.map((row, idx) => ({ row, originalIdx: idx }));
     } else {
-      return table.rows
+      return rows
         .map((row, idx) => ({ row, originalIdx: idx }))
         .filter(({ originalIdx }) => !summaryDetection.isSummaryRow(originalIdx));
     }
-  }, [table.rows, showSummaryRows, summaryDetection]);
+  }, [rows, showSummaryRows, summaryDetection]);
 
   // Handle cell edit save
   const handleSaveCellEdit = useCallback((rowIndex: number, colIndex: number, value: string) => {

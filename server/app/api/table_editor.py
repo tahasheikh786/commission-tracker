@@ -47,7 +47,8 @@ class TableData(BaseModel):
 class SaveTablesRequest(BaseModel):
     upload_id: str
     tables: List[TableData]
-    company_id: str
+    company_id: Optional[str] = None  # DEPRECATED: May contain carrier_id by mistake
+    carrier_id: Optional[str] = None  # CORRECT: The insurance carrier ID
     selected_statement_date: Optional[Dict[str, Any]] = None
     extracted_carrier: Optional[str] = None
     extracted_date: Optional[str] = None
@@ -72,7 +73,8 @@ async def save_tables(request: SaveTablesRequest, db: AsyncSession = Depends(get
         logger.info(f"🎯 Table Editor API: Saving edited tables for upload_id: {request.upload_id}")
         logger.info(f"🎯 Table Editor API: Tables count: {len(request.tables)}")
         logger.info(f"🎯 Table Editor API: Selected statement date: {request.selected_statement_date}")
-        logger.info(f"🎯 Table Editor API: Company ID: {request.company_id}")
+        logger.info(f"🎯 Table Editor API: Company ID (deprecated): {request.company_id}")
+        logger.info(f"🎯 Table Editor API: Carrier ID: {request.carrier_id}")
         logger.info(f"🎯 Table Editor API: Field config received: {request.field_config}")
         
         # Convert tables to the format expected by the database
@@ -522,9 +524,10 @@ async def learn_format_patterns(
                 carrier_id = new_carrier.id
                 logger.info(f"🎯 Format Learning: Created new carrier with corrected name: {carrier_id}")
         
+        # Fallback to carrier_id from request if carrier name lookup failed
         if not carrier_id:
-            logger.warning(f"🎯 Format Learning: No carrier_id available, using user's company_id")
-            carrier_id = request.company_id
+            carrier_id = request.carrier_id or request.company_id  # Try carrier_id first, then company_id for backward compatibility
+            logger.info(f"🎯 Format Learning: Using carrier_id from request: {carrier_id}")
         
         # Extract learning data from the edited tables
         main_table = request.tables[0]

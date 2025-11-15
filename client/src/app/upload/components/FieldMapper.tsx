@@ -668,7 +668,7 @@ export default function FieldMapper({
                       <tr key={rowIndex} className="hover:bg-gray-50">
                         {Array.isArray(row) ? (
                           // Handle array format (legacy)
-                          row.map((cell: any, cellIndex: number) => (
+                          (Array.isArray(row) ? row : []).map((cell: any, cellIndex: number) => (
                             <td key={cellIndex} className="py-2 px-4 text-sm text-gray-900">
                               {cell || '-'}
                             </td>

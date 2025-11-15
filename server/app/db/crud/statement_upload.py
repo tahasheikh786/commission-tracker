@@ -281,7 +281,8 @@ async def save_statement_review(
     selected_statement_date: dict = None,
     upload_metadata: dict = None,  # CRITICAL: Add metadata for creating new records
     current_user_id = None,  # NEW: Pass current user ID for record creation
-    current_environment_id = None  # NEW: Pass environment ID for record creation
+    current_environment_id = None,  # NEW: Pass environment ID for record creation
+    document_metadata: dict = None  # ✅ NEW: For total amount validation
 ):
     """
     Save statement review with updated status tracking.
@@ -323,7 +324,7 @@ async def save_statement_review(
             return None
         
         # Create new record with provided metadata
-        from datetime import datetime
+        # NOTE: datetime is already imported at the top of the file
         
         # Parse uploaded_at and convert to timezone-naive UTC datetime
         uploaded_at_value = datetime.utcnow()
@@ -345,26 +346,24 @@ async def save_statement_review(
         # CRITICAL: ALWAYS use user's default environment, NEVER accept environment_id from metadata
         # This prevents environment mismatches and ensures all uploads go to the default environment
         environment_id_to_use = None
+        user_company_id = None  # The user's actual company (NOT the carrier)
         if user_id_to_use:
             try:
                 from app.db.crud.environment import get_or_create_default_environment
-                # CRITICAL: Get user's company_id from upload_metadata OR from user record
-                company_id = None
-                if upload_metadata and upload_metadata.get('company_id'):
-                    company_id = UUID(upload_metadata.get('company_id'))
-                else:
-                    # Fallback: Get company_id from user record
-                    result_user_company = await db.execute(
-                        text("SELECT company_id FROM users WHERE id = :user_id"),
-                        {"user_id": str(user_id_to_use)}
-                    )
-                    row = result_user_company.fetchone()
-                    if row:
-                        company_id = row[0]
+                # CRITICAL: ALWAYS get user's company_id from the users table
+                # NEVER trust upload_metadata.company_id as it might be the carrier_id
+                result_user_company = await db.execute(
+                    text("SELECT company_id FROM users WHERE id = :user_id"),
+                    {"user_id": str(user_id_to_use)}
+                )
+                row = result_user_company.fetchone()
+                if row:
+                    user_company_id = row[0]
+                    logger.info(f"✅ Retrieved user's company_id {user_company_id} from users table for user {user_id_to_use}")
                 
-                if company_id and user_id_to_use:
-                    # ALWAYS get/create the default environment for this user
-                    default_env = await get_or_create_default_environment(db, company_id, user_id_to_use)
+                if user_company_id and user_id_to_use:
+                    # ALWAYS get/create the default environment for this user in their company
+                    default_env = await get_or_create_default_environment(db, user_company_id, user_id_to_use)
                     environment_id_to_use = default_env.id
                     logger.info(f"✅ ALWAYS using user's default environment_id {environment_id_to_use} for consistency")
             except Exception as e:
@@ -376,9 +375,11 @@ async def save_statement_review(
         if upload_metadata and upload_metadata.get('environment_id') and UUID(upload_metadata.get('environment_id')) != environment_id_to_use:
             logger.warning(f"⚠️  Ignoring metadata environment_id {upload_metadata.get('environment_id')}, using default {environment_id_to_use}")
         
+        # CRITICAL FIX: Use user_company_id from users table, NOT from upload_metadata
+        # upload_metadata.company_id might be the carrier_id due to frontend confusion
         db_upload = StatementUploadModel(
             id=upload_id_uuid,
-            company_id=UUID(upload_metadata.get('company_id')) if upload_metadata.get('company_id') else None,
+            company_id=user_company_id,  # FIXED: Use user's actual company from users table
             carrier_id=UUID(upload_metadata.get('carrier_id')) if upload_metadata.get('carrier_id') else None,
             user_id=user_id_to_use,
             environment_id=environment_id_to_use,
@@ -594,7 +595,36 @@ async def save_statement_review(
                 print(f"  ✅ Table {table_idx} total: ${table_total:.2f}")
             
             extracted_total = round(calculated_total, 2)
-            total_amount_match = True  # Assume match for manually approved statements
+            
+            # ✅ CRITICAL FIX: Compare with AI-extracted total from document_metadata
+            ai_extracted_total = None
+            if document_metadata and 'total_amount' in document_metadata:
+                try:
+                    ai_extracted_total = float(document_metadata['total_amount'])
+                    print(f"💰 AI-extracted total from document: ${ai_extracted_total:.2f}")
+                except (ValueError, TypeError):
+                    print(f"⚠️ Could not parse AI-extracted total: {document_metadata.get('total_amount')}")
+            
+            # Compare totals with 5% tolerance
+            if ai_extracted_total is not None and ai_extracted_total > 0:
+                difference = abs(ai_extracted_total - extracted_total)
+                difference_percent = (difference / ai_extracted_total) * 100
+                total_amount_match = difference_percent < 5.0  # 5% tolerance
+                
+                print(f"💰 Total comparison:")
+                print(f"   - AI extracted from document: ${ai_extracted_total:.2f}")
+                print(f"   - Calculated from table rows: ${extracted_total:.2f}")
+                print(f"   - Difference: ${difference:.2f} ({difference_percent:.2f}%)")
+                print(f"   - Match: {total_amount_match}")
+                
+                # ⚠️ IMPORTANT: If totals don't match, change status to needs_review
+                if not total_amount_match:
+                    print(f"⚠️ TOTAL MISMATCH DETECTED! Changing status from '{status}' to 'needs_review'")
+                    status = 'needs_review'
+            else:
+                # No AI-extracted total available - assume match
+                total_amount_match = True
+                print(f"⚠️ No AI-extracted total available for comparison - assuming match")
             
             print(f"💰 Final extracted_total: ${extracted_total:.2f}")
         else:
@@ -990,11 +1020,10 @@ async def update_upload_tables(db: AsyncSession, upload_id: str, tables_data: li
         print(f"🎯 CRUD: No selected statement date provided")
     
     # Update carrier_id if provided (this links the statement to the carrier)
-    # CRITICAL FIX: Update both carrier_id AND company_id for backwards compatibility
+    # CRITICAL: carrier_id = insurance carrier, company_id = user's company (DO NOT OVERWRITE!)
     if carrier_id:
         db_upload.carrier_id = carrier_id
-        db_upload.company_id = carrier_id  # Also update company_id for backwards compatibility
-        print(f"🎯 CRUD: Linking statement to carrier: carrier_id={carrier_id}, company_id={carrier_id}")
+        print(f"🎯 CRUD: Linking statement to carrier: carrier_id={carrier_id}, company_id stays as user's company={db_upload.company_id}")
     
     # Save in progress_data
     if not db_upload.progress_data:

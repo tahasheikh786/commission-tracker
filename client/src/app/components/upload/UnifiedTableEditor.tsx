@@ -48,6 +48,8 @@ export interface ExtractedData {
     date_confidence?: number;
     broker_company?: string;
     document_type?: string;
+    total_amount?: number;  // ✅ CRITICAL: AI-extracted total for validation
+    total_amount_label?: string;
   };
   ai_intelligence?: {
     enabled: boolean;
@@ -632,6 +634,9 @@ export default function UnifiedTableEditor({
       const updatedCarrierId = saveTablesResponse.data?.carrier_id || carrier_id || company_id;
       const updatedCarrierName = saveTablesResponse.data?.carrier_name || editedCarrierName || extractedData?.carrierName || extractedData?.extracted_carrier;
       
+      // ✅ CRITICAL FIX: Get user's actual company_id (NOT the carrier_id)
+      const userCompanyId = uploadData?.user_company_id || uploadData?.company_id || extractedData?.company_id;
+      
       setApprovalProgress(40);
 
       // STEP 2: Learn Format Patterns
@@ -645,7 +650,7 @@ export default function UnifiedTableEditor({
           {
             upload_id: upload_id,
             tables: currentTablesSnapshot,
-            company_id: updatedCarrierId, // Use updated carrier_id from save response
+            carrier_id: updatedCarrierId, // FIXED: Use carrier_id (not company_id)
             selected_statement_date: statementDateObj,
             extracted_carrier: updatedCarrierName, // Already uses edited value
             extracted_date: editedStatementDate || extractedData?.extracted_date,
@@ -738,16 +743,18 @@ export default function UnifiedTableEditor({
       // Use filtered commission tables for final data
       const finalData = commissionTables.map(table => {
         const tableHeaders = table.header;
-        const tableRows = table.rows;
+        const tableRows = table.rows || []; // ✅ FIX: Ensure rows is always an array
         
         // Convert each row from array to dictionary with header names as keys
-        const transformedRows = tableRows.map((row: any[]) => {
+        const transformedRows = Array.isArray(tableRows) ? tableRows.map((row: any[]) => {
+          // ✅ FIX: Ensure row is an array before accessing by index
+          const rowArray = Array.isArray(row) ? row : [];
           const rowDict: Record<string, any> = {};
           tableHeaders.forEach((header: string, index: number) => {
-            rowDict[header] = row[index] || '';
+            rowDict[header] = rowArray[index] || '';
           });
           return rowDict;
-        });
+        }) : [];
         
         // CRITICAL FIX: Convert summaryRows Set to Array for JSON serialization
         // Sets serialize as empty objects {} in JSON, which breaks backend summary row exclusion
@@ -771,15 +778,17 @@ export default function UnifiedTableEditor({
       // company_id = USER'S company (who uploaded the statement)
       // carrier_id = INSURANCE CARRIER (Allied Benefit Systems, etc.)
       const upload_metadata = {
-        company_id: extractedData?.company_id || uploadData?.company_id || uploadData?.user_company_id,  // NEVER use carrier_id here!
-        carrier_id: updatedCarrierId,  // This is the insurance carrier (Allied, etc.)
+        company_id: userCompanyId,  // User's actual company (Pinecrest Consulting, etc.)
+        carrier_id: updatedCarrierId,  // Insurance carrier (Allied, Aetna, etc.)
         user_id: uploadData?.user_id || extractedData?.user_id,
         environment_id: uploadData?.environment_id || extractedData?.environment_id || uploadData?.upload_metadata?.environment_id,
         file_name: extractedData?.file_name || uploadData?.file_name,
         file_hash: uploadData?.file_hash || extractedData?.file_hash || uploadData?.upload_metadata?.file_hash,
         file_size: uploadData?.file_size || extractedData?.file_size || uploadData?.upload_metadata?.file_size,
         uploaded_at: uploadData?.uploaded_at || extractedData?.uploaded_at || uploadData?.upload_metadata?.uploaded_at || new Date().toISOString(),
-        raw_data: finalData
+        raw_data: finalData,
+        // ✅ CRITICAL: Include document_metadata for total validation
+        document_metadata: extractedData?.document_metadata || uploadData?.document_metadata || {}
       };
 
       console.log('🔍 Upload metadata being sent:', {

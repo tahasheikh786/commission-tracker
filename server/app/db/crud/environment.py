@@ -20,19 +20,23 @@ async def get_or_create_default_environment(
     """
     Get or create a default environment for the user.
     This ensures every user always has at least one environment.
+    
+    CRITICAL: Must filter by BOTH company_id AND created_by (user_id) to match
+    the constraint: UNIQUE(company_id, created_by, name)
     """
-    # First check if ANY Default environment exists for the company
-    # This handles the current production constraint: UNIQUE(company_id, name)
+    # CRITICAL FIX: Check if Default environment exists for THIS USER in THIS COMPANY
+    # This matches the actual constraint: uq_user_environment_name(company_id, created_by, name)
     result = await db.execute(
         select(Environment).where(
             Environment.company_id == company_id,
+            Environment.created_by == user_id,
             Environment.name == "Default"
         )
     )
     default_env = result.scalar_one_or_none()
     
     if not default_env:
-        # No Default environment exists for the company, create one
+        # No Default environment exists for this user in this company, create one
         try:
             default_env = Environment(
                 company_id=company_id,
@@ -42,16 +46,17 @@ async def get_or_create_default_environment(
             db.add(default_env)
             await db.commit()
             await db.refresh(default_env)
-            logger.info(f"Created default environment {default_env.id} for company {company_id} by user {user_id}")
+            logger.info(f"✅ Created default environment {default_env.id} for user {user_id} in company {company_id}")
         except Exception as e:
-            # If we get a unique constraint error, another user created it concurrently
-            logger.warning(f"Failed to create default environment: {e}")
+            # If we get a unique constraint error, another process created it concurrently
+            logger.warning(f"⚠️ Failed to create default environment (likely race condition): {e}")
             await db.rollback()
             
-            # Try to fetch it again
+            # Try to fetch it again with user filter
             result = await db.execute(
                 select(Environment).where(
                     Environment.company_id == company_id,
+                    Environment.created_by == user_id,
                     Environment.name == "Default"
                 )
             )
@@ -61,10 +66,7 @@ async def get_or_create_default_environment(
                 # If still not found, raise the original error
                 raise
     else:
-        logger.info(f"Found existing default environment {default_env.id} for company {company_id}")
-    
-    # Note: With the current production constraint, all users in a company share the same Default environment
-    # This will change once migration 002_update_environment_constraint.py is run
+        logger.info(f"✅ Found existing default environment {default_env.id} for user {user_id} in company {company_id}")
     
     return default_env
 

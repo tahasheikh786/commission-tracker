@@ -1,272 +1,36 @@
-ode=my_data&year=2025 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53235 - "GET /api/companies/user-specific?environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53231 - "GET /api/earned-commission/carrier/user-specific/18a058c4-5195-4eb9-aa04-6ec01a3575da/stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53030 - "GET /api/companies/user-specific HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53030 - "GET /api/companies/user-specific HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53231 - "GET /api/companies/user-specific HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53546 - "GET /api/dashboard/earned-commissions?view_mode=my_data&year=2025&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53548 - "GET /api/earned-commission/carriers HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53552 - "GET /api/earned-commission/companies-aggregated?view_mode=my_data&year=2025&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53550 - "GET /api/earned-commission/carriers-detailed?view_mode=my_data&year=2025&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53544 - "GET /api/dashboard/stats?view_mode=my_data&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53542 - "GET /api/earned-commission/stats?view_mode=my_data&year=2025&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53546 - "GET /api/dashboard/earned-commissions?view_mode=my_data&year=2025&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53548 - "GET /api/earned-commission/carriers HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53552 - "GET /api/earned-commission/companies-aggregated?view_mode=my_data&year=2025&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53550 - "GET /api/earned-commission/carriers-detailed?view_mode=my_data&year=2025&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53544 - "GET /api/dashboard/stats?view_mode=my_data&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53542 - "GET /api/earned-commission/stats?view_mode=my_data&year=2025&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53705 - "GET /api/dashboard/earned-commissions/years HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53705 - "GET /api/dashboard/earned-commissions/years HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53703 - "GET /api/earned-commission/carriers HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53699 - "GET /api/dashboard/stats?view_mode=my_data&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53701 - "GET /api/dashboard/earned-commissions?view_mode=my_data&year=2025&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53707 - "GET /api/earned-commission/carriers-detailed?view_mode=my_data&year=2025&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53697 - "GET /api/earned-commission/stats?view_mode=my_data&year=2025&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53703 - "GET /api/earned-commission/carriers HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53701 - "GET /api/dashboard/earned-commissions?view_mode=my_data&year=2025&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53707 - "GET /api/earned-commission/carriers-detailed?view_mode=my_data&year=2025&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53699 - "GET /api/dashboard/stats?view_mode=my_data&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53697 - "GET /api/earned-commission/stats?view_mode=my_data&year=2025&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53785 - "GET /api/dashboard/earned-commissions/years HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53785 - "GET /api/dashboard/earned-commissions/years HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53787 - "GET /api/dashboard/earned-commissions?view_mode=my_data&year=2025&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53789 - "GET /api/earned-commission/companies-aggregated?view_mode=my_data&year=2025&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53783 - "GET /api/earned-commission/carriers HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53787 - "GET /api/dashboard/earned-commissions?view_mode=my_data&year=2025&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53789 - "GET /api/earned-commission/companies-aggregated?view_mode=my_data&year=2025&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53783 - "GET /api/earned-commission/carriers HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53843 - "GET /api/companies/?view_mode=my_data&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53841 - "GET /api/companies/user-specific?environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53789 - "GET /api/earned-commission/companies-aggregated?view_mode=my_data&year=2025&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53843 - "GET /api/companies/?view_mode=my_data&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53783 - "GET /api/companies/user-specific?environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53841 - "GET /api/earned-commission/companies-aggregated?view_mode=my_data&year=2025&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53783 - "GET /api/companies/user-specific?environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53783 - "GET /api/companies/user-specific?environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
+INFO:app.main:✅ Orphan cleanup scheduler started (runs every 3 minutes)
+INFO:app.services.process_monitor:Process monitor initialized: max_time=1800s, heartbeat_timeout=300s
+INFO:app.services.process_monitor:Process monitoring started
+INFO:app.main:Process monitoring started for large file processing
+INFO:app.main:Application startup complete with enhanced monitoring
+INFO:app.services.orphan_cleanup_service:🚀 Starting orphan cleanup scheduler (runs every 3 minutes)
 INFO:app.services.orphan_cleanup_service:🧹 Starting orphan cleanup job...
+INFO:app.services.process_monitor:Starting process monitoring loop
+INFO:     Application startup complete.
+INFO:app.main:Cleaned up 473 expired/inactive sessions
 INFO:app.services.orphan_cleanup_service:✅ Orphan cleanup completed: no orphans found
-INFO:app.services.orphan_cleanup_service:🧹 Starting orphan cleanup job...
-INFO:app.services.orphan_cleanup_service:✅ Orphan cleanup completed: no orphans found
-WARNING:  StatReload detected changes in 'app/db/crud/statement_upload.py'. Reloading...
-INFO:     Shutting down
-INFO:     Waiting for application shutdown.
-INFO:app.main:FastAPI shutdown event triggered
-INFO:app.services.process_monitor:Process monitoring cancelled
-INFO:app.services.process_monitor:Process monitoring loop stopped
-INFO:app.services.process_monitor:Process monitoring stopped
-INFO:app.main:Process monitoring stopped
-INFO:app.main:Graceful shutdown complete
-INFO:     Application shutdown complete.
-INFO:     Finished server process [10519]
-✅ Using Render PostgreSQL database
-✅ Using Render PostgreSQL database
-INFO:app.services.company_name_service:spaCy not available, using pattern matching only
-INFO:app.services.gpt4o_vision_service:GPT-5 Vision service initialized successfully
-WARNING:  StatReload detected changes in 'app/db/crud/statement_upload.py'. Reloading...
-INFO:app.services.ai_field_mapping_service:AI Field Mapping Service initialized successfully
-INFO:app.services.ai_plan_type_detection_service:AI Plan Type Detection Service initialized successfully
-🌐 CORS Configuration - Allowed Origins: ['http://localhost:3000', 'http://127.0.0.1:3000', 'https://commission-tracker-1.onrender.com', 'https://commission-tracker-ochre.vercel.app']
-INFO:     Started server process [34134]
-INFO:     Waiting for application startup.
-INFO:app.main:✅ Orphan cleanup scheduler started (runs every 3 minutes)
-INFO:app.services.process_monitor:Process monitor initialized: max_time=1800s, heartbeat_timeout=300s
-INFO:app.services.process_monitor:Process monitoring started
-INFO:app.main:Process monitoring started for large file processing
-INFO:app.main:Application startup complete with enhanced monitoring
-INFO:app.services.orphan_cleanup_service:🚀 Starting orphan cleanup scheduler (runs every 3 minutes)
-INFO:app.services.orphan_cleanup_service:🧹 Starting orphan cleanup job...
-INFO:app.services.process_monitor:Starting process monitoring loop
-INFO:     Application startup complete.
-✅ Using Render PostgreSQL database
-✅ Using Render PostgreSQL database
-INFO:app.services.company_name_service:spaCy not available, using pattern matching only
-INFO:app.services.gpt4o_vision_service:GPT-5 Vision service initialized successfully
-WARNING:  StatReload detected changes in 'fix_environment_data.py'. Reloading...
-INFO:app.services.ai_field_mapping_service:AI Field Mapping Service initialized successfully
-INFO:app.services.ai_plan_type_detection_service:AI Plan Type Detection Service initialized successfully
-🌐 CORS Configuration - Allowed Origins: ['http://localhost:3000', 'http://127.0.0.1:3000', 'https://commission-tracker-1.onrender.com', 'https://commission-tracker-ochre.vercel.app']
-INFO:     Started server process [34711]
-INFO:     Waiting for application startup.
-INFO:app.main:✅ Orphan cleanup scheduler started (runs every 3 minutes)
-INFO:app.services.process_monitor:Process monitor initialized: max_time=1800s, heartbeat_timeout=300s
-INFO:app.services.process_monitor:Process monitoring started
-INFO:app.main:Process monitoring started for large file processing
-INFO:app.main:Application startup complete with enhanced monitoring
-INFO:app.services.orphan_cleanup_service:🚀 Starting orphan cleanup scheduler (runs every 3 minutes)
-INFO:app.services.orphan_cleanup_service:🧹 Starting orphan cleanup job...
-INFO:app.services.process_monitor:Starting process monitoring loop
-INFO:     Application startup complete.
-✅ Using Render PostgreSQL database
-✅ Using Render PostgreSQL database
-INFO:app.services.company_name_service:spaCy not available, using pattern matching only
-INFO:app.services.gpt4o_vision_service:GPT-5 Vision service initialized successfully
-INFO:app.services.ai_field_mapping_service:AI Field Mapping Service initialized successfully
-INFO:app.services.ai_plan_type_detection_service:AI Plan Type Detection Service initialized successfully
-🌐 CORS Configuration - Allowed Origins: ['http://localhost:3000', 'http://127.0.0.1:3000', 'https://commission-tracker-1.onrender.com', 'https://commission-tracker-ochre.vercel.app']
-INFO:     Started server process [35198]
-INFO:     Waiting for application startup.
-INFO:app.main:✅ Orphan cleanup scheduler started (runs every 3 minutes)
-INFO:app.services.process_monitor:Process monitor initialized: max_time=1800s, heartbeat_timeout=300s
-INFO:app.services.process_monitor:Process monitoring started
-INFO:app.main:Process monitoring started for large file processing
-INFO:app.main:Application startup complete with enhanced monitoring
-INFO:app.services.orphan_cleanup_service:🚀 Starting orphan cleanup scheduler (runs every 3 minutes)
-INFO:app.services.orphan_cleanup_service:🧹 Starting orphan cleanup job...
-INFO:app.services.process_monitor:Starting process monitoring loop
-INFO:     Application startup complete.
-WARNING:  StatReload detected changes in 'fix_environment_data.py'. Reloading...
-INFO:     Shutting down
-INFO:     Waiting for application shutdown.
-INFO:app.main:FastAPI shutdown event triggered
-INFO:app.services.process_monitor:Process monitoring cancelled
-INFO:app.services.process_monitor:Process monitoring loop stopped
-INFO:app.services.process_monitor:Process monitoring stopped
-INFO:app.main:Process monitoring stopped
-INFO:app.main:Session cleanup task cancelled
-INFO:app.main:Graceful shutdown complete
-INFO:     Application shutdown complete.
-INFO:     Finished server process [35198]
-✅ Using Render PostgreSQL database
-✅ Using Render PostgreSQL database
-INFO:app.services.company_name_service:spaCy not available, using pattern matching only
-INFO:app.services.gpt4o_vision_service:GPT-5 Vision service initialized successfully
-INFO:app.services.ai_field_mapping_service:AI Field Mapping Service initialized successfully
-INFO:app.services.ai_plan_type_detection_service:AI Plan Type Detection Service initialized successfully
-🌐 CORS Configuration - Allowed Origins: ['http://localhost:3000', 'http://127.0.0.1:3000', 'https://commission-tracker-1.onrender.com', 'https://commission-tracker-ochre.vercel.app']
-INFO:     Started server process [35726]
-INFO:     Waiting for application startup.
-INFO:app.main:✅ Orphan cleanup scheduler started (runs every 3 minutes)
-INFO:app.services.process_monitor:Process monitor initialized: max_time=1800s, heartbeat_timeout=300s
-INFO:app.services.process_monitor:Process monitoring started
-INFO:app.main:Process monitoring started for large file processing
-INFO:app.main:Application startup complete with enhanced monitoring
-INFO:app.services.orphan_cleanup_service:🚀 Starting orphan cleanup scheduler (runs every 3 minutes)
-INFO:app.services.orphan_cleanup_service:🧹 Starting orphan cleanup job...
-INFO:app.services.process_monitor:Starting process monitoring loop
-INFO:     Application startup complete.
-INFO:app.services.orphan_cleanup_service:✅ Orphan cleanup completed: no orphans found
-INFO:app.main:Cleaned up 467 expired/inactive sessions
-WARNING:  StatReload detected changes in 'app/db/crud/statement_upload.py'. Reloading...
-INFO:     Shutting down
-INFO:     Waiting for application shutdown.
-INFO:app.main:FastAPI shutdown event triggered
-INFO:app.services.process_monitor:Process monitoring cancelled
-INFO:app.services.process_monitor:Process monitoring loop stopped
-INFO:app.services.process_monitor:Process monitoring stopped
-INFO:app.main:Process monitoring stopped
-INFO:app.main:Graceful shutdown complete
-INFO:     Application shutdown complete.
-INFO:     Finished server process [35726]
-✅ Using Render PostgreSQL database
-✅ Using Render PostgreSQL database
-INFO:app.services.company_name_service:spaCy not available, using pattern matching only
-INFO:app.services.gpt4o_vision_service:GPT-5 Vision service initialized successfully
-INFO:app.services.ai_field_mapping_service:AI Field Mapping Service initialized successfully
-INFO:app.services.ai_plan_type_detection_service:AI Plan Type Detection Service initialized successfully
-🌐 CORS Configuration - Allowed Origins: ['http://localhost:3000', 'http://127.0.0.1:3000', 'https://commission-tracker-1.onrender.com', 'https://commission-tracker-ochre.vercel.app']
-INFO:     Started server process [36823]
-INFO:     Waiting for application startup.
-INFO:app.main:✅ Orphan cleanup scheduler started (runs every 3 minutes)
-INFO:app.services.process_monitor:Process monitor initialized: max_time=1800s, heartbeat_timeout=300s
-INFO:app.services.process_monitor:Process monitoring started
-INFO:app.main:Process monitoring started for large file processing
-INFO:app.main:Application startup complete with enhanced monitoring
-INFO:app.services.orphan_cleanup_service:🚀 Starting orphan cleanup scheduler (runs every 3 minutes)
-INFO:app.services.orphan_cleanup_service:🧹 Starting orphan cleanup job...
-INFO:app.services.process_monitor:Starting process monitoring loop
-INFO:     Application startup complete.
-🔍 Auth Status - All cookies: ['__next_hmr_refresh_hash__', 'access_token', 'refresh_token', 'session_token']
-🔍 Auth Status - Access token present: True
-🔍 Auth Status - Request host: localhost:8000
-🔍 Auth Status - Request origin: http://localhost:3000
-🔍 Auth Status - Cookie __next_hmr_refresh_hash__: 195beea9f78d48ea3509197114e12357633457081244afec
-🔍 Auth Status - Cookie access_token: eyJhbGciOiJIUzI1NiIs...
-🔍 Auth Status - Cookie refresh_token: eyJhbGciOiJIUzI1NiIs...
-🔍 Auth Status - Cookie session_token: 94e0eed0-a6bd-4e97-9...
-INFO:     127.0.0.1:55961 - "OPTIONS /environments HTTP/1.1" 200 OK
-INFO:app.services.orphan_cleanup_service:✅ Orphan cleanup completed: no orphans found
-INFO:app.main:Cleaned up 466 expired/inactive sessions
-🔍 Auth Status - All cookies: ['__next_hmr_refresh_hash__', 'access_token', 'refresh_token', 'session_token']
-🔍 Auth Status - Access token present: True
-🔍 Auth Status - Request host: localhost:8000
-🔍 Auth Status - Request origin: http://localhost:3000
-🔍 Auth Status - Cookie __next_hmr_refresh_hash__: 195beea9f78d48ea3509197114e12357633457081244afec
-🔍 Auth Status - Cookie access_token: eyJhbGciOiJIUzI1NiIs...
-🔍 Auth Status - Cookie refresh_token: eyJhbGciOiJIUzI1NiIs...
-🔍 Auth Status - Cookie session_token: 94e0eed0-a6bd-4e97-9...
-INFO:     127.0.0.1:56101 - "GET /api/auth/otp/status HTTP/1.1" 200 OK
-🔍 Debug - All cookies received: ['__next_hmr_refresh_hash__', 'access_token', 'refresh_token', 'session_token']
-🔍 Debug - Access token present: True
-INFO:     127.0.0.1:56101 - "GET /api/auth/permissions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56120 - "GET /environments HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56141 - "GET /api/earned-commission/carriers-detailed?view_mode=my_data&year=2025 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56101 - "GET /api/earned-commission/stats?view_mode=my_data&year=2025 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56137 - "GET /api/dashboard/earned-commissions?view_mode=my_data&year=2025 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56139 - "GET /api/earned-commission/carriers HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56120 - "GET /api/earned-commission/companies-aggregated?view_mode=my_data&year=2025 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56135 - "GET /api/dashboard/stats?view_mode=my_data HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56137 - "GET /api/dashboard/earned-commissions?view_mode=my_data&year=2025&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56139 - "GET /api/earned-commission/carriers-detailed?view_mode=my_data&year=2025&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56120 - "GET /api/earned-commission/companies-aggregated?view_mode=my_data&year=2025&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56101 - "GET /api/dashboard/stats?view_mode=my_data&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56141 - "GET /api/earned-commission/stats?view_mode=my_data&year=2025&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56135 - "GET /api/earned-commission/carriers-detailed?view_mode=my_data&year=2025 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56120 - "GET /api/earned-commission/carriers HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56101 - "GET /api/earned-commission/companies-aggregated?view_mode=my_data&year=2025 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56139 - "GET /api/dashboard/earned-commissions?view_mode=my_data&year=2025 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56141 - "GET /api/dashboard/stats?view_mode=my_data HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56137 - "GET /api/earned-commission/stats?view_mode=my_data&year=2025 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56141 - "GET /api/dashboard/earned-commissions/years HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56141 - "GET /api/dashboard/earned-commissions/years HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56135 - "GET /api/earned-commission/carriers HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56120 - "GET /api/dashboard/earned-commissions?view_mode=my_data&year=2025&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56137 - "GET /api/earned-commission/carriers-detailed?view_mode=my_data&year=2025&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56139 - "GET /api/earned-commission/stats?view_mode=my_data&year=2025&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56101 - "GET /api/dashboard/stats?view_mode=my_data&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56135 - "GET /api/earned-commission/carriers HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56120 - "GET /api/dashboard/earned-commissions?view_mode=my_data&year=2025&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56137 - "GET /api/earned-commission/carriers-detailed?view_mode=my_data&year=2025&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56101 - "GET /api/dashboard/stats?view_mode=my_data&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56139 - "GET /api/earned-commission/stats?view_mode=my_data&year=2025&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56101 - "GET /api/dashboard/earned-commissions/years HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56135 - "GET /api/dashboard/earned-commissions/years HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56120 - "GET /api/earned-commission/companies-aggregated?view_mode=my_data&year=2025&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56137 - "GET /api/dashboard/earned-commissions?view_mode=my_data&year=2025&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56139 - "GET /api/earned-commission/carriers HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56120 - "GET /api/earned-commission/companies-aggregated?view_mode=my_data&year=2025&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56139 - "GET /api/earned-commission/carriers HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56137 - "GET /api/dashboard/earned-commissions?view_mode=my_data&year=2025&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56120 - "GET /api/earned-commission/companies-aggregated?view_mode=my_data&year=2025&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56294 - "GET /api/companies/?view_mode=my_data&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56292 - "GET /api/companies/user-specific?environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56120 - "GET /api/earned-commission/companies-aggregated?view_mode=my_data&year=2025&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56294 - "GET /api/companies/?view_mode=my_data&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56292 - "GET /api/companies/user-specific?environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56320 - "GET /api/companies/user-specific/18a058c4-5195-4eb9-aa04-6ec01a3575da/statements HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56322 - "GET /api/earned-commission/carrier/user-specific/18a058c4-5195-4eb9-aa04-6ec01a3575da/stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56292 - "GET /api/companies/user-specific?environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56322 - "GET /api/database-fields/?active_only=true HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56322 - "GET /api/database-fields/?active_only=true HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56320 - "GET /api/companies/user-specific?environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763138055460_wpizyorev. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763138055460_wpizyorev, session_id: session_1763138055494_cwei7efh9
-INFO:     127.0.0.1:56449 - "WebSocket /api/ws/progress/upload_1763138055460_wpizyorev?session_id=session_1763138055494_cwei7efh9" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763138055460_wpizyorev, session_id=session_1763138055494_cwei7efh9, timeout=1800s
+INFO:     127.0.0.1:59833 - "GET /api/database-fields/?active_only=true HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59833 - "GET /api/database-fields/?active_only=true HTTP/1.1" 200 OK
+WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763174500295_rkrj59k3b. This is allowed for progress tracking, but consider implementing token passing for production.
+INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763174500295_rkrj59k3b, session_id: session_1763174500304_evjqd6qua
+INFO:     127.0.0.1:59837 - "WebSocket /api/ws/progress/upload_1763174500295_rkrj59k3b?session_id=session_1763174500304_evjqd6qua" [accepted]
+INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763174500295_rkrj59k3b, session_id=session_1763174500304_evjqd6qua, timeout=1800s
 INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763138055460_wpizyorev, session_id: session_1763138055494_cwei7efh9
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763138055460_wpizyorev
-INFO:     127.0.0.1:56451 - "OPTIONS /api/extract-tables-smart/ HTTP/1.1" 200 OK
-INFO:app.api.new_extract:📁 File: 08.06.2025 Allied Innovative Payment 2.pdf, Size: 227321 bytes, User: f6cf1764-5bfc-4352-abd9-81b72b7cf191
-INFO:app.api.new_extract:🚀 Starting extraction: 08.06.2025 Allied Innovative Payment 2.pdf (ID: upload_1763138055460_wpizyorev)
-INFO:app.services.gcs_utils:✅ File uploaded to GCS: statements/ce061f11-a2ad-4212-b83f-6de2b3f30ba4/08.06.2025 Allied Innovative Payment 2.pdf
-INFO:app.api.new_extract:✅ Uploaded to GCS: statements/ce061f11-a2ad-4212-b83f-6de2b3f30ba4/08.06.2025 Allied Innovative Payment 2.pdf
-INFO:app.services.gcs_utils:✅ Generated signed URL for GCS file with inline headers: statements/ce061f11-a2ad-4212-b83f-6de2b3f30ba4/08.06.2025 Allied Innovative Payment 2.pdf
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763138055460_wpizyorev: STEP_STARTED
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763138055460_wpizyorev
-INFO:app.services.websocket_service:Step started: Uploading Document (Step 1) for upload_id upload_1763138055460_wpizyorev
-INFO:app.api.new_extract:📝 Upload metadata prepared (NOT saved to DB): ce061f11-a2ad-4212-b83f-6de2b3f30ba4
-INFO:app.services.audit_logging_service:Audit: data_view by user f6cf1764-5bfc-4352-abd9-81b72b7cf191 on extraction_process (ID: ce061f11-a2ad-4212-b83f-6de2b3f30ba4)
+INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763174500295_rkrj59k3b, session_id: session_1763174500304_evjqd6qua
+INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763174500295_rkrj59k3b
+INFO:     127.0.0.1:59839 - "OPTIONS /api/extract-tables-smart/ HTTP/1.1" 200 OK
+INFO:app.api.new_extract:📁 File: 01.24.2025.2 Allied Innovative Payment.pdf, Size: 117658 bytes, User: f6cf1764-5bfc-4352-abd9-81b72b7cf191
+INFO:app.api.new_extract:🚀 Starting extraction: 01.24.2025.2 Allied Innovative Payment.pdf (ID: upload_1763174500295_rkrj59k3b)
+INFO:app.services.gcs_utils:✅ File uploaded to GCS: statements/b67bcc53-3efd-4df6-b60d-9e3a8192e725/01.24.2025.2 Allied Innovative Payment.pdf
+INFO:app.api.new_extract:✅ Uploaded to GCS: statements/b67bcc53-3efd-4df6-b60d-9e3a8192e725/01.24.2025.2 Allied Innovative Payment.pdf
+INFO:app.services.gcs_utils:✅ Generated signed URL for GCS file with inline headers: statements/b67bcc53-3efd-4df6-b60d-9e3a8192e725/01.24.2025.2 Allied Innovative Payment.pdf
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763174500295_rkrj59k3b: STEP_STARTED
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763174500295_rkrj59k3b
+INFO:app.services.websocket_service:Step started: Uploading Document (Step 1) for upload_id upload_1763174500295_rkrj59k3b
+INFO:app.db.crud.environment:✅ Found existing default environment 9f4a7a57-5715-4b1e-98a9-b9901726a485 for user f6cf1764-5bfc-4352-abd9-81b72b7cf191 in company d883a865-a54f-41d6-968e-f94c3cb3f589
+INFO:app.api.new_extract:✅ Using user's default environment 9f4a7a57-5715-4b1e-98a9-b9901726a485 for upload consistency
+INFO:app.api.new_extract:📝 Upload metadata prepared (NOT saved to DB): b67bcc53-3efd-4df6-b60d-9e3a8192e725
+INFO:app.services.audit_logging_service:Audit: data_view by user f6cf1764-5bfc-4352-abd9-81b72b7cf191 on extraction_process (ID: b67bcc53-3efd-4df6-b60d-9e3a8192e725)
 INFO:app.services.claude.service:🔄 Initializing Claude API client (SDK version: True)
 INFO:app.services.claude.service:🔑 API Key found: sk-ant-api03-vz...
 INFO:app.services.claude.service:✅ Claude API client initialized successfully
@@ -300,138 +64,307 @@ INFO:app.services.enhanced_extraction_service:🚀 Enhanced 3-phase pipeline: EN
 INFO:app.services.enhanced_extraction_service:✅ Using Claude as primary extraction service
 INFO:app.services.enhanced_extraction_service:✅ CLAUDE service validated successfully
 INFO:app.services.enhanced_extraction_service:Routing to Claude extraction (method: smart)
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763138055460_wpizyorev: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763138055460_wpizyorev
-INFO:app.services.websocket_service:Started stage document_processing for upload upload_1763138055460_wpizyorev
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763138055460_wpizyorev: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763138055460_wpizyorev
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763138055460_wpizyorev: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763138055460_wpizyorev
-INFO:app.services.websocket_service:Completed stage document_processing for upload upload_1763138055460_wpizyorev
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763174500295_rkrj59k3b: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763174500295_rkrj59k3b
+INFO:app.services.websocket_service:Started stage document_processing for upload upload_1763174500295_rkrj59k3b
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763174500295_rkrj59k3b: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763174500295_rkrj59k3b
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763174500295_rkrj59k3b: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763174500295_rkrj59k3b
+INFO:app.services.websocket_service:Completed stage document_processing for upload upload_1763174500295_rkrj59k3b
 INFO:app.services.enhanced_extraction_service:⚡ Extracting metadata with Claude to determine carrier-specific prompt
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763138055460_wpizyorev: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763138055460_wpizyorev
-INFO:app.services.claude.service:🔍 Extracting metadata with Claude from: pdfs/08.06.2025 Allied Innovative Payment 2.pdf
-INFO:app.services.claude.service:📄 Large file (7 pages) - Using ONLY first 3 pages for metadata
-INFO:app.services.claude.service:   Savings: 4 pages / ~11,000 tokens saved
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763174500295_rkrj59k3b: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763174500295_rkrj59k3b
+INFO:app.services.claude.service:🔍 Extracting metadata with Claude from: pdfs/01.24.2025.2 Allied Innovative Payment.pdf
+INFO:app.services.claude.service:📄 Large file (17 pages) - Using ONLY first 3 pages for metadata
+INFO:app.services.claude.service:   Savings: 14 pages / ~38,500 tokens saved
 INFO:app.services.claude.service:📊 Estimated tokens - Input: 10,677, Output: 4,270 (est.), Pages: 3
 INFO:app.services.claude.service:🔄 Calling Claude API with model: claude-sonnet-4-5-20250929 (attempt 1/5, cache=False)
 INFO:httpx:HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-INFO:app.services.claude.service:✅ Claude API call successful. Tokens - Input: 7,623, Output: 228
-INFO:app.services.claude.service:📊 Token tracking: Input: Est=10,677, Actual=7,623, Diff=-3,054 | Output: Est=4,270, Actual=228, Diff=-4,042
-INFO:app.services.claude.service:🔧 Token bucket adjusted: Input: 10,677 → 7,623, Output: 4,270 → 228
-INFO:app.services.enhanced_extraction_service:✓ Using Claude-extracted carrier name for prompt: Allied Benefit Systems (ABSF)
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763138055460_wpizyorev: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763138055460_wpizyorev
+INFO:app.services.claude.service:✅ Claude API call successful. Tokens - Input: 6,911, Output: 266
+INFO:app.services.claude.service:📊 Token tracking: Input: Est=10,677, Actual=6,911, Diff=-3,766 | Output: Est=4,270, Actual=266, Diff=-4,004
+INFO:app.services.claude.service:🔧 Token bucket adjusted: Input: 10,677 → 6,911, Output: 4,270 → 266
+INFO:app.services.claude.utils:✅ Successfully parsed JSON from markdown code block
+INFO:app.services.enhanced_extraction_service:✓ Using Claude-extracted carrier name for prompt: Allied Benefit Systems
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763174500295_rkrj59k3b: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763174500295_rkrj59k3b
 INFO:app.services.enhanced_extraction_service:📡 Emitting extraction step...
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763138055460_wpizyorev: STEP_STARTED
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763138055460_wpizyorev
-INFO:app.services.websocket_service:Step started: Analyzing Document (Step 2) for upload_id upload_1763138055460_wpizyorev
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763174500295_rkrj59k3b: STEP_STARTED
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763174500295_rkrj59k3b
+INFO:app.services.websocket_service:Step started: Analyzing Document (Step 2) for upload_id upload_1763174500295_rkrj59k3b
 INFO:app.services.enhanced_extraction_service:✅ Metadata extraction completed by Claude
 INFO:app.services.enhanced_extraction_service:📡 Emitting table_extraction step...
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763138055460_wpizyorev: STEP_STARTED
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763138055460_wpizyorev
-INFO:app.services.websocket_service:Step started: Reading Commission Data (Step 3) for upload_id upload_1763138055460_wpizyorev
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763138055460_wpizyorev: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763138055460_wpizyorev
-INFO:app.services.websocket_service:Started stage table_detection for upload upload_1763138055460_wpizyorev
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763138055460_wpizyorev: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763138055460_wpizyorev
-INFO:app.services.enhanced_extraction_service:Starting Claude extraction for pdfs/08.06.2025 Allied Innovative Payment 2.pdf (enhanced=True)
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763138055460_wpizyorev: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763138055460_wpizyorev
-INFO:app.services.claude.service:📄 Standard file (7 pages) - Using STANDARD processing
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763138055460_wpizyorev: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763138055460_wpizyorev
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763138055460_wpizyorev: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763138055460_wpizyorev
-INFO:app.services.websocket_service:Completed stage document_processing for upload upload_1763138055460_wpizyorev
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763138055460_wpizyorev: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763138055460_wpizyorev
-INFO:app.services.websocket_service:Started stage table_detection for upload upload_1763138055460_wpizyorev
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763138055460_wpizyorev: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763138055460_wpizyorev
-INFO:app.services.claude.dynamic_prompts:No carrier-specific prompt found for 'Allied Benefit Systems (ABSF)', using standard prompt only
-INFO:app.services.claude.service:📋 No carrier-specific prompt for 'Allied Benefit Systems (ABSF)', using standard prompt only
-INFO:app.services.claude.service:📊 Estimated tokens - Input: 36,640, Output: 6,000 (est.), Pages: 7
-ERROR:app.services.claude.service:Error in standard file extraction: Request too large: 36,640 input tokens exceeds limit of 36,000 tokens per minute
-INFO:app.services.claude.service:Attempting extraction with fallback model...
-INFO:app.services.claude.service:Attempting extraction with fallback model: claude-opus-4-1-20250805
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763138055460_wpizyorev: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763138055460_wpizyorev
-INFO:app.services.claude.dynamic_prompts:No carrier-specific prompt found for 'Allied Benefit Systems (ABSF)', using standard prompt only
-INFO:app.services.claude.service:📊 Estimated tokens - Input: 36,640, Output: 6,000 (est.), Pages: 7
-ERROR:app.services.claude.service:Fallback extraction also failed: Request too large: 36,640 input tokens exceeds limit of 36,000 tokens per minute
-ERROR:app.services.claude.service:❌ Claude extraction failed after 0.04s: Request too large: 36,640 input tokens exceeds limit of 36,000 tokens per minute
-INFO:app.services.enhanced_extraction_service:⚡ Extracting metadata from Claude extraction results
-INFO:app.services.enhanced_extraction_service:✅ Using Claude metadata: carrier=None, date=None, broker=None
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763138055460_wpizyorev: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763138055460_wpizyorev
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763138055460_wpizyorev: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763138055460_wpizyorev
-INFO:app.services.websocket_service:Completed stage table_detection for upload upload_1763138055460_wpizyorev
-INFO:app.services.enhanced_extraction_service:================================================================================
-INFO:app.services.enhanced_extraction_service:🎯 STAGE 3: CONVERSATIONAL SUMMARY GENERATION
-INFO:app.services.enhanced_extraction_service:================================================================================
-INFO:app.services.enhanced_extraction_service:   - Enhanced mode enabled: True
-INFO:app.services.enhanced_extraction_service:   - Result has 'summary': False
-INFO:app.services.enhanced_extraction_service:   - Summary service available: True
-INFO:app.services.enhanced_extraction_service:🗣️ Generating enhanced conversational summary...
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763138055460_wpizyorev: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763138055460_wpizyorev
-INFO:app.services.websocket_service:Started stage summary_generation for upload upload_1763138055460_wpizyorev
-INFO:app.services.conversational_summary_service:🗣️ Generating conversational summary...
-INFO:app.services.conversational_summary_service:🔍 _build_summary_prompt called:
-INFO:app.services.conversational_summary_service:   - use_enhanced: True
-INFO:app.services.conversational_summary_service:   - has_enhanced_data: False
-INFO:app.services.conversational_summary_service:   - extraction_data keys: ['success', 'error', 'error_message', 'tables', 'extraction_method', 'processing_time']
-WARNING:app.services.conversational_summary_service:⚠️ use_enhanced=True but has_enhanced_data=False
-WARNING:app.services.conversational_summary_service:   Missing keys in extraction_data. Available: ['success', 'error', 'error_message', 'tables', 'extraction_method', 'processing_time']
-INFO:app.services.conversational_summary_service:✅ SUCCESS: Enhanced prompts imported correctly
-INFO:app.services.conversational_summary_service:📊 Estimated tokens - Input: 2,749, Output: 800
-INFO:app.services.conversational_summary_service:🚀 Calling Claude API for summary generation...
-INFO:app.services.conversational_summary_service:   Model: claude-sonnet-4-5-20250929
-INFO:app.services.conversational_summary_service:   Max tokens: 800
-INFO:app.services.conversational_summary_service:   Prompt length: 9576 chars
-INFO:app.services.conversational_summary_service:   System prompt length: 1421 chars
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763174500295_rkrj59k3b: STEP_STARTED
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763174500295_rkrj59k3b
+INFO:app.services.websocket_service:Step started: Reading Commission Data (Step 3) for upload_id upload_1763174500295_rkrj59k3b
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763174500295_rkrj59k3b: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763174500295_rkrj59k3b
+INFO:app.services.websocket_service:Started stage table_detection for upload upload_1763174500295_rkrj59k3b
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763174500295_rkrj59k3b: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763174500295_rkrj59k3b
+INFO:app.services.enhanced_extraction_service:Starting Claude extraction for pdfs/01.24.2025.2 Allied Innovative Payment.pdf (enhanced=True)
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763174500295_rkrj59k3b: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763174500295_rkrj59k3b
+INFO:app.services.claude.dynamic_prompts:No carrier-specific prompt found for 'Allied Benefit Systems', using standard prompt only
+INFO:app.services.claude.service:📊 Token Estimation:
+INFO:app.services.claude.service: - Mode: standard
+INFO:app.services.claude.service: - Pages: 17 (actual: 17)
+INFO:app.services.claude.service: - Tokens/page: 4500 (with 114% buffer)
+INFO:app.services.claude.service: - Estimated input: 92,000 tokens
+INFO:app.services.claude.service: - Safe limit: 32,400 tokens (90% of 36,000)
+INFO:app.services.claude.service: - Will fit in single call: False
+INFO:app.services.claude.service: - Recommended chunk size: 6 pages/chunk
+INFO:app.services.claude.service: - Risk level: critical
+WARNING:app.services.claude.service:⚠️  Token estimate 92,000 exceeds safe limit
+WARNING:app.services.claude.service:   Forcing chunking: 6 pages/chunk
+INFO:app.services.claude.service:🔐 Forcing chunked extraction due to token estimate
+INFO:app.services.claude.service:🔐 Force chunking enabled by pre-validation
+INFO:app.services.claude.service:📋 Chunking 17 pages into chunks of 5 pages
+INFO:app.services.claude.service:🔄 Starting chunked extraction: 17 pages, 5 pages/chunk with model: claude-sonnet-4-5-20250929
+INFO:app.services.claude.service:  Chunk 1: Pages 1-5 (overlap: True)
+INFO:app.services.claude.service:  Chunk 2: Pages 5-10 (overlap: True)
+INFO:app.services.claude.service:  Chunk 3: Pages 10-15 (overlap: True)
+INFO:app.services.claude.service:  Chunk 4: Pages 15-17 (overlap: True)
+INFO:app.services.claude.service:📖 Processing chunk 1/4: Pages 1-5
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763174500295_rkrj59k3b: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763174500295_rkrj59k3b
+INFO:app.services.claude.service:📊 Token Estimation:
+INFO:app.services.claude.service: - Mode: chunk
+INFO:app.services.claude.service: - Pages: 5 (actual: 5)
+INFO:app.services.claude.service: - Tokens/page: 4500 (with 114% buffer)
+INFO:app.services.claude.service: - Estimated input: 29,899 tokens
+INFO:app.services.claude.service: - Safe limit: 32,400 tokens (90% of 36,000)
+INFO:app.services.claude.service: - Will fit in single call: False
+INFO:app.services.claude.service: - Recommended chunk size: 6 pages/chunk
+INFO:app.services.claude.service: - Risk level: warning
+INFO:app.services.claude.service:   Chunk tokens: 29,899 (safe: False)
+INFO:app.services.claude.service:📊 Token Estimation:
+INFO:app.services.claude.service: - Mode: standard
+INFO:app.services.claude.service: - Pages: 5 (actual: 5)
+INFO:app.services.claude.service: - Tokens/page: 4500 (with 114% buffer)
+INFO:app.services.claude.service: - Estimated input: 29,899 tokens
+INFO:app.services.claude.service: - Safe limit: 32,400 tokens (90% of 36,000)
+INFO:app.services.claude.service: - Will fit in single call: False
+INFO:app.services.claude.service: - Recommended chunk size: 6 pages/chunk
+INFO:app.services.claude.service: - Risk level: warning
+INFO:app.services.claude.service:📊 Calling Claude with estimated 29,899 tokens
+INFO:app.services.claude.service:🔄 Calling Claude API for chunk with model: claude-sonnet-4-5-20250929
+INFO:app.services.claude.service:📊 Estimated tokens - Input: 28,914, Output: 6,000 (est.), Pages: 5
+INFO:app.services.claude.service:🔄 Calling Claude API with model: claude-sonnet-4-5-20250929 (attempt 1/5, cache=True)
 INFO:httpx:HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-INFO:app.services.conversational_summary_service:📊 Actual usage - Input: 3,121, Output: 118
-INFO:app.services.conversational_summary_service:✅ Claude API call successful
-INFO:app.services.conversational_summary_service:   Response content blocks: 1
-INFO:app.services.conversational_summary_service:⚠️ No structured JSON found, using text-only summary
-INFO:app.services.conversational_summary_service:✅ Extracted structured summary data (1 fields): ['broker_id_confidence']
-INFO:app.services.conversational_summary_service:📄 Generated summary length: 604 characters
-INFO:app.services.conversational_summary_service:📊 Final structured data keys: ['broker_id_confidence']
-INFO:app.services.enhanced_extraction_service:✅ Enhanced summary generated: This is  a commission statement from Allied Benefit for INNOVATIVE BPS LLC, dated August 6, 2025, th...
-INFO:app.services.enhanced_extraction_service:✅ Structured summary data extracted: ['broker_id_confidence']
-INFO:app.services.enhanced_extraction_service:📤 Sending enhanced summary AND structured data to frontend via WebSocket NOW
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763138055460_wpizyorev: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763138055460_wpizyorev
-INFO:app.services.enhanced_extraction_service:✅ Sent structured summary data to frontend: {'broker_id_confidence': 0.7}
-INFO:app.services.enhanced_extraction_service:✅ Enhanced summary sent to frontend successfully
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763138055460_wpizyorev: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763138055460_wpizyorev
-INFO:app.services.websocket_service:Completed stage summary_generation for upload upload_1763138055460_wpizyorev
-INFO:app.services.enhanced_extraction_service:================================================================================
-INFO:app.services.enhanced_extraction_service:📝 FINAL SUMMARY SELECTION: ENHANCED CONVERSATIONAL
-INFO:app.services.enhanced_extraction_service:================================================================================
-INFO:app.services.enhanced_extraction_service:   Summary length: 604 characters
-INFO:app.services.enhanced_extraction_service:   Full summary:
-This is  a commission statement from Allied Benefit for INNOVATIVE BPS LLC, dated August 6, 2025, though the extracted data appears incomplete in the current analysis. The total amount is not explicitly stated in the document metadata, indicating potential extraction limitations from this particular PDF file (pdfs/08.06.2025 Allied Innovative Payment 2.pdf). Without access to the detailed commission breakdown, company names, payment amounts, or plan structure information, a comprehensive analysis of top contributors, commission rates, and payment details cannot be provided from the available data.
-INFO:app.services.enhanced_extraction_service:================================================================================
-INFO:app.services.enhanced_extraction_service:✅ Added structured_data to result: ['broker_id_confidence']
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763138055460_wpizyorev: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763138055460_wpizyorev
-INFO:app.services.websocket_service:Started stage validation for upload upload_1763138055460_wpizyorev
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763138055460_wpizyorev: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763138055460_wpizyorev
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763138055460_wpizyorev: completion
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763138055460_wpizyorev
-INFO:app.services.websocket_service:Completed processing for upload upload_1763138055460_wpizyorev in 14.22 seconds
-INFO:app.api.new_extract:✅ Extraction completed
-INFO:app.services.cancellation_manager:Cleared cancellation status for upload upload_1763138055460_wpizyorev
-INFO:app.api.new_extract:✅ Extraction completed (data NOT saved to DB, will be saved on approval)
-INFO:app.services.audit_logging_service:Audit: data_view by user f6cf1764-5bfc-4352-abd9-81b72b7cf191 on extraction_complete (ID: ce061f11-a2ad-4212-b83f-6de2b3f30ba4)
+INFO:app.services.claude.service:💾 Cache created with 10,209 tokens
+INFO:app.services.claude.service:✅ Claude API call successful. Tokens - Input: 12,302, Output: 8,000
+INFO:app.services.claude.service:📊 Token tracking: Input: Est=28,914, Actual=12,302, Diff=-16,612 | Output: Est=6,000, Actual=8,000, Diff=+2,000
+INFO:app.services.claude.service:🔧 Token bucket adjusted: Input: 35,825 → 19,213, Output: 6,266 → 8,266
+WARNING:app.services.claude.utils:Failed to parse unwrapped markdown JSON: Unterminated string starting at: line 597 column 31 (char 22159)
+WARNING:app.services.claude.utils:Could not find JSON, attempting to parse markdown tables
+ERROR:app.services.claude.utils:All parsing strategies failed
+ERROR:app.services.claude.utils:Response text (first 500 chars): ```json
+{
+  "document_type": "commission_statement",
+  "extraction_quality": {
+    "overall_confidence": 0.96,
+    "extraction_method": "vision_language_multimodal"
+  },
+  "carrier": {
+    "name": "Allied Benefit Systems",
+    "confidence": 0.98,
+    "evidence": "Header logo area on page 1, company branding clearly visible with full name 'Allied Benefit Systems' in footer area. Logo shows 'ALLIED' with full company name 'AlliedBenefit.com' in contact information.",
+    "location": "header_logo",
+ERROR:app.services.claude.utils:Response text (last 200 chars): ... "1/1/2025", "12/1/2024", "$3,068.80", "$1,317.75", "16%", "Premium Equivalent", "4", "$280.56"],
+          "is_summary": false
+        },
+        {
+          "data": ["L234576", "MUSIC CITY DELIVERY 
+INFO:app.services.claude.service:   ✅ Chunk successful: 0 tables extracted
+INFO:app.services.claude.service:📖 Processing chunk 2/4: Pages 6-10
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763174500295_rkrj59k3b: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763174500295_rkrj59k3b
+INFO:app.services.claude.service:📊 Token Estimation:
+INFO:app.services.claude.service: - Mode: chunk
+INFO:app.services.claude.service: - Pages: 5 (actual: 5)
+INFO:app.services.claude.service: - Tokens/page: 4500 (with 114% buffer)
+INFO:app.services.claude.service: - Estimated input: 29,899 tokens
+INFO:app.services.claude.service: - Safe limit: 32,400 tokens (90% of 36,000)
+INFO:app.services.claude.service: - Will fit in single call: False
+INFO:app.services.claude.service: - Recommended chunk size: 6 pages/chunk
+INFO:app.services.claude.service: - Risk level: warning
+INFO:app.services.claude.service:   Chunk tokens: 29,899 (safe: False)
+INFO:app.services.claude.service:📊 Token Estimation:
+INFO:app.services.claude.service: - Mode: standard
+INFO:app.services.claude.service: - Pages: 5 (actual: 5)
+INFO:app.services.claude.service: - Tokens/page: 4500 (with 114% buffer)
+INFO:app.services.claude.service: - Estimated input: 29,899 tokens
+INFO:app.services.claude.service: - Safe limit: 32,400 tokens (90% of 36,000)
+INFO:app.services.claude.service: - Will fit in single call: False
+INFO:app.services.claude.service: - Recommended chunk size: 6 pages/chunk
+INFO:app.services.claude.service: - Risk level: warning
+INFO:app.services.claude.service:📊 Calling Claude with estimated 29,899 tokens
+INFO:app.services.claude.service:🔄 Calling Claude API for chunk with model: claude-sonnet-4-5-20250929
+INFO:app.services.claude.service:📊 Estimated tokens - Input: 28,914, Output: 6,000 (est.), Pages: 5
+INFO:app.services.claude.utils:✅ Token bucket reset (60s window)
+INFO:app.services.claude.service:🔄 Calling Claude API with model: claude-sonnet-4-5-20250929 (attempt 1/5, cache=True)
+INFO:app.services.orphan_cleanup_service:🧹 Starting orphan cleanup job...
+INFO:app.services.orphan_cleanup_service:✅ Orphan cleanup completed: no orphans found
+INFO:httpx:HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+INFO:app.services.claude.service:💾 Cache created with 10,632 tokens
+INFO:app.services.claude.service:✅ Claude API call successful. Tokens - Input: 12,302, Output: 8,000
+INFO:app.services.claude.service:📊 Token tracking: Input: Est=28,914, Actual=12,302, Diff=-16,612 | Output: Est=6,000, Actual=8,000, Diff=+2,000
+INFO:app.services.claude.service:🔧 Token bucket adjusted: Input: 28,914 → 12,302, Output: 6,000 → 8,000
+WARNING:app.services.claude.utils:Failed to parse unwrapped markdown JSON: Unterminated string starting at: line 706 column 7 (char 22619)
+WARNING:app.services.claude.utils:Could not find JSON, attempting to parse markdown tables
+ERROR:app.services.claude.utils:All parsing strategies failed
+ERROR:app.services.claude.utils:Response text (first 500 chars): ```json
+{
+  "document_type": "commission_statement",
+  "extraction_quality": {
+    "overall_confidence": 0.96,
+    "extraction_method": "vision_language_multimodal"
+  },
+  "carrier": {
+    "name": "Allied Benefit Systems",
+    "confidence": 0.98,
+    "evidence": "Header logo area on all pages shows 'ALLIED' with full company name 'Allied Benefit Systems' visible in branding. Footer shows 'AlliedBenefit.com' confirming carrier identity.",
+    "location": "header_logo",
+    "confidence_calculation
+ERROR:app.services.claude.utils:Response text (last 200 chars): ...census_count": "1",
+      "paid_amount": "$21.45",
+      "writing_agent": "LIOR C GOLDSTEIN",
+      "special_notes": "",
+      "is_summary": false
+    },
+    {
+      "group_number": "L243742",
+      "
+INFO:app.services.claude.service:   ✅ Chunk successful: 0 tables extracted
+INFO:app.services.claude.service:📖 Processing chunk 3/4: Pages 11-15
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763174500295_rkrj59k3b: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763174500295_rkrj59k3b
+INFO:app.services.claude.service:📊 Token Estimation:
+INFO:app.services.claude.service: - Mode: chunk
+INFO:app.services.claude.service: - Pages: 5 (actual: 5)
+INFO:app.services.claude.service: - Tokens/page: 4500 (with 114% buffer)
+INFO:app.services.claude.service: - Estimated input: 29,899 tokens
+INFO:app.services.claude.service: - Safe limit: 32,400 tokens (90% of 36,000)
+INFO:app.services.claude.service: - Will fit in single call: False
+INFO:app.services.claude.service: - Recommended chunk size: 6 pages/chunk
+INFO:app.services.claude.service: - Risk level: warning
+INFO:app.services.claude.service:   Chunk tokens: 29,899 (safe: False)
+INFO:app.services.claude.service:📊 Token Estimation:
+INFO:app.services.claude.service: - Mode: standard
+INFO:app.services.claude.service: - Pages: 5 (actual: 5)
+INFO:app.services.claude.service: - Tokens/page: 4500 (with 114% buffer)
+INFO:app.services.claude.service: - Estimated input: 29,899 tokens
+INFO:app.services.claude.service: - Safe limit: 32,400 tokens (90% of 36,000)
+INFO:app.services.claude.service: - Will fit in single call: False
+INFO:app.services.claude.service: - Recommended chunk size: 6 pages/chunk
+INFO:app.services.claude.service: - Risk level: warning
+INFO:app.services.claude.service:📊 Calling Claude with estimated 29,899 tokens
+INFO:app.services.claude.service:🔄 Calling Claude API for chunk with model: claude-sonnet-4-5-20250929
+INFO:app.services.claude.service:📊 Estimated tokens - Input: 28,914, Output: 6,000 (est.), Pages: 5
+INFO:app.services.claude.utils:✅ Token bucket reset (60s window)
+INFO:app.services.claude.service:🔄 Calling Claude API with model: claude-sonnet-4-5-20250929 (attempt 1/5, cache=True)
+INFO:httpx:HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+INFO:app.services.claude.service:💾 Cache created with 10,563 tokens
+INFO:app.services.claude.service:✅ Claude API call successful. Tokens - Input: 12,302, Output: 8,000
+INFO:app.services.claude.service:📊 Token tracking: Input: Est=28,914, Actual=12,302, Diff=-16,612 | Output: Est=6,000, Actual=8,000, Diff=+2,000
+INFO:app.services.claude.service:🔧 Token bucket adjusted: Input: 28,914 → 12,302, Output: 6,000 → 8,000
+WARNING:app.services.claude.utils:Failed to parse unwrapped markdown JSON: Unterminated string starting at: line 619 column 67 (char 21846)
+WARNING:app.services.claude.utils:Could not find JSON, attempting to parse markdown tables
+ERROR:app.services.claude.utils:All parsing strategies failed
+ERROR:app.services.claude.utils:Response text (first 500 chars): ```json
+{
+  "document_metadata": {
+    "carrier_name": "Allied Benefit Systems",
+    "carrier_confidence": 0.98,
+    "carrier_evidence": "Found in header logo area and footer text 'AlliedBenefit.com' on all pages. Full name 'Allied Benefit Systems' visible in logo branding.",
+    "statement_date": "2025-01-22",
+    "date_confidence": 0.98,
+    "date_evidence": "Found as 'Report Date 1/22/2025' in header section of page 1",
+    "broker_company": "INNOVATIVE BPS LLC",
+    "broker_confidence": 0.98
+ERROR:app.services.claude.utils:Response text (last 200 chars): ...roup:", "RIDGELINE EXPRESS LOGI", "", "", "", "", "", "", "15", "$1,762.71"],
+          "is_summary": true
+        },
+        {
+          "data": ["L244178", "DROP ENTERPRISES LL", "11/1/2024", "11/1/
+INFO:app.services.claude.service:   ✅ Chunk successful: 0 tables extracted
+INFO:app.services.claude.service:📖 Processing chunk 4/4: Pages 16-17
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763174500295_rkrj59k3b: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763174500295_rkrj59k3b
+INFO:app.services.claude.service:📊 Token Estimation:
+INFO:app.services.claude.service: - Mode: chunk
+INFO:app.services.claude.service: - Pages: 2 (actual: 2)
+INFO:app.services.claude.service: - Tokens/page: 4500 (with 114% buffer)
+INFO:app.services.claude.service: - Estimated input: 14,374 tokens
+INFO:app.services.claude.service: - Safe limit: 32,400 tokens (90% of 36,000)
+INFO:app.services.claude.service: - Will fit in single call: True
+INFO:app.services.claude.service: - Recommended chunk size: 6 pages/chunk
+INFO:app.services.claude.service: - Risk level: safe
+INFO:app.services.claude.service:   Chunk tokens: 14,374 (safe: True)
+INFO:app.services.claude.service:📊 Token Estimation:
+INFO:app.services.claude.service: - Mode: standard
+INFO:app.services.claude.service: - Pages: 2 (actual: 2)
+INFO:app.services.claude.service: - Tokens/page: 4500 (with 114% buffer)
+INFO:app.services.claude.service: - Estimated input: 14,374 tokens
+INFO:app.services.claude.service: - Safe limit: 32,400 tokens (90% of 36,000)
+INFO:app.services.claude.service: - Will fit in single call: True
+INFO:app.services.claude.service: - Recommended chunk size: 6 pages/chunk
+INFO:app.services.claude.service: - Risk level: safe
+INFO:app.services.claude.service:📊 Calling Claude with estimated 14,374 tokens
+INFO:app.services.claude.service:🔄 Calling Claude API for chunk with model: claude-sonnet-4-5-20250929
+INFO:app.services.claude.service:📊 Estimated tokens - Input: 19,014, Output: 6,000 (est.), Pages: 2
+INFO:app.services.claude.utils:✅ Token bucket reset (60s window)
+INFO:app.services.claude.service:🔄 Calling Claude API with model: claude-sonnet-4-5-20250929 (attempt 1/5, cache=True)
+INFO:httpx:HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+INFO:app.services.claude.service:💾 Cache created with 4,171 tokens
+INFO:app.services.claude.service:✅ Claude API call successful. Tokens - Input: 12,302, Output: 3,584
+INFO:app.services.claude.service:📊 Token tracking: Input: Est=19,014, Actual=12,302, Diff=-6,712 | Output: Est=6,000, Actual=3,584, Diff=-2,416
+INFO:app.services.claude.service:🔧 Token bucket adjusted: Input: 19,014 → 12,302, Output: 6,000 → 3,584
+INFO:app.services.claude.utils:✅ Successfully parsed JSON from markdown code block
+INFO:app.services.claude.utils:✅ Converted table 0: 7 rows, 2 summary rows
+INFO:app.services.claude.utils:✅ Converted table 1: 7 rows, 4 summary rows
+INFO:app.services.claude.service:   ✅ Chunk successful: 2 tables extracted
+INFO:app.services.claude.service:Added table with 7 unique rows
+INFO:app.services.claude.service:Added table with 7 unique rows
+INFO:app.services.claude.service:Deduplication complete: 2 tables, total unique rows tracked
+INFO:app.services.claude.service:✅ Partial extraction successful:
+INFO:app.services.claude.service:   - Successful chunks: 4/4
+INFO:app.services.claude.service:   - Failed chunks: 0
+INFO:app.services.claude.service:   - Total tables extracted: 2
+INFO:app.services.claude.service:   - Duplicate rows removed: 0
+INFO:app.services.claude.service:Validation complete: {'valid': True, 'warnings': [], 'errors': []}
+INFO:app.services.claude.service:Extraction validation result: valid=True
+INFO:app.services.claude.service:✅ Extraction validation passed
+INFO:app.services.extraction_utils:Header normalization: 10 headers normalized
+INFO:app.services.extraction_utils:Header normalization: 10 headers normalized
+INFO:app.services.claude.service:📦 Added 8 groups/companies to response for semantic filtering
+INFO:app.services.claude.service:📦 Added 1 writing agents to response
+INFO:app.services.claude.service:Validation complete: {'valid': True, 'warnings': [], 'errors': []}
+INFO:app.services.claude.service:🚀 Running enhanced 3-phase extraction pipeline...
+INFO:app.services.claude.service:   Phase 1: Document Intelligence ✓ (completed)
+INFO:app.services.claude.service:   Phase 2: Semantic Extraction → Starting...
+INFO:app.services.claude.service:   Phase 3: Intelligent Summarization → Pending...
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763174500295_rkrj59k3b: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763174500295_rkrj59k3b
+INFO:app.services.websocket_service:Started stage semantic_analysis for upload upload_1763174500295_rkrj59k3b
+INFO:app.services.claude.service:📊 Phase 2: Semantic extraction and relationship mapping...
+INFO:app.services.claude.semantic_extractor:🔍 Starting semantic extraction and relationship mapping...
+INFO:app.services.claude.semantic_extractor:✅ Using Claude's extracted groups/companies (before filtering): 8 groups
+INFO:app.services.claude.semantic_extractor:✅ _filter_summary_rows: Filtered out 1 summary/total rows from 8 total
+INFO:app.services.claude.semantic_extractor:📊 After semantic filtering: 8 → 7 actual groups (removed 1 summary rows)
+INFO:app.services.claude.semantic_extractor:✅ Semantic extraction completed successfully
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763174500295_rkrj59k3b: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763174500295_rkrj59k3b
+INFO:app.services.websocket_service:Completed stage semantic_analysis for upload upload_1763174500295_rkrj59k3b
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763174500295_rkrj59k3b: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763174500295_rkrj59k3b
+INFO:app.services.websocket_service:Started stage summary_generation for upload upload_1763174500295_rkrj59k3b
+INFO:app.services.claude.service:✍️ Phase 3: Intelligent summarization...
+INFO:app.services.claude.service:📊 Semantic result keys: ['success', 'entities', 'relationships', 'business_intelligence', 'raw_tables']
+INFO:app.services.claude.service:   - Entities: ✅
+INFO:app.services.claude.service:   - Relationships: ✅
+INFO:app.services.claude.service:   - Business Intelligence: ✅
 INFO:app.services.claude.utils:🔧 Token Bucket initialized:
 INFO:app.services.claude.utils:   RPM Limit: 45 (from 50)
 INFO:app.services.claude.utils:   ITPM Limit: 36,000 (from 40,000)
@@ -439,63 +372,142 @@ INFO:app.services.claude.utils:   OTPM Limit: 7,200 (from 8,000)
 INFO:app.services.claude.utils:   Buffer: 90%
 INFO:app.services.claude.utils:   Max chunk: 12 pages = 33,000 tokens + 3K prompt
 INFO:app.services.conversational_summary_service:✅ ConversationalSummaryService initialized with rate limiting
-INFO:app.api.new_extract:🗣️ Starting conversational summary generation...
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763138055460_wpizyorev: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763138055460_wpizyorev
-INFO:app.api.new_extract:📝 Using STANDARD extraction data for summary
+INFO:app.services.claude.service:📝 Summary service available: True
+INFO:app.services.claude.service:🚀 Calling generate_conversational_summary with use_enhanced=True...
 INFO:app.services.conversational_summary_service:🗣️ Generating conversational summary...
 INFO:app.services.conversational_summary_service:🔍 _build_summary_prompt called:
-INFO:app.services.conversational_summary_service:   - use_enhanced: False
-INFO:app.services.conversational_summary_service:   - has_enhanced_data: False
-INFO:app.services.conversational_summary_service:   - extraction_data keys: ['carrier_name', 'statement_date', 'broker_company', 'tables', 'document_metadata']
-INFO:app.services.conversational_summary_service:📝 Using STANDARD summary prompt (enhanced mode disabled)
-INFO:app.services.conversational_summary_service:📊 Estimated tokens - Input: 3,102, Output: 600
+INFO:app.services.conversational_summary_service:   - use_enhanced: True
+INFO:app.services.conversational_summary_service:   - has_enhanced_data: True
+INFO:app.services.conversational_summary_service:   - extraction_data keys: ['success', 'entities', 'relationships', 'business_intelligence', 'raw_tables']
+INFO:app.services.conversational_summary_service:✅ Using ENHANCED summary prompt (with enhanced prompts module)
+INFO:app.services.conversational_summary_service:🎯 Building enhanced summary prompt...
+INFO:app.services.conversational_summary_service:   - Entities: ['carrier', 'broker', 'writing_agents', 'groups_and_companies', 'document_metadata']
+INFO:app.services.conversational_summary_service:   - Relationships: ['carrier_to_broker', 'broker_to_agents', 'agents_to_groups', 'groups_to_payments']
+INFO:app.services.conversational_summary_service:   - Business Intelligence: ['total_commission_amount', 'number_of_groups', 'commission_structures', 'top_contributors', 'payment_period', 'patterns_detected', 'total_census_count']
+INFO:app.services.conversational_summary_service:✅ SUCCESS: Enhanced prompts module imported
+INFO:app.services.conversational_summary_service:🚀 Using EnhancedClaudePrompts.get_intelligent_summarization_prompt()
+INFO:app.services.conversational_summary_service:✅ SUCCESS: Enhanced prompts imported correctly
+INFO:app.services.conversational_summary_service:📊 Estimated tokens - Input: 5,178, Output: 800
 INFO:app.services.conversational_summary_service:🚀 Calling Claude API for summary generation...
 INFO:app.services.conversational_summary_service:   Model: claude-sonnet-4-5-20250929
-INFO:app.services.conversational_summary_service:   Max tokens: 600
-INFO:app.services.conversational_summary_service:   Prompt length: 9555 chars
-INFO:app.services.conversational_summary_service:   System prompt length: 2856 chars
-ERROR:app.services.user_profile_service:Error recording user contribution: (sqlalchemy.dialects.postgresql.asyncpg.IntegrityError) <class 'asyncpg.exceptions.ForeignKeyViolationError'>: insert or update on table "user_data_contributions" violates foreign key constraint "user_data_contributions_upload_id_fkey"
-DETAIL:  Key (upload_id)=(ce061f11-a2ad-4212-b83f-6de2b3f30ba4) is not present in table "statement_uploads".
-[SQL: INSERT INTO user_data_contributions (id, user_id, upload_id, contribution_type, contribution_data, created_at) VALUES ($1::UUID, $2::UUID, $3::UUID, $4::VARCHAR, $5::JSON, $6::TIMESTAMP WITHOUT TIME ZONE)]
-[parameters: (UUID('e4b8a950-2d7d-42f1-bf6e-32533cfb2ff4'), UUID('f6cf1764-5bfc-4352-abd9-81b72b7cf191'), UUID('ce061f11-a2ad-4212-b83f-6de2b3f30ba4'), 'upload', '{"file_name": "08.06.2025 Allied Innovative Payment 2.pdf", "file_size": 227321, "file_hash": "98272fc00893adaec0ba3d024c34cd58ae3c39498cb8f83c45f819900f06e322", "extraction_method": "smart", "confidence_threshold": 0.6, "enable_ocr": true, "enable_multipage": true}', datetime.datetime(2025, 11, 14, 16, 34, 37, 536120))]
-(Background on this error at: https://sqlalche.me/e/20/gkpj)
-INFO:app.api.new_extract:ℹ️ User contribution deferred until approval (statement not yet persisted): (sqlalchemy.dialects.postgresql.asyncpg.IntegrityError) <class 'asyncpg.exceptions.ForeignKeyViolationError'>: insert or update on table "user_data_contributions" violates foreign key constraint "user_data_contributions_upload_id_fkey"
-DETAIL:  Key (upload_id)=(ce061f11-a2ad-4212-b83f-6de2b3f30ba4) is not present in table "statement_uploads".
-[SQL: INSERT INTO user_data_contributions (id, user_id, upload_id, contribution_type, contribution_data, created_at) VALUES ($1::UUID, $2::UUID, $3::UUID, $4::VARCHAR, $5::JSON, $6::TIMESTAMP WITHOUT TIME ZONE)]
-[parameters: (UUID('e4b8a950-2d7d-42f1-bf6e-32533cfb2ff4'), UUID('f6cf1764-5bfc-4352-abd9-81b72b7cf191'), UUID('ce061f11-a2ad-4212-b83f-6de2b3f30ba4'), 'upload', '{"file_name": "08.06.2025 Allied Innovative Payment 2.pdf", "file_size": 227321, "file_hash": "98272fc00893adaec0ba3d024c34cd58ae3c39498cb8f83c45f819900f06e322", "extraction_method": "smart", "confidence_threshold": 0.6, "enable_ocr": true, "enable_multipage": true}', datetime.datetime(2025, 11, 14, 16, 34, 37, 536120))]
-(Background on this error at: https://sqlalche.me/e/20/gkpj)
-INFO:app.services.audit_logging_service:Audit: file_upload by user f6cf1764-5bfc-4352-abd9-81b72b7cf191 on statement_upload (ID: ce061f11-a2ad-4212-b83f-6de2b3f30ba4)
-INFO:app.api.new_extract:⏳ Waiting for conversational summary...
+INFO:app.services.conversational_summary_service:   Max tokens: 800
+INFO:app.services.conversational_summary_service:   Prompt length: 19294 chars
+INFO:app.services.conversational_summary_service:   System prompt length: 1421 chars
+INFO:app.services.orphan_cleanup_service:🧹 Starting orphan cleanup job...
 INFO:httpx:HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
-INFO:app.services.conversational_summary_service:📊 Actual usage - Input: 3,483, Output: 105
+INFO:app.services.conversational_summary_service:📊 Actual usage - Input: 6,543, Output: 639
 INFO:app.services.conversational_summary_service:✅ Claude API call successful
 INFO:app.services.conversational_summary_service:   Response content blocks: 1
-INFO:app.services.conversational_summary_service:⚠️ No structured JSON found, using text-only summary
-INFO:app.services.conversational_summary_service:✅ Extracted structured summary data (1 fields): ['broker_id_confidence']
-INFO:app.services.conversational_summary_service:📄 Generated summary length: 616 characters
-INFO:app.services.conversational_summary_service:📊 Final structured data keys: ['broker_id_confidence']
-INFO:app.api.new_extract:✅ Conversational summary ready: This is  a commission statement from Allied Innovative Payment dated August 6, 2025, but unfortunate...
-INFO:app.api.new_extract:✅ Structured data ready: {'broker_id_confidence': 0.7}
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763138055460_wpizyorev: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763138055460_wpizyorev
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763138055460_wpizyorev: STEP_STARTED
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763138055460_wpizyorev
-INFO:app.services.websocket_service:Step started: Preparing Results (Step 6) for upload_id upload_1763138055460_wpizyorev
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763138055460_wpizyorev: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763138055460_wpizyorev
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763138055460_wpizyorev: EXTRACTION_COMPLETE
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763138055460_wpizyorev
-INFO:app.services.websocket_service:Extraction complete for upload_id upload_1763138055460_wpizyorev
-INFO:app.api.new_extract:✅ Extraction complete! Sent results via WebSocket for upload_id: upload_1763138055460_wpizyorev
+INFO:app.services.conversational_summary_service:✅ Detected structured JSON response from Claude
+INFO:app.services.conversational_summary_service:📊 Claude provided 7 fields: ['total_amount', 'statement_date', 'company_count', 'top_contributors', 'commission_structure', 'census_count', 'billing_periods']
+INFO:app.services.conversational_summary_service:✅ Extracted structured summary data (5 fields): ['total_amount', 'company_count', 'broker_id_confidence', 'top_contributors', 'commission_structure']
+INFO:app.services.conversational_summary_service:✅ Fallback added 1 missing fields: ['broker_id_confidence']
+INFO:app.services.conversational_summary_service:📄 Generated summary length: 818 characters
+INFO:app.services.conversational_summary_service:📊 Final structured data keys: ['total_amount', 'company_count', 'broker_id_confidence', 'top_contributors', 'commission_structure', 'statement_date', 'census_count', 'billing_periods']
+INFO:app.services.claude.service:✅ Summary generation completed. Success: True
+INFO:app.services.claude.service:📄 Generated summary (first 200 chars): This is This is a commission statement for Writing Agent LIOR C GOLDSTEIN (agent #00000019019593) covering the January 1, 2025 billing period, with a total payout of $63,088.80 across 6 logistics comp...
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763174500295_rkrj59k3b: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763174500295_rkrj59k3b
+INFO:app.services.websocket_service:Completed stage summary_generation for upload upload_1763174500295_rkrj59k3b
+INFO:app.services.claude.service:✅ Enhanced 3-phase pipeline completed successfully
+INFO:app.services.claude.service:📦 Enhanced result keys: ['success', 'tables', 'extraction_method', 'file_type', 'document_metadata', 'extracted_carrier', 'extracted_date', 'quality_summary', 'metadata', 'extraction_quality', 'groups_and_companies', 'writing_agents', 'business_intelligence', 'validation', 'entities', 'relationships', 'summary', 'structured_data', 'extraction_pipeline', 'semantic_extraction_success']
+INFO:app.services.claude.service:   - Summary length: 818 characters
+INFO:app.services.claude.service:   - Summary preview: This is This is a commission statement for Writing Agent LIOR C GOLDSTEIN (agent #00000019019593) covering the January 1, 2025 billing period, with a ...
+INFO:app.services.claude.service:   - Structured data: {'total_amount': '63088.80', 'company_count': '6', 'broker_id_confidence': 0.7, 'top_contributors': [{'name': 'GHODIREC', 'amount': '3525.56'}, {'name': 'RELIANT LOGISTICS LL', 'amount': '2140.47'}, {'name': 'ZIPZONE LOGISTICS LL', 'amount': '1778.97'}], 'commission_structure': 'Premium Equivalent', 'statement_date': '2025-01-01', 'census_count': '883', 'billing_periods': 'Jan 2025'}
+INFO:app.services.claude.service:✅ Claude extraction completed in 319.92s
+INFO:app.services.enhanced_extraction_service:⚡ Extracting metadata from Claude extraction results
+INFO:app.services.enhanced_extraction_service:✅ Using Claude metadata: carrier=None, date=None, broker=None
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763174500295_rkrj59k3b: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763174500295_rkrj59k3b
+📎 Enhanced multi-strategy stitching: Processing 2 tables
+📎 Canonical header identified: ['Group No.', 'Group Name', 'Billing Period', 'Adj. Period', 'Invoice Total', 'Stoploss Total', 'Agent Rate', 'Calculation Method', 'Census Ct.', 'Paid Amount'] (10 columns)
+📎 Table 1 headers: ['Group No.', 'Group Name', 'Billing Period', 'Adj. Period', 'Invoice Total', 'Stoploss Total', 'Agent Rate', 'Calculation Method', 'Census Ct.', 'Paid Amount'] (10 columns)
+📎 Table 2 headers: ['Group No.', 'Group Name', 'Billing Period', 'Adj. Period', 'Invoice Total', 'Stoploss Total', 'Agent Rate', 'Calculation Method', 'Census Ct.', 'Paid Amount'] (10 columns)
+📎 Found 1 unique header patterns
+📎 Header pattern 'group no.' appears in 2 tables
+📎 Creating group with 2 tables (identical headers)
+📎 Grouped 2 tables into 1 groups
+📎 Merging group 1 with 2 tables
+INFO:app.services.extraction_utils:✅ Merged table created: 14 rows (enhancements preserved from individual tables)
+📎 Merged table 1: 10 headers, 14 rows
+📎 Merged headers: ['Group No.', 'Group Name', 'Billing Period', 'Adj. Period', 'Invoice Total', 'Stoploss Total', 'Agent Rate', 'Calculation Method', 'Census Ct.', 'Paid Amount']
+📎 Enhanced stitching completed: 1 final tables
+INFO:app.services.extraction_utils:Header normalization: 10 headers normalized
+INFO:app.services.enhanced_extraction_service:Claude: Verified normalized headers
+INFO:app.services.enhanced_extraction_service:Claude: Processed 2 tables into 1 tables
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763174500295_rkrj59k3b: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763174500295_rkrj59k3b
+INFO:app.services.websocket_service:Completed stage table_detection for upload upload_1763174500295_rkrj59k3b
+INFO:app.services.enhanced_extraction_service:================================================================================
+INFO:app.services.enhanced_extraction_service:🎯 STAGE 3: CONVERSATIONAL SUMMARY GENERATION
+INFO:app.services.enhanced_extraction_service:================================================================================
+INFO:app.services.enhanced_extraction_service:   - Enhanced mode enabled: True
+INFO:app.services.enhanced_extraction_service:   - Result has 'summary': True
+INFO:app.services.enhanced_extraction_service:   - Summary service available: True
+INFO:app.services.enhanced_extraction_service:✅ Using enhanced summary from Claude pipeline
+INFO:app.services.enhanced_extraction_service:   Summary length: 818 characters
+INFO:app.services.enhanced_extraction_service:   Summary preview: This is This is a commission statement for Writing Agent LIOR C GOLDSTEIN (agent #00000019019593) covering the January 1, 2025 billing period, with a total payout of $63,088.80 across 6 logistics comp...
+INFO:app.services.enhanced_extraction_service:📤 Sending Claude-generated summary AND structured data to frontend via WebSocket NOW
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763174500295_rkrj59k3b: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763174500295_rkrj59k3b
+INFO:app.services.enhanced_extraction_service:✅ Sent structured summary data to frontend: {'total_amount': '63088.80', 'company_count': '6', 'broker_id_confidence': 0.7, 'top_contributors': [{'name': 'GHODIREC', 'amount': '3525.56'}, {'name': 'RELIANT LOGISTICS LL', 'amount': '2140.47'}, {'name': 'ZIPZONE LOGISTICS LL', 'amount': '1778.97'}], 'commission_structure': 'Premium Equivalent', 'statement_date': '2025-01-01', 'census_count': '883', 'billing_periods': 'Jan 2025'}
+INFO:app.services.enhanced_extraction_service:✅ Claude-generated summary sent to frontend successfully
+INFO:app.services.enhanced_extraction_service:================================================================================
+INFO:app.services.enhanced_extraction_service:📝 FINAL SUMMARY SELECTION: ENHANCED CONVERSATIONAL
+INFO:app.services.enhanced_extraction_service:================================================================================
+INFO:app.services.enhanced_extraction_service:   Summary length: 818 characters
+INFO:app.services.enhanced_extraction_service:   Full summary:
+This is This is a commission statement for Writing Agent LIOR C GOLDSTEIN (agent #00000019019593) covering the January 1, 2025 billing period, with a total payout of $63,088.80 across 6 logistics company groups. The largest contributors are GHODIREC generating $3,525.56 in commissions across 28 covered members (at a 29% agent rate), RELIANT LOGISTICS LL contributing $2,140.47 across 42 members (at 12.5%), and ZIPZONE LOGISTICS LL adding $1,778.97 for 10 members (at 31%). All groups utilize the Premium Equivalent calculation method with agent commission rates varying from 12.5% to 31%, and the statement shows multiple census entries per group indicating different coverage tiers or mid-period adjustments, with invoice totals ranging from $5,404.17 for PREVISION LOGISTIC to $17,123.22 for RELIANT LOGISTICS LL.
+INFO:app.services.enhanced_extraction_service:================================================================================
+INFO:app.services.enhanced_extraction_service:✅ Added structured_data to result: ['total_amount', 'company_count', 'broker_id_confidence', 'top_contributors', 'commission_structure', 'statement_date', 'census_count', 'billing_periods']
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763174500295_rkrj59k3b: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763174500295_rkrj59k3b
+INFO:app.services.websocket_service:Started stage validation for upload upload_1763174500295_rkrj59k3b
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763174500295_rkrj59k3b: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763174500295_rkrj59k3b
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763174500295_rkrj59k3b: completion
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763174500295_rkrj59k3b
+INFO:app.services.websocket_service:Completed processing for upload upload_1763174500295_rkrj59k3b in 327.52 seconds
+INFO:app.services.claude.service:✅ Cleaned up Claude service models and freed memory
+INFO:app.services.claude.service:✅ Cleaned up Claude service models and freed memory
+INFO:app.api.new_extract:✅ Extraction completed
+INFO:app.services.cancellation_manager:Cleared cancellation status for upload upload_1763174500295_rkrj59k3b
+INFO:app.api.new_extract:✅ Extraction completed (data NOT saved to DB, will be saved on approval)
+INFO:app.services.audit_logging_service:Audit: data_view by user f6cf1764-5bfc-4352-abd9-81b72b7cf191 on extraction_complete (ID: b67bcc53-3efd-4df6-b60d-9e3a8192e725)
+INFO:app.api.new_extract:✅ Enhanced summary already generated by Claude pipeline - using it
+INFO:app.api.new_extract:   Enhanced summary: This is This is a commission statement for Writing Agent LIOR C GOLDSTEIN (agent #00000019019593) covering the January 1, 2025 billing period, with a total payout of $63,088.80 across 6 logistics company groups. The largest contributors are GHODIREC generating $3,525.56 in commissions across 28 covered members (at a 29% agent rate), RELIANT LOGISTICS LL contributing $2,140.47 across 42 members (at 12.5%), and ZIPZONE LOGISTICS LL adding $1,778.97 for 10 members (at 31%). All groups utilize the Premium Equivalent calculation method with agent commission rates varying from 12.5% to 31%, and the statement shows multiple census entries per group indicating different coverage tiers or mid-period adjustments, with invoice totals ranging from $5,404.17 for PREVISION LOGISTIC to $17,123.22 for RELIANT LOGISTICS LL.
+INFO:app.api.new_extract:   Structured data: {'total_amount': '63088.80', 'company_count': '6', 'broker_id_confidence': 0.7, 'top_contributors': [{'name': 'GHODIREC', 'amount': '3525.56'}, {'name': 'RELIANT LOGISTICS LL', 'amount': '2140.47'}, {'name': 'ZIPZONE LOGISTICS LL', 'amount': '1778.97'}], 'commission_structure': 'Premium Equivalent', 'statement_date': '2025-01-01', 'census_count': '883', 'billing_periods': 'Jan 2025'}
+ERROR:app.services.user_profile_service:Error recording user contribution: (sqlalchemy.dialects.postgresql.asyncpg.IntegrityError) <class 'asyncpg.exceptions.ForeignKeyViolationError'>: insert or update on table "user_data_contributions" violates foreign key constraint "user_data_contributions_upload_id_fkey"
+DETAIL:  Key (upload_id)=(b67bcc53-3efd-4df6-b60d-9e3a8192e725) is not present in table "statement_uploads".
+[SQL: INSERT INTO user_data_contributions (id, user_id, upload_id, contribution_type, contribution_data, created_at) VALUES ($1::UUID, $2::UUID, $3::UUID, $4::VARCHAR, $5::JSON, $6::TIMESTAMP WITHOUT TIME ZONE)]
+[parameters: (UUID('6da21ec3-83c6-47e7-b99a-c924661595ed'), UUID('f6cf1764-5bfc-4352-abd9-81b72b7cf191'), UUID('b67bcc53-3efd-4df6-b60d-9e3a8192e725'), 'upload', '{"file_name": "01.24.2025.2 Allied Innovative Payment.pdf", "file_size": 117658, "file_hash": "c561832fdb7b1436179a99c1a23b062624baaa8d4a7098fa2f0844778d3c37fe", "extraction_method": "smart", "confidence_threshold": 0.6, "enable_ocr": true, "enable_multipage": true}', datetime.datetime(2025, 11, 15, 2, 47, 15, 970334))]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)
+INFO:app.api.new_extract:ℹ️ User contribution deferred until approval (statement not yet persisted): (sqlalchemy.dialects.postgresql.asyncpg.IntegrityError) <class 'asyncpg.exceptions.ForeignKeyViolationError'>: insert or update on table "user_data_contributions" violates foreign key constraint "user_data_contributions_upload_id_fkey"
+DETAIL:  Key (upload_id)=(b67bcc53-3efd-4df6-b60d-9e3a8192e725) is not present in table "statement_uploads".
+[SQL: INSERT INTO user_data_contributions (id, user_id, upload_id, contribution_type, contribution_data, created_at) VALUES ($1::UUID, $2::UUID, $3::UUID, $4::VARCHAR, $5::JSON, $6::TIMESTAMP WITHOUT TIME ZONE)]
+[parameters: (UUID('6da21ec3-83c6-47e7-b99a-c924661595ed'), UUID('f6cf1764-5bfc-4352-abd9-81b72b7cf191'), UUID('b67bcc53-3efd-4df6-b60d-9e3a8192e725'), 'upload', '{"file_name": "01.24.2025.2 Allied Innovative Payment.pdf", "file_size": 117658, "file_hash": "c561832fdb7b1436179a99c1a23b062624baaa8d4a7098fa2f0844778d3c37fe", "extraction_method": "smart", "confidence_threshold": 0.6, "enable_ocr": true, "enable_multipage": true}', datetime.datetime(2025, 11, 15, 2, 47, 15, 970334))]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)
+INFO:app.services.audit_logging_service:Audit: file_upload by user f6cf1764-5bfc-4352-abd9-81b72b7cf191 on statement_upload (ID: b67bcc53-3efd-4df6-b60d-9e3a8192e725)
+INFO:app.api.new_extract:📤 Sending pre-generated enhanced summary via WebSocket...
+INFO:app.api.new_extract:📊 Sending structured data: {"total_amount": "63088.80", "company_count": "6", "broker_id_confidence": 0.7, "top_contributors": [{"name": "GHODIREC", "amount": "3525.56"}, {"name": "RELIANT LOGISTICS LL", "amount": "2140.47"}, {...
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763174500295_rkrj59k3b: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763174500295_rkrj59k3b
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763174500295_rkrj59k3b: STEP_STARTED
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763174500295_rkrj59k3b
+INFO:app.services.websocket_service:Step started: Preparing Results (Step 6) for upload_id upload_1763174500295_rkrj59k3b
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763174500295_rkrj59k3b: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763174500295_rkrj59k3b
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763174500295_rkrj59k3b: EXTRACTION_COMPLETE
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763174500295_rkrj59k3b
+INFO:app.services.websocket_service:Extraction complete for upload_id upload_1763174500295_rkrj59k3b
+INFO:app.api.new_extract:✅ Extraction complete! Sent results via WebSocket for upload_id: upload_1763174500295_rkrj59k3b
 INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763138055460_wpizyorev, session_id=session_1763138055494_cwei7efh9
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763138055460_wpizyorev, session_id=session_1763138055494_cwei7efh9
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763138055460_wpizyorev
-INFO:     127.0.0.1:56453 - "POST /api/extract-tables-smart/ HTTP/1.1" 200 OK
-INFO:app.api.pdf_proxy:🔄 Proxying PDF from: https://storage.googleapis.com/pdf_extraction_files_saver/statements/ce061f11-a2ad-4212-b83f-6de2b3f...
-INFO:httpx:HTTP Request: GET https://storage.googleapis.com/pdf_extraction_files_saver/statements/ce061f11-a2ad-4212-b83f-6de2b3f30ba4/08.06.2025%20Allied%20Innovative%20Payment%202.pdf?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=docsai-table-extractor%40pdf-tables-extractor-465009.iam.gserviceaccount.com%2F20251114%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20251114T163422Z&X-Goog-Expires=3599&X-Goog-SignedHeaders=host&response-content-disposition=inline&response-content-type=application%2Fpdf&X-Goog-Signature=a18894a9ddaf4994d5fe2239353803bbd97f4e99948185551abb0be92c4fea3f947e8f8489d0c2a05a8c6111673bea7323fcf4d542f0115ed93cfad82d4716aea7336d0302ccb9ba096e3b5a3587356ccac7f2d29d79b061025bba065c47707d97814e09e58ca3055e4f003fe8e43c8a0edc22c5f1515ac9ea9afd717a19d7f30e3d732f9866777038ab0c32b0355a37e26039f083055a71885f116e4b14d151e5a60969007542aa9c776655cf97a6adc8a6e4ea02a5dd1e3706c32a54e74e30f7b4a8705f5afca61b007dbf0531c07ef0d48539e02747444ce6043cdd64e8427178943a12012d5637af80f0cf91ad9a85f0f8dd681460a7aea84fe051f15dc2 "HTTP/1.1 200 OK"
-INFO:     127.0.0.1:56575 - "GET /api/pdf-proxy?url=https%3A%2F%2Fstorage.googleapis.com%2Fpdf_extraction_files_saver%2Fstatements%2Fce061f11-a2ad-4212-b83f-6de2b3f30ba4%2F08.06.2025%2520Allied%2520Innovative%2520Payment%25202.pdf%3FX-Goog-Algorithm%3DGOOG4-RSA-SHA256%26X-Goog-Credential%3Ddocsai-table-extractor%2540pdf-tables-extractor-465009.iam.gserviceaccount.com%252F20251114%252Fauto%252Fstorage%252Fgoog4_request%26X-Goog-Date%3D20251114T163422Z%26X-Goog-Expires%3D3599%26X-Goog-SignedHeaders%3Dhost%26response-content-disposition%3Dinline%26response-content-type%3Dapplication%252Fpdf%26X-Goog-Signature%3Da18894a9ddaf4994d5fe2239353803bbd97f4e99948185551abb0be92c4fea3f947e8f8489d0c2a05a8c6111673bea7323fcf4d542f0115ed93cfad82d4716aea7336d0302ccb9ba096e3b5a3587356ccac7f2d29d79b061025bba065c47707d97814e09e58ca3055e4f003fe8e43c8a0edc22c5f1515ac9ea9afd717a19d7f30e3d732f9866777038ab0c32b0355a37e26039f083055a71885f116e4b14d151e5a60969007542aa9c776655cf97a6adc8a6e4ea02a5dd1e3706c32a54e74e30f7b4a8705f5afca61b007dbf0531c07ef0d48539e02747444ce6043cdd64e8427178943a12012d5637af80f0cf91ad9a85f0f8dd681460a7aea84fe051f15dc2 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56569 - "GET /api/pending/progress/ce061f11-a2ad-4212-b83f-6de2b3f30ba4/table_editor HTTP/1.1" 200 OK
-INFO:app.services.orphan_cleanup_service:🧹 Starting orphan cleanup job...
+INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763174500295_rkrj59k3b, session_id=session_1763174500304_evjqd6qua
+INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763174500295_rkrj59k3b, session_id=session_1763174500304_evjqd6qua
+INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763174500295_rkrj59k3b
+INFO:     127.0.0.1:59833 - "POST /api/extract-tables-smart/ HTTP/1.1" 200 OK
+INFO:app.api.pdf_proxy:🔄 Proxying PDF from: https://storage.googleapis.com/pdf_extraction_files_saver/statements/b67bcc53-3efd-4df6-b60d-9e3a819...
+INFO:httpx:HTTP Request: GET https://storage.googleapis.com/pdf_extraction_files_saver/statements/b67bcc53-3efd-4df6-b60d-9e3a8192e725/01.24.2025.2%20Allied%20Innovative%20Payment.pdf?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=docsai-table-extractor%40pdf-tables-extractor-465009.iam.gserviceaccount.com%2F20251115%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20251115T024146Z&X-Goog-Expires=3599&X-Goog-SignedHeaders=host&response-content-disposition=inline&response-content-type=application%2Fpdf&X-Goog-Signature=97c8ef40a1d5b0cb2710fe3fb1f009be09495d85b6b4848a72a4be0dab20eb47bd83e2ff59d778f50e398ece2fd7f91c46b73b6be5770ce0457f981f16400e1539daf411e24ba626e76811bb462a810677d0bfbf6f93572be83389d98eab892ff5ac6d8b67d028a6d52da9d7e239b19f4cd5b0ea348b75be5e5e529c31682f66da6d225c9d68875b90a368134312f7866a551760e18177077b7c3754c1288cf75555886e8b83a2968f98561f6b2baf20719279141b461cfc8214158bfc64ea9c1932b0f8083da59cec892b28e8454551ffd750826623a83a3845542688d9c7b1fbdb6f94276c0fdafe9eb6084929e40b64a3263534dcec50a610626aeb1e56e1 "HTTP/1.1 200 OK"
 INFO:app.services.orphan_cleanup_service:✅ Orphan cleanup completed: no orphans found
+INFO:     127.0.0.1:59935 - "GET /api/pdf-proxy?url=https%3A%2F%2Fstorage.googleapis.com%2Fpdf_extraction_files_saver%2Fstatements%2Fb67bcc53-3efd-4df6-b60d-9e3a8192e725%2F01.24.2025.2%2520Allied%2520Innovative%2520Payment.pdf%3FX-Goog-Algorithm%3DGOOG4-RSA-SHA256%26X-Goog-Credential%3Ddocsai-table-extractor%2540pdf-tables-extractor-465009.iam.gserviceaccount.com%252F20251115%252Fauto%252Fstorage%252Fgoog4_request%26X-Goog-Date%3D20251115T024146Z%26X-Goog-Expires%3D3599%26X-Goog-SignedHeaders%3Dhost%26response-content-disposition%3Dinline%26response-content-type%3Dapplication%252Fpdf%26X-Goog-Signature%3D97c8ef40a1d5b0cb2710fe3fb1f009be09495d85b6b4848a72a4be0dab20eb47bd83e2ff59d778f50e398ece2fd7f91c46b73b6be5770ce0457f981f16400e1539daf411e24ba626e76811bb462a810677d0bfbf6f93572be83389d98eab892ff5ac6d8b67d028a6d52da9d7e239b19f4cd5b0ea348b75be5e5e529c31682f66da6d225c9d68875b90a368134312f7866a551760e18177077b7c3754c1288cf75555886e8b83a2968f98561f6b2baf20719279141b461cfc8214158bfc64ea9c1932b0f8083da59cec892b28e8454551ffd750826623a83a3845542688d9c7b1fbdb6f94276c0fdafe9eb6084929e40b64a3263534dcec50a610626aeb1e56e1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59933 - "GET /api/pending/progress/b67bcc53-3efd-4df6-b60d-9e3a8192e725/table_editor HTTP/1.1" 200 OK

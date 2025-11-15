@@ -186,21 +186,33 @@ const TableRow = memo(function TableRow({
         </td>
 
         {/* Data Cells */}
-        {row.map((cell, colIndex) => (
-          <td key={colIndex} className={`px-1 py-1 text-xs text-gray-900 dark:text-slate-100 border-b border-gray-100 dark:border-slate-700 border-r border-gray-100 dark:border-slate-700 min-w-[150px] hover:bg-slate-50 dark:hover:bg-slate-800 ${
-            isSelected ? 'bg-slate-50/50 dark:bg-slate-800/30 hover:bg-slate-100 dark:hover:bg-slate-700/40' : ''
-          }`}>
-            <EditableCell
-              value={cell}
-              isEditing={
-                editingCell?.rowIdx === rowIndex && editingCell?.colIdx === colIndex
-              }
-              onStartEdit={() => onStartCellEdit(rowIndex, colIndex)}
-              onSave={(value) => onSaveCellEdit(rowIndex, colIndex, value)}
-              onCancel={onCancelCellEdit}
-            />
-          </td>
-        ))}
+        {(() => {
+          // ✅ DEBUG: Log row data structure
+          console.log('🔍 TableRow Debug:', {
+            rowIndex,
+            isArray: Array.isArray(row),
+            rowType: typeof row,
+            rowValue: row,
+            rowLength: Array.isArray(row) ? row.length : 'N/A'
+          });
+          
+          const cells = Array.isArray(row) ? row : [];
+          return cells.map((cell, colIndex) => (
+            <td key={colIndex} className={`px-1 py-1 text-xs text-gray-900 dark:text-slate-100 border-b border-gray-100 dark:border-slate-700 border-r border-gray-100 dark:border-slate-700 min-w-[150px] hover:bg-slate-50 dark:hover:bg-slate-800 ${
+              isSelected ? 'bg-slate-50/50 dark:bg-slate-800/30 hover:bg-slate-100 dark:hover:bg-slate-700/40' : ''
+            }`}>
+              <EditableCell
+                value={cell}
+                isEditing={
+                  editingCell?.rowIdx === rowIndex && editingCell?.colIdx === colIndex
+                }
+                onStartEdit={() => onStartCellEdit(rowIndex, colIndex)}
+                onSave={(value) => onSaveCellEdit(rowIndex, colIndex, value)}
+                onCancel={onCancelCellEdit}
+              />
+            </td>
+          ));
+        })()}
 
         {/* Actions Cell - Fixed position on right */}
         <td className={`px-1 py-1 w-12 relative border-b border-gray-100 dark:border-slate-700 border-r border-gray-100 dark:border-slate-700 sticky right-0 z-20 shadow-[-2px_0_4px_rgba(0,0,0,0.05)] dark:shadow-[-2px_0_4px_rgba(0,0,0,0.2)] ${

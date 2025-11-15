@@ -15,7 +15,7 @@ Key Capabilities:
 import logging
 from typing import Dict, Any, List, Optional
 import json
-from .summary_row_filtering_rules import SummaryRowFilteringRules
+from .extraction_rules import ExtractionRules
 
 logger = logging.getLogger(__name__)
 
@@ -283,7 +283,7 @@ class SemanticExtractionService:
                         group_no = str(row[group_no_idx]).strip() if group_no_idx is not None and group_no_idx < len(row) else ''
                         
                         # Use unified filtering logic
-                        if SummaryRowFilteringRules.should_filter_row(group_name, group_no):
+                        if ExtractionRules.Filtering.should_filter_row(group_name, group_no):
                             logger.debug(f"Skipping summary/metadata row: {group_no} - {group_name}")
                             continue
                         
@@ -315,14 +315,14 @@ class SemanticExtractionService:
         This is a critical safety net to catch any summary rows that Claude
         might have included despite prompt instructions.
         
-        Uses unified filtering rules from SummaryRowFilteringRules to ensure
+        Uses unified filtering rules from ExtractionRules.Filtering to ensure
         consistency with prompt instructions.
         """
         if not groups:
             return groups
         
         # Use unified filtering method
-        filtered_groups, excluded_groups = SummaryRowFilteringRules.filter_groups(groups)
+        filtered_groups, excluded_groups = ExtractionRules.Filtering.filter_groups(groups)
         
         # Log filtering results
         skipped_count = len(excluded_groups)

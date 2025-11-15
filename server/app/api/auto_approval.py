@@ -233,7 +233,8 @@ async def auto_approve_statement(
             field_config=field_config_list,
             plan_types=[],  # Plan types can be detected from learned format if needed
             selected_statement_date={"date": request.statement_date},
-            upload_metadata=request.upload_metadata  # CRITICAL: Pass metadata for DB record creation
+            upload_metadata=request.upload_metadata,  # CRITICAL: Pass metadata for DB record creation
+            document_metadata=request.document_metadata  # ✅ CRITICAL: Pass document_metadata for total validation
         )
         
         # Call approve_statement with the payload object
@@ -471,8 +472,20 @@ async def auto_approve_statement(
         db_upload.automated_approval = True
         db_upload.automation_timestamp = datetime.utcnow()
         db_upload.total_amount_match = total_validation.get("matches", False) if total_validation else None
-        db_upload.extracted_total = round(actual_extracted_total, 2) if actual_extracted_total else 0
+        # ✅ FIX: extracted_total should be the CALCULATED total from table rows, not AI-extracted from document
+        # The comparison is: AI-extracted (actual_extracted_total) vs Calculated (calculated_total)
+        db_upload.extracted_total = round(calculated_total, 2) if calculated_total else 0  # This is the sum from table rows
         db_upload.extracted_invoice_total = round(calculated_invoice_total, 2) if calculated_invoice_total else 0
+        
+        # 🔧 CRITICAL FIX: Update status based on total validation
+        # If totals don't match, set status to 'needs_review' instead of 'Approved'
+        if needs_review:
+            db_upload.status = 'needs_review'
+            logger.warning(f"⚠️ Auto-approval: Totals don't match, setting status to 'needs_review' for manual review")
+        else:
+            # Status is already 'Approved' from approve_statement(), but let's be explicit
+            db_upload.status = 'Approved'
+            logger.info(f"✅ Auto-approval: Totals match, status remains 'Approved'")
         
         await db.commit()
         await db.refresh(db_upload)
@@ -501,13 +514,21 @@ async def auto_approve_statement(
             logger.warning(f"⚠️ Could not record user contribution: {e}")
             # Don't fail the auto-approval if contribution recording fails
         
-        # Emit final progress update
-        await connection_manager.send_stage_update(
-            request.upload_id, 
-            'auto_approval_complete', 
-            100, 
-            f"✨ Auto-approval completed successfully!"
-        )
+        # Emit final progress update with appropriate message based on needs_review status
+        if needs_review:
+            await connection_manager.send_stage_update(
+                request.upload_id, 
+                'auto_approval_complete', 
+                100, 
+                f"⚠️ Auto-processed but needs review - totals don't match!"
+            )
+        else:
+            await connection_manager.send_stage_update(
+                request.upload_id, 
+                'auto_approval_complete', 
+                100, 
+                f"✨ Auto-approval completed successfully!"
+            )
         
         logger.info(f"Auto-approval completed for upload {request.upload_id}")
         
@@ -524,8 +545,10 @@ async def auto_approve_statement(
             "carrier_name": carrier_name,
             "statement_date": request.statement_date,
             "total_amount_match": total_validation.get("matches", False) if total_validation else None,
-            "extracted_total": round(actual_extracted_total, 2) if actual_extracted_total else 0,
-            "calculated_total": round(calculated_total, 2) if calculated_total else 0
+            # ✅ FIX: Return both AI-extracted and calculated totals for frontend display
+            "ai_extracted_total": round(actual_extracted_total, 2) if actual_extracted_total else 0,  # From document
+            "calculated_total": round(calculated_total, 2) if calculated_total else 0,  # From table rows
+            "extracted_total": round(calculated_total, 2) if calculated_total else 0  # For backward compatibility
         }
         
     except Exception as e:

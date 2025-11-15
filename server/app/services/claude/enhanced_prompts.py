@@ -10,13 +10,327 @@ This module implements research-backed prompt engineering techniques:
 Based on the Cursor AI Implementation Guide for matching Google Gemini quality.
 """
 
-from .carrier_extraction_rules import CarrierExtractionRules
-from .total_amount_extraction_rules import TotalAmountExtractionRules
-from .summary_row_filtering_rules import SummaryRowFilteringRules
+from .extraction_rules import ExtractionRules
 
 
 class EnhancedClaudePrompts:
     """Enhanced prompts for intelligent document understanding"""
+    
+    @staticmethod
+    def get_metadata_extraction_prompt() -> str:
+        """Prompt for extracting document metadata (carrier, date, broker, etc.)"""
+        return """You are an expert at extracting metadata from insurance commission statement documents.
+
+Your task is to analyze the document and extract:
+
+1. **CARRIER NAME** - The insurance company that issued this statement
+   - Look in headers, logos, letterhead, and document branding
+   - Look at page footers where companies often place their logos
+   - Common carriers: Aetna, Blue Cross Blue Shield, Cigna, UnitedHealthcare, Allied Benefit Systems, Humana, etc.
+   - DO NOT extract from table data columns - look at document structure elements only
+   
+2. **STATEMENT DATE** - The date of this commission statement
+   - Extract the ACTUAL date shown in the document - NEVER use current date or any default/fallback date
+   - Look for "Statement Date:", "Commission Summary For:", "Report Date:", "Period:", "Period Ending:", "Date Range:", "Statement Period:", "Reporting Period:"
+   - Look in document headers, titles, and top section of the first page
+   - **CRITICAL FOR DATE RANGES**: If you see a date range (e.g., "Period: 01/01/2025 - 01/31/2025"), USE THE END DATE (the second date) as the statement date
+   - For date ranges like "MM/DD/YYYY - MM/DD/YYYY", always extract the SECOND date (end date)
+   - Format: YYYY-MM-DD (Example: "Period: 01/01/2025 - 01/31/2025" → use "2025-01-31")
+   - If no date is visible or you cannot confidently extract it, return null with a low confidence score
+   - DO NOT extract dates from table data, policy effective dates, or transaction dates - only extract the statement/report date from the document header
+
+3. **BROKER/AGENT COMPANY** - The broker or agent entity receiving commissions
+   - Look for "Agent:", "Broker:", "Agency:", "To:", "Prepared For:" labels
+   - Usually appears near the top of the document or in the header
+   - This is different from the carrier - it's the entity receiving the statement
+   - Common examples: "Innovative BPS", "ABC Insurance Agency", "XYZ Benefits Group"
+
+4. **DOCUMENT TYPE** - Classification of the document
+   - commission_statement, billing_statement, summary_report, etc.
+
+Return your response in this exact JSON format:
+{
+  "carrier_name": "Exact carrier name as it appears",
+  "carrier_confidence": 0.95,
+  "statement_date": "2024-01-31",
+  "date_confidence": 0.90,
+  "broker_company": "Broker/Agent company name as it appears",
+  "broker_confidence": 0.85,
+  "document_type": "commission_statement",
+  "total_pages": 5,
+  "evidence": "Brief explanation of where you found this information"
+}
+
+If you cannot find the information with high confidence, use null for the value and a lower confidence score."""
+
+    @staticmethod
+    def get_table_extraction_prompt() -> str:
+        """
+        Main prompt for extracting tables from commission statements.
+        Optimized for Claude 4 with XML structure and character-level precision.
+        
+        Uses unified carrier and total amount extraction rules to ensure consistency.
+        """
+        # Get unified rules
+        carrier_rules_xml = ExtractionRules.Carrier.get_xml_format()
+        total_amount_rules_xml = ExtractionRules.Amount.get_xml_format()
+        
+        return f"""<document_extraction_task>
+
+<role_context>
+You are analyzing an insurance commission statement PDF. Your extraction must be pixel-perfect accurate because this data feeds automated approval systems. Any modification or addition of text creates duplicate records and breaks automation.
+</role_context>
+
+<extraction_workflow>
+
+<!-- PHASE 1: DOCUMENT METADATA EXTRACTION -->
+<phase id="1" name="metadata_extraction" priority="critical">
+
+{carrier_rules_xml}
+
+<statement_date_extraction>
+  <objective>
+    Extract the statement or reporting period date
+  </objective>
+  
+  <search_strategy>
+    <priority_labels>
+      1. "Statement Date:"
+      2. "Report Date:"
+      3. "Billing Period:" or "Period:"
+      4. "Commission Summary For:"
+      5. "Reporting Period:"
+      6. "Period Ending:"
+    </priority_labels>
+    
+    <search_locations>
+      - Top 30% of first page (header area)
+      - Document title or heading
+      - Summary box if present
+    </search_locations>
+  </search_strategy>
+  
+  <date_range_handling>
+    <rule>
+      When you find a DATE RANGE (e.g., "01/01/2025 - 01/31/2025"):
+      - Extract the END DATE (second date) as the statement date
+      - Format: YYYY-MM-DD
+      - Example: "Period: 01/01/2025 - 01/31/2025" → extract "2025-01-31"
+    </rule>
+  </date_range_handling>
+  
+  <critical_instructions>
+    <instruction>Extract the ACTUAL date shown in document - NEVER use current date</instruction>
+    <instruction>Do NOT extract dates from table cells or transaction rows</instruction>
+    <instruction>If no statement date visible, return null with low confidence</instruction>
+  </critical_instructions>
+  
+  <output_format>
+    {{
+      "statement_date": "2025-01-31",
+      "date_confidence": 0.92,
+      "evidence": "Found as 'Report Date: 1/8/2025' in header"
+    }}
+  </output_format>
+</statement_date_extraction>
+
+<broker_company_extraction>
+  <objective>Extract broker/agent entity receiving commissions</objective>
+  
+  <search_labels>
+    - "Agent:"
+    - "Broker:"  
+    - "Agency:"
+    - "To:"
+    - "Prepared For:"
+    - "Producer Name:"
+  </search_labels>
+  
+  <extraction_rules>
+    <rule>Extract company name exactly as shown (same character-level precision as carrier)</rule>
+    <rule>This is different from the carrier - it's the RECIPIENT of the statement</rule>
+  </extraction_rules>
+  
+  <output_format>
+    {{
+      "broker_company": "INNOVATIVE BPS LLC",
+      "broker_confidence": 0.90,
+      "evidence": "Found after 'Producer Name:' label in header"
+    }}
+  </output_format>
+</broker_company_extraction>
+
+{total_amount_rules_xml}
+
+</phase>
+
+<!-- PHASE 2: TABLE EXTRACTION -->
+<phase id="2" name="table_extraction">
+
+<table_detection>
+  <objective>Identify and extract ALL tables with commission data</objective>
+  
+  <visual_indicators>
+    - Column headers (even if borderless)
+    - Aligned data in rows
+    - Repeated patterns vertically
+    - Monetary values with $ or decimal points
+  </visual_indicators>
+</table_detection>
+
+<company_name_column_handling>
+  <scenario name="company_as_column">
+    <condition>Company names appear as regular column header</condition>
+    <action>Extract normally within existing table structure</action>
+  </scenario>
+  
+  <scenario name="company_in_summary_rows">
+    <condition>Company names appear in non-column format (summary rows, section headers)</condition>
+    <critical_action>
+      1. ADD "Company Name" as FIRST column in headers array
+      2. Populate this column with company name for each data row
+      3. Maintain alignment between company names and data rows
+      4. Track context as you process document sequentially
+    </critical_action>
+    
+    <example>
+      <document_structure>
+        Writing Agent: 271004-02 GOLDSTEIN, ANAT
+        Customer: 1653402
+        Customer Name: B &amp; B Lightning Protection
+        Med 10/01/2024 ($3,844.84) -3 NJ PEPM ...
+        Med 10/01/2024 $3,844.84 3 NJ PEPM ...
+        
+        Customer: 1674097  
+        Customer Name: MAMMOTH DELIVERY LLC
+        Med 12/01/2024 $55.58 3 WI PEPM ...
+      </document_structure>
+      
+      <extracted_table>
+        {{
+          "headers": ["Company Name", "Cov Type", "Bill Eff Date", "Billed Premium", ...],
+          "rows": [
+            ["B &amp; B Lightning Protection", "Med", "10/01/2024", "($3,844.84)", ...],
+            ["B &amp; B Lightning Protection", "Med", "10/01/2024", "$3,844.84", ...],
+            ["MAMMOTH DELIVERY LLC", "Med", "12/01/2024", "$55.58", ...]
+          ]
+        }}
+      </extracted_table>
+    </example>
+  </scenario>
+</company_name_column_handling>
+
+<table_output_format>
+  {{
+    "tables": [
+      {{
+        "headers": ["Column 1", "Column 2", ...],
+        "rows": [
+          ["data1", "data2", ...],
+          ["data3", "data4", ...]
+        ],
+        "table_type": "commission_table",
+        "page_number": 1,
+        "confidence_score": 0.95,
+        "summary_rows": [5, 10]
+      }}
+    ]
+  }}
+</table_output_format>
+
+</phase>
+
+</extraction_workflow>
+
+<!-- FINAL OUTPUT STRUCTURE -->
+<output_structure>
+  <json_format>
+    {{
+      "document_metadata": {{
+        "carrier_name": "Exact carrier name",
+        "carrier_confidence": 0.95,
+        "statement_date": "2025-01-31",
+        "date_confidence": 0.92,
+        "broker_company": "Exact broker name",
+        "broker_confidence": 0.90,
+        "total_amount": 1027.20,
+        "total_amount_label": "Total for Vendor",
+        "total_amount_confidence": 0.95
+      }},
+      "tables": [...],
+      "extraction_notes": "Any observations or challenges"
+    }}
+  </json_format>
+</output_structure>
+
+<!-- QUALITY ASSURANCE -->
+<quality_checks>
+  <check priority="critical">
+    <name>Exact Text Verification</name>
+    <question>Did I add ANY text not visible in the source document?</question>
+    <action_if_yes>Re-extract with character-level precision</action_if_yes>
+  </check>
+  
+  <check priority="critical">
+    <name>Carrier Name Uniqueness</name>
+    <question>Will this carrier name create a duplicate if variations exist?</question>
+    <action_if_yes>Verify I extracted EXACTLY as shown, no modifications</action_if_yes>
+  </check>
+  
+  <check priority="high">
+    <name>Confidence Scoring</name>
+    <question>Am I certain about each extracted field?</question>
+    <action_if_uncertain>Lower confidence score, note uncertainty in evidence</action_if_uncertain>
+  </check>
+</quality_checks>
+
+</document_extraction_task>"""
+
+    @staticmethod
+    def get_base_extraction_instructions() -> str:
+        """Get static extraction instructions (for caching)."""
+        return """You are an expert at extracting tabular data from commission statements.
+
+EXTRACTION RULES:
+1. Extract ALL tables from the document
+2. Preserve exact text, numbers, and formatting
+3. Include table headers and all data rows
+4. Mark incomplete tables that span pages
+5. Return ONLY valid JSON in this format:
+
+{
+  "tables": [
+    {
+      "headers": ["Column1", "Column2"],
+      "rows": [["value1", "value2"]],
+      "incomplete": false
+    }
+  ],
+  "document_metadata": {
+    "carrier_name": "Exact carrier name as shown",
+    "statement_date": "YYYY-MM-DD",
+    "broker_company": "Broker name as shown"
+  }
+}
+
+CRITICAL: Return ONLY the JSON object. No markdown, no explanations."""
+
+    @staticmethod
+    def get_summarize_extraction_prompt() -> str:
+        """Prompt for summarize extraction - returns markdown content"""
+        return """You are an OCR agent. Extract structured invoice data as Markdown. Note probably the document was split only send the first three pages do not mention this to the user. No debes envolver dentro de un bloque de código (```markdown...```)
+
+Extract the following information from the document:
+- Document name/number
+- Document date
+- Total amount
+- Currency
+- Vendor name
+- Customer name
+- Additional metadata
+- Complete summary about the document (dont return tables)
+
+Format your response as structured markdown without code blocks. Dont return tables"""
     
     @staticmethod
     def get_document_intelligence_system_prompt() -> str:
@@ -51,9 +365,9 @@ Critical operating rules:
         to ensure consistency across all extraction pipelines.
         """
         # Get unified rules
-        carrier_rules = CarrierExtractionRules.get_critical_requirements()
-        total_amount_rules = TotalAmountExtractionRules.get_extraction_strategy()
-        filtering_rules = SummaryRowFilteringRules.get_prompt_instructions()
+        carrier_rules = ExtractionRules.Carrier.get_critical_requirements()
+        total_amount_rules = ExtractionRules.Amount.get_extraction_strategy()
+        filtering_rules = ExtractionRules.Filtering.get_prompt_instructions()
         
         # Use string concatenation instead of f-string to avoid nesting issues
         prompt = """<task>
@@ -151,6 +465,66 @@ Extract all tables with:
 • Column Semantics: Understand what each column means
 • Relationships: Parent-child connections in hierarchical tables
 
+**🔴 CRITICAL: EXTRACT ALL ROWS - NO EXCEPTIONS**
+
+**PRIMARY DIRECTIVE:**
+Your #1 priority is to extract EVERY SINGLE visible data row from ALL tables in the document.
+Missing even one row causes calculation errors and failed validations.
+
+**MANDATORY ROW EXTRACTION RULES:**
+
+1. **Count and Verify:**
+   - Before starting: Count visible data rows in each table
+   - After extraction: Verify your count matches
+   - If mismatch: Re-scan document for missed rows
+
+2. **Extract ALL Rows:**
+   - Extract EVERY row you see, even if it looks like a duplicate
+   - Extract rows even if values seem unusual or negative
+   - Extract rows even if they appear incomplete
+   - DO NOT skip rows because they "look wrong" - extract everything
+
+3. **Mark, Don't Skip:**
+   - If a row looks like a summary/total, extract it AND mark it as `"is_summary": true`
+   - If a row looks unusual, extract it AND note it in `extraction_notes`
+   - DO NOT make filtering decisions during extraction - extract first, filter later
+
+4. **Chunked Documents:**
+   - If table continues across pages: mark `"incomplete": true` on last row
+   - Next chunk: Check if first rows duplicate previous chunk's last rows
+   - Mark continued tables clearly so merging doesn't lose rows
+
+5. **Final Validation:**
+   - Count rows in your JSON output
+   - Compare to visible rows in document
+   - If counts don't match: Re-scan and add missing rows
+
+**VERIFICATION CHECKLIST (Mandatory before returning):**
+
+Before returning your extraction, answer these:
+□ Did I count the visible data rows in each table?
+□ Does my extracted row count match the visible row count?
+□ Did I extract EVERY row, or did I skip any?
+□ If I skipped rows, did I document why in extraction_notes?
+□ Did I re-scan the document to catch any missed rows?
+
+**If ANY checkbox is unchecked → Re-scan document and extract missed rows**
+
+**Example:**
+
+```
+Table Analysis:
+- Visible data rows: 23
+- Extracted rows: 23 ✅
+- All rows accounted for: YES ✅
+
+If Visible: 23, Extracted: 21 ❌
+→ STOP: Re-scan document, find the 2 missing rows, extract them
+```
+
+**Remember:** It's better to extract too much (and filter later) than to miss rows.
+Missing rows = Failed validation = Manual review required = Bad user experience.
+
 **CRITICAL: COMPANY NAME COLUMN HANDLING**
 
 <company_name_extraction>
@@ -232,6 +606,43 @@ Key Points for Company Name Extraction:
 • This ensures extracted data maintains full context without losing company-to-data relationships
 • For hierarchical documents with Writing Agents → Companies → Data rows, maintain all levels of the hierarchy
 </company_name_extraction>
+
+**CHUNKED DOCUMENT HANDLING:**
+
+If you are processing a chunk of a larger document:
+
+1. **Extract ALL rows visible in this chunk**
+
+2. **If table continues from previous page:**
+   - Mark `"continued_from_previous": true`
+   - Include continuation rows in your extraction
+   
+3. **If table continues to next page:**
+   - Mark `"continues_to_next": true`
+   - Extract all visible rows up to the page boundary
+   
+4. **Row Count Reporting:**
+   - Report: `"rows_in_chunk": <count>`
+   - This helps validate merging accuracy
+
+5. **Overlap Handling:**
+   - If first few rows look identical to expected last rows of previous chunk:
+   - Still extract them (deduplication happens in post-processing)
+   - Mark: `"may_have_overlap": true`
+
+Example:
+
+```json
+{
+  "table": {
+    "continued_from_previous": true,
+    "continues_to_next": true,
+    "rows_in_chunk": 47,
+    "may_have_overlap": true,
+    "rows": [...]
+  }
+}
+```
 
 **OUTPUT FORMAT**
 Return your analysis in this JSON structure:
@@ -483,6 +894,8 @@ Generate summaries that match or exceed Google Gemini's quality:
         
         Creates comprehensive, conversational summary with business intelligence
         AND structured key-value data for UI display.
+        
+        ⭐ UPDATED: Now handles both entity-based AND table-based extraction data
         """
         return f"""<task>
 Create a comprehensive, conversational summary of this commission statement that captures all key business intelligence.
@@ -490,6 +903,12 @@ Create a comprehensive, conversational summary of this commission statement that
 🔴 CRITICAL: You MUST return BOTH outputs:
 1. A conversational summary (3-4 sentence paragraph)
 2. A structured key-value data object (JSON) for UI display
+
+⭐ IMPORTANT: The input data may contain either:
+   - Structured entities (carrier, broker, groups_and_companies, etc.) - use these directly
+   - OR raw table data (headers and rows) - analyze these to extract information
+   
+   Analyze whatever data is provided and extract as much information as possible.
 </task>
 
 <input_data>
@@ -504,6 +923,22 @@ Create a comprehensive, conversational summary of this commission statement that
 
 <instructions>
 **STEP 1: Analyze the Data**
+
+⭐ CRITICAL: First check if you have structured entities OR raw table data:
+
+**If you have structured entities** (carrier, broker, groups_and_companies):
+• Use the entity data directly
+• Extract key information from business_intelligence
+• Identify relationships and patterns
+
+**If you have raw table data** (tables with headers and rows):
+• Analyze the table headers to identify key columns
+• Look for: Company/Group names, Commission amounts, Invoice totals, Dates, Rates
+• Identify summary rows (usually contain "Total", "Grand", "Subtotal")
+• Count unique companies/groups from the name column
+• Extract top 3 contributors by sorting commission amounts
+• Look for census counts, billing periods, plan types in the data
+
 Internally review:
 • What type of document is this?
 • Who are the key entities (carrier, broker, agents)?
@@ -534,21 +969,36 @@ Sentence 4 (if applicable): Notable features
 **STEP 3: Extract Structured Key-Value Data**
 Extract the following fields for UI display (MUST be scannable, short values):
 
+⭐ EXTRACTION STRATEGY:
+- If you have `document_metadata` → extract from there
+- If you have `tables` → analyze table data:
+  * Find "Paid Amount" or "Commission Earned" column and sum all values for total_amount
+  * Find "Group Name" or "Company Name" column and count unique entries for company_count
+  * Sort companies by amount to get top_contributors
+  * Look for "Census" or "Subscribers" column for census_count
+  * Look for "Billing Period" column for billing_periods
+
 MANDATORY (always try to find these):
 • broker_id: Document/statement/broker ID number
-• total_amount: Total commission/compensation (numeric only, no $ or commas)
+• total_amount: Total commission/compensation (numeric only, no $ or commas) 
+  → If from tables: SUM all values in "Paid Amount" or "Commission Earned" column
 • carrier_name: Insurance carrier name
-• broker_company: Broker/agent company name
+• broker_company: Broker/agent company name  
 • statement_date: Statement date (YYYY-MM-DD format)
 
 OPTIONAL (include if found):
 • payment_type: EFT, Check, Wire, etc.
 • company_count: Number of companies/groups (as string)
+  → If from tables: COUNT unique values in "Group Name" or "Company Name" column
 • top_contributors: Array of top 1-3 companies with amounts (e.g., [{{"name": "Company A", "amount": "1027.20"}}])
+  → If from tables: Sort companies by commission amount (descending), take top 3
 • commission_structure: E.g., "PEPM", "Percentage-based", "Premium Equivalent"
+  → If from tables: Look in "Calculation Method" or "Rate" column
 • plan_types: E.g., "Medical, Dental, Vision"
 • census_count: Total members/subscribers (as string)
+  → If from tables: SUM all positive values in "Census" or "Census Ct." column
 • billing_periods: Date range covered (e.g., "Dec 2024 - Jan 2025")
+  → If from tables: Find MIN and MAX dates in "Billing Period" column
 • special_payments: Bonuses, incentives, etc. (as string)
 
 **RULES FOR KEY-VALUE DATA:**

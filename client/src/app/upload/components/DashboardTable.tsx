@@ -363,7 +363,7 @@ export default function DashboardTable({
                     </td>
                   )}
                   {Array.isArray(row) 
-                    ? row.map((val: string, colIdx: number) => (
+                    ? (Array.isArray(row) ? row : []).map((val: string, colIdx: number) => (
                         <td key={colIdx} className="py-3 px-4 border-b border-slate-200 dark:border-slate-600 align-top">
                           {isEditing
                             ? (

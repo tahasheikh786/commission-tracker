@@ -37,31 +37,28 @@ logger = logging.getLogger(__name__)
 
 class ClaudeTokenBucket:
     """
-    ✅ CRITICAL FIX: Token bucket algorithm for Claude API rate limiting.
+    ✅ PRODUCTION-GRADE: Token bucket algorithm for Claude API rate limiting.
     
-    Now tracks BOTH input and output tokens separately to prevent 429 errors.
+    Now tracks BOTH input and output tokens separately with exponential backoff.
     
     OPTIMIZED LIMITS (Based on Claude Sonnet 4.5 Tier 1):
     - Requests: 50 RPM → 45 RPM (with 90% buffer)
     - Input Tokens: 40,000 ITPM → 36,000 ITPM (with 90% buffer)
-    - Output Tokens: 8,000 OTPM → 7,200 OTPM (with 90% buffer) ✅ NEW
+    - Output Tokens: 8,000 OTPM → 7,200 OTPM (with 90% buffer)
     
     Claude API enforces THREE separate limits. This prevents 429 rate limit errors
-    by managing all three consumption metrics proactively.
+    by managing all three consumption metrics proactively with exponential backoff.
     """
     
     def __init__(
         self,
         requests_per_minute: int = 50,
-        input_tokens_per_minute: int = 40000,  # ✅ RENAMED: Claude Sonnet 4.5 Tier 1 = 40,000 ITPM
-        output_tokens_per_minute: int = 8000,  # ✅ NEW: Claude Sonnet 4.5 Tier 1 = 8,000 OTPM
-        buffer_percentage: float = 0.90  # ✅ INCREASED to 90% (was 80%) - we have concurrency control now
+        input_tokens_per_minute: int = 40000,
+        output_tokens_per_minute: int = 8000,
+        buffer_percentage: float = 0.90
     ):
         """
-        Initialize token bucket rate limiter with INTELLIGENT WAITING.
-        
-        ✅ CRITICAL FIX: Now tracks BOTH input and output tokens separately.
-        Claude API enforces separate limits for input tokens AND output tokens.
+        Initialize token bucket rate limiter with exponential backoff and jitter.
         
         Args:
             requests_per_minute: Maximum requests per minute (50 for Tier 1)
@@ -71,23 +68,30 @@ class ClaudeTokenBucket:
         """
         self.rpm_limit = int(requests_per_minute * buffer_percentage)  # 45 RPM
         self.itpm_limit = int(input_tokens_per_minute * buffer_percentage)    # 36,000 ITPM
-        self.otpm_limit = int(output_tokens_per_minute * buffer_percentage)   # 7,200 OTPM (NEW)
+        self.otpm_limit = int(output_tokens_per_minute * buffer_percentage)   # 7,200 OTPM
         
-        # ✅ CRITICAL FIX: Track input and output tokens separately
+        # Track input and output tokens separately
         self.request_count = 0
-        self.input_token_count = 0   # ✅ RENAMED from token_count
-        self.output_token_count = 0  # ✅ NEW: Track output tokens
+        self.input_token_count = 0
+        self.output_token_count = 0
         
-        # Timestamp tracking
+        # Window management
         self.window_start = time.time()
-        self.lock = asyncio.Lock()  # ✅ Changed to asyncio.Lock for async compatibility
+        self.lock = asyncio.Lock()
+        
+        # Exponential backoff parameters
+        self.backoff_base = 1.0
+        self.backoff_max = 60.0
+        self.backoff_jitter = True
+        self.attempt_count = 0
         
         self.logger = logging.getLogger(__name__)
         self.logger.info(f"🔧 Token Bucket initialized:")
         self.logger.info(f"   RPM Limit: {self.rpm_limit} (from {requests_per_minute})")
         self.logger.info(f"   ITPM Limit: {self.itpm_limit:,} (from {input_tokens_per_minute:,})")
-        self.logger.info(f"   OTPM Limit: {self.otpm_limit:,} (from {output_tokens_per_minute:,})")  # ✅ NEW
+        self.logger.info(f"   OTPM Limit: {self.otpm_limit:,} (from {output_tokens_per_minute:,})")
         self.logger.info(f"   Buffer: {buffer_percentage * 100:.0f}%")
+        self.logger.info(f"   Exponential backoff: base={self.backoff_base}s, max={self.backoff_max}s, jitter={self.backoff_jitter}")
         # Calculate max pages per chunk
         available_tokens_for_pages = self.itpm_limit - 3000  # Reserve 3K for prompt
         max_pages_per_chunk = int(available_tokens_for_pages / 2750)  # DIVIDE to get pages
@@ -150,16 +154,29 @@ class ClaudeTokenBucket:
                     f"Request too large: {estimated_input_tokens:,} input tokens exceeds "
                     f"limit of {self.itpm_limit:,} tokens per minute"
                 )
-            if estimated_output_tokens > self.otpm_limit:
+            # ✅ ADJUSTED: Allow individual requests up to 16K output tokens (max_tokens limit)
+            # Rate limiter will enforce waits to stay within aggregate OTPM limit
+            if estimated_output_tokens > 16000:
                 raise ValueError(
                     f"Request too large: {estimated_output_tokens:,} output tokens exceeds "
-                    f"limit of {self.otpm_limit:,} tokens per minute"
+                    f"maximum of 16,000 tokens per request"
                 )
             
             # ✅ CRITICAL FIX: Check ALL THREE limits
             requests_available = self.request_count < self.rpm_limit
             input_tokens_available = (self.input_token_count + estimated_input_tokens) <= self.itpm_limit
             output_tokens_available = (self.output_token_count + estimated_output_tokens) <= self.otpm_limit  # ✅ NEW
+            
+            # ✅ SPECIAL CASE: Allow large output requests in fresh/near-fresh windows
+            # If we've used less than 20% of OTPM, allow the request even if it exceeds limit
+            # This handles chunked extractions with large tables (up to 16K tokens per chunk)
+            fresh_window = self.output_token_count < (self.otpm_limit * 0.2)  # Less than 20% used
+            if fresh_window and not output_tokens_available:
+                self.logger.info(
+                    f"✅ Allowing large output request in fresh window "
+                    f"({estimated_output_tokens:,} tokens, {self.output_token_count:,}/{self.otpm_limit:,} used)"
+                )
+                output_tokens_available = True  # Override the check
             
             # If all limits are OK, reserve tokens immediately
             if requests_available and input_tokens_available and output_tokens_available:
@@ -242,6 +259,32 @@ class ClaudeTokenBucket:
             )
             
             return seconds_to_wait
+    
+    def _calculate_exponential_backoff(self) -> float:
+        """
+        Calculate exponential backoff delay with jitter.
+        
+        Uses formula: min(base * (2 ** attempt), max) with optional jitter
+        
+        Returns:
+            Delay in seconds
+        """
+        # Base exponential calculation
+        base_delay = min(self.backoff_base * (2 ** self.attempt_count), self.backoff_max)
+        
+        # Add jitter if enabled (randomize between 0 and base_delay)
+        if self.backoff_jitter:
+            return base_delay * random.random()
+        
+        return base_delay
+    
+    def reset_backoff(self):
+        """Reset backoff attempt counter after successful request"""
+        self.attempt_count = 0
+    
+    def increment_backoff(self):
+        """Increment backoff attempt counter after rate limit hit"""
+        self.attempt_count += 1
     
     def update_actual_usage(self, actual_input_tokens: int, actual_output_tokens: int):
         """
@@ -475,62 +518,118 @@ class ClaudeResponseParser:
     @staticmethod
     def parse_json_response(response_text: str) -> Optional[Dict[str, Any]]:
         """
-        Parse JSON response from Claude - ROBUST HANDLING of multiple formats.
+        ✅ PRODUCTION-GRADE: Parse JSON response from Claude with multiple recovery strategies.
         
         Handles:
         - Pure JSON: {"key": "value"}
         - Markdown wrapped: ```json\n{...}\n```
         - Conversational with JSON: "Here's the data:\n```json\n{...}\n```"
         - Markdown tables (fallback)
+        - Unterminated strings (fixes escaping issues)
+        - Nested markdown blocks
         
         Returns empty structure on failure to prevent downstream errors
         """
+        
         if not response_text:
             logger.error("Empty response from Claude")
             return ClaudeResponseParser._create_empty_structure()
         
-        # Try 1: Parse as pure JSON
+        # ✅ STRATEGY 1: Direct JSON parse (fastest path)
         try:
-            return json.loads(response_text.strip())
+            parsed = json.loads(response_text)
+            logger.info("✅ Strategy 1: Direct JSON parse succeeded")
+            return ClaudeResponseParser._validate_and_fix_structure(parsed)
         except json.JSONDecodeError:
             pass
         
-        # Try 2: Extract JSON from markdown code blocks
-        # Pattern: ```json\n{...}\n```
-        json_pattern = r'```(?:json)?\s*\n?(.*?)\n?```'
-        matches = re.findall(json_pattern, response_text, re.DOTALL)
+        logger.info("Strategy 1 failed - trying markdown extraction...")
         
-        for match in matches:
+        # ✅ STRATEGY 2: Extract JSON from ```json``` blocks
+        import re
+        
+        # Look for ```json ... ``` pattern
+        json_match = re.search(
+            r'```(?:json)?\n(.*?)\n```',
+            response_text,
+            re.DOTALL
+        )
+        
+        if json_match:
             try:
-                parsed = json.loads(match.strip())
+                json_text = json_match.group(1)
+                parsed = json.loads(json_text)
+                logger.info("✅ Strategy 2: Markdown block extraction succeeded")
                 return ClaudeResponseParser._validate_and_fix_structure(parsed)
-            except json.JSONDecodeError:
-                continue
+            except json.JSONDecodeError as e:
+                logger.warning(f"Strategy 2 failed: {e}")
         
-        # Try 3: Find JSON object anywhere in response
-        # Look for {..."tables"...}
-        json_obj_pattern = r'\{(?:[^{}]|(?:\{(?:[^{}]|(?:\{[^{}]*\}))*\}))*\}'
-        matches = re.findall(json_obj_pattern, response_text, re.DOTALL)
+        logger.info("Strategy 2 failed - trying object boundary detection...")
         
-        for match in matches:
-            try:
-                data = json.loads(match)
-                if "tables" in data:  # Validate it's our expected format
-                    return ClaudeResponseParser._validate_and_fix_structure(data)
-            except json.JSONDecodeError:
-                continue
+        # ✅ STRATEGY 3: Find JSON object boundaries manually
+        # Look for outermost {} that contains valid JSON
         
-        # Try 4: Extract tables from markdown format
-        logger.warning("Could not find JSON, attempting to parse markdown tables")
+        start_idx = response_text.find('{')
+        if start_idx == -1:
+            logger.error("No JSON object found in response")
+            return ClaudeResponseParser._create_empty_structure()
+        
+        # Find matching closing brace
+        brace_count = 0
+        end_idx = -1
+        
+        for i in range(start_idx, len(response_text)):
+            if response_text[i] == '{':
+                brace_count += 1
+            elif response_text[i] == '}':
+                brace_count -= 1
+                if brace_count == 0:
+                    end_idx = i + 1
+                    break
+        
+        if end_idx == -1:
+            logger.error("Could not find matching closing brace")
+            return ClaudeResponseParser._create_empty_structure()
+        
+        json_candidate = response_text[start_idx:end_idx]
+        
+        try:
+            parsed = json.loads(json_candidate)
+            logger.info("✅ Strategy 3: Object boundary detection succeeded")
+            return ClaudeResponseParser._validate_and_fix_structure(parsed)
+        except json.JSONDecodeError as e:
+            logger.warning(f"Strategy 3 failed: {e}")
+        
+        # ✅ STRATEGY 4: Fix common JSON escaping issues and retry
+        logger.info("Strategy 3 failed - trying escaping fixes...")
+        
+        try:
+            # Fix unescaped newlines in strings
+            fixed_json = re.sub(
+                r':\s*"([^"]*\n[^"]*)"',
+                lambda m: ': "' + m.group(1).replace('\n', '\\n') + '"',
+                json_candidate
+            )
+            
+            parsed = json.loads(fixed_json)
+            logger.info("✅ Strategy 4: Escaping fixes succeeded")
+            return ClaudeResponseParser._validate_and_fix_structure(parsed)
+        except json.JSONDecodeError as e:
+            logger.warning(f"Strategy 4 failed: {e}")
+        
+        # ✅ STRATEGY 5: Extract tables from markdown format (last resort)
+        logger.warning("All JSON strategies failed - attempting markdown table parsing")
         markdown_result = ClaudeResponseParser._parse_markdown_tables(response_text)
         if markdown_result and markdown_result.get("tables"):
+            logger.info("✅ Strategy 5: Markdown table parsing succeeded")
             return markdown_result
         
-        # All strategies failed - return empty structure
-        logger.error("All parsing strategies failed")
+        # ❌ ALL STRATEGIES FAILED
+        logger.error("❌ All parsing strategies failed")
         logger.error(f"Response text (first 500 chars): {response_text[:500]}")
         if len(response_text) > 500:
             logger.error(f"Response text (last 200 chars): ...{response_text[-200:]}")
+        
         return ClaudeResponseParser._create_empty_structure()
     
     @staticmethod
@@ -565,6 +664,9 @@ class ClaudeResponseParser:
     def _validate_and_fix_structure(parsed: Dict[str, Any]) -> Dict[str, Any]:
         """
         Validate and fix parsed JSON structure to ensure it has required fields.
+        
+        ✅ CRITICAL FIX: Converts Claude's row format from {"data": [...], "is_summary": bool}
+        to frontend-expected format: rows = [[...]], summary_rows = [indices]
         """
         # Ensure tables field exists and is a list
         if 'tables' not in parsed:
@@ -593,12 +695,191 @@ class ClaudeResponseParser:
             if 'rows' not in table:
                 table['rows'] = []
             
+            # ✅ CRITICAL FIX: Convert row format from Claude's {"data": [...], "is_summary": bool}
+            # to frontend format: rows = [[...]], summary_rows = [indices]
+            if table['rows'] and len(table['rows']) > 0:
+                # Check if rows are in the new format with "data" and "is_summary"
+                first_row = table['rows'][0]
+                if isinstance(first_row, dict) and 'data' in first_row:
+                    # Convert from {"data": [...], "is_summary": bool} format
+                    converted_rows = []
+                    summary_row_indices = []
+                    
+                    for row_idx, row_obj in enumerate(table['rows']):
+                        if isinstance(row_obj, dict) and 'data' in row_obj:
+                            # Extract the data array
+                            converted_rows.append(row_obj['data'])
+                            
+                            # Track summary rows by index
+                            if row_obj.get('is_summary', False):
+                                summary_row_indices.append(row_idx)
+                        else:
+                            # Fallback: if row is already in array format, keep it
+                            converted_rows.append(row_obj if isinstance(row_obj, list) else [])
+                    
+                    # Update table with converted format
+                    table['rows'] = converted_rows
+                    table['summary_rows'] = summary_row_indices
+                    
+                    logger.info(f"✅ Converted table {idx}: {len(converted_rows)} rows, {len(summary_row_indices)} summary rows")
+                else:
+                    # Rows are already in correct format (array of arrays)
+                    # Ensure summary_rows field exists
+                    if 'summary_rows' not in table:
+                        table['summary_rows'] = []
+                
+                # 🛡️ SAFETY NET: Detect missed grand total rows
+                # Claude sometimes misses grand total rows when Group Number/Name are empty
+                table = ClaudeResponseParser._detect_missed_summary_rows(table, parsed.get('document_metadata', {}))
+                
+                # Update summary_row_indices after safety net detection
+                if isinstance(first_row, dict) and 'data' in first_row:
+                    summary_row_indices = table.get('summary_rows', [])
+            
             # Only include tables with actual content
             if table['headers'] or table['rows']:
                 valid_tables.append(table)
         
         parsed['tables'] = valid_tables
         return parsed
+    
+    @staticmethod
+    def _detect_missed_summary_rows(table: Dict[str, Any], document_metadata: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        🛡️ SAFETY NET: Detect grand total rows that Claude missed marking as summary rows.
+        
+        Claude sometimes fails to mark rows as summaries when:
+        - Group Number is blank/empty
+        - Group Name is blank/empty  
+        - Only the amount column contains the grand total
+        
+        This method uses heuristics to catch these missed cases.
+        
+        Args:
+            table: Table dict with headers, rows, and summary_rows
+            document_metadata: Document metadata containing total_amount if available
+            
+        Returns:
+            Updated table dict with additional summary rows marked
+        """
+        import re
+        
+        headers = table.get('headers', [])
+        rows = table.get('rows', [])
+        summary_rows = set(table.get('summary_rows', []))
+        
+        if not rows or len(rows) < 2:
+            return table
+        
+        # Find key column indices
+        group_name_idx = None
+        group_no_idx = None
+        amount_idx = None
+        
+        for idx, header in enumerate(headers):
+            header_lower = str(header).lower()
+            if 'group no' in header_lower or 'policy no' in header_lower or 'group number' in header_lower:
+                group_no_idx = idx
+            elif any(kw in header_lower for kw in ['group name', 'company', 'client name', 'customer']) and 'no' not in header_lower:
+                group_name_idx = idx
+            elif any(kw in header_lower for kw in ['paid amount', 'commission earned', 'commission', 'paid']):
+                amount_idx = idx
+        
+        # Get document total if available
+        doc_total = None
+        if document_metadata:
+            doc_total_val = document_metadata.get('total_amount')
+            if doc_total_val:
+                try:
+                    doc_total = float(doc_total_val)
+                except (ValueError, TypeError):
+                    pass
+        
+        additional_summary_rows = []
+        
+        # Strategy 1: Check last row for grand total
+        # Last row often contains the grand total with blank group name/number
+        last_row_idx = len(rows) - 1
+        if last_row_idx not in summary_rows:
+            last_row = rows[last_row_idx]
+            
+            # Check if first few columns are empty/blank
+            leading_empty = True
+            if group_no_idx is not None and group_no_idx < len(last_row):
+                val = str(last_row[group_no_idx]).strip()
+                if val and val not in ['', '-', 'N/A', 'n/a']:
+                    leading_empty = False
+            
+            if group_name_idx is not None and group_name_idx < len(last_row) and leading_empty:
+                val = str(last_row[group_name_idx]).strip()
+                if val and val not in ['', '-', 'N/A', 'n/a']:
+                    leading_empty = False
+            
+            # If leading columns are empty but amount column has a value
+            if leading_empty and amount_idx is not None and amount_idx < len(last_row):
+                amount_str = str(last_row[amount_idx]).strip()
+                if amount_str and amount_str not in ['', '-', 'N/A', 'n/a', '$0.00', '$0', '0.00', '0']:
+                    # Parse the amount
+                    try:
+                        # Remove currency symbols, commas, parentheses
+                        clean_amount = re.sub(r'[$,\s]', '', amount_str)
+                        clean_amount = clean_amount.replace('(', '-').replace(')', '')
+                        last_row_amount = float(clean_amount)
+                        
+                        # If it matches document total or is suspiciously large
+                        if doc_total and abs(last_row_amount - doc_total) < 0.01:
+                            logger.warning(f"🛡️ Safety net: Last row {last_row_idx} matches document total ${doc_total:.2f} - marking as summary")
+                            additional_summary_rows.append(last_row_idx)
+                        elif abs(last_row_amount) > 10000:  # Suspiciously large single commission
+                            # Check if it's close to sum of other rows
+                            other_total = 0
+                            for i, row in enumerate(rows):
+                                if i == last_row_idx or i in summary_rows:
+                                    continue
+                                if amount_idx < len(row):
+                                    try:
+                                        val_str = str(row[amount_idx]).strip()
+                                        clean_val = re.sub(r'[$,\s]', '', val_str)
+                                        clean_val = clean_val.replace('(', '-').replace(')', '')
+                                        other_total += float(clean_val)
+                                    except (ValueError, TypeError):
+                                        pass
+                            
+                            # If last row is close to sum of others, it's likely a grand total
+                            if abs(last_row_amount - other_total) < 1.0:
+                                logger.warning(f"🛡️ Safety net: Last row {last_row_idx} (${last_row_amount:.2f}) matches sum of other rows (${other_total:.2f}) - marking as summary")
+                                additional_summary_rows.append(last_row_idx)
+                    except (ValueError, TypeError):
+                        pass
+        
+        # Strategy 2: Check for rows with "Total" keywords that were missed
+        for row_idx, row in enumerate(rows):
+            if row_idx in summary_rows or row_idx in additional_summary_rows:
+                continue
+            
+            # Check group number for total keywords
+            if group_no_idx is not None and group_no_idx < len(row):
+                val = str(row[group_no_idx]).lower().strip()
+                if any(kw in val for kw in ['total', 'subtotal', 'grand', 'summary', 'combined']):
+                    logger.warning(f"🛡️ Safety net: Row {row_idx} has 'total' keyword in group number: '{row[group_no_idx]}' - marking as summary")
+                    additional_summary_rows.append(row_idx)
+                    continue
+            
+            # Check group name for total keywords
+            if group_name_idx is not None and group_name_idx < len(row):
+                val = str(row[group_name_idx]).lower().strip()
+                if any(kw in val for kw in ['total', 'subtotal', 'grand', 'summary', 'combined']):
+                    logger.warning(f"🛡️ Safety net: Row {row_idx} has 'total' keyword in group name: '{row[group_name_idx]}' - marking as summary")
+                    additional_summary_rows.append(row_idx)
+                    continue
+        
+        # Update summary_rows list
+        if additional_summary_rows:
+            all_summary_rows = sorted(list(summary_rows) + additional_summary_rows)
+            table['summary_rows'] = all_summary_rows
+            logger.info(f"🛡️ Safety net: Added {len(additional_summary_rows)} missed summary rows. Total summary rows: {len(all_summary_rows)}")
+        
+        return table
     
     @staticmethod
     def _create_empty_structure() -> Dict[str, Any]:
@@ -838,6 +1119,126 @@ class ClaudeQualityAssessor:
                 'issues_detected': [f'Error during assessment: {str(e)}'],
                 'quality_grade': 'C'
             }
+
+
+class ExtractionValidator:
+    """
+    ✅ PRODUCTION-GRADE: Validates extraction completeness and row counting
+    """
+    
+    @staticmethod
+    def validate_table_rows(
+        extracted_tables: list,
+        expected_minimum_rows: int = 3
+    ) -> Dict[str, Any]:
+        """
+        Ensure all visible rows were extracted.
+        
+        Returns:
+            Validation report with warnings and errors
+        """
+        validation_report = {
+            'valid': True,
+            'warnings': [],
+            'errors': [],
+            'row_counts': {}
+        }
+        
+        for table_idx, table in enumerate(extracted_tables):
+            headers = table.get('headers', [])
+            rows = table.get('rows', [])
+            
+            # Check for empty table
+            if not rows:
+                validation_report['errors'].append(
+                    f"Table {table_idx}: No rows extracted"
+                )
+                validation_report['valid'] = False
+            
+            # Check for inconsistent row widths
+            header_count = len(headers)
+            for row_idx, row in enumerate(rows):
+                if len(row) != header_count:
+                    validation_report['warnings'].append(
+                        f"Table {table_idx}, Row {row_idx}: "
+                        f"Width mismatch ({len(row)} vs {header_count})"
+                    )
+            
+            # Check for duplicate rows (indicates extraction error)
+            unique_rows = len(set(str(row) for row in rows))
+            if unique_rows < len(rows):
+                duplicates = len(rows) - unique_rows
+                validation_report['warnings'].append(
+                    f"Table {table_idx}: {duplicates} duplicate rows"
+                )
+            
+            validation_report['row_counts'][f'table_{table_idx}'] = {
+                'headers': header_count,
+                'rows': len(rows),
+                'unique_rows': unique_rows
+            }
+        
+        return validation_report
+    
+    @staticmethod
+    def validate_chunk_merge(chunk_results: list) -> list:
+        """
+        After merging chunks, ensure we didn't lose rows.
+        Returns merged tables with deduplication.
+        """
+        # Count total rows before/after deduplication
+        before_dedupe = sum(
+            len(table.get('rows', []))
+            for chunk in chunk_results
+            for table in chunk.get('tables', [])
+        )
+        
+        # Deduplicate overlapping chunk boundaries
+        merged = ExtractionValidator._deduplicate_rows(chunk_results)
+        
+        after_dedupe = sum(
+            len(table.get('rows', []))
+            for table in merged
+        )
+        
+        logger.info(f"Chunk merge deduplication:")
+        logger.info(f"  Before: {before_dedupe} rows")
+        logger.info(f"  After: {after_dedupe} rows")
+        logger.info(f"  Removed: {before_dedupe - after_dedupe} duplicate rows")
+        
+        return merged
+    
+    @staticmethod
+    def _deduplicate_rows(chunk_results: list) -> list:
+        """
+        Intelligently merge tables from overlapping chunks.
+        """
+        if not chunk_results:
+            return []
+        
+        # For each table, track row hashes to detect duplicates
+        merged_tables = []
+        seen_rows = set()
+        
+        for chunk in chunk_results:
+            for table in chunk.get('tables', []):
+                
+                filtered_rows = []
+                for row in table.get('rows', []):
+                    row_hash = hash(tuple(str(cell) for cell in row))
+                    
+                    if row_hash not in seen_rows:
+                        filtered_rows.append(row)
+                        seen_rows.add(row_hash)
+                
+                merged_tables.append({
+                    **table,
+                    'rows': filtered_rows,
+                    'original_row_count': len(table.get('rows', [])),
+                    'deduplicated_row_count': len(filtered_rows)
+                })
+        
+        return merged_tables
 
 
 class ClaudeErrorHandler:
