@@ -766,11 +766,20 @@ async def save_statement_review(
     db_upload.completed_at = datetime.utcnow()
     db_upload.last_updated = datetime.utcnow()
     
-    # Set extracted_total and total_amount_match if calculated
-    if extracted_total is not None:
-        db_upload.extracted_total = extracted_total
+    # Set extracted_total, calculated_total and total_amount_match if calculated
+    # ✅ CRITICAL: extracted_total stores the AI-extracted value, calculated_total stores the sum from table rows
+    # Frontend displays: "File" = extracted_total (AI value), "Calc" = calculated_total (from table rows)
+    if ai_extracted_total is not None:
+        db_upload.extracted_total = ai_extracted_total  # Store AI-extracted value
+        db_upload.calculated_total = extracted_total  # Store calculated value from table rows
         db_upload.total_amount_match = total_amount_match
-        print(f"✅ Set extracted_total={extracted_total}, total_amount_match={total_amount_match}")
+        print(f"✅ Set extracted_total={ai_extracted_total} (AI-extracted), calculated_total={extracted_total}, total_amount_match={total_amount_match}")
+    elif extracted_total is not None:
+        # Fallback: If no AI-extracted total available, use calculated value for both
+        db_upload.extracted_total = extracted_total
+        db_upload.calculated_total = extracted_total
+        db_upload.total_amount_match = total_amount_match
+        print(f"✅ Set extracted_total={extracted_total} (fallback to calculated), calculated_total={extracted_total}, total_amount_match={total_amount_match}")
     
     # Set extracted_invoice_total if calculated
     if extracted_invoice_total is not None:

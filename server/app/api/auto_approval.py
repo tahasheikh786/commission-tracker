@@ -246,22 +246,20 @@ async def auto_approve_statement(
         # because it referenced an undefined 'upload' variable
         
         # Step 4: Get extracted total from document (from Claude) and calculate from tables
+        # ✅ CRITICAL: Get AI-extracted value from document_metadata (NOT from learned format!)
         actual_extracted_total = request.extracted_total
+        
+        # If not in request.extracted_total, try document_metadata.total_amount
+        if actual_extracted_total == 0 and request.document_metadata:
+            actual_extracted_total = request.document_metadata.get('total_amount', 0)
+            if actual_extracted_total > 0:
+                logger.info(f"✅ Using AI-extracted total from document_metadata: ${actual_extracted_total:.2f}")
+        
+        if actual_extracted_total == 0:
+            logger.warning("⚠️  No AI-extracted total available - this may cause validation issues")
         
         # Convert field_config_list to dict for easier lookup (needed for total calculation and saving)
         field_mapping = {item['field']: item['mapping'] for item in field_config_list if 'field' in item and 'mapping' in item}
-        
-        # ✅ NEW: Fallback to learned total if extracted_total not provided
-        if actual_extracted_total == 0:
-            # Try to get from learned format
-            table_editor_settings = request.learned_format.get("table_editor_settings", {})
-            learned_total = table_editor_settings.get("statement_total_amount", 0)
-            
-            if learned_total:
-                actual_extracted_total = learned_total
-                logger.info(f"Using learned total from format: ${actual_extracted_total:.2f}")
-            else:
-                logger.warning("❌ No extracted total available - cannot validate")
         
         # ✅ Calculate commission from tables (for comparison only)
         calculated_total = 0.0
@@ -472,9 +470,12 @@ async def auto_approve_statement(
         db_upload.automated_approval = True
         db_upload.automation_timestamp = datetime.utcnow()
         db_upload.total_amount_match = total_validation.get("matches", False) if total_validation else None
-        # ✅ FIX: extracted_total should be the CALCULATED total from table rows, not AI-extracted from document
+        # ✅ CRITICAL: extracted_total stores the AI-extracted value from document (what Claude found)
+        # calculated_total stores the sum of commission rows from table data
         # The comparison is: AI-extracted (actual_extracted_total) vs Calculated (calculated_total)
-        db_upload.extracted_total = round(calculated_total, 2) if calculated_total else 0  # This is the sum from table rows
+        # Frontend displays: "File" = extracted_total (AI value), "Calc" = calculated_total (from table rows)
+        db_upload.extracted_total = round(actual_extracted_total, 2) if actual_extracted_total else 0  # AI-extracted from document
+        db_upload.calculated_total = round(calculated_total, 2) if calculated_total else 0  # Calculated from table rows
         db_upload.extracted_invoice_total = round(calculated_invoice_total, 2) if calculated_invoice_total else 0
         
         # 🔧 CRITICAL FIX: Update status based on total validation

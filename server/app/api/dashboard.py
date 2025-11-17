@@ -440,7 +440,15 @@ async def get_statements_by_carrier(
                 "raw_data": statement.raw_data,
                 "edited_tables": statement.edited_tables,
                 "final_data": statement.final_data,
-                "selected_statement_date": statement.selected_statement_date
+                "selected_statement_date": statement.selected_statement_date,
+                "field_mapping": statement.field_mapping,
+                # ✅ Include automation/validation metadata
+                "automated_approval": statement.automated_approval,
+                "automation_timestamp": statement.automation_timestamp.isoformat() if statement.automation_timestamp else None,
+                "total_amount_match": statement.total_amount_match,
+                "extracted_total": float(statement.extracted_total) if statement.extracted_total else None,
+                "calculated_total": float(statement.calculated_total) if statement.calculated_total else None,
+                "extracted_invoice_total": float(statement.extracted_invoice_total) if statement.extracted_invoice_total else None
             })
         
         return formatted_statements
@@ -521,7 +529,15 @@ async def get_statements_by_carrier_and_status(
                 "raw_data": statement.raw_data,
                 "edited_tables": statement.edited_tables,
                 "final_data": statement.final_data,
-                "selected_statement_date": statement.selected_statement_date
+                "selected_statement_date": statement.selected_statement_date,
+                "field_mapping": statement.field_mapping,
+                # ✅ Include automation/validation metadata
+                "automated_approval": statement.automated_approval,
+                "automation_timestamp": statement.automation_timestamp.isoformat() if statement.automation_timestamp else None,
+                "total_amount_match": statement.total_amount_match,
+                "extracted_total": float(statement.extracted_total) if statement.extracted_total else None,
+                "calculated_total": float(statement.calculated_total) if statement.calculated_total else None,
+                "extracted_invoice_total": float(statement.extracted_invoice_total) if statement.extracted_invoice_total else None
             })
         
         return formatted_statements
@@ -632,6 +648,7 @@ async def get_user_specific_company_statements(
                 "automation_timestamp": statement.automation_timestamp.isoformat() if statement.automation_timestamp else None,
                 "total_amount_match": statement.total_amount_match,
                 "extracted_total": float(statement.extracted_total) if statement.extracted_total else None,
+                "calculated_total": float(statement.calculated_total) if statement.calculated_total else None,
                 "extracted_invoice_total": float(statement.extracted_invoice_total) if statement.extracted_invoice_total else None
             })
         

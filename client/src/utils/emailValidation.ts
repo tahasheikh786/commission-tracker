@@ -2,6 +2,7 @@
 const AUTHORIZED_EMAILS = [
   'shaine.rucker@pinecrestconsulting.com',
   'david.almeida@innovativebps.com',
+  'norberto@innovativebps.com',
   'muhammad@pinecrestconsulting.com',
   'sales@pinecrestconsulting.com'
 ];

@@ -96,6 +96,7 @@ async def get_statements_for_company(
             "automation_timestamp": statement.automation_timestamp.isoformat() if statement.automation_timestamp else None,
             "total_amount_match": statement.total_amount_match,
             "extracted_total": float(statement.extracted_total) if statement.extracted_total else None,
+            "calculated_total": float(statement.calculated_total) if statement.calculated_total else None,
             "extracted_invoice_total": float(statement.extracted_invoice_total) if statement.extracted_invoice_total else None
         })
     

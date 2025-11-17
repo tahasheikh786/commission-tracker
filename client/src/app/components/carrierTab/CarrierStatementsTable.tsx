@@ -26,7 +26,8 @@ type Statement = {
   automated_approval?: boolean;
   automation_timestamp?: string;
   total_amount_match?: boolean | null;
-  extracted_total?: number;  // Earned commission total extracted from document
+  extracted_total?: number;  // Earned commission total extracted from document (AI-extracted)
+  calculated_total?: number;  // Earned commission total calculated from table rows
   extracted_invoice_total?: number;  // Invoice total calculated from table data
   gcs_key?: string;
   gcs_url?: string;
@@ -296,66 +297,10 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
       };
     }
     
-    // For NEEDSREVIEW statements - calculate and show difference
+    // For NEEDSREVIEW statements - show the stored calculated total and difference
     if (isNeedsReview && extractedTotal > 0) {
-      // Calculate the total from finaldata (same logic as in expandable section)
-      let calculatedTotal = 0;
-      
-      // Find commission field name
-      let sourceCommissionFieldName = "";
-      if (statement.field_mapping && typeof statement.field_mapping === "object") {
-        const commissionMappingCandidates = [
-          "commission earned", "commissionearned", "total commission paid",
-          "commission", "paid amount", "paidamount", "amount paid"
-        ];
-        
-        for (const [sourceField, targetField] of Object.entries(statement.field_mapping)) {
-          const normalizedTarget = String(targetField).toLowerCase().trim();
-          if (commissionMappingCandidates.some(candidate => 
-            normalizedTarget.includes(candidate) || candidate.includes(normalizedTarget)
-          )) {
-            sourceCommissionFieldName = sourceField;
-            break;
-          }
-        }
-      }
-      
-      // Calculate from finaldata if we found the field
-      if (sourceCommissionFieldName && statement.final_data && Array.isArray(statement.final_data)) {
-        statement.final_data.forEach((table: any) => {
-          const headers = table.header || table.headers;
-          const rows = table.rows;
-          const summaryRows = new Set(table.summaryRows || []);
-          
-          let commissionColumnIndex = headers?.indexOf(sourceCommissionFieldName);
-          if (commissionColumnIndex === -1) {
-            commissionColumnIndex = headers?.findIndex((h: string) => 
-              h.toLowerCase() === sourceCommissionFieldName.toLowerCase()
-            );
-          }
-          
-          if (commissionColumnIndex >= 0 && rows) {
-            rows.forEach((row: any, rowIdx: number) => {
-              if (summaryRows.has(rowIdx)) return;
-              
-              const rawValue = row[commissionColumnIndex];
-              if (rawValue !== undefined && rawValue !== null && rawValue !== "") {
-                let numericValue = 0;
-                if (typeof rawValue === "number") {
-                  numericValue = rawValue;
-                } else if (typeof rawValue === "string") {
-                  const cleaned = rawValue.replace(/[$,]/g, "").trim();
-                  numericValue = parseFloat(cleaned);
-                }
-                
-                if (!isNaN(numericValue) && numericValue !== 0) {
-                  calculatedTotal += numericValue;
-                }
-              }
-            });
-          }
-        });
-      }
+      // Use the calculated_total from database (calculated during auto-approval)
+      const calculatedTotal = statement.calculated_total || 0;
       
       const difference = calculatedTotal - extractedTotal;
       const isMatch = Math.abs(difference) < 0.01;

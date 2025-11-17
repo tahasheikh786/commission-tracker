@@ -663,6 +663,8 @@ Return in this exact structure:
         Summary row filtering rules - identifies and excludes summary/total/metadata rows.
         
         Applied to groups_and_companies extraction to ensure only actual groups are included.
+        Enhanced with multi-stage intelligent detection based on textual, structural, 
+        positional, and content pattern indicators.
         """
         
         @staticmethod
@@ -684,6 +686,22 @@ Return in this exact structure:
                 'subtotal',
                 'total',  # General catch-all
                 'summary',
+                'sum',
+                'overall',
+                'aggregate',
+                'combined',
+                'consolidated',
+                'net',
+                'final',
+                
+                # Page/Section totals
+                'page total',
+                'section total',
+                'department total',
+                'agent total',
+                'writing agent total',
+                'group total',
+                'vendor total',
                 
                 # Agent metadata rows
                 'writing agent name',
@@ -711,52 +729,211 @@ Return in this exact structure:
         @staticmethod
         def get_prompt_instructions() -> str:
             """
-            Instructions for Claude to mark summary rows during extraction.
+            Instructions for Claude to intelligently identify summary rows during extraction.
             
-            NEW APPROACH: Extract all rows, mark summaries for later filtering.
-            This is safer than having Claude skip rows during extraction.
+            COMPREHENSIVE MULTI-STAGE APPROACH: Extract all rows, mark summaries with confidence scores.
+            Uses textual, structural, positional, and content pattern indicators.
             
             Returns:
-                Detailed marking instructions for Claude
+                Comprehensive intelligent filtering instructions for Claude
             """
             return """
-**📋 SUMMARY ROW IDENTIFICATION (Not Filtering)**
+## 🎯 COMMISSION STATEMENT SUMMARY ROW REMOVAL SYSTEM
+
+**CRITICAL: Extract ALL detail rows, but EXCLUDE all summary rows.**
+
+Summary rows are aggregations, subtotals, totals, group rollups, or any row that represents a calculation rather than an actual transaction or commission record.
+
+---
+
+### Part 1: Identify Summary Row Indicators
+
+A summary row typically exhibits ONE OR MORE of these characteristics:
+
+#### 1. Textual Indicators (Check First Column/Name Column)
+
+- Starts with keywords: "Total", "Subtotal", "Grand Total", "Summary", "Sum", "Overall", "Aggregate", "Combined", "Consolidated", "Net", "Final"
+- Contains patterns like "Total for Group:", "Total for [NAME]:", "[NAME] Total"
+- Contains "Page Total", "Section Total", "Department Total", "Agent Total", "Writing Agent Total", "Group Total", "Vendor Total"
+- Reads as a label rather than a name (e.g., "TOTAL COMMISSIONS" vs "ABC COMPANY LLC")
+
+#### 2. Structural Position Indicators
+
+- Appears AFTER a continuous block of data rows from the same entity/group
+- Positioned just before the next group begins
+- Located near page boundaries (bottom of page, between page breaks)
+- Appears at the end of a table section
+- Has unusual indentation or spacing compared to detail rows
+- Bordered/highlighted differently than detail rows
+
+#### 3. Data Pattern Indicators
+
+- First column contains numeric aggregate (not a company name)
+- Row contains mostly EMPTY CELLS compared to detail rows
+- Row has sparse data - only amounts/totals populated, company name missing
+- Contains only 2-3 populated cells while detail rows have 8-12
+- All numeric columns in this row are much LARGER than typical detail rows (likely sums)
+- Contains BOLD or ITALICIZED text (visual formatting for emphasis)
+
+#### 4. Content Pattern Indicators
+
+- Row has repeated/duplicate values across columns
+- Contains percentages that look like rollup calculations
+- Shows running totals or cumulative amounts
+- Census count is ZERO or very high compared to detail rows
+- Invoice total equals sum of several rows above it
+- Shows "0" or "-0" in certain columns (aggregate placeholders)
+
+#### 5. Hierarchical Relationship Indicators
+
+- Preceded by rows with the SAME company name (this row is their total)
+- Preceded by rows with DIFFERENT company names under same agent/section (section total)
+- Followed by a new company/agent (marks end of section)
+- Indented further than detail rows (hierarchy marker)
+
+#### 6. Format-Specific Indicators
+
+- Lacks detailed employee/policy information
+- Missing dates that are present in all detail rows
+- Calculation-like values: "(1,234.56)" format indicating negative/adjustments
+- Shows rates/percentages instead of actual commission amounts
+
+---
+
+### Part 2: Context Analysis Strategy
+
+Before making decisions, understand the FULL CONTEXT:
+
+#### Step 1: Analyze Document Structure
+1. Count total rows in the table
+2. Identify the "writing agent" or primary grouping level (if present)
+3. Find logical sections (blocks of rows for same company, same agent, etc.)
+4. Look for patterns in row counts (e.g., every 5-10 rows has a total row)
+5. Identify visual/structural breaks that mark section boundaries
+
+#### Step 2: Establish What's "Normal" for Detail Rows
+1. Count populated columns in typical detail rows (benchmark)
+2. Note typical row structure/format
+3. Identify standard value ranges for amounts, census counts, rates
+4. Document which columns are ALWAYS populated in detail rows
+
+#### Step 3: Compare Suspect Rows to Normal Pattern
+1. If row has significantly fewer populated cells → likely summary
+2. If row values are much larger than the group above it → likely sum
+3. If row structure doesn't match the detail row pattern → likely summary
+4. If position suggests it's marking section end → likely summary
+
+---
+
+### Part 3: Carrier-Specific Patterns
+
+Some carriers have unique summary row formats:
+
+**Allied Benefit Systems (ABSF)**
+- Summary rows often say "Total for Group: [GROUP NAME]"
+- May show in separate row with same company name but marked "TOTAL"
+- Look for "Total for Vendor" patterns
+- Often has negative numbers in parentheses for adjustments
+
+**UnitedHealthcare (UHC)**
+- Summary rows marked with "Subtotal:" in first column
+- May have writing agent summaries
+- Page totals often present at bottom
+- Look for "Summary" keyword in first column
+
+**Cigna**
+- Summary rows may use "NET" keyword
+- Look for "Total Commission" patterns
+- Often indented for hierarchy
+
+**Generic/Unknown Carriers**
+- "Total" is most common keyword
+- Look for position-based indicators (end of group)
+- Analyze numeric pattern - sums are always larger than individuals
+
+---
+
+### Part 4: The Intelligent Filtering Algorithm
+
+For each row, ask these questions IN THIS ORDER:
+
+**Question 1: Is this a text summary label?**
+- IF first_column contains ["total", "subtotal", "summary", "grand", "net", "final", "overall"]
+- AND NOT contains company-like names (all caps company suffixes: LLC, INC, LP, CORP)
+- THEN → REMOVE (it's a summary)
+
+**Question 2: Is this a structural summary marker?**
+- IF (position_in_section == "last" AND previous_rows_same_company > 0)
+- OR (structure matches "Total for Group: [name]" pattern)
+- OR (preceded by 5+ rows of same company AND this row has different structure)
+- THEN → REMOVE (it's a section total)
+
+**Question 3: Is this an aggregate by size?**
+- IF (total_populated_cells < 4 AND (numeric_columns < detail_row_avg OR numeric_values >> detail_row_avg_values))
+- THEN → REMOVE (it's an aggregate)
+
+**Question 4: Is this a position-based aggregate?**
+- IF (row appears at page boundary OR section boundary)
+- AND (has summary keywords OR structural anomalies)
+- THEN → REMOVE (it's a section boundary aggregate)
+
+**Question 5: Everything else?**
+- IF not matched by Q1-Q4 above
+- THEN → KEEP (it's a detail row)
+
+---
+
+### Part 5: Confidence Scoring
+
+For each row you identify as a summary, assign a confidence score:
+
+- **95-100%**: Text contains explicit "Total", "Subtotal", "Summary" + numeric aggregate patterns
+- **85-94%**: Position + keywords match AND structure differs from detail rows
+- **75-84%**: Strong structural indicators but ambiguous text
+- **60-74%**: Weak indicators; might be edge case
+- **Below 60%**: Likely detail row; flag for manual review
+
+Only remove rows with 75%+ confidence. Flag lower scores for user review.
+
+---
+
+### Part 6: Critical Edge Cases to Handle
+
+**Duplicate Company Names**: Some companies appear multiple times
+- Summary row: "ACME CORP Total" or indented summary
+- Detail rows: Regular "ACME CORP" entries
+- Decision: Check context and structure, not just name
+
+**Empty/Placeholder Rows**: Rows with dashes, zeros, or blanks
+- Often appear between sections
+- Remove only if clearly part of formatting, not data
+
+**Negative Amounts**: Usually in parentheses like "(100.00)"
+- Could be corrections/adjustments (KEEP) or aggregate negatives (REMOVE)
+- Context: Is this one entry or sum of entries?
+
+**High-Value Rows**: One row with amount much larger than others
+- Could be large deal (KEEP) or aggregate (REMOVE)
+- Check: Does it have company/policy details?
+
+**Single-Row Sections**: Sometimes a carrier/group has only one transaction
+- KEEP it - it's the detail row, not a summary
+- Only remove if structure/keywords explicitly mark it as "Total"
+
+---
+
+### Part 7: Output Format
 
 **NEW APPROACH: Extract All, Mark Summaries**
 
 Do NOT skip summary rows during extraction. Instead:
 
 1. **Extract ALL rows** (including summaries)
-2. **Mark summary rows** with `"is_summary": true` in the row object
+2. **Mark summary rows** with `"is_summary": true` and `"summary_confidence": 0.95` in the row object
 3. **Let Python code filter** them later in post-processing
 
-**How to Identify Summary Rows:**
+**Output Format Example:**
 
-A row is a summary if ANY of these conditions are true:
-
-1. **Text-based indicators:**
-   - Group Number contains: "Total", "Subtotal", "Grand Total", "Total for Group"
-   - Group Name contains: "Total", "Summary", "Grand Total", "Combined"
-   - Row represents aggregate of multiple groups (not a single group)
-
-2. **Visual indicators:**
-   - Row is clearly a total/subtotal line (bold, different font, separator line above/below)
-   - Row has different background color or styling than data rows
-   - Row appears at the bottom of a table or section
-
-3. **🔴 CRITICAL: Empty column indicators (Most commonly missed!):**
-   - Group Number is **BLANK/EMPTY** but amount column has a large value
-   - Group Name is **BLANK/EMPTY** but amount column has a large value
-   - First 2-3 columns are blank, but the last column (amount) has a value
-   - **This is the GRAND TOTAL row pattern - DO NOT MISS THIS!**
-
-4. **Position-based indicators:**
-   - Last row in the table with empty group columns but non-zero amount
-   - Row immediately after a section of similar groups
-
-**Output Format Examples:**
-
-**Example 1: Text-based summary row**
 ```json
 {
   "tables": [
@@ -772,8 +949,16 @@ A row is a summary if ANY of these conditions are true:
           "is_summary": false
         },
         {
-          "data": ["Total for Group:", "Company A + B", "$300.00"],
-          "is_summary": true   ← Mark as summary (has "Total" text)
+          "data": ["Total for Group:", "Companies A-B", "$300.00"],
+          "is_summary": true,
+          "summary_confidence": 0.98,
+          "summary_reason": "Text pattern 'Total for Group:' + position match"
+        },
+        {
+          "data": ["", "", "$300.00"],
+          "is_summary": true,
+          "summary_confidence": 0.95,
+          "summary_reason": "Empty group columns + last row + matches sum"
         }
       ]
     }
@@ -781,65 +966,66 @@ A row is a summary if ANY of these conditions are true:
 }
 ```
 
-**Example 2: 🔴 GRAND TOTAL with empty columns (Most Common!)**
-```json
-{
-  "tables": [
-    {
-      "headers": ["Group No.", "Group Name", "Billing Period", "Paid Amount"],
-      "rows": [
-        {
-          "data": ["L001", "Company A", "1/1/2025", "$1,234.56"],
-          "is_summary": false
-        },
-        {
-          "data": ["L002", "Company B", "1/1/2025", "$2,345.67"],
-          "is_summary": false
-        },
-        {
-          "data": ["L003", "Company C", "1/1/2025", "$890.12"],
-          "is_summary": false
-        },
-        {
-          "data": ["", "", "", "$4,470.35"],
-          "is_summary": true   ← Mark as summary (empty group columns, last row, matches sum)
-        }
-      ]
-    }
-  ]
-}
-```
+---
 
-**Key Point:** If the last row has blank Group No. and Group Name but has a value in the amount column, it's ALWAYS a grand total summary row!
+### Part 8: Validation Checklist
 
-**Why This Approach?**
+Before returning final result, verify:
 
-- **Safer:** Ensures no data rows are accidentally skipped
-- **Traceable:** We can see what was filtered and why
-- **Reversible:** Can include summaries later if needed
-- **Simpler:** Claude doesn't need to make filtering decisions
+☑ No "Total" or "Summary" keyword rows remain (unless company name like "Total Logistics LLC")
+☑ Row counts make sense (detail rows > summary rows)
+☑ Flagged rows are legitimately ambiguous
+☑ Key numeric columns align (sections sum to totals correctly)
+☑ Removed rows match summary patterns from Part 1
+☑ Carrier-specific patterns were applied
+☑ Confidence scores are realistic (not all 100% or all 50%)
+☑ Edge cases documented in extraction_notes
 
-**Key Point:** Your job is to extract ALL rows accurately. Python code will handle filtering summaries based on the `is_summary` flag.
+---
+
+**Why This Works Better:**
+- Multi-layered Analysis: Doesn't rely on single regex pattern
+- Contextual Understanding: Claude analyzes structure, not just keywords
+- Carrier Flexibility: Works with ANY carrier structure
+- Confidence Scoring: User can review uncertain cases
+- Semantic Awareness: Claude understands business logic, not just text patterns
+- Edge Case Handling: Documents special cases instead of failing
+
+**Key Point:** Your job is to extract ALL rows accurately and mark summaries with confidence. Python code will handle final filtering based on the `is_summary` flag and confidence scores.
 """
         
         @staticmethod
-        def should_filter_row(group_name: str, group_number: str) -> bool:
+        def should_filter_row(group_name: str, group_number: str, paid_amount: str = None, row_data: dict = None) -> bool:
             """
-            Determine if a row should be filtered (excluded).
+            Determine if a row should be filtered (excluded) using intelligent multi-stage detection.
             
-            This implements the filtering logic for Python post-processing.
+            This implements the comprehensive filtering logic for Python post-processing.
+            Uses textual, structural, and content pattern indicators.
             
             Args:
                 group_name: The group/company name
                 group_number: The group identifier/number
+                paid_amount: Optional paid amount (to detect aggregates)
+                row_data: Optional full row data dict (to check is_summary flag and confidence)
                 
             Returns:
                 True if row should be EXCLUDED (is a summary/metadata row)
                 False if row should be INCLUDED (is an actual group)
             """
+            # PRIORITY CHECK: If Claude marked this as summary with high confidence, trust it
+            if row_data:
+                is_summary = row_data.get('is_summary', False)
+                summary_confidence = row_data.get('summary_confidence', 0.0)
+                if is_summary and summary_confidence >= 0.75:
+                    return True  # EXCLUDE - Claude marked as summary with high confidence
+            
             # Convert to lowercase for case-insensitive matching
             name_lower = str(group_name).strip().lower()
             number_lower = str(group_number).strip().lower()
+            
+            # CRITICAL CHECK: Empty group name AND empty group number = aggregate/total row
+            if not name_lower and not number_lower:
+                return True  # EXCLUDE - likely grand total with empty identifiers
             
             # Skip if group name is empty
             if not name_lower:
@@ -848,13 +1034,19 @@ A row is a summary if ANY of these conditions are true:
             # Get skip keywords
             skip_keywords = ExtractionRules.Filtering.get_skip_keywords()
             
+            # Question 1: Text-based summary label detection
             # Check if group name contains any skip keyword
             if any(keyword in name_lower for keyword in skip_keywords):
-                return True  # EXCLUDE
+                # BUT: Exclude if it's a company name like "Total Logistics LLC"
+                # Company names typically have entity designations
+                if not any(entity in name_lower for entity in ['llc', 'inc', 'corp', 'ltd', 'lp']):
+                    return True  # EXCLUDE
             
             # Check if group name STARTS with "total" or "summary"
             if name_lower.startswith('total') or name_lower.startswith('summary'):
-                return True  # EXCLUDE
+                # BUT: Exclude if it's a company name
+                if not any(entity in name_lower for entity in ['llc', 'inc', 'corp', 'ltd', 'lp']):
+                    return True  # EXCLUDE
             
             # CRITICAL: Also check group number for skip keywords
             # Summary rows often have "Total for Group:" in the group_number field
@@ -869,13 +1061,26 @@ A row is a summary if ANY of these conditions are true:
             if not number_lower or number_lower in ['—', '-', 'n/a', 'na', 'none', '']:
                 return True  # EXCLUDE
             
+            # Question 2: Structural pattern detection
+            # Check for "Total for [NAME]:" pattern
+            if 'total for' in name_lower or 'total for' in number_lower:
+                return True  # EXCLUDE
+            
+            # Question 3: Content pattern detection
+            # Check for aggregate indicators in the paid amount
+            if paid_amount:
+                amount_str = str(paid_amount).strip().lower()
+                # If paid amount is suspiciously large or formatted as subtotal
+                if 'subtotal' in amount_str or 'total:' in amount_str:
+                    return True  # EXCLUDE
+            
             # If all checks passed, this is a legitimate group
             return False  # INCLUDE
         
         @staticmethod
         def filter_groups(groups: list) -> tuple:
             """
-            Filter a list of groups to remove summary/metadata rows.
+            Filter a list of groups to remove summary/metadata rows using intelligent detection.
             
             Args:
                 groups: List of group dictionaries with 'group_name' and 'group_number' keys
@@ -894,12 +1099,23 @@ A row is a summary if ANY of these conditions are true:
             for group in groups:
                 group_name = group.get('group_name', '')
                 group_number = group.get('group_number', '')
+                paid_amount = group.get('paid_amount', '')
                 
-                if ExtractionRules.Filtering.should_filter_row(group_name, group_number):
+                # Pass full group dict as row_data to check is_summary flag
+                if ExtractionRules.Filtering.should_filter_row(
+                    group_name, 
+                    group_number, 
+                    paid_amount,
+                    row_data=group
+                ):
                     excluded_groups.append({
                         'group_number': group_number,
                         'group_name': group_name,
-                        'reason': 'Summary/metadata row detected'
+                        'paid_amount': paid_amount,
+                        'is_summary': group.get('is_summary', False),
+                        'summary_confidence': group.get('summary_confidence', 0.0),
+                        'summary_reason': group.get('summary_reason', 'Multi-stage detection'),
+                        'reason': 'Summary/metadata row detected via intelligent filtering'
                     })
                 else:
                     filtered_groups.append(group)

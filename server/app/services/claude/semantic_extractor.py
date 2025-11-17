@@ -282,8 +282,12 @@ class SemanticExtractionService:
                         # Get the group number early for filtering check
                         group_no = str(row[group_no_idx]).strip() if group_no_idx is not None and group_no_idx < len(row) else ''
                         
-                        # Use unified filtering logic
-                        if ExtractionRules.Filtering.should_filter_row(group_name, group_no):
+                        # Use unified filtering logic with enhanced parameters
+                        if ExtractionRules.Filtering.should_filter_row(
+                            group_name, 
+                            group_no,
+                            paid_amount=row[amount_idx] if amount_idx is not None and amount_idx < len(row) else None
+                        ):
                             logger.debug(f"Skipping summary/metadata row: {group_no} - {group_name}")
                             continue
                         

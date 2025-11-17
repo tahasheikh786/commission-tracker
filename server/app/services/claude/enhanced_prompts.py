@@ -337,21 +337,30 @@ Format your response as structured markdown without code blocks. Dont return tab
         """
         System prompt for document intelligence extraction.
         Optimized for Claude 4 with zero hallucination tolerance.
+        Enhanced with comprehensive summary row removal intelligence.
         """
-        return """You are an elite insurance document extraction specialist with expertise in commission statement analysis.
+        return """You are an elite insurance document extraction specialist with expertise in commission statement analysis and intelligent summary row detection.
 
 Your core competencies:
 - Precise character-level text extraction from PDF documents
 - Visual document structure analysis and entity recognition  
 - Commission data extraction with zero hallucination tolerance
 - Strict adherence to "what you see is what you extract" principle
+- Multi-stage intelligent summary row detection using textual, structural, positional, and content patterns
+- Contextual understanding of hierarchical data relationships
+- Confidence scoring for summary row classification
 
 Critical operating rules:
 1. Extract ONLY text that appears visually in the document
 2. Never add, modify, or infer information not explicitly shown
 3. Preserve exact formatting: spacing, capitalization, punctuation
 4. Stop at natural text boundaries (whitespace, line breaks, punctuation)
-5. When uncertain, provide low confidence scores rather than guessing"""
+5. When uncertain, provide low confidence scores rather than guessing
+6. Extract ALL rows (including summaries), mark summary rows with confidence scores
+7. Use multi-layered analysis for summary detection: not just keywords, but also structure, position, and context
+8. Understand business logic: distinguish between data rows and aggregation rows
+9. Apply carrier-specific patterns when detected (Allied Benefit, UHC, Cigna, etc.)
+10. Flag edge cases for manual review rather than making uncertain filtering decisions"""
 
     @staticmethod
     def get_document_intelligence_extraction_prompt() -> str:
@@ -460,7 +469,7 @@ Using visual cues (indentation, spacing, borders, grouping):
 Extract all tables with:
 • Headers: Preserve multi-line headers with proper joining
 • Data Rows: Include all data with exact values
-• Summary Rows: Flag totals and subtotals
+• Summary Rows: Flag totals and subtotals using intelligent multi-stage detection
 • Row Context: Identify what each row represents
 • Column Semantics: Understand what each column means
 • Relationships: Parent-child connections in hierarchical tables
@@ -484,19 +493,49 @@ Missing even one row causes calculation errors and failed validations.
    - Extract rows even if they appear incomplete
    - DO NOT skip rows because they "look wrong" - extract everything
 
-3. **Mark, Don't Skip:**
-   - If a row looks like a summary/total, extract it AND mark it as `"is_summary": true`
-   - If a row looks unusual, extract it AND note it in `extraction_notes`
-   - DO NOT make filtering decisions during extraction - extract first, filter later
+3. **Mark, Don't Skip - USE INTELLIGENT MULTI-STAGE DETECTION:**
+
+""" + filtering_rules + """
+
+   **CRITICAL SUMMARY ROW MARKING:**
+   - Apply ALL 6 indicator types from above (textual, structural, data pattern, content, hierarchical, format-specific)
+   - Mark row with `"is_summary": true`, `"summary_confidence": 0.95`, `"summary_reason": "description"`
+   - Check for empty rows with only company names - these are often summary section headers
+   - The LAST ROW with a large dollar amount matching the document total is ALWAYS the grand total
+   - Rows with empty cells in key columns (Group No, dates) but populated amount = summary rows
+   - If row looks unusual, extract it AND note it in `extraction_notes`
+   - DO NOT make filtering decisions during extraction - extract first, mark summaries, filter later
 
 4. **Chunked Documents:**
    - If table continues across pages: mark `"incomplete": true` on last row
    - Next chunk: Check if first rows duplicate previous chunk's last rows
    - Mark continued tables clearly so merging doesn't lose rows
 
-5. **Final Validation:**
+5. **🔴 MANDATORY SUMMARY ROW PATTERNS TO DETECT:**
+   
+   **Pattern A: Grand Total Row (MOST CRITICAL)**
+   - If the LAST row of a table has an amount that equals the document total → `is_summary: true, confidence: 0.99`
+   - Example: Last row shows "$3,604.95" and document total is $3,604.95 → THIS IS THE GRAND TOTAL
+   
+   **Pattern B: Empty/Sparse Rows**
+   - If a row has 3+ empty cells AND only has company name + one amount → `is_summary: true, confidence: 0.95`
+   - If Group Number is EMPTY but amount is populated → `is_summary: true, confidence: 0.95`
+   - If all columns empty except company name → `is_summary: true, confidence: 0.90` (section header)
+   
+   **Pattern C: "Total for Group" Rows**
+   - ANY row with "Total for Group:", "Total for Vendor", "Subtotal" → `is_summary: true, confidence: 0.99`
+   
+   **Pattern D: Writing Agent Section Headers**
+   - Rows showing "Writing Agent Name:", "Writing Agent 1 Name:" → `is_summary: true, confidence: 0.99`
+   
+   **Pattern E: Position-Based Detection**
+   - After 5+ consecutive rows with same company, a row with just company name and total → `is_summary: true, confidence: 0.90`
+   - Row immediately before a new company section starts → likely summary of previous section
+
+6. **Final Validation:**
    - Count rows in your JSON output
    - Compare to visible rows in document
+   - Verify you marked the LAST ROW as summary if it contains the document total
    - If counts don't match: Re-scan and add missing rows
 
 **VERIFICATION CHECKLIST (Mandatory before returning):**
