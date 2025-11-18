@@ -147,3 +147,106 @@ async def reject_statement(
 async def get_all_reviews(db: AsyncSession = Depends(get_db)):
     rows = await crud.get_all_statement_reviews(db)
     return rows
+
+@router.post("/recalculate-commissions/{upload_id}")
+async def recalculate_commissions(
+    upload_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user_hybrid)
+):
+    """
+    Recalculate and save commission data for an existing approved statement.
+    
+    This is useful when:
+    - A statement was approved but commission data wasn't saved due to missing field_config
+    - Commission calculation logic has been updated
+    - Data integrity issues need to be fixed
+    """
+    try:
+        logger.info(f"🔄 Recalculating commissions for upload {upload_id}")
+        
+        # Get the statement from database
+        statement = await crud.get_statement_upload_by_id(db, upload_id)
+        if not statement:
+            raise HTTPException(status_code=404, detail=f"Statement with ID {upload_id} not found")
+        
+        # Verify it's approved
+        if statement.status.lower() != 'approved':
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Can only recalculate commissions for approved statements. Current status: {statement.status}"
+            )
+        
+        # Verify user has access (same user or admin)
+        if statement.user_id != current_user.id:
+            # TODO: Add admin check here if needed
+            raise HTTPException(status_code=403, detail="Access denied")
+        
+        logger.info(f"✅ Statement found: {statement.file_name}, Status: {statement.status}")
+        logger.info(f"   field_config present: {bool(statement.field_config)}")
+        logger.info(f"   progress_data present: {bool(statement.progress_data)}")
+        
+        # Call bulk_process_commissions to reprocess the data
+        from app.db.crud.earned_commission import bulk_process_commissions
+        
+        result = await bulk_process_commissions(db, statement)
+        
+        if result is None:
+            # Check if field_config was recovered
+            if not statement.field_config:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Cannot recalculate: field_config is missing and could not be recovered from progress_data"
+                )
+            else:
+                raise HTTPException(
+                    status_code=500,
+                    detail="Commission recalculation failed. Check server logs for details."
+                )
+        
+        # CRITICAL FIX: After reprocessing, update extracted_invoice_total and calculated_total
+        # to reflect the corrected values from earned_commissions table
+        from app.db.models import EarnedCommission
+        from sqlalchemy import func
+        
+        commission_result = await db.execute(
+            select(
+                func.sum(EarnedCommission.commission_earned).label('total_commission'),
+                func.sum(EarnedCommission.invoice_total).label('total_invoice')
+            )
+            .where(
+                EarnedCommission.upload_ids.contains([str(upload_id)])
+            )
+        )
+        commission_totals = commission_result.first()
+        
+        if commission_totals:
+            actual_commission = float(commission_totals.total_commission) if commission_totals.total_commission else 0
+            actual_invoice = float(commission_totals.total_invoice) if commission_totals.total_invoice else 0
+            
+            # Update the statement record with the corrected totals
+            statement.calculated_total = actual_commission
+            statement.extracted_invoice_total = actual_invoice
+            
+            logger.info(f"✅ Updated statement totals: commission=${actual_commission:.2f}, invoice=${actual_invoice:.2f}")
+        
+        await db.commit()
+        
+        logger.info(f"✅ Successfully recalculated commissions for upload {upload_id}")
+        
+        return {
+            "success": True,
+            "message": "Commissions recalculated successfully",
+            "upload_id": str(upload_id),
+            "records_processed": result if isinstance(result, int) else "unknown",
+            "updated_totals": {
+                "commission": actual_commission if commission_totals else None,
+                "invoice": actual_invoice if commission_totals else None
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error recalculating commissions for {upload_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Error recalculating commissions: {str(e)}")

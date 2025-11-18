@@ -92,6 +92,24 @@ async def get_earned_commission_by_carrier_client_user(db: AsyncSession, carrier
     result = await db.execute(query)
     return result.scalar_one_or_none()
 
+async def get_earned_commission_by_carrier_client_month_year_user(db: AsyncSession, carrier_id: UUID, client_name: str, statement_month: int, statement_year: int, user_id: UUID, environment_id: UUID = None):
+    """Get earned commission record by carrier, client, month, year, user, and environment for proper isolation."""
+    conditions = [
+        EarnedCommission.carrier_id == carrier_id,
+        EarnedCommission.client_name == client_name,
+        EarnedCommission.statement_month == statement_month,
+        EarnedCommission.statement_year == statement_year,
+        EarnedCommission.user_id == user_id
+    ]
+    
+    # Add environment filter if provided
+    if environment_id:
+        conditions.append(EarnedCommission.environment_id == environment_id)
+    
+    query = select(EarnedCommission).where(and_(*conditions))
+    result = await db.execute(query)
+    return result.scalar_one_or_none()
+
 async def update_earned_commission(db: AsyncSession, commission_id: UUID, update_data: EarnedCommissionUpdate):
     """Update an earned commission record."""
     result = await db.execute(select(EarnedCommission).where(EarnedCommission.id == commission_id))
@@ -124,7 +142,12 @@ async def upsert_earned_commission(db: AsyncSession, carrier_id: UUID, client_na
         return None
     
     # Use the correct unique constraint lookup WITH user_id
-    if statement_date:
+    # CRITICAL: Now using statement_month and statement_year instead of statement_date
+    # This prevents merging of statements with the same date but different months
+    if statement_month and statement_year:
+        existing = await get_earned_commission_by_carrier_client_month_year_user(db, carrier_id, client_name, statement_month, statement_year, user_id, environment_id)
+    elif statement_date:
+        # Fallback for old code paths
         existing = await get_earned_commission_by_unique_constraint_with_user(db, carrier_id, client_name, statement_date, user_id)
     else:
         # Fallback to year-based lookup WITH user_id
@@ -619,41 +642,51 @@ async def fetch_existing_commission_records_bulk(db: AsyncSession, commission_re
     CRITICAL OPTIMIZATION: Fetch all existing records in single query instead of N queries
     This eliminates the N+1 query problem that was causing 300-400 database calls.
     
-    CRITICAL FIX: Now includes user_id in lookup to ensure proper user data isolation
+    CRITICAL FIX: Now includes user_id, statement_month, and environment_id in lookup
+    to match the new unique constraint and ensure proper data isolation
     """
     if not commission_records:
         return {}
     
-    # Create lookup keys for all commission records using statement_year (aggregated by year) AND user_id
-    # CRITICAL FIX: Include user_id in the lookup key to ensure user data isolation
-    lookup_keys = [(r['carrier_id'], r['client_name'], r['statement_year'], r.get('user_id')) for r in commission_records]
+    # Create lookup keys for all commission records using month, year, user_id, and environment_id
+    # CRITICAL FIX: Include statement_month and environment_id to match the new unique constraint
+    lookup_keys = [
+        (r['carrier_id'], r['client_name'], r['statement_month'], r['statement_year'], r.get('user_id'), r.get('environment_id')) 
+        for r in commission_records
+    ]
     unique_keys = list(set(lookup_keys))  # Remove duplicates
     
     if not unique_keys:
         return {}
     
-    print(f"🔍 Bulk fetch: Looking up {len(unique_keys)} unique commission records (with user isolation)")
+    print(f"🔍 Bulk fetch: Looking up {len(unique_keys)} unique commission records (with user + month/year isolation)")
     
     # Single query with OR conditions - this replaces 300-400 individual queries
-    # CRITICAL FIX: Now includes user_id in the conditions
+    # CRITICAL FIX: Now includes statement_month and environment_id in the conditions
     conditions = []
-    for carrier_id, client_name, statement_year, user_id in unique_keys:
+    for carrier_id, client_name, statement_month, statement_year, user_id, environment_id in unique_keys:
         if user_id is not None:
-            # Include user_id filter for proper data isolation
-            conditions.append(
-                and_(
-                    EarnedCommission.carrier_id == carrier_id,
-                    EarnedCommission.client_name == client_name,
-                    EarnedCommission.statement_year == statement_year,
-                    EarnedCommission.user_id == user_id
-                )
-            )
+            # Include user_id, month, year, and environment_id filter for proper data isolation
+            condition_parts = [
+                EarnedCommission.carrier_id == carrier_id,
+                EarnedCommission.client_name == client_name,
+                EarnedCommission.statement_month == statement_month,
+                EarnedCommission.statement_year == statement_year,
+                EarnedCommission.user_id == user_id
+            ]
+            
+            # Add environment_id filter if provided
+            if environment_id is not None:
+                condition_parts.append(EarnedCommission.environment_id == environment_id)
+            
+            conditions.append(and_(*condition_parts))
         else:
             # Fallback for legacy records without user_id (backward compatibility)
             conditions.append(
                 and_(
                     EarnedCommission.carrier_id == carrier_id,
                     EarnedCommission.client_name == client_name,
+                    EarnedCommission.statement_month == statement_month,
                     EarnedCommission.statement_year == statement_year,
                     EarnedCommission.user_id.is_(None)
                 )
@@ -666,33 +699,34 @@ async def fetch_existing_commission_records_bulk(db: AsyncSession, commission_re
     print(f"✅ Bulk fetch: Found {len(existing_records)} existing records for specified users")
     
     # Create lookup dictionary for O(1) access
-    # CRITICAL FIX: Include user_id in the key
-    lookup_dict = {}
+    # Group by (carrier_id, client_name, statement_month, statement_year, user_id, environment_id)
+    # CRITICAL FIX: Now includes statement_month and environment_id in the lookup key to match new constraint
+    lookup = {}
     for record in existing_records:
-        key = (record.carrier_id, record.client_name, record.statement_year, record.user_id)
-        lookup_dict[key] = record
+        key = (record.carrier_id, record.client_name, record.statement_month, record.statement_year, record.user_id, record.environment_id)
+        lookup[key] = record
     
-    return lookup_dict
+    return lookup
 
 def prepare_bulk_operations(commission_records: List[Dict[str, Any]], existing_records: Dict[tuple, EarnedCommission]) -> tuple:
     """
     Prepare bulk update and insert operations from commission records.
-    ✅ FIXED: Now properly aggregates records by unique constraint (carrier_id, client_name, statement_year, user_id)
+    ✅ FIXED: Now properly aggregates records by unique constraint (carrier_id, client_name, statement_month, statement_year, user_id, environment_id)
     Returns (updates_list, inserts_list) for bulk execution.
     """
     
     # ✅ CRITICAL FIX: Aggregate commission records by unique constraint FIRST
     print(f"📊 Aggregating {len(commission_records)} individual records by unique constraint...")
     
-    # Group records by unique constraint: (carrier_id, client_name, statement_year, user_id)
-    # CRITICAL FIX: Include user_id in unique key for proper user data isolation
-    # This ensures one record per company per year PER USER, with monthly breakdowns
+    # Group records by unique constraint: (carrier_id, client_name, statement_month, statement_year, user_id, environment_id)
+    # CRITICAL FIX: Include statement_month and environment_id in unique key to match new constraint
+    # This ensures one record per company per MONTH per year PER USER, preventing aggregation across months
     aggregated_records = {}
     
     for record in commission_records:
-        # Create unique key based on company, year, AND user (not specific date)
-        # CRITICAL FIX: Include user_id in the key
-        unique_key = (record['carrier_id'], record['client_name'], record['statement_year'], record.get('user_id'))
+        # Create unique key based on company, month, year, user, and environment
+        # CRITICAL FIX: Include statement_month and environment_id in the key to match new constraint
+        unique_key = (record['carrier_id'], record['client_name'], record['statement_month'], record['statement_year'], record.get('user_id'), record.get('environment_id'))
         
         if unique_key not in aggregated_records:
             # First record for this unique key - initialize
@@ -1315,8 +1349,67 @@ async def bulk_process_commissions(db: AsyncSession, statement_upload: Statement
     
     # Check if field_config is missing or empty
     if not statement_upload.field_config:
-        print(f"❌ Missing field_config: field_config={bool(statement_upload.field_config)}")
-        return None
+        print(f"⚠️  field_config is empty, attempting to recover...")
+        
+        # ✅ STRATEGY 1: Try to recover from progress_data
+        if statement_upload.progress_data and isinstance(statement_upload.progress_data, dict):
+            learned_format = statement_upload.progress_data.get('learned_format', {})
+            if learned_format and isinstance(learned_format, dict):
+                field_mapping = learned_format.get('field_mapping', {})
+                if field_mapping:
+                    recovered_field_config = [{"field": k, "mapping": v} for k, v in field_mapping.items()]
+                    print(f"✅ STRATEGY 1: Recovered {len(recovered_field_config)} field mappings from progress_data")
+                    statement_upload.field_config = recovered_field_config
+        
+        # ✅ STRATEGY 2: Try to retrieve from carrier_format_learning table
+        if not statement_upload.field_config and statement_upload.carrier_id and statement_upload.final_data:
+            print(f"⚠️  Attempting STRATEGY 2: Retrieve from carrier_format_learning...")
+            try:
+                from app.db.crud.carrier_format_learning import get_carrier_formats_for_company
+                
+                # Get all learned formats for this carrier
+                formats = await get_carrier_formats_for_company(db, statement_upload.carrier_id)
+                print(f"   Found {len(formats)} learned formats for carrier")
+                
+                if formats:
+                    # Get headers from the statement's first table
+                    first_table = statement_upload.final_data[0] if statement_upload.final_data else None
+                    if first_table and isinstance(first_table, dict):
+                        statement_headers = first_table.get('header') or first_table.get('headers', [])
+                        
+                        # Find the best matching format based on headers
+                        best_format = None
+                        best_match_score = 0
+                        
+                        for fmt in formats:
+                            if fmt.field_mapping and fmt.headers:
+                                # Calculate header similarity
+                                matching_headers = sum(1 for h in statement_headers if h in fmt.headers)
+                                similarity = matching_headers / max(len(statement_headers), len(fmt.headers))
+                                
+                                if similarity > best_match_score:
+                                    best_match_score = similarity
+                                    best_format = fmt
+                        
+                        if best_format and best_match_score > 0.7:  # 70% similarity threshold
+                            # Convert field_mapping dict to field_config list format
+                            recovered_field_config = [
+                                {"field": k, "mapping": v} 
+                                for k, v in best_format.field_mapping.items()
+                            ]
+                            print(f"✅ STRATEGY 2: Retrieved {len(recovered_field_config)} field mappings from carrier_format_learning")
+                            print(f"   Match score: {best_match_score:.2%}")
+                            print(f"   Field config: {recovered_field_config}")
+                            statement_upload.field_config = recovered_field_config
+                        else:
+                            print(f"❌ No matching format found (best score: {best_match_score:.2%})")
+            except Exception as e:
+                print(f"❌ Error retrieving from carrier_format_learning: {e}")
+        
+        # If still no field_config after all recovery attempts, return
+        if not statement_upload.field_config:
+            print(f"❌ Could not recover field_config after trying all strategies")
+            return None
     
     # Check if status is approved (case insensitive)
     if statement_upload.status.lower() != 'approved':

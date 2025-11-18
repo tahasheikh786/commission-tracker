@@ -638,6 +638,7 @@ async def get_user_specific_company_statements(
                 "carrier_id": str(statement.carrier_id) if statement.carrier_id else None,  # Include carrier_id
                 "rejection_reason": statement.rejection_reason,
                 "selected_statement_date": statement.selected_statement_date,
+                "plan_types": statement.plan_types,  # ✅ FIX: Include plan_types for consistency
                 "final_data": statement.final_data,
                 "edited_tables": statement.edited_tables,  # Include edited tables for preview
                 "field_config": statement.field_config,

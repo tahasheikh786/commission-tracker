@@ -213,9 +213,10 @@ class EarnedCommission(Base):
     last_updated = Column(DateTime, server_default=text('now()'), onupdate=text('now()'), nullable=False)
     created_at = Column(DateTime, server_default=text('now()'), nullable=False)
     
-    # Add unique constraint for carrier, client, statement date, user_id, AND environment_id for proper data isolation
+    # Add unique constraint for carrier, client, statement month/year, user_id, AND environment_id for proper data isolation
+    # Changed from statement_date to statement_month/year to prevent merging of statements with same/null dates
     __table_args__ = (
-        UniqueConstraint('carrier_id', 'client_name', 'statement_date', 'user_id', 'environment_id', name='uq_carrier_client_date_user_env_commission'),
+        UniqueConstraint('carrier_id', 'client_name', 'statement_month', 'statement_year', 'user_id', 'environment_id', name='uq_carrier_client_month_year_user_env'),
     )
 
 class EditedTable(Base):

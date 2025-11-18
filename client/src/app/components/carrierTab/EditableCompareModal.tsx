@@ -5,6 +5,7 @@ import { X, FileText, Map, Save, Loader2, CheckCircle } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import axios from 'axios';
 import toast from 'react-hot-toast';
+import CustomDropdown from '../ui/CustomDropdown';
 
 // Dynamically import components to avoid SSR issues
 const PDFViewer = dynamic(() => import('../upload/PDFViewer'), { 
@@ -40,6 +41,8 @@ interface Statement {
   // ✅ FIX: Correct property name to match API response (field_mapping with underscore)
   field_mapping?: Record<string, string> | null;  // Field mappings from format learning
   field_config?: Array<Record<string, any>> | null;  // Field config for fallback reconstruction
+  plan_types?: string[];  // Plan types extracted from the document
+  ai_intelligence?: any;  // AI intelligence data including plan type detection
 }
 
 interface Props {
@@ -94,6 +97,29 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
   // Metadata
   const [editedCarrierName, setEditedCarrierName] = useState(statement.selected_statement_date?.carrier_name || '');
   const [editedStatementDate, setEditedStatementDate] = useState(statement.selected_statement_date?.date || '');
+  
+  // ✅ NEW: Editable AI-extracted metadata
+  const [editedCommissionTotal, setEditedCommissionTotal] = useState<string>(
+    statement.extracted_total?.toString() || '0'
+  );
+  const [editedPlanType, setEditedPlanType] = useState<string>(
+    statement.plan_types && statement.plan_types.length > 0 ? statement.plan_types[0] : 'none'
+  );
+  const [editedExtractedDate, setEditedExtractedDate] = useState<string>(
+    statement.selected_statement_date?.date || ''
+  );
+  
+  // Plan type options for dropdown
+  const planTypeOptions = [
+    { id: 'none', label: 'None', description: 'No plan type selected' },
+    { id: 'Medical', label: 'Medical', description: 'Medical insurance plans' },
+    { id: 'Dental', label: 'Dental', description: 'Dental insurance plans' },
+    { id: 'Vision', label: 'Vision', description: 'Vision insurance plans' },
+    { id: 'Life', label: 'Life', description: 'Life insurance plans' },
+    { id: 'Disability', label: 'Disability', description: 'Disability insurance plans' },
+    { id: 'Ancillary', label: 'Ancillary', description: 'Ancillary benefits' },
+    { id: 'Stop Loss', label: 'Stop Loss', description: 'Stop loss coverage' },
+  ];
 
  
 
@@ -132,16 +158,7 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
   useEffect(() => {
     const tableData = statement.edited_tables || statement.raw_data;
     if (Array.isArray(tableData) && tableData.length > 0) {
-      console.log('🔍 EditableCompareModal: Loading tables from statement:', 
-        tableData.map((t, i) => ({ 
-          index: i, 
-          name: t.name, 
-          rowCount: t.rows?.length || 0, 
-          summaryRowsType: t.summaryRows?.constructor?.name,
-          summaryRowsCount: t.summaryRows instanceof Set ? t.summaryRows.size : (Array.isArray(t.summaryRows) ? t.summaryRows.length : 0),
-          summaryRowsValue: t.summaryRows instanceof Set ? Array.from(t.summaryRows) : t.summaryRows
-        }))
-      );
+     
       
       // CRITICAL FIX: Normalize summaryRows to ensure it's always an array
       // Backend might return {} for empty summaryRows which breaks validation
@@ -154,7 +171,6 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
             : [])  // Convert {} or any non-array/Set to []
       }));
       
-      console.log('✅ EditableCompareModal: Normalized summaryRows for all tables');
       setTables(normalizedTables);
       setCurrentTableIndex(0);
     }
@@ -234,7 +250,6 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
         // FALLBACK: If field_mapping is null, try to extract from field_config
         // This handles statements approved before the field_mapping save fix
         if (!formatLearnedMappings && statement.field_config && Array.isArray(statement.field_config)) {
-          console.log('🔄 EditableCompareModal: field_mapping is null, extracting from field_config');
           const extractedMappings: Record<string, string> = {};
           statement.field_config.forEach((item: any) => {
             const sourceField = item.field || item.source_field;
@@ -245,11 +260,9 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
           });
           if (Object.keys(extractedMappings).length > 0) {
             formatLearnedMappings = extractedMappings;
-            console.log('✅ EditableCompareModal: Reconstructed field_mapping from field_config:', formatLearnedMappings);
           }
         }
         
-        console.log('🔍 EditableCompareModal: Final format learned mappings:', formatLearnedMappings);
         
         // Check if we have format learned mappings
         if (formatLearnedMappings && 
@@ -303,7 +316,6 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
           setIsLoadingAI(false);
           
           // Show toast to inform user
-          console.log('✅ EditableCompareModal: Successfully loaded format learned mappings, skipping AI call');
           toast.success(
             `Loaded ${mappings.length} format learned field mappings (already approved)`,
             { duration: 3000 }
@@ -314,10 +326,6 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
 
         // ⚠️ No format learned mappings - should not happen for auto-approved statements
         // But provide fallback for edge cases
-        console.log('⚠️ EditableCompareModal: No format learned mappings found, calling AI field mapping API');
-        console.log('   - statement.field_mapping:', formatLearnedMappings);
-        console.log('   - statement.field_config:', statement.field_config);
-        console.log('   - statement.carrier_id:', statement.carrier_id);
         
         // Fallback: Try to get mappings from company field mappings
         const selectedTable = tables[currentTableIndex] || tables;
@@ -400,10 +408,6 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
 
   // Handle Save & Recalculate
   const handleSaveAndRecalculate = async () => {
-    console.log('🚀 ==================== SAVE & RECALCULATE STARTED ====================');
-    console.log('📊 Current aiMapperState:', aiMapperState);
-    console.log('📊 databaseFieldSelections:', aiMapperState.databaseFieldSelections);
-    console.log('📊 databaseFields available:', databaseFields.length);
     
     setIsSaving(true);
     setSaveProgress(0);
@@ -421,24 +425,42 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
 
       // Step 1: Prepare field mappings FIRST (needed for format learning)
       // CRITICAL FIX: Build from aiMappingResults and current row statuses to capture ALL changes
-      console.log('🔍 Building final mappings:');
-      console.log('  - userMappings:', userMappings);
-      console.log('  - acceptedMappings:', acceptedMappings);
-      console.log('  - aiMapperState.rowStatuses:', aiMapperState.rowStatuses);
-      console.log('  - aiMapperState.editedStatementFields:', aiMapperState.editedStatementFields);
-      console.log('  - aiMapperState.databaseFieldSelections:', aiMapperState.databaseFieldSelections);
-      console.log('  - aiMappingResults:', aiMappingResults);
       
       // CRITICAL FIX: Build finalMappings from CURRENT state including dropdown changes
-      console.log('╔═══════════════════════════════════════════════════════════════');
-      console.log('║ 🔧 EDITABLE COMPARE MODAL: Building Final Mappings');
-      console.log('╠═══════════════════════════════════════════════════════════════');
-      console.log('║ Source 1 - User Manual Mappings:', Object.keys(userMappings).length, userMappings);
-      console.log('║ Source 2 - AI Mapper State:');
-      console.log('║   - databaseFieldSelections:', Object.keys(aiMapperState.databaseFieldSelections || {}).length);
-      console.log('║   - Database fields available:', databaseFields.length);
       
       const finalMappings: Record<string, string> = {};
+      
+      // STEP 0: Reconstruct from existing statement data if aiMappingResults is not loaded yet
+      // This handles the case where user clicks "Save & Recalculate" without switching to field_mapping view
+      if (!aiMappingResults?.mappings || Object.keys(aiMapperState.rowStatuses).length === 0) {
+        console.log('⚠️ AI mappings not loaded, attempting to reconstruct from statement data...');
+        
+        // Try to get field_mapping from statement (preferred)
+        let existingMappings = (statement as any).field_mapping;
+        
+        // FALLBACK: Extract from field_config if field_mapping is not available
+        if (!existingMappings && statement.field_config && Array.isArray(statement.field_config)) {
+          console.log('🔄 Reconstructing field mappings from field_config...');
+          const reconstructed: Record<string, string> = {};
+          statement.field_config.forEach((item: any) => {
+            const sourceField = item.field || item.source_field;
+            const targetField = item.label || item.mapping || item.display_name;
+            if (sourceField && targetField) {
+              reconstructed[sourceField] = targetField;
+            }
+          });
+          if (Object.keys(reconstructed).length > 0) {
+            existingMappings = reconstructed;
+            console.log(`✅ Reconstructed ${Object.keys(reconstructed).length} field mappings from field_config`);
+          }
+        }
+        
+        // Use reconstructed mappings as the base
+        if (existingMappings && typeof existingMappings === 'object') {
+          Object.assign(finalMappings, existingMappings);
+          console.log(`✅ Using ${Object.keys(existingMappings).length} existing field mappings from statement`);
+        }
+      }
       
       // STEP 1: Start with approved AI mappings (base)
       if (aiMappingResults?.mappings) {
@@ -446,7 +468,6 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
           const status = aiMapperState.rowStatuses[mapping.extracted_field];
           if (status === 'approved') {
             finalMappings[mapping.extracted_field] = mapping.mapped_to;
-            console.log(`║ ✓ AI Base: "${mapping.extracted_field}" → "${mapping.mapped_to}"`);
           }
         });
       }
@@ -461,7 +482,6 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
             if (dbField) {
               const previousValue = finalMappings[field];
               finalMappings[field] = dbField.display_name;
-              console.log(`║ 🔄 User Dropdown: "${field}" → "${dbField.display_name}" (was: "${previousValue}")`);
             }
           }
         });
@@ -471,13 +491,18 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
       Object.entries(userMappings).forEach(([field, mapping]) => {
         const previousValue = finalMappings[field];
         finalMappings[field] = mapping;
-        console.log(`║ 🎯 User Manual: "${field}" → "${mapping}" (was: "${previousValue || 'unmapped'}")`);
       });
-      
-      console.log('╠═══════════════════════════════════════════════════════════════');
-      console.log('║ ✅ Final mappings to save:', Object.keys(finalMappings).length, 'fields');
-      console.log('╚═══════════════════════════════════════════════════════════════');
 
+      // CRITICAL VALIDATION: Check if finalMappings is empty
+      if (Object.keys(finalMappings).length === 0) {
+        console.error('❌ No field mappings available for recalculation');
+        toast.error('Cannot recalculate: No field mappings found. Please go to Field Mapping tab and set up mappings first.');
+        setIsSaving(false);
+        return;
+      }
+      
+      console.log(`✅ Final mappings ready: ${Object.keys(finalMappings).length} mappings`, finalMappings);
+      
       // CRITICAL FIX: Create field_config in the correct format for ALL endpoints
       // Format: {field: source_field, mapping: target_field} - consistent across all APIs
       // This ensures format learning, calculations, and display all use the same mapping
@@ -493,17 +518,6 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
         mapping: mappedTo       // Target database field name - CHANGED from 'label' to 'mapping'
       }));
       
-      console.log('📋 ==================== FIELD CONFIGS TO BE SAVED ====================');
-      console.log('📋 fieldConfigForLearning (for save-tables & learn-format-patterns):');
-      fieldConfigForLearning.forEach((config, idx) => {
-        console.log(`   ${idx + 1}. ${config.field} → ${config.mapping}`);
-      });
-      console.log('📋 fieldConfig (for approve endpoint):');
-      fieldConfig.forEach((config, idx) => {
-        console.log(`   ${idx + 1}. ${config.field} → ${config.mapping}`);
-      });
-      console.log('=' .repeat(70));
-      
       // Step 2: Save Tables (20%) - NOW includes field_config for format learning
       setSaveProgress(20);
       toast('Saving edited tables...');
@@ -518,7 +532,6 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
         field_config: fieldConfigForLearning  // CRITICAL: Include field_config for format learning
       };
 
-      console.log('📤 Sending save-tables payload with', fieldConfigForLearning.length, 'field mappings');
 
       const saveTablesResponse = await axios.post(
         `${process.env.NEXT_PUBLIC_API_URL}/api/table-editor/save-tables`,
@@ -554,9 +567,23 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
 
       const selectedTable = tables[currentTableIndex] || tables;
       
+      // ✅ CRITICAL FIX: Extract plan types from statement
+      // Check multiple sources: direct plan_types field, or ai_intelligence data
+      let extractedPlanTypes: string[] = [];
+      
+      if (statement.plan_types && Array.isArray(statement.plan_types)) {
+        extractedPlanTypes = statement.plan_types;
+      } else if (statement.ai_intelligence?.plan_type_detection?.detected_plan_types) {
+        // Extract plan type names from AI detection results
+        const detectedPlans = statement.ai_intelligence.plan_type_detection.detected_plan_types;
+        extractedPlanTypes = detectedPlans.map((p: any) => p.plan_type || p.display_name || '').filter(Boolean);
+      }
+      
+      console.log('💡 Extracted plan types for saving:', extractedPlanTypes);
+
       const mappingPayload = {
         mapping: finalMappings,
-        plantypes: [],
+        plantypes: extractedPlanTypes,  // ✅ FIX: Use extracted plan types instead of empty array
         fieldconfig: databaseFields.map(field => ({
           displayname: field.display_name,
           description: field.description
@@ -586,21 +613,18 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
         
         // Skip summary tables
         if (summaryTableTypes.includes(tableType)) {
-          console.log(`🔍 EditableCompareModal: Skipping summary table: ${table.name} (type: ${tableType})`);
           return false;
         }
         
         // Also skip tables where ALL rows are summary rows
         const summaryRowsArray = Array.from(table.summaryRows || []);
         if (table.rows && summaryRowsArray.length > 0 && summaryRowsArray.length === table.rows.length) {
-          console.log(`🔍 EditableCompareModal: Skipping table ${table.name} - all rows are summary rows`);
           return false;
         }
         
         return true;
       });
       
-      console.log(`🔍 EditableCompareModal: Filtered ${tables.length} tables down to ${commissionTables.length} commission tables`);
       
       const finalData = commissionTables.map(table => {
         const tableHeaders = table.header;
@@ -620,7 +644,6 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
           ? (table.summaryRows instanceof Set ? Array.from(table.summaryRows) : table.summaryRows)
           : [];
 
-        console.log(`🔍 Table "${table.name}": summaryRows type=${table.summaryRows?.constructor?.name}, count=${summaryRowsArray.length}, values=${JSON.stringify(summaryRowsArray)}`);
 
         return {
           name: table.name,
@@ -630,8 +653,7 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
         };
       });
 
-      console.log(`📤 Sending ${finalData.length} tables to approve endpoint with summaryRows:`, 
-        finalData.map(t => ({ name: t.name, rowCount: t.rows.length, summaryRowCount: t.summaryRows?.length || 0 })));
+   
 
       // CRITICAL FIX: Include upload_metadata for backend to create DB record
       const upload_metadata = {
@@ -646,15 +668,35 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
         raw_data: finalData
       };
 
+      // ✅ NEW: Use edited values for commission total, plan types, and date
+      const updatedStatementDate = {
+        ...statement.selected_statement_date,
+        date: editedExtractedDate,
+        carrier_name: editedCarrierName
+      };
+      
+      // ✅ NEW: Include edited metadata in document_metadata for recalculation
+      const document_metadata = {
+        total_amount: parseFloat(editedCommissionTotal) || 0,
+        statement_date: editedExtractedDate,
+        carrier_name: editedCarrierName
+      };
+      
+      // ✅ Convert plan type to array format (exclude "none")
+      const finalPlanTypes = editedPlanType && editedPlanType !== 'none' 
+        ? [editedPlanType] 
+        : (extractedPlanTypes.length > 0 ? extractedPlanTypes : []);
+
       await axios.post(
         `${process.env.NEXT_PUBLIC_API_URL}/api/review/approve`,
         {
           upload_id: statement.id,
           final_data: finalData,
           field_config: fieldConfig,
-          plan_types: [],
-          selected_statement_date: statement.selected_statement_date,
-          upload_metadata: upload_metadata  // NEW: Include metadata for DB record creation
+          plan_types: finalPlanTypes,  // ✅ Use edited plan type (converted to array)
+          selected_statement_date: updatedStatementDate,  // ✅ Use edited date
+          upload_metadata: upload_metadata,  // NEW: Include metadata for DB record creation
+          document_metadata: document_metadata  // ✅ NEW: Include edited AI-extracted values for recalculation
         },
         { withCredentials: true }
       );
@@ -817,6 +859,68 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
           </div>
         </div>
 
+        {/* ✅ NEW: Editable AI-Extracted Metadata Section - Compact Design */}
+        <div className="px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+          <div className="flex items-center gap-4">
+            
+            {/* Commission Total (Editable) */}
+            <div className="w-48">
+              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+                Commission Total
+              </label>
+              <div className="flex items-center gap-1">
+                <span className="text-xs text-slate-500 dark:text-slate-400">$</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={editedCommissionTotal}
+                  onChange={(e) => setEditedCommissionTotal(e.target.value)}
+                  className={`flex-1 px-2.5 py-1.5 text-sm border rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all ${
+                    statement.extracted_total && parseFloat(editedCommissionTotal) !== statement.extracted_total
+                      ? 'border-amber-400 dark:border-amber-500'
+                      : 'border-slate-300 dark:border-slate-600'
+                  }`}
+                  placeholder="0.00"
+                />
+              </div>
+            </div>
+
+            {/* Statement Date (Editable) */}
+            <div className="w-44">
+              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+                Statement Date
+              </label>
+              <input
+                type="date"
+                value={editedExtractedDate}
+                onChange={(e) => setEditedExtractedDate(e.target.value)}
+                className="w-full px-2.5 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+              />
+            </div>
+
+            {/* Plan Type (Editable with Searchable Dropdown) */}
+            <div className="w-52">
+              <CustomDropdown
+                value={editedPlanType}
+                onChange={setEditedPlanType}
+                options={planTypeOptions}
+                placeholder="Select plan type..."
+                searchable={true}
+                label="Plan Type"
+                className="text-sm"
+              />
+            </div>
+
+            {/* Info Badge */}
+            <div className="ml-auto flex items-center gap-2 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-800">
+              <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+              <span className="text-xs font-medium text-blue-700 dark:text-blue-300">
+                AI Values - Edit if needed
+              </span>
+            </div>
+          </div>
+        </div>
+
         {/* Content */}
         <div className="flex-1 flex flex-col lg:flex-row w-full min-h-0 bg-slate-50 dark:bg-slate-900">
           
@@ -901,12 +1005,6 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
                     isLoading={isLoadingAI}
                     databaseFields={databaseFields}
                     onStateChange={(newState) => {
-                      console.log('📥 EditableCompareModal: Received state update from AIFieldMapperTable:', {
-                        databaseFieldSelections: Object.keys(newState.databaseFieldSelections || {}).length,
-                        rowStatuses: Object.keys(newState.rowStatuses || {}).length,
-                        editedStatementFields: Object.keys(newState.editedStatementFields || {}).length,
-                        selections: newState.databaseFieldSelections
-                      });
                       setAiMapperState(newState);
                     }}
                     hideActionButtons={true}

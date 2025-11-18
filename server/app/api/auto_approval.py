@@ -147,13 +147,66 @@ async def auto_approve_statement(
         logger.info(f"🤖 Auto-approval: Raw field_mapping from learned format: {field_mapping}")
         
         field_config_list = []
-        if isinstance(field_mapping, dict):
+        if isinstance(field_mapping, dict) and field_mapping:
             field_config_list = [{"field": k, "mapping": v} for k, v in field_mapping.items()]
-        elif isinstance(field_mapping, list):
+        elif isinstance(field_mapping, list) and field_mapping:
             field_config_list = field_mapping
         
         logger.info(f"🤖 Auto-approval: Using {len(field_config_list)} field mappings from learned format")
         logger.info(f"🤖 Auto-approval: Field config list: {field_config_list}")
+        
+        # ✅ CRITICAL FIX: FALLBACK - If still no field config, try to retrieve from database
+        if not field_config_list and carrier:
+            logger.info("🤖 Auto-approval: Attempting to retrieve field config from carrier_format_learning")
+            
+            try:
+                from app.db.crud.carrier_format_learning import get_carrier_formats_for_company
+                
+                formats = await get_carrier_formats_for_company(db, request.carrier_id)
+                
+                if formats and commission_tables:
+                    # Get headers from first table to match against
+                    first_table = commission_tables[0]
+                    statement_headers = first_table.get('header') or first_table.get('headers', [])
+                    
+                    best_format = None
+                    best_score = 0
+                    
+                    # Find best matching format based on header similarity
+                    for fmt in formats:
+                        if hasattr(fmt, 'field_mapping') and fmt.field_mapping and hasattr(fmt, 'headers') and fmt.headers:
+                            # Calculate similarity score
+                            matching = sum(1 for h in statement_headers if h in fmt.headers)
+                            similarity = matching / max(len(statement_headers), len(fmt.headers)) if (statement_headers and fmt.headers) else 0
+                            
+                            if similarity > best_score:
+                                best_score = similarity
+                                best_format = fmt
+                    
+                    if best_format and best_score > 0.7:
+                        # ✅ Extract field config from best matching format
+                        if isinstance(best_format.field_mapping, dict):
+                            field_config_list = [
+                                {
+                                    'field': k,
+                                    'mapping': v
+                                }
+                                for k, v in best_format.field_mapping.items()
+                            ]
+                        elif isinstance(best_format.field_mapping, list):
+                            field_config_list = best_format.field_mapping
+                        
+                        logger.info(
+                            f"🤖 Auto-approval: Retrieved {len(field_config_list)} field mappings "
+                            f"from carrier_format_learning (score: {best_score:.2f})"
+                        )
+                    else:
+                        logger.warning(f"🤖 Auto-approval: No matching format found (best score: {best_score:.2f})")
+            except Exception as e:
+                logger.error(f"🤖 Auto-approval: Error retrieving from carrier_format_learning: {e}")
+        
+        if not field_config_list:
+            logger.error("🤖 Auto-approval: Could not retrieve field configuration - commission calculation will fail")
         
         # Create SaveTablesRequest object
         save_request = SaveTablesRequest(
@@ -246,14 +299,24 @@ async def auto_approve_statement(
         # because it referenced an undefined 'upload' variable
         
         # Step 4: Get extracted total from document (from Claude) and calculate from tables
-        # ✅ CRITICAL: Get AI-extracted value from document_metadata (NOT from learned format!)
-        actual_extracted_total = request.extracted_total
+        # ✅ ENHANCED: Priority 1 - Use document_metadata total_amount (most reliable from Claude)
+        actual_extracted_total = 0.0
         
-        # If not in request.extracted_total, try document_metadata.total_amount
-        if actual_extracted_total == 0 and request.document_metadata:
-            actual_extracted_total = request.document_metadata.get('total_amount', 0)
-            if actual_extracted_total > 0:
-                logger.info(f"✅ Using AI-extracted total from document_metadata: ${actual_extracted_total:.2f}")
+        # Priority 1: Use document_metadata total_amount (Claude's extraction from document)
+        if request.document_metadata and request.document_metadata.get('total_amount'):
+            try:
+                actual_extracted_total = float(request.document_metadata['total_amount'])
+                logger.info(f"📊 Priority 1: Using total from document_metadata: ${actual_extracted_total:,.2f}")
+            except (ValueError, TypeError) as e:
+                logger.warning(f"📊 Priority 1: Failed to parse document_metadata.total_amount: {e}")
+        
+        # Priority 2: Fallback to request.extracted_total
+        if actual_extracted_total == 0 and request.extracted_total:
+            try:
+                actual_extracted_total = float(request.extracted_total)
+                logger.info(f"📊 Priority 2: Using total from request.extracted_total: ${actual_extracted_total:.2f}")
+            except (ValueError, TypeError) as e:
+                logger.warning(f"📊 Priority 2: Failed to parse request.extracted_total: {e}")
         
         if actual_extracted_total == 0:
             logger.warning("⚠️  No AI-extracted total available - this may cause validation issues")
@@ -266,31 +329,43 @@ async def auto_approve_statement(
         commission_field = None
         
         # Find commission field from field mapping
-        # ✅ CRITICAL: Be precise - don't match "Commission Rate", only match actual earned commission fields
-        commission_field_candidates = [
-            "commission earned", "commission_earned",
-            "paid amount", "paid_amount", 
-            "commission amount", "commission_amount",
-            "total commission paid", "earned commission"
-        ]
+        # ✅ CRITICAL FIX: Prioritize "Commission Earned" over other fields like "Total Commission Paid"
+        # The user explicitly maps to "Commission Earned" - we should use that field!
         
-        # ✅ Exclude rate/percentage fields - these are NOT commission earned amounts
-        excluded_fields = ['commission rate', 'commission_rate', 'rate', 'percentage', 'agent rate', 'agent %', 'agent percent']
-        
+        # Priority 1: Look for exact "Commission Earned" match first (this is the PRIMARY commission field)
         for header, mapped in field_mapping.items():
-            # Normalize the mapped value: replace spaces/underscores, lowercase
             normalized_mapped = mapped.lower().replace("_", " ").strip()
-            
-            # Skip if this is a rate/percentage field
-            if any(excluded in normalized_mapped for excluded in excluded_fields):
-                logger.info(f"  ⏭️ Auto-approval: Skipping rate field: '{header}' -> '{mapped}'")
-                continue
-            
-            # Check if any candidate matches the normalized value
-            if any(candidate.replace("_", " ") == normalized_mapped for candidate in commission_field_candidates):
+            if normalized_mapped == "commission earned":
                 commission_field = header
-                logger.info(f"💰 Auto-approval: Found commission field: '{commission_field}' (mapped to '{mapped}')")
+                logger.info(f"💰 Auto-approval: Found PRIMARY commission field: '{commission_field}' (mapped to '{mapped}')")
                 break
+        
+        # Priority 2: If no "Commission Earned" found, look for other earned/paid commission fields
+        # ✅ CRITICAL: Exclude "Total Commission Paid" from candidates - it's often the wrong field!
+        if not commission_field:
+            commission_field_candidates = [
+                "paid amount", "paid_amount", 
+                "commission amount", "commission_amount",
+                "earned commission"
+            ]
+            
+            # ✅ Exclude rate/percentage fields AND "total commission paid"
+            excluded_fields = ['commission rate', 'commission_rate', 'rate', 'percentage', 'agent rate', 'agent %', 'agent percent', 'total commission paid']
+            
+            for header, mapped in field_mapping.items():
+                # Normalize the mapped value: replace spaces/underscores, lowercase
+                normalized_mapped = mapped.lower().replace("_", " ").strip()
+                
+                # Skip if this is a rate/percentage field OR "total commission paid"
+                if any(excluded in normalized_mapped for excluded in excluded_fields):
+                    logger.info(f"  ⏭️ Auto-approval: Skipping excluded field: '{header}' -> '{mapped}'")
+                    continue
+                
+                # Check if any candidate matches the normalized value
+                if any(candidate.replace("_", " ") == normalized_mapped for candidate in commission_field_candidates):
+                    commission_field = header
+                    logger.info(f"💰 Auto-approval: Found fallback commission field: '{commission_field}' (mapped to '{mapped}')")
+                    break
         
         if commission_field:
             logger.info(f"💰 Auto-approval: Calculating total from {len(commission_tables)} table(s)")
@@ -423,18 +498,23 @@ async def auto_approve_statement(
         else:
             logger.warning(f"💰 Auto-approval: No invoice field identified in field_mapping: {field_mapping}")
         
-        logger.info(f"Total validation:")
-        logger.info(f"  - Extracted from file: ${actual_extracted_total:.2f}")
+        # ✅ ENHANCED VALIDATION: Better handling of total comparison
+        logger.info(f"📊 Total validation:")
+        logger.info(f"  - Extracted from file: ${actual_extracted_total:.2f}" if actual_extracted_total else "  - No extracted total")
         logger.info(f"  - Calculated from table: ${calculated_total:.2f}")
         logger.info(f"  - Invoice total calculated: ${calculated_invoice_total:.2f}")
         
-        # ✅ Validate: Extracted total should match calculated total
+        # ✅ Validate: Compare extracted total vs calculated total
         total_validation = {}
-        if actual_extracted_total > 0:
+        needs_review = False
+        tolerance = 0.01  # $0.01 tolerance for rounding
+        
+        if actual_extracted_total > 0 and calculated_total > 0:
+            # We have both - compare them
             difference = abs(actual_extracted_total - calculated_total)
-            difference_percent = (difference / actual_extracted_total) * 100
+            difference_percent = (difference / actual_extracted_total) * 100 if actual_extracted_total else 0
             
-            matches = difference_percent < 5.0  # 5% tolerance
+            matches = difference < tolerance
             
             total_validation = {
                 "matches": matches,
@@ -444,13 +524,43 @@ async def auto_approve_statement(
                 "difference_percent": round(difference_percent, 2)
             }
             
-            logger.info(f"  - Match: {matches} (difference: {difference_percent:.2f}%)")
+            logger.info(f"  - Difference: ${difference:,.2f} ({difference_percent:.2f}%)")
+            logger.info(f"  - Match: {matches}")
             
-            # ✅ Set needs_review if totals don't match
+            # Set needs_review if totals don't match
             needs_review = not matches
+            
+        elif actual_extracted_total > 0 and calculated_total == 0:
+            # We have document total but couldn't calculate from table
+            # This is OK - use document total and proceed
+            logger.info("✅ Using document total (table calculation not available)")
+            total_validation = {
+                "matches": True,  # Consider it valid since we trust Claude's extraction
+                "extracted": round(actual_extracted_total, 2),
+                "calculated": round(calculated_total, 2),
+                "difference": 0,
+                "difference_percent": 0,
+                "note": "Used document_metadata total (field mapping unavailable)"
+            }
+            needs_review = False  # Don't require review if Claude extracted the total
+            
+        elif actual_extracted_total == 0 and calculated_total > 0:
+            # We calculated from table but no document total
+            logger.warning("⚠️ No document total - using calculated total")
+            total_validation = {
+                "matches": False,
+                "extracted": 0,
+                "calculated": round(calculated_total, 2),
+                "difference": calculated_total,
+                "difference_percent": 100
+            }
+            needs_review = True  # Require review since we don't have Claude's confirmation
+            
         else:
-            needs_review = False
-            logger.warning("No extracted total - skipping validation")
+            # No totals at all
+            logger.warning("⚠️ Cannot validate totals - no data available")
+            total_validation = {}
+            needs_review = True
         
         # ✅ FIX: The DB record was already created by approve_statement() above (line 241)
         # We just need to retrieve it and update it if needed
@@ -492,6 +602,23 @@ async def auto_approve_statement(
         await db.refresh(db_upload)
         
         logger.info(f"✅ Updated DB record with auto-approval metadata")
+        
+        # ✅ CRITICAL FIX: Process commission data AFTER status is finalized
+        # Previously, commission processing was skipped because status was temporarily 'needs_review'
+        # Now we explicitly process commission data here for auto-approved statements
+        if db_upload.status == 'Approved':
+            logger.info(f"✅ Auto-approval: Statement approved, processing commission data...")
+            try:
+                from app.db.crud.earned_commission import bulk_process_commissions
+                await bulk_process_commissions(db, db_upload)
+                await db.commit()  # Commit commission data
+                logger.info(f"✅ Auto-approval: Commission data processed and saved successfully")
+            except Exception as e:
+                logger.error(f"❌ Auto-approval: Failed to process commission data: {e}")
+                # Don't fail the auto-approval if commission processing fails
+                # The user can manually trigger commission recalculation later
+        else:
+            logger.info(f"⚠️ Auto-approval: Status is '{db_upload.status}', skipping commission data processing")
         
         # Record user contribution now that the statement is persisted
         try:

@@ -167,16 +167,16 @@ class ClaudeTokenBucket:
             input_tokens_available = (self.input_token_count + estimated_input_tokens) <= self.itpm_limit
             output_tokens_available = (self.output_token_count + estimated_output_tokens) <= self.otpm_limit  # ✅ NEW
             
-            # ✅ SPECIAL CASE: Allow large output requests in fresh/near-fresh windows
-            # If we've used less than 20% of OTPM, allow the request even if it exceeds limit
-            # This handles chunked extractions with large tables (up to 16K tokens per chunk)
+            # ✅ ENHANCED: Smart windowing for output tokens
+            # Allow large output requests if we're in a fresh window
             fresh_window = self.output_token_count < (self.otpm_limit * 0.2)  # Less than 20% used
             if fresh_window and not output_tokens_available:
-                self.logger.info(
-                    f"✅ Allowing large output request in fresh window "
-                    f"({estimated_output_tokens:,} tokens, {self.output_token_count:,}/{self.otpm_limit:,} used)"
-                )
-                output_tokens_available = True  # Override the check
+                if estimated_output_tokens <= 16000:  # Within per-request limit
+                    self.logger.info(
+                        f"⚡ Allowing large output request in fresh window "
+                        f"({estimated_output_tokens:,} tokens, {self.output_token_count:,}/{self.otpm_limit:,} used)"
+                    )
+                    output_tokens_available = True
             
             # If all limits are OK, reserve tokens immediately
             if requests_available and input_tokens_available and output_tokens_available:
@@ -192,50 +192,25 @@ class ClaudeTokenBucket:
                 )
                 return 0.0
             
-            # Calculate wait time
+            # ✅ ENHANCED: Calculate precise wait time based on most restrictive limit
             time_until_reset = 60 - elapsed
             
-            # ✅ CRITICAL FIX: Log which limit is hit
-            if not output_tokens_available:
-                self.logger.warning(
-                    f"⚠️  OUTPUT token limit approaching: "
-                    f"{self.output_token_count:,}/{self.otpm_limit:,} "
-                    f"(requesting {estimated_output_tokens:,} more)"
-                )
-            if not input_tokens_available:
-                self.logger.warning(
-                    f"⚠️  INPUT token limit approaching: "
-                    f"{self.input_token_count:,}/{self.itpm_limit:,} "
-                    f"(requesting {estimated_input_tokens:,} more)"
-                )
+            wait_reasons = []
             if not requests_available:
-                self.logger.warning(
-                    f"⚠️  Request limit approaching: "
-                    f"{self.request_count}/{self.rpm_limit}"
-                )
+                wait_reasons.append(f"RPM limit ({self.request_count}/{self.rpm_limit})")
+            if not input_tokens_available:
+                tokens_over = (self.input_token_count + estimated_input_tokens) - self.itpm_limit
+                wait_reasons.append(f"ITPM limit (over by {tokens_over:,})")
+            if not output_tokens_available:
+                tokens_over = (self.output_token_count + estimated_output_tokens) - self.otpm_limit
+                wait_reasons.append(f"OTPM limit (over by {tokens_over:,})")
             
-            # Partial reset strategy: wait only for tokens to decay
-            if not input_tokens_available or not output_tokens_available:
-                # Calculate wait time based on most restrictive limit
-                input_wait = 0
-                output_wait = 0
-                
-                if not input_tokens_available:
-                    tokens_needed = (self.input_token_count + estimated_input_tokens) - self.itpm_limit
-                    input_wait = (tokens_needed / self.itpm_limit) * 60
-                
-                if not output_tokens_available:
-                    tokens_needed = (self.output_token_count + estimated_output_tokens) - self.otpm_limit
-                    output_wait = (tokens_needed / self.otpm_limit) * 60
-                
-                # Use the longer wait time
-                seconds_to_wait = max(input_wait, output_wait)
-                seconds_to_wait = min(seconds_to_wait, time_until_reset)
-            else:
-                # Just wait for request window
-                seconds_to_wait = time_until_reset
+            self.logger.warning(f"⏳ Rate limit hit: {', '.join(wait_reasons)}")
+            self.logger.info(f"   Waiting {time_until_reset:.1f}s for window reset")
             
-            self.logger.info(f"⏳ Rate limit hit - waiting {seconds_to_wait:.1f}s for reset")
+            # Wait for window reset
+            seconds_to_wait = time_until_reset
+            
             await asyncio.sleep(seconds_to_wait)
             
             # After waiting, reset appropriately
@@ -243,19 +218,19 @@ class ClaudeTokenBucket:
             if elapsed_after_wait >= 60:
                 self.request_count = 0
                 self.input_token_count = 0
-                self.output_token_count = 0  # ✅ NEW
+                self.output_token_count = 0
                 self.window_start = time.time()
             
             # Reserve tokens
             self.request_count += 1
             self.input_token_count += estimated_input_tokens
-            self.output_token_count += estimated_output_tokens  # ✅ NEW
+            self.output_token_count += estimated_output_tokens
             
             self.logger.info(
-                f"📊 Rate limit status: "
+                f"✅ Rate limit status after wait: "
                 f"RPM: {self.request_count}/{self.rpm_limit}, "
                 f"ITPM: {self.input_token_count:,}/{self.itpm_limit:,}, "
-                f"OTPM: {self.output_token_count:,}/{self.otpm_limit:,}"  # ✅ NEW
+                f"OTPM: {self.output_token_count:,}/{self.otpm_limit:,}"
             )
             
             return seconds_to_wait
@@ -815,8 +790,19 @@ class ClaudeResponseParser:
                 if val and val not in ['', '-', 'N/A', 'n/a']:
                     leading_empty = False
             
-            # If leading columns are empty but amount column has a value
-            if leading_empty and amount_idx is not None and amount_idx < len(last_row):
+            # ✅ NEW: Also check if ALL required columns are empty (not just leading)
+            # This catches cases where row is ["", "", "", "", "", "", "", "$77,137.16"]
+            all_key_cols_empty = True
+            for col_idx in range(len(last_row)):
+                if col_idx == amount_idx:
+                    continue  # Skip the amount column itself
+                val = str(last_row[col_idx]).strip()
+                if val and val not in ['', '-', 'N/A', 'n/a', '$0.00', '$0', '0.00', '0']:
+                    all_key_cols_empty = False
+                    break
+            
+            # If leading columns are empty OR all key columns are empty but amount column has a value
+            if (leading_empty or all_key_cols_empty) and amount_idx is not None and amount_idx < len(last_row):
                 amount_str = str(last_row[amount_idx]).strip()
                 if amount_str and amount_str not in ['', '-', 'N/A', 'n/a', '$0.00', '$0', '0.00', '0']:
                     # Parse the amount
@@ -826,29 +812,33 @@ class ClaudeResponseParser:
                         clean_amount = clean_amount.replace('(', '-').replace(')', '')
                         last_row_amount = float(clean_amount)
                         
-                        # If it matches document total or is suspiciously large
-                        if doc_total and abs(last_row_amount - doc_total) < 0.01:
+                        # ✅ ENHANCED: Calculate sum of all non-summary rows for comparison
+                        other_total = 0
+                        for i, row in enumerate(rows):
+                            if i == last_row_idx or i in summary_rows:
+                                continue
+                            if amount_idx < len(row):
+                                try:
+                                    val_str = str(row[amount_idx]).strip()
+                                    clean_val = re.sub(r'[$,\s]', '', val_str)
+                                    clean_val = clean_val.replace('(', '-').replace(')', '')
+                                    other_total += float(clean_val)
+                                except (ValueError, TypeError):
+                                    pass
+                        
+                        # ✅ CRITICAL: If last row amount is close to sum of other rows, it's a grand total
+                        # Use absolute difference check (allow for rounding)
+                        if abs(last_row_amount - other_total) < 1.0:
+                            logger.warning(f"🛡️ Safety net: Last row {last_row_idx} (${last_row_amount:.2f}) matches sum of other rows (${other_total:.2f}) - marking as summary")
+                            additional_summary_rows.append(last_row_idx)
+                        # Also check against document total if available
+                        elif doc_total and abs(last_row_amount - doc_total) < 0.01:
                             logger.warning(f"🛡️ Safety net: Last row {last_row_idx} matches document total ${doc_total:.2f} - marking as summary")
                             additional_summary_rows.append(last_row_idx)
-                        elif abs(last_row_amount) > 10000:  # Suspiciously large single commission
-                            # Check if it's close to sum of other rows
-                            other_total = 0
-                            for i, row in enumerate(rows):
-                                if i == last_row_idx or i in summary_rows:
-                                    continue
-                                if amount_idx < len(row):
-                                    try:
-                                        val_str = str(row[amount_idx]).strip()
-                                        clean_val = re.sub(r'[$,\s]', '', val_str)
-                                        clean_val = clean_val.replace('(', '-').replace(')', '')
-                                        other_total += float(clean_val)
-                                    except (ValueError, TypeError):
-                                        pass
-                            
-                            # If last row is close to sum of others, it's likely a grand total
-                            if abs(last_row_amount - other_total) < 1.0:
-                                logger.warning(f"🛡️ Safety net: Last row {last_row_idx} (${last_row_amount:.2f}) matches sum of other rows (${other_total:.2f}) - marking as summary")
-                                additional_summary_rows.append(last_row_idx)
+                        # ✅ NEW: If it's suspiciously large and all key columns are empty, likely a total
+                        elif abs(last_row_amount) > 10000 and all_key_cols_empty:
+                            logger.warning(f"🛡️ Safety net: Last row {last_row_idx} (${last_row_amount:.2f}) is large with all key columns empty - marking as summary")
+                            additional_summary_rows.append(last_row_idx)
                     except (ValueError, TypeError):
                         pass
         

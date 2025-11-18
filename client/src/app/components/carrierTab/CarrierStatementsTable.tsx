@@ -29,6 +29,9 @@ type Statement = {
   extracted_total?: number;  // Earned commission total extracted from document (AI-extracted)
   calculated_total?: number;  // Earned commission total calculated from table rows
   extracted_invoice_total?: number;  // Invoice total calculated from table data
+  // CRITICAL FIX: Actual values from earned_commissions table (post-correction)
+  actual_commission_total?: number | null;  // Actual commission sum from DB after reprocessing
+  actual_invoice_total?: number | null;  // Actual invoice sum from DB after reprocessing
   gcs_key?: string;
   gcs_url?: string;
 };
@@ -268,15 +271,22 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
     const status = statement.status.toLowerCase();
     const extractedTotal = statement.extracted_total || 0;
     const extractedInvoice = statement.extracted_invoice_total || 0;
+    // CRITICAL FIX: Use actual values from earned_commissions table if available (post-correction)
+    const actualCommission = statement.actual_commission_total;
+    const actualInvoice = statement.actual_invoice_total;
     const isApproved = status === "approved" || status === "completed";
     const isNeedsReview = status === "needs_review";
     
-    // For APPROVED statements - show the values directly
-    if (isApproved && extractedTotal > 0) {
+    // For APPROVED statements - show ACTUAL values from DB if available, otherwise fallback to extracted
+    if (isApproved) {
+      // CRITICAL FIX: Prefer actual values from earned_commissions table (reflects user corrections)
+      const displayCommission = actualCommission !== null && actualCommission !== undefined ? actualCommission : extractedTotal;
+      const displayInvoice = actualInvoice !== null && actualInvoice !== undefined ? actualInvoice : extractedInvoice;
+      
       return {
         invoice: (
           <div className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">
-            {extractedInvoice.toLocaleString("en-US", {
+            {displayInvoice.toLocaleString("en-US", {
               style: "currency",
               currency: "USD",
               minimumFractionDigits: 2,
@@ -286,7 +296,7 @@ export default function CarrierStatementsTable({ statements, setStatements, onPr
         ),
         commission: (
           <div className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">
-            {extractedTotal.toLocaleString("en-US", {
+            {displayCommission.toLocaleString("en-US", {
               style: "currency",
               currency: "USD",
               minimumFractionDigits: 2,

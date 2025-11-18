@@ -576,6 +576,19 @@ async def learn_format_patterns(
             logger.info(f"🎯 Format Learning: Extracted {len(field_mapping)} field mappings from field_config")
             logger.info(f"🎯 Format Learning: Field mappings: {field_mapping}")
         
+        # CRITICAL VALIDATION: Don't save format learning if field_mapping is empty
+        # This prevents creating useless learned formats that break auto-approval
+        if not field_mapping:
+            logger.warning(f"⚠️ Format Learning: Skipping - field_mapping is empty! field_config={request.field_config}")
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "success": False,
+                    "error": "Cannot learn format: field_config is missing or empty",
+                    "details": "Field mappings are required for format learning"
+                }
+            )
+        
         # Create format learning record using Pydantic schema
         format_learning = schemas.CarrierFormatLearningCreate(
             company_id=carrier_id,  # Use carrier_id for carrier-specific learning

@@ -76,18 +76,13 @@ export default function AIFieldMapperTable({
   const [databaseFieldSelections, setDatabaseFieldSelections] = useState<Record<string, string>>(() => {
     const initialSelections: Record<string, string> = {};
     if (mappingResults?.mappings && databaseFields.length > 0) {
-      console.log('🎬 AIFieldMapperTable: Initializing dropdown selections with AI mappings...');
       mappingResults.mappings.forEach(mapping => {
         // Find database field ID from the AI-suggested display name
         const dbField = databaseFields.find(f => f.display_name === mapping.mapped_to);
         if (dbField) {
           initialSelections[mapping.extracted_field] = dbField.id;
-          console.log(`   🤖 Init: "${mapping.extracted_field}" → "${dbField.display_name}" (ID: ${dbField.id})`);
-        } else {
-          console.log(`   ⚠️  Init: "${mapping.extracted_field}" → "${mapping.mapped_to}" (DB field not found)`);
-        }
+        } 
       });
-      console.log(`   ✅ Initialized ${Object.keys(initialSelections).length} dropdown selections`);
     }
     return initialSelections;
   });

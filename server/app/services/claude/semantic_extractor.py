@@ -234,6 +234,16 @@ class SemanticExtractionService:
             # Apply post-processing filter to remove any summary rows that slipped through Claude's filter
             filtered_groups = self._filter_summary_rows(raw_groups)
             logger.info(f"📊 After semantic filtering: {len(raw_groups)} → {len(filtered_groups)} actual groups (removed {len(raw_groups) - len(filtered_groups)} summary rows)")
+            
+            # 🔴 CRITICAL FIX: Mark filtered-out groups as summary rows in table metadata
+            # This ensures downstream calculations skip these rows
+            excluded_groups = [g for g in raw_groups if g not in filtered_groups]
+            if excluded_groups:
+                # Get tables from data (try both 'raw_tables' and 'tables' keys)
+                tables = data.get('raw_tables') or data.get('tables', [])
+                if tables:
+                    self._mark_filtered_groups_in_tables(tables, excluded_groups)
+            
             return filtered_groups
         
         logger.info("⚠️ No groups_and_companies from Claude - falling back to table extraction")
@@ -312,33 +322,143 @@ class SemanticExtractionService:
         logger.info(f"📊 Extracted {len(groups)} groups/companies")
         return groups
     
+    def _mark_filtered_groups_in_tables(self, tables: List[Dict[str, Any]], excluded_groups: List[Dict[str, Any]]) -> None:
+        """
+        🔴 CRITICAL FIX: Mark rows corresponding to filtered-out groups as summary rows in table metadata.
+        
+        This ensures that when we filter groups in semantic extraction, the corresponding table rows
+        are also marked as summary rows so they're excluded from commission calculations.
+        
+        Args:
+            tables: List of table dictionaries with headers and rows
+            excluded_groups: List of groups that were filtered out as summary/duplicate rows
+        """
+        if not tables or not excluded_groups:
+            return
+        
+        marked_count = 0
+        
+        for table in tables:
+            headers = table.get('headers', []) or table.get('header', [])
+            rows = table.get('rows', [])
+            
+            if not rows:
+                continue
+            
+            # Get existing summary row indices
+            summary_row_indices = set(table.get('summaryRows', []) or table.get('summary_rows', []))
+            
+            # Find Group No. and Group Name column indices
+            group_no_idx = None
+            group_name_idx = None
+            
+            for idx, header in enumerate(headers):
+                header_lower = str(header).lower()
+                if 'group no' in header_lower or 'group number' in header_lower:
+                    group_no_idx = idx
+                if any(kw in header_lower for kw in ['group name', 'company', 'customer', 'client']) and 'no' not in header_lower:
+                    group_name_idx = idx
+            
+            # Match excluded groups to table rows
+            for row_idx, row in enumerate(rows):
+                # Skip if already marked as summary
+                if row_idx in summary_row_indices:
+                    continue
+                
+                # Check if this row matches any excluded group
+                for excluded_group in excluded_groups:
+                    group_no = excluded_group.get('group_number', '').strip()
+                    group_name = (excluded_group.get('group_name', '') or excluded_group.get('company_name', '')).strip()
+                    
+                    row_matches = False
+                    
+                    # Match by group number if available
+                    if group_no_idx is not None and group_no_idx < len(row) and group_no:
+                        row_group_no = str(row[group_no_idx]).strip()
+                        if row_group_no == group_no:
+                            row_matches = True
+                    
+                    # Match by group name if available
+                    if not row_matches and group_name_idx is not None and group_name_idx < len(row) and group_name:
+                        row_group_name = str(row[group_name_idx]).strip()
+                        if row_group_name == group_name:
+                            row_matches = True
+                    
+                    if row_matches:
+                        summary_row_indices.add(row_idx)
+                        marked_count += 1
+                        logger.debug(
+                            f"   ✅ Marked row {row_idx} as summary (matched excluded group: {group_no or 'N/A'} - {group_name})"
+                        )
+                        break  # Found match, no need to check other excluded groups
+            
+            # Update table metadata with marked summary rows
+            table['summaryRows'] = sorted(list(summary_row_indices))
+            table['summary_rows'] = sorted(list(summary_row_indices))  # Both formats for compatibility
+        
+        if marked_count > 0:
+            logger.info(f"🔍 Marked {marked_count} table rows as summary rows based on semantic filtering")
+    
     def _filter_summary_rows(self, groups: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
-        Filter out summary/total/subtotal rows from extracted groups.
+        ✅ FIXED: Filter out summary rows that Claude already marked.
+        
+        Claude marks summary rows in the 'summaryRows' or 'summary_rows' field in tables.
+        We also apply pattern-based detection as a backup safety net.
         
         This is a critical safety net to catch any summary rows that Claude
         might have included despite prompt instructions.
-        
-        Uses unified filtering rules from ExtractionRules.Filtering to ensure
-        consistency with prompt instructions.
         """
         if not groups:
             return groups
         
-        # Use unified filtering method
+        # First use unified filtering method (pattern-based)
         filtered_groups, excluded_groups = ExtractionRules.Filtering.filter_groups(groups)
         
-        # Log filtering results
-        skipped_count = len(excluded_groups)
-        if skipped_count > 0:
-            logger.info(f"✅ _filter_summary_rows: Filtered out {skipped_count} summary/total rows from {len(groups)} total")
+        # Log filtering results from pattern-based filtering
+        pattern_filtered_count = len(excluded_groups)
+        if pattern_filtered_count > 0:
+            logger.info(f"✅ _filter_summary_rows (Pattern): Filtered out {pattern_filtered_count} summary/total rows from {len(groups)} total")
             # Log what was filtered for debugging
             for excluded in excluded_groups:
-                logger.debug(f"   FILTERED: {excluded.get('group_number', 'N/A')} - {excluded.get('group_name', 'N/A')} - Reason: {excluded.get('reason', 'Unknown')}")
+                logger.debug(f"   FILTERED (Pattern): {excluded.get('group_number', 'N/A')} - {excluded.get('group_name', 'N/A')} - Reason: {excluded.get('reason', 'Unknown')}")
+        
+        # ✅ ADDITIONAL FILTER: Detect duplicate company names (summary rows often duplicate)
+        unique_filtered_groups = []
+        seen_company_names = set()
+        duplicate_count = 0
+        
+        for group in filtered_groups:
+            company_name = group.get('company_name', '') or group.get('group_name', '')
+            
+            # Skip if we've already seen this exact company name
+            if company_name and company_name in seen_company_names:
+                logger.debug(
+                    f"   FILTERED (Duplicate): {group.get('group_number', 'N/A')} - {company_name} "
+                    f"(already in filtered list - likely summary row)"
+                )
+                duplicate_count += 1
+                continue
+            
+            if company_name:
+                seen_company_names.add(company_name)
+            
+            unique_filtered_groups.append(group)
+        
+        if duplicate_count > 0:
+            logger.info(f"✅ _filter_summary_rows (Duplicate): Removed {duplicate_count} duplicate company entries")
+        
+        total_filtered = len(groups) - len(unique_filtered_groups)
+        if total_filtered > 0:
+            logger.info(
+                f"✅ Summary row filtering complete: "
+                f"{len(groups)} → {len(unique_filtered_groups)} groups "
+                f"(removed {total_filtered} summary/duplicate rows: {pattern_filtered_count} pattern + {duplicate_count} duplicate)"
+            )
         else:
             logger.info(f"✅ _filter_summary_rows: All {len(groups)} groups passed filtering (no summary rows detected)")
         
-        return filtered_groups
+        return unique_filtered_groups
     
     def _extract_document_metadata(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Extract document metadata"""

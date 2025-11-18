@@ -422,6 +422,72 @@ async def save_statement_review(
                         table['summaryRows'] = list(summary_rows)
                         print(f"🔧 Converted summaryRows from set to list for table '{table.get('name', 'unknown')}'")
     
+    # ✅ CRITICAL: Post-processing validation to detect missed summary rows
+    # This catches cases where AI failed to mark the last row as a summary total
+    if final_data and upload_metadata:
+        progress_data_obj = upload_metadata.get('progress_data', {}) if upload_metadata else {}
+        extracted_total = progress_data_obj.get('total_amount')
+        if extracted_total:
+            try:
+                doc_total = float(extracted_total)
+                for table_idx, table in enumerate(final_data):
+                    if not isinstance(table, dict):
+                        continue
+                    
+                    headers = table.get('header') or table.get('headers', [])
+                    rows = table.get('rows', [])
+                    summary_rows_set = set(table.get('summaryRows', []))
+                    
+                    if not rows or len(rows) < 2:
+                        continue
+                    
+                    # Find commission/amount column
+                    amount_idx = -1
+                    for idx, h in enumerate(headers):
+                        h_lower = str(h).lower()
+                        if any(kw in h_lower for kw in ['paid amount', 'commission earned', 'commission', 'paid']):
+                            amount_idx = idx
+                            break
+                    
+                    if amount_idx == -1:
+                        continue
+                    
+                    # Check last row
+                    last_row_idx = len(rows) - 1
+                    if last_row_idx not in summary_rows_set:
+                        last_row = rows[last_row_idx]
+                        if isinstance(last_row, list) and amount_idx < len(last_row):
+                            try:
+                                import re
+                                amount_str = str(last_row[amount_idx]).strip()
+                                clean_amount = re.sub(r'[$,\s]', '', amount_str)
+                                clean_amount = clean_amount.replace('(', '-').replace(')', '')
+                                last_row_amount = float(clean_amount)
+                                
+                                # Calculate sum of all other non-summary rows
+                                other_total = 0
+                                for i, row in enumerate(rows):
+                                    if i == last_row_idx or i in summary_rows_set:
+                                        continue
+                                    if isinstance(row, list) and amount_idx < len(row):
+                                        try:
+                                            val_str = str(row[amount_idx]).strip()
+                                            clean_val = re.sub(r'[$,\s]', '', val_str)
+                                            clean_val = clean_val.replace('(', '-').replace(')', '')
+                                            other_total += float(clean_val)
+                                        except (ValueError, TypeError):
+                                            pass
+                                
+                                # If last row matches sum of others OR document total, mark as summary
+                                if abs(last_row_amount - other_total) < 1.0 or abs(last_row_amount - doc_total) < 0.01:
+                                    print(f"🛡️ POST-SAVE VALIDATION: Last row {last_row_idx} in table {table_idx} (${last_row_amount:.2f}) is a grand total - marking as summary")
+                                    summary_rows_set.add(last_row_idx)
+                                    table['summaryRows'] = sorted(list(summary_rows_set))
+                            except (ValueError, TypeError) as e:
+                                pass
+            except (ValueError, TypeError):
+                pass
+    
     # CRITICAL FIX: Extract field_mapping from field_config for review modal
     # field_mapping is a simple dict mapping source fields to target fields
     # This is used by the review modal to load saved mappings instead of calling AI
@@ -456,7 +522,8 @@ async def save_statement_review(
     # ✅ CRITICAL FIX: Calculate extracted_total from final_data for approved statements
     # This ensures the dropdown shows commission details even for manually approved statements
     extracted_total = None
-    total_amount_match = None
+    total_amount_match = True  # ✅ FIX: Initialize to True (assume match by default)
+    ai_extracted_total = None  # ✅ FIX: Initialize ai_extracted_total early
     
     if status == "Approved" and final_data and field_mapping:
         print(f"💰 Calculating extracted_total for manual approval...")
@@ -597,7 +664,7 @@ async def save_statement_review(
             extracted_total = round(calculated_total, 2)
             
             # ✅ CRITICAL FIX: Compare with AI-extracted total from document_metadata
-            ai_extracted_total = None
+            # ai_extracted_total is already initialized at the top of the function
             if document_metadata and 'total_amount' in document_metadata:
                 try:
                     ai_extracted_total = float(document_metadata['total_amount'])

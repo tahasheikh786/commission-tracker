@@ -1004,6 +1004,24 @@ class EnhancedExtractionService:
                 
                 result['tables'] = merged_tables
                 logger.info(f"Claude: Processed {len(original_tables)} tables into {len(merged_tables)} tables")
+                
+                # 🔴 CRITICAL FIX: Apply post-validation AFTER table stitching to detect summary rows
+                # Table stitching can lose summary row metadata, so we need to re-validate
+                from app.services.claude.summary_row_filters import post_validate_extraction
+                
+                logger.info("🔍 Applying post-validation after table stitching to detect summary rows...")
+                validation_data = {'tables': merged_tables}
+                validated_data, validation_metadata = post_validate_extraction(validation_data)
+                
+                if validation_metadata['post_validate_detected_count'] > 0:
+                    logger.warning(
+                        f"⚠️  Post-validation detected {validation_metadata['post_validate_detected_count']} summary rows after stitching"
+                    )
+                    # Update tables with validated data (includes summaryRows metadata)
+                    result['tables'] = validated_data.get('tables', merged_tables)
+                    logger.info(f"✅ Updated tables with summary row metadata")
+                else:
+                    logger.info("✅ Post-validation: No additional summary rows detected after stitching")
             
             await progress_tracker.complete_stage("table_detection", "Claude extraction completed")
             

@@ -19,9 +19,8 @@ import time
 import asyncio
 import json
 import base64
-import random
+import tempfile
 from typing import Dict, Any, List, Optional, Tuple
-from datetime import datetime
 from pathlib import Path
 
 # Load environment variables BEFORE anything else
@@ -35,13 +34,13 @@ except ImportError:
     ANTHROPIC_AVAILABLE = False
     logging.warning("Anthropic SDK not available. Install with: pip install anthropic")
 
-from .models import (
-    ClaudeExtractionResponse,
-    ClaudeDocumentMetadata,
-    ClaudeTableData,
-    ClaudeQualityMetrics,
-    ClaudeChunkMetadata
-)
+try:
+    import fitz  # PyMuPDF - used for PDF chunking operations
+    PYMUPDF_AVAILABLE = True
+except ImportError:
+    PYMUPDF_AVAILABLE = False
+    logging.warning("PyMuPDF not available. PDF chunking will be limited. Install with: pip install pymupdf")
+
 from .dynamic_prompts import ClaudeDynamicPrompts
 from .enhanced_prompts import EnhancedClaudePrompts
 from .semantic_extractor import SemanticExtractionService
@@ -60,348 +59,6 @@ from .utils import (
 from app.services.extraction_utils import normalize_multi_line_headers, normalize_statement_date
 
 logger = logging.getLogger(__name__)
-
-
-class ConcurrentExtractionManager:
-    """
-    ✅ PRODUCTION-GRADE: Manages multiple concurrent file extractions with rate limiting.
-    
-    ⚠️ NOTE: This class is NOT YET INTEGRATED - commented out for Phase 2.
-    Currently using _extract_with_adaptive_chunking() in ClaudeDocumentAIService.
-    
-    TODO Phase 2: Integrate this manager once core chunking is stable.
-    
-    Features:
-    - Per-file task management
-    - Queue-based processing with max concurrency
-    - Proper error isolation (one file failure doesn't affect others)
-    - Sequential chunk processing per file (with rate limiting)
-    - Cleanup and cancellation support
-    """
-    
-    def __init__(self, max_concurrent_files: int = 5):
-        """
-        Initialize concurrent extraction manager.
-        
-        Args:
-            max_concurrent_files: Maximum number of files to process simultaneously
-        """
-        self.max_concurrent = max_concurrent_files
-        self.active_extractions: Dict[str, asyncio.Task] = {}
-        self.extraction_queue = asyncio.Queue()
-        self.rate_limiter = ClaudeTokenBucket()
-        self.service = None  # Will be set by ClaudeDocumentAIService
-        
-        logger.info(f"🔧 ConcurrentExtractionManager initialized:")
-        logger.info(f"   Max concurrent files: {max_concurrent_files}")
-        logger.info(f"   Rate limiter: Shared across all extractions")
-    
-    async def extract_file(
-        self,
-        file_id: str,
-        file_path: str,
-        carrier_name: str,
-        progress_tracker=None
-    ) -> Dict[str, Any]:
-        """
-        Extract single file with proper sequencing and rate limiting.
-        
-        Args:
-            file_id: Unique identifier for this extraction
-            file_path: Path to PDF file
-            carrier_name: Insurance carrier name
-            progress_tracker: Optional progress tracker
-            
-        Returns:
-            Extraction results
-        """
-        try:
-            logger.info(f"🚀 Starting extraction: {file_id}")
-            
-            # Get PDF info
-            pdf_processor = ClaudePDFProcessor()
-            pdf_info = pdf_processor.get_pdf_info(file_path)
-            file_pages = pdf_info.get('page_count', 0)
-            
-            # Pre-estimate: Do we need chunking?
-            chunk_size, needs_chunking = self._calculate_adaptive_chunk_size(file_pages)
-            
-            if needs_chunking:
-                logger.info(f"📦 File {file_id}: Chunking with size {chunk_size} pages")
-                
-                # Create chunks
-                chunks = self._create_chunks(file_path, file_pages, chunk_size)
-                
-                # Process chunks SEQUENTIALLY (not parallel)
-                # Rate limiter ensures we never exceed limits
-                results = await self._extract_chunks_sequentially(
-                    chunks, carrier_name, progress_tracker
-                )
-                
-                return self._merge_chunk_results(results)
-            
-            else:
-                logger.info(f"✅ File {file_id}: Single call extraction")
-                
-                # Single extraction call
-                if self.service:
-                    result = await self.service.extract_commission_data(
-                        carrier_name=carrier_name,
-                        file_path=file_path,
-                        progress_tracker=progress_tracker,
-                        use_enhanced=True
-                    )
-                    return result
-                else:
-                    raise ValueError("Service not initialized")
-        
-        except Exception as e:
-            logger.error(f"❌ File {file_id} extraction failed: {e}")
-            raise
-    
-    async def _extract_chunks_sequentially(
-        self,
-        chunks: List[Dict],
-        carrier_name: str,
-        progress_tracker=None
-    ) -> Dict[str, Any]:
-        """
-        Process chunks one-by-one, respecting rate limits.
-        
-        Returns:
-            Merged extraction results with partial success support
-        """
-        results = []
-        failed_chunks = []
-        
-        for chunk_index, chunk in enumerate(chunks):
-            try:
-                logger.info(
-                    f"📄 Processing chunk {chunk_index + 1}/{len(chunks)}: "
-                    f"Pages {chunk['start_page']}-{chunk['end_page']}"
-                )
-                
-                # Wait for rate limit clearance
-                est_tokens = chunk['page_count'] * 2750
-                wait_time = await self.rate_limiter.wait_if_needed(est_tokens)
-                
-                if wait_time > 0:
-                    logger.info(f"⏳ Rate limit: waited {wait_time:.1f}s")
-                
-                # Extract chunk
-                chunk_result = await self._extract_single_chunk(
-                    chunk, carrier_name, progress_tracker
-                )
-                
-                # Validate extraction
-                if chunk_result.get('success'):
-                    logger.info(
-                        f"✅ Chunk {chunk_index}: "
-                        f"{len(chunk_result.get('tables', []))} tables"
-                    )
-                    results.append(chunk_result)
-                else:
-                    failed_chunks.append({
-                        'index': chunk_index,
-                        'reason': chunk_result.get('error')
-                    })
-                    logger.warning(
-                        f"⚠️ Chunk {chunk_index} failed - continuing with others"
-                    )
-            
-            except Exception as e:
-                logger.error(f"❌ Chunk {chunk_index} exception: {e}")
-                failed_chunks.append({
-                    'index': chunk_index,
-                    'reason': str(e)
-                })
-        
-        # CRITICAL: Return partial success if ANY chunks succeeded
-        if results:
-            return {
-                'success': True,
-                'partial': len(failed_chunks) > 0,
-                'results': results,
-                'failed_chunks': failed_chunks
-            }
-        else:
-            return {
-                'success': False,
-                'error': f"All {len(chunks)} chunks failed",
-                'failed_chunks': failed_chunks
-            }
-    
-    async def _extract_single_chunk(
-        self,
-        chunk: Dict,
-        carrier_name: str,
-        progress_tracker=None
-    ) -> Dict[str, Any]:
-        """
-        Extract one chunk with retry logic and exponential backoff.
-        
-        Returns:
-            Chunk extraction results
-        """
-        MAX_RETRIES = 5
-        attempt = 0
-        backoff_seconds = 1.0
-        
-        while attempt < MAX_RETRIES:
-            try:
-                # Call service for this chunk
-                if self.service:
-                    result = await self.service.extract_commission_data(
-                        carrier_name=carrier_name,
-                        file_path=chunk['path'],
-                        progress_tracker=progress_tracker,
-                        use_enhanced=True
-                    )
-                    
-                    # Success - reset backoff
-                    self.rate_limiter.reset_backoff()
-                    return result
-                else:
-                    raise ValueError("Service not initialized")
-            
-            except Exception as e:
-                error_str = str(e).lower()
-                
-                # Check if it's a rate limit error
-                if '429' in error_str or 'rate limit' in error_str:
-                    logger.warning(f"⚠️ Rate limit hit (attempt {attempt + 1})")
-                    self.rate_limiter.increment_backoff()
-                    backoff_seconds = self.rate_limiter._calculate_exponential_backoff()
-                    await asyncio.sleep(backoff_seconds)
-                    attempt += 1
-                
-                # Check if it's a server error (5xx)
-                elif any(code in error_str for code in ['500', '502', '503', '504']):
-                    logger.warning(
-                        f"⚠️ Server error (attempt {attempt + 1}): {error_str[:50]}"
-                    )
-                    backoff_seconds = min(backoff_seconds * 2, 60)
-                    await asyncio.sleep(backoff_seconds + (random.random() * 0.1))
-                    attempt += 1
-                
-                else:
-                    # Non-retriable error
-                    raise
-        
-        # All retries exhausted
-        return {
-            'success': False,
-            'error': f"Max retries ({MAX_RETRIES}) exceeded"
-        }
-    
-    def _calculate_adaptive_chunk_size(self, file_pages: int) -> Tuple[int, bool]:
-        """
-        Calculate optimal chunk size based on file size.
-        
-        Returns:
-            (chunk_size, should_chunk)
-        """
-        # Constants from production data
-        TOKENS_PER_PAGE = 2750
-        PROMPT_OVERHEAD = 3000
-        
-        # Get safe limits from rate limiter
-        safe_itpm = self.rate_limiter.itpm_limit  # 36,000 with 90% buffer
-        available_for_content = safe_itpm - PROMPT_OVERHEAD  # 33,000
-        
-        # Estimate if file fits in SINGLE call
-        estimated_input_tokens = (file_pages * TOKENS_PER_PAGE) + PROMPT_OVERHEAD
-        
-        logger.info(f"Token estimation for {file_pages}-page file:")
-        logger.info(f"  Estimated: {estimated_input_tokens:,} tokens")
-        logger.info(f"  Safe limit: {safe_itpm:,} tokens")
-        logger.info(f"  Fits in single call: {estimated_input_tokens <= safe_itpm}")
-        
-        # ADAPTIVE SIZING: Balance speed vs reliability
-        if file_pages <= 5:
-            # Very small files: try single call
-            if estimated_input_tokens <= safe_itpm:
-                return (file_pages, False)  # No chunking needed
-            else:
-                # Small but dense: chunk conservatively
-                return (4, True)
-        
-        elif file_pages <= 10:
-            # Small files: prefer speed, but chunk if needed
-            max_pages_per_chunk = available_for_content // TOKENS_PER_PAGE
-            chunk_size = min(8, max_pages_per_chunk, file_pages)
-            should_chunk = estimated_input_tokens > safe_itpm
-            return (chunk_size, should_chunk)
-        
-        elif file_pages <= 30:
-            # Medium files: balance speed and reliability
-            return (6, True)
-        
-        elif file_pages <= 60:
-            # Large files: prioritize reliability
-            return (4, True)
-        
-        else:
-            # Very large files: conservative chunks
-            return (3, True)
-    
-    def _create_chunks(
-        self,
-        file_path: str,
-        total_pages: int,
-        chunk_size: int
-    ) -> List[Dict[str, Any]]:
-        """
-        Create page chunks for processing.
-        
-        Returns:
-            List of chunk metadata dictionaries
-        """
-        chunks = []
-        
-        for i in range(0, total_pages, chunk_size):
-            chunk_start = i
-            chunk_end = min(i + chunk_size, total_pages)
-            
-            chunks.append({
-                'path': file_path,  # For now, reuse same file (service will handle page extraction)
-                'start_page': chunk_start + 1,  # 1-indexed
-                'end_page': chunk_end,
-                'page_count': chunk_end - chunk_start,
-                'chunk_index': len(chunks),
-                'total_chunks': (total_pages + chunk_size - 1) // chunk_size
-            })
-        
-        return chunks
-    
-    def _merge_chunk_results(self, results: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Merge results from multiple chunks with deduplication.
-        
-        Returns:
-            Merged extraction results
-        """
-        if not results.get('success'):
-            return results
-        
-        # Use ExtractionValidator for deduplication
-        all_tables = []
-        for chunk_result in results.get('results', []):
-            all_tables.extend(chunk_result.get('tables', []))
-        
-        # Validate and deduplicate
-        validation = ExtractionValidator.validate_table_rows(all_tables)
-        
-        if not validation['valid']:
-            logger.warning(f"Validation issues after merge: {validation['errors']}")
-        
-        return {
-            'success': True,
-            'tables': all_tables,
-            'validation': validation,
-            'partial': results.get('partial', False),
-            'failed_chunks': results.get('failed_chunks', [])
-        }
 
 
 class ClaudeDocumentAIService:
@@ -483,73 +140,67 @@ class ClaudeDocumentAIService:
     
     def calculate_optimal_chunk_size(self, file_pages: int) -> int:
         """
-        ✅ CONSOLIDATED: Calculate chunk size using _estimate_total_tokens for consistency.
+        Calculate optimal chunk size based on token budget and document size.
         
-        ADAPTIVE CHUNKING: Calculate chunk size based on file characteristics.
+        Uses production-tested formula:
+        - Reserve tokens for prompt overhead
+        - Calculate available tokens for content
+        - Determine max pages that fit safely
+        - Apply adaptive sizing based on document length
         
-        Algorithm:
-        - Uses production-tested token estimates from _estimate_total_tokens
-        - Reserve appropriate tokens for prompt/system overhead
-        - Estimate realistic tokens per page (commission statements)
-        - Available tokens calculated with safety buffers
-        
-        ADAPTIVE sizing based on file pages (optimized for first-attempt success):
-        - Small files (≤10 pages): Use large chunks for speed (respects token limits)
-        - Medium files (11-30 pages): Balance speed and stability
-        - Large files (31-60 pages): Use conservative chunks
-        - Very large files (60+ pages): Prioritize reliability
-        
-        This ensures right-sized chunks from the beginning, reducing retry probability by 70%
+        FIXED: Removed hardcoded 3-page cap that was preventing full document processing.
+        Now uses dynamic sizing based on actual token budget.
         """
         try:
-            # ✅ CONSOLIDATED: Use unified token estimation
-            # Note: We can't use async _estimate_total_tokens here since this is sync method
-            # So we replicate the constants to stay consistent
+            # Import constants for consistency
+            from .token_constants import ClaudeTokenConstants
             
-            # Constants (matches _estimate_total_tokens for "standard" mode)
-            base_tokens_per_page = 4500  # ✅ UNIFIED: Production data shows ~4,500 tokens/page
-            prompt_overhead = 3500        # ✅ UNIFIED: System message + extraction instructions
+            # Calculate theoretical maximum from token budget
+            max_pages_from_budget = ClaudeTokenConstants.estimate_pages_per_chunk("standard")
             
-            # Use rate_limiter's actual ITPM limit (already has buffer applied)
-            safe_itpm_limit = self.rate_limiter.itpm_limit  # 36,000 ITPM (with 90% buffer = 32,400)
-            available_tokens = safe_itpm_limit - prompt_overhead  # 32,400 - 3,500 = 28,900
+            logger.info(f"📊 Token Budget Analysis:")
+            logger.info(f"   Max pages from token budget: {max_pages_from_budget} pages")
+            logger.info(f"   Document total pages: {file_pages} pages")
             
-            # Calculate theoretical max pages per chunk
-            max_pages_theoretical = int(available_tokens / base_tokens_per_page)  # 28,900 / 4,500 = 6 pages
+            # Adaptive sizing based on document length
+            if file_pages <= max_pages_from_budget:
+                # Small document - process in single call
+                chunk_size = file_pages
+                logger.info(f"   Strategy: Single call (document fits in budget)")
             
-            # Bound to practical limits
-            if max_pages_theoretical < 2:
-                max_pages_theoretical = 2
-            if max_pages_theoretical > 40:
-                max_pages_theoretical = 40  # Cap at 40 pages for stability
+            elif file_pages <= 20:
+                # Medium document - use full budget per chunk
+                chunk_size = max_pages_from_budget
+                logger.info(f"   Strategy: Medium doc - {max_pages_from_budget} pages/chunk")
             
-            # ADAPTIVE sizing based on file pages
-            if file_pages <= 10:
-                # Small files: use large chunks for speed
-                chunk_size = min(8, file_pages)
-            elif file_pages <= 30:
-                # Medium files: balance speed and stability
-                chunk_size = 6
-            elif file_pages <= 60:
-                # Large files: use conservative chunks
-                chunk_size = 4
+            elif file_pages <= 50:
+                # Large document - slightly conservative to reduce retry risk
+                chunk_size = max(2, max_pages_from_budget - 1)
+                logger.info(f"   Strategy: Large doc - conservative {chunk_size} pages/chunk")
+            
             else:
-                # Very large files: prioritize reliability
-                chunk_size = 3
+                # Very large document - prioritize reliability
+                chunk_size = max(2, max_pages_from_budget - 2)
+                logger.info(f"   Strategy: Very large doc - reliable {chunk_size} pages/chunk")
             
-            # Safety bounds
-            chunk_size = max(2, min(chunk_size, max_pages_theoretical))
+            # Final safety bounds
+            chunk_size = max(2, min(chunk_size, max_pages_from_budget, 10))  # Cap at 10 pages max
             
-            logger.info(f"📊 Chunk size for {file_pages}-page file: {chunk_size} pages/chunk")
-            logger.info(f"   Expected chunks: {(file_pages + chunk_size - 1) // chunk_size}")
-            logger.info(f"   Estimated processing time: ~{((file_pages + chunk_size - 1) // chunk_size) * 10}s")
+            # Calculate processing estimates
+            num_chunks = (file_pages + chunk_size - 1) // chunk_size
+            estimated_time = num_chunks * 15  # 15 seconds per chunk average
+            
+            logger.info(f"📊 Final Chunk Configuration:")
+            logger.info(f"   Chunk size: {chunk_size} pages/chunk")
+            logger.info(f"   Expected chunks: {num_chunks}")
+            logger.info(f"   Estimated time: {estimated_time}s ({estimated_time/60:.1f}m)")
             
             return chunk_size
         
         except Exception as e:
-            logger.exception(f"[ERROR] calculate_optimal_chunk_size failed: {e}")
-            logger.warning("[FALLBACK] Using default chunk size: 6 pages")
-            return 6
+            logger.exception(f"ERROR: calculate_optimal_chunk_size failed: {e}")
+            logger.warning("FALLBACK: Using safe default chunk size of 3 pages")
+            return 3  # Safe fallback
     
     def _initialize_client(self):
         """Initialize Claude API client"""
@@ -644,9 +295,7 @@ class ClaudeDocumentAIService:
                 logger.info(f"   Savings: {page_count - 3} pages / ~{(page_count - 3) * 2750:,} tokens saved")
                 
                 # Create temp PDF with only first 3 pages
-                try:
-                    import fitz  # PyMuPDF
-                except ImportError:
+                if not PYMUPDF_AVAILABLE:
                     logger.warning("PyMuPDF not available, using full document for metadata")
                     pdf_base64 = self.pdf_processor.encode_pdf_to_base64(file_path)
                     metadata_pages = page_count
@@ -754,7 +403,7 @@ class ClaudeDocumentAIService:
         use_enhanced: bool = True  # ⭐ DEFAULT TO TRUE FOR ENHANCED QUALITY
     ) -> Dict[str, Any]:
         """
-        Extract commission data from PDF file.
+        Extract commission data from PDF file with comprehensive monitoring.
         
         Args:
             carrier_name: Name of the insurance carrier
@@ -763,7 +412,7 @@ class ClaudeDocumentAIService:
             use_enhanced: If True, use enhanced 3-phase extraction pipeline (DEFAULT: True)
             
         Returns:
-            Dictionary with extraction results
+            Dictionary with extraction results including monitoring metadata
         """
         start_time = time.time()
         self.stats['total_extractions'] += 1
@@ -788,6 +437,14 @@ class ClaudeDocumentAIService:
             pdf_info = validation_result['pdf_info']
             page_count = pdf_info.get('page_count', 0)
             
+            # ✅ COMPREHENSIVE MONITORING: Document processing started
+            logger.info("=" * 80)
+            logger.info(f"📄 DOCUMENT PROCESSING STARTED")
+            logger.info(f"   Carrier: {carrier_name}")
+            logger.info(f"   Total Pages: {page_count}")
+            logger.info(f"   File Size: {pdf_info.get('file_size_mb', 0):.2f} MB")
+            logger.info("=" * 80)
+            
             # ✅ CRITICAL FIX: Use adaptive chunking with token estimation
             # Instead of hardcoded page threshold (>8), estimate tokens first
             # This prevents 36K token limit errors on 7-page files with dense content
@@ -810,7 +467,7 @@ class ClaudeDocumentAIService:
                     carrier_name=carrier_name,
                     pdf_path=file_path,
                     num_pages=page_count,
-                    chunk_size=5,  # Force smaller chunks (5 pages each)
+                    chunk_size=None,  # ✅ PHASE 3 FIX: Let system calculate optimal size instead of hardcoding
                     prompt=full_prompt,
                     system_prompt=system_prompt,
                     progress_tracker=progress_tracker,
@@ -920,12 +577,36 @@ class ClaudeDocumentAIService:
                 logger.warning("⚠️ Enhanced pipeline DISABLED - using standard extraction only")
                 logger.warning("   To enable: set use_enhanced=True or USE_ENHANCED_EXTRACTION=true")
             
-            # Update statistics
+            # ✅ COMPREHENSIVE MONITORING: Validate results
             processing_time = time.time() - start_time
+            
+            # CRITICAL: Validate all pages processed
+            if 'pages_processed' in result:
+                pages_processed = len(result['pages_processed'])
+                if pages_processed < page_count:
+                    missing = page_count - pages_processed
+                    logger.error(f"❌ INCOMPLETE PROCESSING: {missing} pages missing!")
+                    logger.error(f"   Expected: {page_count} pages")
+                    logger.error(f"   Processed: {pages_processed} pages")
+                    
+                    # Add to result metadata
+                    result['processing_incomplete'] = True
+                    result['missing_pages_count'] = missing
+            
+            # Update statistics
             self.stats['successful_extractions'] += 1
             self.stats['total_processing_time'] += processing_time
             
-            logger.info(f"✅ Claude extraction completed in {processing_time:.2f}s")
+            # ✅ COMPREHENSIVE MONITORING: Final summary
+            logger.info("=" * 80)
+            logger.info(f"✅ DOCUMENT PROCESSING COMPLETE")
+            logger.info(f"   Pages Processed: {pages_processed if 'pages_processed' in result else page_count}/{page_count}")
+            logger.info(f"   Tables Extracted: {len(result.get('tables', []))}")
+            logger.info(f"   Processing Time: {processing_time:.1f}s")
+            logger.info(f"   Pages/Second: {page_count/processing_time:.2f}")
+            if result.get('processing_incomplete'):
+                logger.error(f"   ⚠️ INCOMPLETE: {result.get('missing_pages_count', 0)} pages not processed")
+            logger.info("=" * 80)
             
             return result
         
@@ -933,7 +614,13 @@ class ClaudeDocumentAIService:
             self.stats['failed_extractions'] += 1
             processing_time = time.time() - start_time
             
-            logger.error(f"❌ Claude extraction failed after {processing_time:.2f}s: {e}")
+            # ✅ COMPREHENSIVE MONITORING: Extraction failed
+            logger.error("=" * 80)
+            logger.error(f"❌ DOCUMENT PROCESSING FAILED")
+            logger.error(f"   Processing Time: {processing_time:.1f}s")
+            logger.error(f"   Error: {str(e)}")
+            logger.error("=" * 80)
+            logger.exception(f"Full traceback:")
             
             return {
                 'success': False,
@@ -1111,30 +798,32 @@ class ClaudeDocumentAIService:
             PROMPT_TOKENS = 2500
         else:
             # Table extraction is heavier (full file)
-            # Based on actual API usage: 45,414 tokens for 10 pages = 4,541 tokens/page
-            TOKENS_PER_PAGE = 4500  # ✅ UNIFIED: Also used in calculate_optimal_chunk_size()
+            # ✅ CRITICAL FIX: Based on production data - 37,012 tokens for 5 pages = 7,402 tokens/page
+            # But this includes base64 PDF overhead + prompt overhead
+            # Breakdown: PDF content ~5,500 tokens/page + System prompt ~5,500 tokens (one-time)
+            TOKENS_PER_PAGE = 5500  # ✅ INCREASED from 4500 to 5500 (22% increase)
             num_pages_actual = num_pages
-            PROMPT_TOKENS = 3500  # ✅ UNIFIED: Also used in calculate_optimal_chunk_size()
+            PROMPT_TOKENS = 5500  # ✅ INCREASED from 3500 to 5500 (57% increase)
         
-        OUTPUT_TOKENS = 6000
-        SAFETY_BUFFER = 0.90  # Use only 90% of limit
-        SAFETY_MULTIPLIER = 1.15  # ← NEW: Add 15% buffer for unknowns
+        OUTPUT_TOKENS = 12000  # ✅ INCREASED from 6000 to 12000 for dense tables
+        SAFETY_BUFFER = 0.85  # ✅ TIGHTENED from 0.90 to 0.85 (more conservative)
+        SAFETY_MULTIPLIER = 1.15  # ✅ PHASE 2 FIX: REDUCED from 1.25 to 1.15 (more accurate, prevents false rejections)
         ITPM_LIMIT = 36000
         
-        safe_limit = int(ITPM_LIMIT * SAFETY_BUFFER)  # 32,400
+        safe_limit = int(ITPM_LIMIT * SAFETY_BUFFER)  # 30,600 (85% of 36,000)
         
         # Estimate input tokens WITH safety multiplier
         estimated_input = int(((num_pages_actual * TOKENS_PER_PAGE) + PROMPT_TOKENS) * SAFETY_MULTIPLIER)
         estimated_output = OUTPUT_TOKENS
         total_estimated = estimated_input + estimated_output
         
-        # Determine if safe
-        will_fit = total_estimated <= safe_limit
+        # Determine if safe (check input tokens only, as ITPM_LIMIT is for input)
+        will_fit = estimated_input <= safe_limit
         
         # Calculate recommended chunk size
         # Work backwards: safe_limit - prompt = available for content
-        available_for_content = safe_limit - PROMPT_TOKENS
-        max_pages_per_chunk = max(1, available_for_content // TOKENS_PER_PAGE)
+        available_for_content = safe_limit - (int(PROMPT_TOKENS * SAFETY_MULTIPLIER))
+        max_pages_per_chunk = max(1, available_for_content // int(TOKENS_PER_PAGE * SAFETY_MULTIPLIER))
         
         # Determine risk level
         if will_fit:
@@ -1144,15 +833,18 @@ class ClaudeDocumentAIService:
         else:
             risk = 'critical'
         
-        logger.info(f"📊 Token Estimation:")
-        logger.info(f" - Mode: {estimate_mode}")
-        logger.info(f" - Pages: {num_pages} (actual: {num_pages_actual})")
-        logger.info(f" - Tokens/page: {TOKENS_PER_PAGE} (with {int(SAFETY_MULTIPLIER*100)}% buffer)")
-        logger.info(f" - Estimated input: {estimated_input:,} tokens")
-        logger.info(f" - Safe limit: {safe_limit:,} tokens (90% of {ITPM_LIMIT:,})")
-        logger.info(f" - Will fit in single call: {will_fit}")
-        logger.info(f" - Recommended chunk size: {max_pages_per_chunk} pages/chunk")
-        logger.info(f" - Risk level: {risk}")
+        logger.info(f"📊 Token Estimation (FIXED):")
+        logger.info(f"   - Mode: {estimate_mode}")
+        logger.info(f"   - Pages: {num_pages} (actual: {num_pages_actual})")
+        logger.info(f"   - Tokens/page: {TOKENS_PER_PAGE} (realistic)")
+        logger.info(f"   - Prompt overhead: {PROMPT_TOKENS}")
+        logger.info(f"   - Safety multiplier: {SAFETY_MULTIPLIER}x")
+        logger.info(f"   - Base estimate: {(num_pages_actual * TOKENS_PER_PAGE) + PROMPT_TOKENS:,} tokens")
+        logger.info(f"   - With multiplier: {estimated_input:,} tokens")
+        logger.info(f"   - Safe limit: {safe_limit:,} tokens ({int(SAFETY_BUFFER*100)}% of {ITPM_LIMIT:,})")
+        logger.info(f"   - Will fit: {will_fit}")
+        logger.info(f"   - Recommended chunk: {max_pages_per_chunk} pages")
+        logger.info(f"   - Risk level: {risk}")
         
         return {
             'estimated_input_tokens': estimated_input,
@@ -1201,18 +893,13 @@ class ClaudeDocumentAIService:
         Returns path to new temporary PDF with only the selected pages.
         """
         
-        import tempfile
-        from pathlib import Path
-        
         # Create temporary file
         temp_dir = tempfile.gettempdir()
         chunk_filename = f"chunk_{start_page}_{end_page}_{Path(original_path).stem}.pdf"
         chunk_path = Path(temp_dir) / chunk_filename
         
         # Create new PDF with selected pages
-        try:
-            import fitz  # PyMuPDF
-        except ImportError:
+        if not PYMUPDF_AVAILABLE:
             logger.error("PyMuPDF (fitz) not available for chunking")
             raise ImportError("PyMuPDF required for PDF chunking. Install with: pip install pymupdf")
         
@@ -1227,42 +914,84 @@ class ClaudeDocumentAIService:
         
         return str(chunk_path)
     
-    def _deduplicate_table_rows(self, all_chunks_results: List[Dict]) -> List[Dict]:
-        """
-        ⚠️ DEPRECATED: Use ExtractionValidator.validate_chunk_merge() instead.
-        
-        This method is kept for backward compatibility but is no longer actively used.
-        All new code should use ExtractionValidator.validate_chunk_merge() from utils.py.
-        
-        TODO Phase 2: Remove this method entirely once migration is complete.
-        
-        Deduplicate rows from overlapping chunks.
-        
-        Strategy:
-        1. Track which rows we've already seen using content hash
-        2. Use MD5 hash of row content to identify exact duplicates
-        3. Keep first occurrence, skip subsequent duplicates
-        4. Return merged tables with no duplicates
-        """
-        # Redirect to consolidated implementation
-        logger.warning("⚠️ _deduplicate_table_rows is deprecated - redirecting to ExtractionValidator")
-        return ExtractionValidator.validate_chunk_merge(all_chunks_results)
-    
     def _get_table_signature(self, table: Dict[str, Any]) -> str:
         """
         Create unique signature for table to detect duplicates across chunks.
         
-        Uses: header names + first row values + row count
+        Uses: header names + first 2 rows values + row count for accurate matching
         """
         
         headers = tuple(table.get('headers', []) or table.get('header', []))
         rows = table.get('rows', [])
-        first_row = tuple(rows[0]) if rows else ()
+        
+        # Include first 2 rows for better duplicate detection
+        first_row = tuple(rows[0]) if len(rows) > 0 else ()
+        second_row = tuple(rows[1]) if len(rows) > 1 else ()
         row_count = len(rows)
         
-        signature = f"{headers}|{first_row}|{row_count}"
+        signature = f"{headers}|{first_row}|{second_row}|{row_count}"
         import hashlib
         return hashlib.md5(signature.encode()).hexdigest()
+    
+    def get_table_signature(self, table: Dict[str, Any]) -> str:
+        """
+        Public wrapper for _get_table_signature.
+        Creates unique signature for table to detect duplicates.
+        
+        Strategy:
+        - Compare table signatures (headers + first 2 rows)
+        - Used for deduplication of overlapping chunks
+        """
+        return self._get_table_signature(table)
+    
+    def deduplicate_overlapping_tables(self, tables: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Remove duplicate tables from overlapping chunks.
+        
+        Strategy:
+        - Compare table signatures (headers + first 2 rows)
+        - If 90%+ similarity, keep the one with more rows
+        - Preserve metadata from both sources
+        
+        This is critical for processing multi-chunk documents where chunks
+        have 1-page overlaps to preserve context.
+        """
+        if len(tables) <= 1:
+            return tables
+        
+        seen_signatures = {}
+        deduplicated = []
+        
+        logger.info(f"🔍 Deduplicating {len(tables)} tables from overlapping chunks...")
+        
+        for table in tables:
+            # Create signature
+            signature = self.get_table_signature(table)
+            
+            if signature not in seen_signatures:
+                # New table
+                seen_signatures[signature] = len(deduplicated)
+                deduplicated.append(table)
+                logger.debug(f"   Added new table (signature={signature[:20]}..., rows={len(table.get('rows', []))})")
+            else:
+                # Potential duplicate - compare row counts
+                existing_idx = seen_signatures[signature]
+                existing_table = deduplicated[existing_idx]
+                
+                existing_rows = len(existing_table.get('rows', []))
+                new_rows = len(table.get('rows', []))
+                
+                if new_rows > existing_rows:
+                    # Replace with version that has more rows
+                    logger.info(f"   Replacing table (signature={signature[:20]}...) - {existing_rows} → {new_rows} rows")
+                    deduplicated[existing_idx] = table
+                else:
+                    logger.debug(f"   Skipping duplicate table (signature={signature[:20]}...) - keeping {existing_rows} rows")
+        
+        removed_count = len(tables) - len(deduplicated)
+        logger.info(f"✅ Deduplication complete: {len(tables)} → {len(deduplicated)} tables ({removed_count} duplicates removed)")
+        
+        return deduplicated
     
     def _merge_chunk_results(
         self,
@@ -1370,18 +1099,33 @@ class ClaudeDocumentAIService:
             model = self.primary_model
         
         try:
-            # Estimate tokens for this call
+            # ✅ CRITICAL FIX: Estimate tokens BEFORE any API interaction
             estimation = await self._estimate_total_tokens(
                 pdf_path, pdf_pages, "standard"
             )
             
-            logger.info(f"📊 Calling Claude with estimated {estimation['estimated_input_tokens']:,} tokens")
+            estimated_input_tokens = estimation['estimated_input_tokens']
+            safe_limit = estimation['safe_limit']  # This is 30,600 (85% of 36,000)
             
-            # Check if estimate is still too high even with safety buffer
-            if estimation['estimated_input_tokens'] > 35000:  # Leave buffer for API variations
-                raise ValueError(
-                    f"Estimated tokens ({estimation['estimated_input_tokens']}) still too high. "
-                    f"Would exceed limit. Falling back to chunking."
+            logger.info(f"📊 Token Estimation:")
+            logger.info(f"   Estimated input: {estimated_input_tokens:,} tokens")
+            logger.info(f"   Safe limit: {safe_limit:,} tokens")
+            logger.info(f"   Will fit: {estimation['will_fit']}")
+            
+            # ✅ CRITICAL VALIDATION: Reject BEFORE rate limiter if too large
+            if estimated_input_tokens > self.rate_limiter.itpm_limit:
+                error_msg = (
+                    f"❌ PRE-VALIDATION FAILED: Estimated {estimated_input_tokens:,} tokens "
+                    f"exceeds ITPM limit of {self.rate_limiter.itpm_limit:,}. "
+                    f"Recommendation: Use {estimation['recommended_chunk_size']} pages/chunk instead."
+                )
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+            
+            if not estimation['will_fit']:
+                logger.warning(
+                    f"⚠️ Token estimate {estimated_input_tokens:,} exceeds safe limit "
+                    f"{safe_limit:,} but below hard limit. Proceeding with caution."
                 )
             
             logger.info(f"🔄 Calling Claude API {'for chunk' if is_chunk else 'for full document'} with model: {model}")
@@ -1413,19 +1157,34 @@ class ClaudeDocumentAIService:
                     'business_intelligence': {}
                 }
             
+            # 🔴 CRITICAL: Apply post-validation to mark escaped summary rows
+            from .summary_row_filters import post_validate_extraction
+            
+            logger.info("🔍 Applying post-validation to detect summary rows...")
+            validated_data, validation_metadata = post_validate_extraction(parsed_data)
+            
+            if validation_metadata['post_validate_detected_count'] > 0:
+                logger.warning(
+                    f"⚠️  Post-validation detected {validation_metadata['post_validate_detected_count']} summary rows (now marked in metadata)"
+                )
+                logger.debug(f"Detected summary rows: {validation_metadata['post_validate_detected_rows']}")
+            else:
+                logger.info("✅ Post-validation: No additional summary rows detected")
+            
             # Transform format
-            doc_metadata = self._transform_carrier_broker_metadata(parsed_data)
-            parsed_data['document_metadata'] = doc_metadata
+            doc_metadata = self._transform_carrier_broker_metadata(validated_data)
+            validated_data['document_metadata'] = doc_metadata
             
             # Ensure entities are preserved
             result = {
                 'success': True,
-                'tables': parsed_data.get('tables', []),
+                'tables': validated_data.get('tables', []),
                 'document_metadata': doc_metadata,
-                'groups_and_companies': parsed_data.get('groups_and_companies', []),
-                'writing_agents': parsed_data.get('writing_agents', []),
-                'business_intelligence': parsed_data.get('business_intelligence', {}),
-                'token_usage': extraction_result.get('usage', {})
+                'groups_and_companies': validated_data.get('groups_and_companies', []),
+                'writing_agents': validated_data.get('writing_agents', []),
+                'business_intelligence': validated_data.get('business_intelligence', {}),
+                'token_usage': extraction_result.get('usage', {}),
+                'validation_metadata': validation_metadata  # Include validation info for debugging
             }
             
             return result
@@ -1470,19 +1229,31 @@ class ClaudeDocumentAIService:
                     )
                     
                     if parsed_data:
+                        # 🔴 CRITICAL: Apply post-validation to fallback results too
+                        from .summary_row_filters import post_validate_extraction
+                        
+                        logger.info("🔍 Applying post-validation to fallback results...")
+                        validated_data, validation_metadata = post_validate_extraction(parsed_data)
+                        
+                        if validation_metadata['post_validate_detected_count'] > 0:
+                            logger.warning(
+                                f"⚠️  Post-validation (fallback) detected {validation_metadata['post_validate_detected_count']} summary rows"
+                            )
+                        
                         # Transform format
-                        doc_metadata = self._transform_carrier_broker_metadata(parsed_data)
-                        parsed_data['document_metadata'] = doc_metadata
+                        doc_metadata = self._transform_carrier_broker_metadata(validated_data)
+                        validated_data['document_metadata'] = doc_metadata
                         
                         # Return with proper format
                         return {
                             'success': True,
-                            'tables': parsed_data.get('tables', []),
+                            'tables': validated_data.get('tables', []),
                             'document_metadata': doc_metadata,
-                            'groups_and_companies': parsed_data.get('groups_and_companies', []),
-                            'writing_agents': parsed_data.get('writing_agents', []),
-                            'business_intelligence': parsed_data.get('business_intelligence', {}),
-                            'token_usage': fallback_result.get('usage', {})
+                            'groups_and_companies': validated_data.get('groups_and_companies', []),
+                            'writing_agents': validated_data.get('writing_agents', []),
+                            'business_intelligence': validated_data.get('business_intelligence', {}),
+                            'token_usage': fallback_result.get('usage', {}),
+                            'validation_metadata': validation_metadata
                         }
                         
                 except Exception as fallback_error:
@@ -1500,10 +1271,17 @@ class ClaudeDocumentAIService:
         system_prompt: str,
         estimation: Dict[str, Any],
         progress_tracker = None,
-        model: str = None  # ← NEW: Optional model override
+        model: str = None,  # ← NEW: Optional model override
+        max_rechunk_attempts: int = 2,  # ✅ NEW: Allow 2 levels of re-chunking (5→3→2 or 3→2→1)
+        _recursion_depth: int = 0  # ✅ INTERNAL: Track recursion depth
     ) -> Dict[str, Any]:
         """
-        Extract from PDF in chunks and merge results.
+        Extract from PDF in chunks with AUTOMATIC RE-CHUNKING on failure.
+        
+        NEW BEHAVIOR (Phase 1 - Critical Fix):
+        - If a chunk fails pre-validation, automatically split it into smaller sub-chunks
+        - Recursively retry with progressively smaller sizes: 5 → 3 → 2 pages
+        - Only mark as failed after exhausting all re-chunking attempts
         
         Chunks are processed sequentially (respecting 36K ITPM limit)
         but intelligently merged to avoid duplication.
@@ -1513,13 +1291,15 @@ class ClaudeDocumentAIService:
         if model is None:
             model = self.primary_model
         
-        try:
-            import fitz  # PyMuPDF
-        except ImportError:
+        if not PYMUPDF_AVAILABLE:
             logger.error("PyMuPDF not available for chunking")
             raise ImportError("PyMuPDF required for PDF chunking. Install with: pip install pymupdf")
         
-        logger.info(f"🔄 Starting chunked extraction: {num_pages} pages, {chunk_size} pages/chunk with model: {model}")
+        # ✅ ENHANCED LOGGING (Phase 5)
+        indent = "   " * _recursion_depth
+        logger.info(f"{indent}🔄 Starting chunked extraction: {num_pages} pages, {chunk_size} pages/chunk with model: {model}")
+        if _recursion_depth > 0:
+            logger.info(f"{indent}   (Re-chunking attempt {_recursion_depth}/{max_rechunk_attempts})")
         
         # Open PDF
         pdf_doc = fitz.open(pdf_path)
@@ -1531,7 +1311,8 @@ class ClaudeDocumentAIService:
             'text_content': [],
             'chunk_metadata': [],
             'successful_chunks': [],
-            'failed_chunks': []
+            'failed_chunks': [],
+            'pages_processed': set()  # ✅ NEW: Track which pages we actually processed
         }
         
         # ✅ NEW: Track individual chunk results for deduplication
@@ -1555,16 +1336,20 @@ class ClaudeDocumentAIService:
                 'page_count': chunk_end - chunk_start,
                 'has_overlap': len(chunks) > 0  # Flag indicating overlap exists
             })
-            
-            logger.info(
-                f"  Chunk {len(chunks)}: Pages {effective_start+1}-{chunk_end} "
-                f"(overlap: {len(chunks) > 0})"
-            )
+        
+        # ✅ ENHANCED LOGGING (Phase 5): Show chunking plan
+        logger.info(f"{indent}📊 CHUNKING PLAN:")
+        logger.info(f"{indent}   Total pages: {num_pages}")
+        logger.info(f"{indent}   Chunk size: {chunk_size} pages/chunk")
+        logger.info(f"{indent}   Expected chunks: {len(chunks)}")
+        logger.info(f"{indent}   Page ranges:")
+        for i, chunk in enumerate(chunks):
+            logger.info(f"{indent}      Chunk {i + 1}: Pages {chunk['start_page'] + 1}-{chunk['end_page']}")
         
         # Process each chunk with error recovery
         for chunk_info in chunks:
             try:
-                logger.info(f"📖 Processing chunk {chunk_info['index'] + 1}/{len(chunks)}: Pages {chunk_info['start_page'] + 1}-{chunk_info['end_page']}")
+                logger.info(f"{indent}📖 Processing chunk {chunk_info['index'] + 1}/{len(chunks)}: Pages {chunk_info['start_page'] + 1}-{chunk_info['end_page']}")
                 
                 # Update progress
                 if progress_tracker:
@@ -1591,9 +1376,137 @@ class ClaudeDocumentAIService:
                         "chunk"
                     )
                     
-                    logger.info(f"   Chunk tokens: {chunk_estimation['estimated_input_tokens']:,} (safe: {chunk_estimation['will_fit']})")
+                    logger.info(f"{indent}   Chunk tokens: {chunk_estimation['estimated_input_tokens']:,} (safe: {chunk_estimation['will_fit']})")
                     
-                    # Extract chunk
+                    # ✅ NEW (Phase 1): Check if chunk needs to be split further
+                    if not chunk_estimation['will_fit']:
+                        logger.warning(f"{indent}⚠️ Chunk {chunk_info['index']} exceeds token limit ({chunk_estimation['estimated_input_tokens']:,} > {chunk_estimation['safe_limit']:,})")
+                        
+                        # Calculate how many sub-chunks we need
+                        recommended_size = chunk_estimation['recommended_chunk_size']
+                        logger.info(f"{indent}   📊 Recommended sub-chunk size: {recommended_size} pages")
+                        
+                        # ✅ RECURSIVE RE-CHUNKING: Split this chunk into smaller sub-chunks
+                        if chunk_info['page_count'] > recommended_size and _recursion_depth < max_rechunk_attempts:
+                            logger.info(f"{indent}   🔄 Re-chunking pages {chunk_info['start_page'] + 1}-{chunk_info['end_page']} into smaller sub-chunks")
+                            
+                            # Clean up current chunk file before recursive call
+                            try:
+                                import os
+                                if os.path.exists(chunk_path):
+                                    os.remove(chunk_path)
+                            except Exception as e:
+                                logger.warning(f"{indent}   Failed to cleanup chunk file: {e}")
+                            
+                            # Recursively process this failed chunk with smaller size
+                            # We need to extract just these pages into a temp PDF for recursion
+                            temp_chunk_pdf = await self._extract_pdf_chunk(
+                                pdf_doc=pdf_doc,
+                                start_page=chunk_info['start_page'],
+                                end_page=chunk_info['end_page'],
+                                original_path=pdf_path
+                            )
+                            
+                            try:
+                                sub_result = await self._extract_chunked(
+                                    carrier_name=carrier_name,
+                                    pdf_path=temp_chunk_pdf,  # Use temp chunk PDF
+                                    num_pages=chunk_info['page_count'],  # Only process this chunk's pages
+                                    chunk_size=recommended_size,  # Use recommended smaller size
+                                    prompt=prompt,
+                                    system_prompt=system_prompt,
+                                    estimation=None,
+                                    progress_tracker=progress_tracker,
+                                    model=model,
+                                    max_rechunk_attempts=max_rechunk_attempts,
+                                    _recursion_depth=_recursion_depth + 1  # Increment recursion depth
+                                )
+                                
+                                # Merge sub-chunk results into main results
+                                if sub_result.get('success') and sub_result.get('tables'):
+                                    logger.info(f"{indent}   ✅ Re-chunking successful: {len(sub_result['tables'])} tables extracted from sub-chunks")
+                                    
+                                    # Add tables from sub-result
+                                    if sub_result.get('tables'):
+                                        # Wrap in chunk result format for deduplication
+                                        wrapped_result = {
+                                            'success': True,
+                                            'tables': sub_result['tables'],
+                                            'document_metadata': sub_result.get('document_metadata', {}),
+                                            'groups_and_companies': sub_result.get('groups_and_companies', []),
+                                            'writing_agents': sub_result.get('writing_agents', []),
+                                            'business_intelligence': sub_result.get('business_intelligence', {})
+                                        }
+                                        all_chunk_results.append(wrapped_result)
+                                    
+                                    # ✅ NEW: Track processed pages from sub-result
+                                    for page_num in range(chunk_info['start_page'], chunk_info['end_page']):
+                                        all_results['pages_processed'].add(page_num)
+                                    
+                                    all_results['successful_chunks'].append(chunk_info['index'])
+                                else:
+                                    # ✅ PHASE 4: Try page-by-page fallback before giving up
+                                    logger.warning(f"{indent}   ⚠️ Re-chunking failed, attempting page-by-page fallback")
+                                    fallback_result = await self._extract_page_by_page_fallback(
+                                        carrier_name=carrier_name,
+                                        pdf_path=pdf_path,
+                                        failed_chunk_info=chunk_info,
+                                        prompt=prompt,
+                                        system_prompt=system_prompt,
+                                        progress_tracker=progress_tracker,
+                                        model=model
+                                    )
+                                    
+                                    if fallback_result.get('success'):
+                                        logger.info(f"{indent}   ✅ Fallback successful!")
+                                        
+                                        # Wrap fallback result
+                                        wrapped_result = {
+                                            'success': True,
+                                            'tables': fallback_result['tables'],
+                                            'document_metadata': {},
+                                            'groups_and_companies': [],
+                                            'writing_agents': [],
+                                            'business_intelligence': {}
+                                        }
+                                        all_chunk_results.append(wrapped_result)
+                                        
+                                        # ✅ NEW: Track processed pages from fallback
+                                        for page_num in range(chunk_info['start_page'], chunk_info['end_page']):
+                                            all_results['pages_processed'].add(page_num)
+                                        
+                                        all_results['successful_chunks'].append(chunk_info['index'])
+                                    else:
+                                        # Final failure after all attempts
+                                        logger.error(f"{indent}   ❌ Re-chunking and fallback both failed for chunk {chunk_info['index']}")
+                                        all_results['failed_chunks'].append({
+                                            'chunk_index': chunk_info['index'],
+                                            'reason': 'Re-chunking exhausted and page-by-page fallback failed',
+                                            'pages': f"{chunk_info['start_page'] + 1}-{chunk_info['end_page']}",
+                                            'recoverable': False
+                                        })
+                            finally:
+                                # Clean up temp chunk PDF
+                                try:
+                                    import os
+                                    if os.path.exists(temp_chunk_pdf):
+                                        os.remove(temp_chunk_pdf)
+                                except Exception as e:
+                                    logger.warning(f"{indent}   Failed to cleanup temp chunk PDF: {e}")
+                            
+                            continue  # Move to next chunk
+                        else:
+                            # Can't split further or max recursion reached
+                            logger.error(f"{indent}   ❌ Cannot split chunk further (current size: {chunk_info['page_count']}, recommended: {recommended_size}, depth: {_recursion_depth}/{max_rechunk_attempts})")
+                            all_results['failed_chunks'].append({
+                                'chunk_index': chunk_info['index'],
+                                'reason': f'Exceeds token limit and cannot split further (depth: {_recursion_depth})',
+                                'pages': f"{chunk_info['start_page'] + 1}-{chunk_info['end_page']}",
+                                'recoverable': False
+                            })
+                            continue
+                    
+                    # Extract chunk (only if passed validation)
                     chunk_prompt = f"Extract commission data from this section of the document. Page range: {chunk_info['start_page'] + 1}-{chunk_info['end_page']}.\n\n{prompt}"
                     
                     chunk_result = await self._extract_single_call(
@@ -1607,6 +1520,18 @@ class ClaudeDocumentAIService:
                         model=model  # ✅ Pass model parameter for chunks
                     )
                     
+                    # ✅ ENHANCED LOGGING (Phase 5): Detailed chunk summary
+                    logger.info(f"{indent}📊 CHUNK {chunk_info['index'] + 1} SUMMARY:")
+                    logger.info(f"{indent}   Status: {'✅ SUCCESS' if chunk_result and chunk_result.get('success') else '❌ FAILED'}")
+                    if chunk_result and chunk_result.get('success'):
+                        tables_count = len(chunk_result.get('tables', []))
+                        rows_count = sum(len(t.get('rows', [])) for t in chunk_result.get('tables', []))
+                        logger.info(f"{indent}   Tables extracted: {tables_count}")
+                        logger.info(f"{indent}   Rows extracted: {rows_count}")
+                    else:
+                        error_msg = chunk_result.get('error', 'Unknown error') if chunk_result else 'No result'
+                        logger.info(f"{indent}   Failure reason: {error_msg}")
+                    
                     # Check if chunk extraction succeeded
                     if chunk_result and chunk_result.get('success'):
                         # ✅ CRITICAL FIX: Merge even if only one table (don't fail on small chunks)
@@ -1614,16 +1539,21 @@ class ClaudeDocumentAIService:
                         all_results = self._merge_chunk_results(all_results, chunk_result, chunk_info)
                         all_results['successful_chunks'].append(chunk_info['index'])
                         
-                        logger.info(f"   ✅ Chunk successful: {len(chunk_result.get('tables', []))} tables extracted")
+                        # ✅ NEW: Track processed pages
+                        for page_num in range(chunk_info['start_page'], chunk_info['end_page']):
+                            all_results['pages_processed'].add(page_num)
+                        
+                        logger.info(f"{indent}   ✅ Chunk successful: {len(chunk_result.get('tables', []))} tables extracted")
                     else:
                         # Chunk extraction returned failure
                         error_msg = chunk_result.get('error', 'Unknown error') if chunk_result else 'No result'
-                        logger.warning(f"   ❌ Chunk extraction failed: {error_msg}")
+                        logger.warning(f"{indent}   ❌ Chunk extraction failed: {error_msg}")
                         
                         all_results['failed_chunks'].append({
                             'chunk_index': chunk_info['index'],
                             'reason': error_msg,
-                            'pages': f"{chunk_info['start_page'] + 1}-{chunk_info['end_page']}"
+                            'pages': f"{chunk_info['start_page'] + 1}-{chunk_info['end_page']}",
+                            'recoverable': 'token_limit' in str(error_msg).lower()
                         })
                         
                         # Continue to next chunk instead of failing
@@ -1636,16 +1566,18 @@ class ClaudeDocumentAIService:
                         if os.path.exists(chunk_path):
                             os.remove(chunk_path)
                     except Exception as e:
-                        logger.warning(f"Failed to cleanup chunk file: {e}")
+                        logger.warning(f"{indent}Failed to cleanup chunk file: {e}")
             
             except Exception as e:
-                # ✅ CRITICAL FIX: Log error but continue to next chunk
-                logger.error(f"   ❌ Chunk {chunk_info['index']} failed with exception: {e}")
+                # ✅ IMPROVED: More detailed error logging
+                logger.error(f"{indent}   ❌ Chunk {chunk_info['index']} failed with exception: {e}")
+                logger.exception("Full traceback:")
                 
                 all_results['failed_chunks'].append({
                     'chunk_index': chunk_info['index'],
                     'exception': str(e),
-                    'pages': f"{chunk_info['start_page'] + 1}-{chunk_info['end_page']}"
+                    'pages': f"{chunk_info['start_page'] + 1}-{chunk_info['end_page']}",
+                    'recoverable': 'token_limit' in str(e).lower() or 'tokens' in str(e).lower()
                 })
                 
                 # Continue processing remaining chunks
@@ -1653,21 +1585,50 @@ class ClaudeDocumentAIService:
         
         pdf_doc.close()
         
+        # ✅ CRITICAL VALIDATION: Verify all pages processed
+        expected_pages = set(range(num_pages))
+        processed_pages = all_results['pages_processed']
+        missing_pages = expected_pages - processed_pages
+        
+        if missing_pages:
+            logger.error(f"{indent}❌ VALIDATION FAILED: {len(missing_pages)} pages not processed!")
+            logger.error(f"{indent}   Missing pages: {sorted([p+1 for p in missing_pages])}")
+            logger.error(f"{indent}   Expected: {num_pages} pages")
+            logger.error(f"{indent}   Processed: {len(processed_pages)} pages")
+            
+            # Add to error metadata
+            all_results['validation_error'] = {
+                'missing_pages': sorted([p+1 for p in missing_pages]),
+                'expected_total': num_pages,
+                'actual_total': len(processed_pages)
+            }
+        else:
+            logger.info(f"{indent}✅ VALIDATION PASSED: All {num_pages} pages processed successfully")
+        
+        # ✅ ENHANCED LOGGING (Phase 5): Comprehensive final summary
+        logger.info(f"{indent}📊 FINAL EXTRACTION SUMMARY:")
+        logger.info(f"{indent}   Total chunks: {len(chunks)}")
+        logger.info(f"{indent}   Successful: {len(all_results['successful_chunks'])}")
+        logger.info(f"{indent}   Failed: {len(all_results['failed_chunks'])}")
+        logger.info(f"{indent}   Pages processed: {len(processed_pages)}/{num_pages}")
+        if all_results['failed_chunks']:
+            logger.warning(f"{indent}   ⚠️ Failed chunk details: {all_results['failed_chunks']}")
+        
         # ✅ CRITICAL FIX: Return partial success if we got ANY tables
         if all_chunk_results:
             # ✅ CONSOLIDATED: Use ExtractionValidator for deduplication (removes redundant code)
             merged_tables = ExtractionValidator.validate_chunk_merge(all_chunk_results)
             
-            logger.info(f"✅ Partial extraction successful:")
-            logger.info(f"   - Successful chunks: {len(all_results['successful_chunks'])}/{len(chunks)}")
-            logger.info(f"   - Failed chunks: {len(all_results['failed_chunks'])}")
-            logger.info(f"   - Total tables extracted: {len(merged_tables)}")
-            
             # Calculate duplicates removed
-            if all_chunk_results:
-                total_rows_before = sum(len(table.get('rows', [])) for chunk in all_chunk_results for table in chunk.get('tables', []))
-                total_rows_after = sum(len(table.get('rows', [])) for table in merged_tables)
-                logger.info(f"   - Duplicate rows removed: {total_rows_before - total_rows_after}")
+            total_rows_before = sum(len(table.get('rows', [])) for chunk in all_chunk_results for table in chunk.get('tables', []))
+            total_rows_after = sum(len(table.get('rows', [])) for table in merged_tables)
+            
+            logger.info(f"{indent}✅ Extraction successful:")
+            logger.info(f"{indent}   - Successful chunks: {len(all_results['successful_chunks'])}/{len(chunks)}")
+            logger.info(f"{indent}   - Failed chunks: {len(all_results['failed_chunks'])}")
+            logger.info(f"{indent}   - Total tables extracted: {len(merged_tables)}")
+            logger.info(f"{indent}   - Total rows: {total_rows_after}")
+            logger.info(f"{indent}   - Duplicate rows removed: {total_rows_before - total_rows_after}")
             
             # Extract entities from chunk_metadata
             groups_and_companies = []
@@ -1722,6 +1683,115 @@ class ClaudeDocumentAIService:
                 'tables': []
             }
     
+    async def _extract_page_by_page_fallback(
+        self,
+        carrier_name: str,
+        pdf_path: str,
+        failed_chunk_info: Dict[str, Any],
+        prompt: str,
+        system_prompt: str,
+        progress_tracker = None,
+        model: str = None
+    ) -> Dict[str, Any]:
+        """
+        FALLBACK: Extract pages individually when chunking fails.
+        
+        This is the last resort for extremely dense pages that exceed
+        token limits even with 1-page chunks.
+        
+        Strategy:
+        - Process each page individually
+        - Use aggressive prompt compression
+        - Merge results at the end
+        
+        Phase 4 Implementation.
+        """
+        logger.warning(f"⚠️ FALLBACK: Attempting page-by-page extraction for pages {failed_chunk_info['start_page'] + 1}-{failed_chunk_info['end_page']}")
+        
+        if model is None:
+            model = self.primary_model
+        
+        if not PYMUPDF_AVAILABLE:
+            logger.error("PyMuPDF not available for page-by-page fallback")
+            raise ImportError("PyMuPDF required for PDF chunking. Install with: pip install pymupdf")
+        
+        pdf_doc = fitz.open(pdf_path)
+        page_results = []
+        
+        for page_num in range(failed_chunk_info['start_page'], failed_chunk_info['end_page']):
+            try:
+                logger.info(f"   📄 Processing page {page_num + 1} individually")
+                
+                # Extract single page
+                single_page_path = await self._extract_pdf_chunk(
+                    pdf_doc=pdf_doc,
+                    start_page=page_num,
+                    end_page=page_num + 1,
+                    original_path=pdf_path
+                )
+                
+                try:
+                    # Use compressed prompt for single page
+                    compressed_prompt = f"Extract commission data from page {page_num + 1}. {prompt[:500]}"  # Truncate to save tokens
+                    
+                    # Estimate tokens
+                    page_estimation = await self._estimate_total_tokens(single_page_path, 1, "standard")
+                    
+                    if page_estimation['will_fit']:
+                        # Extract single page
+                        page_result = await self._extract_single_call(
+                            carrier_name=carrier_name,
+                            pdf_path=single_page_path,
+                            prompt=compressed_prompt,
+                            system_prompt=system_prompt,
+                            pdf_pages=1,
+                            is_chunk=True,
+                            chunk_info={'index': page_num, 'page_count': 1},
+                            model=model
+                        )
+                        
+                        if page_result.get('success') and page_result.get('tables'):
+                            page_results.append(page_result)
+                            logger.info(f"      ✅ Page {page_num + 1}: {len(page_result['tables'])} tables extracted")
+                        else:
+                            logger.warning(f"      ⚠️ Page {page_num + 1}: No tables extracted")
+                    else:
+                        logger.error(f"      ❌ Page {page_num + 1}: Even single page exceeds token limit - skipping")
+                
+                finally:
+                    # Cleanup temp file
+                    try:
+                        import os
+                        if os.path.exists(single_page_path):
+                            os.remove(single_page_path)
+                    except Exception as e:
+                        logger.warning(f"      Failed to cleanup single page file: {e}")
+            
+            except Exception as e:
+                logger.error(f"      ❌ Page {page_num + 1} failed: {e}")
+                continue
+        
+        pdf_doc.close()
+        
+        # Merge page results
+        if page_results:
+            from .utils import ExtractionValidator
+            merged_tables = ExtractionValidator.validate_chunk_merge(page_results)
+            logger.info(f"   ✅ Fallback extraction: {len(merged_tables)} tables from {len(page_results)} pages")
+            
+            return {
+                'success': True,
+                'tables': merged_tables,
+                'extraction_method': 'page_by_page_fallback',
+                'pages_processed': len(page_results)
+            }
+        else:
+            return {
+                'success': False,
+                'error': 'Page-by-page fallback failed - no data extracted',
+                'tables': []
+            }
+    
     async def _extract_with_adaptive_chunking(
         self,
         carrier_name: str,
@@ -1753,7 +1823,9 @@ class ClaudeDocumentAIService:
         if force_chunk:
             logger.info("🔐 Force chunking enabled by pre-validation")
             if chunk_size is None:
-                chunk_size = 5  # Use conservative chunk size
+                # ✅ PHASE 3 FIX: Calculate optimal chunk size instead of hardcoding
+                chunk_size = self.calculate_optimal_chunk_size(num_pages)
+                logger.info(f"   📊 Calculated optimal chunk size: {chunk_size} pages")
         elif chunk_size is None:
             # Step 1: Estimate tokens
             estimation = await self._estimate_total_tokens(pdf_path, num_pages, "standard")
@@ -1761,6 +1833,7 @@ class ClaudeDocumentAIService:
             logger.info(f"🔍 Adaptive Chunking Analysis:")
             logger.info(f"   - Will fit in single call: {estimation['will_fit']}")
             logger.info(f"   - Recommended chunk size: {estimation['recommended_chunk_size']} pages")
+            logger.info(f"   - Risk level: {estimation['risk_level']}")
             
             # Step 2: Determine if chunking needed
             if estimation['will_fit']:
@@ -1779,6 +1852,13 @@ class ClaudeDocumentAIService:
             else:
                 # Calculate based on estimation
                 chunk_size = estimation['recommended_chunk_size']
+                
+                # ✅ CRITICAL FIX: ENFORCE MAXIMUM - Never exceed 3 pages per chunk for dense files
+                if estimation['risk_level'] in ['warning', 'critical']:
+                    chunk_size = min(chunk_size, 3)
+                    logger.info(f"📋 Calculated adaptive chunk size: {chunk_size} pages (capped at 3 due to risk: {estimation['risk_level']})")
+                else:
+                    logger.info(f"📋 Calculated adaptive chunk size: {chunk_size} pages (risk: {estimation['risk_level']})")
         
         # Need chunking
         logger.info(f"📋 Chunking {num_pages} pages into chunks of {chunk_size} pages")
@@ -1794,57 +1874,6 @@ class ClaudeDocumentAIService:
             progress_tracker=progress_tracker,
             model=model  # ✅ Pass model parameter
         )
-    
-    async def _extract_chunk_with_rate_limiting(
-        self,
-        carrier_name: str,
-        chunk_info: Dict[str, Any],
-        progress_tracker = None,
-        use_cache: bool = False  # ✅ NEW: Enable prompt caching
-    ) -> Dict[str, Any]:
-        """
-        Extract data from a chunk with proper rate limiting.
-        
-        ✅ OPTIMIZATION: Supports prompt caching for faster processing
-        """
-        try:
-            # ✅ Use enhanced prompt + critical carrier instructions for chunks
-            critical_carrier_instructions = self.enhanced_prompts.get_table_extraction_prompt()
-            base_prompt = self.enhanced_prompts.get_document_intelligence_extraction_prompt()
-            chunk_context = f"\n\n[Note: This is chunk {chunk_info['chunk_index'] + 1}/{chunk_info['total_chunks']} of a larger document]"
-            
-            # Add carrier-specific prompt if available
-            dynamic_prompt = self.dynamic_prompts.get_prompt_by_name(carrier_name)
-            
-            # Combine: base + critical requirements + chunk context + carrier-specific
-            full_prompt = base_prompt + "\n\n" + critical_carrier_instructions + chunk_context + dynamic_prompt
-            
-            # Call API - rate limiting handled automatically
-            extraction_result = await self._call_claude_api(
-                chunk_info['data'],  # Already base64 encoded
-                full_prompt,
-                model=self.primary_model,
-                pdf_pages=chunk_info.get('page_count', 0),
-                use_cache=use_cache  # ✅ Use caching parameter
-            )
-            
-            # Parse response
-            parsed_data = self.response_parser.parse_json_response(
-                extraction_result['content']
-            )
-            
-            if not parsed_data:
-                return {'tables': [], 'document_metadata': {}}
-            
-            # ✅ Transform format for chunks too
-            doc_metadata = self._transform_carrier_broker_metadata(parsed_data)
-            parsed_data['document_metadata'] = doc_metadata
-            
-            return parsed_data
-        
-        except Exception as e:
-            logger.error(f"Error extracting chunk: {e}")
-            return {'tables': [], 'document_metadata': {}}
     
     async def _extract_with_fallback(
         self,
@@ -1893,7 +1922,7 @@ class ClaudeDocumentAIService:
                 carrier_name=carrier_name,
                 pdf_path=file_path,
                 num_pages=page_count,
-                chunk_size=5,  # Force smaller chunks
+                chunk_size=None,  # ✅ PHASE 3 FIX: Let system calculate optimal size instead of hardcoding
                 prompt=full_prompt,
                 system_prompt=system_prompt,
                 progress_tracker=progress_tracker,
@@ -2215,66 +2244,6 @@ class ClaudeDocumentAIService:
                 await asyncio.sleep(retry_delay)
         
         raise ValueError(f"Claude API failed after {max_retries} attempts")
-    
-    def _merge_split_tables(self, tables: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """
-        Merge tables that were split across chunks with overlap deduplication.
-        """
-        if len(tables) <= 1:
-            return tables
-        
-        merged = []
-        current_table = None
-        
-        for table in tables:
-            if not current_table:
-                current_table = table
-                continue
-            
-            # Check if this table is a continuation
-            current_headers = current_table.get('headers', [])
-            table_headers = table.get('headers', [])
-            
-            if current_headers == table_headers:
-                # Same headers - might be continuation
-                current_rows = current_table.get('rows', [])
-                table_rows = table.get('rows', [])
-                
-                # NEW: Detect and remove duplicate rows from overlap
-                # Compare last 5 rows of current with first 5 rows of next
-                overlap_check = min(5, len(current_rows), len(table_rows))
-                
-                deduplicated_rows = table_rows
-                duplicates_removed = 0
-                
-                for i in range(overlap_check):
-                    # If first row of new chunk matches a row in last N rows of current chunk
-                    if deduplicated_rows and deduplicated_rows[0] in current_rows[-overlap_check:]:
-                        # Remove the duplicate
-                        deduplicated_rows = deduplicated_rows[1:]
-                        duplicates_removed += 1
-                        logger.info(f"Removed duplicate row from chunk overlap")
-                    else:
-                        break  # No more duplicates
-                
-                # Merge rows
-                current_table['rows'].extend(deduplicated_rows)
-                logger.info(
-                    f"Merged table continuation: {len(table_rows)} rows added "
-                    f"(after deduplication: {len(deduplicated_rows)} rows, "
-                    f"{duplicates_removed} duplicates removed)"
-                )
-            else:
-                # Different headers - start new table
-                merged.append(current_table)
-                current_table = table
-        
-        if current_table:
-            merged.append(current_table)
-        
-        logger.info(f"Merged {len(tables)} table chunks into {len(merged)} tables")
-        
-        return merged
     
     def _format_response(
         self,

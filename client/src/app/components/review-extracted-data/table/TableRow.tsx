@@ -188,13 +188,7 @@ const TableRow = memo(function TableRow({
         {/* Data Cells */}
         {(() => {
           // ✅ DEBUG: Log row data structure
-          console.log('🔍 TableRow Debug:', {
-            rowIndex,
-            isArray: Array.isArray(row),
-            rowType: typeof row,
-            rowValue: row,
-            rowLength: Array.isArray(row) ? row.length : 'N/A'
-          });
+          
           
           const cells = Array.isArray(row) ? row : [];
           return cells.map((cell, colIndex) => (

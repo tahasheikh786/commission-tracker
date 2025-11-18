@@ -64,12 +64,30 @@ async def get_statements_for_company(
     logger.info(f"✅ Found {len(statements_with_users)} statements with valid statuses")
     
     # Convert ORM objects to dict format with gcs_key and user info included
+    # CRITICAL FIX: Calculate actual earned_commission and invoice_total from earned_commissions table
     formatted_statements = []
     for statement, user in statements_with_users:
         # Build user display name
         user_display_name = None
         if user.first_name or user.last_name:
             user_display_name = f"{user.first_name or ''} {user.last_name or ''}".strip()
+        
+        # CRITICAL FIX: Query actual commission data from earned_commissions table for this statement
+        from app.db.models import EarnedCommission
+        from sqlalchemy import func
+        
+        commission_result = await db.execute(
+            select(
+                func.sum(EarnedCommission.commission_earned).label('actual_commission'),
+                func.sum(EarnedCommission.invoice_total).label('actual_invoice')
+            )
+            .where(
+                EarnedCommission.upload_ids.contains([str(statement.id)])
+            )
+        )
+        commission_sums = commission_result.first()
+        actual_commission = float(commission_sums.actual_commission) if commission_sums.actual_commission else None
+        actual_invoice = float(commission_sums.actual_invoice) if commission_sums.actual_invoice else None
         
         formatted_statements.append({
             "id": statement.id,
@@ -97,7 +115,10 @@ async def get_statements_for_company(
             "total_amount_match": statement.total_amount_match,
             "extracted_total": float(statement.extracted_total) if statement.extracted_total else None,
             "calculated_total": float(statement.calculated_total) if statement.calculated_total else None,
-            "extracted_invoice_total": float(statement.extracted_invoice_total) if statement.extracted_invoice_total else None
+            "extracted_invoice_total": float(statement.extracted_invoice_total) if statement.extracted_invoice_total else None,
+            # ✅ CRITICAL FIX: Add ACTUAL values from earned_commissions table (post-correction)
+            "actual_commission_total": actual_commission,
+            "actual_invoice_total": actual_invoice
         })
     
     return formatted_statements

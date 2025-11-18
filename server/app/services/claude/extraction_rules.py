@@ -56,66 +56,101 @@ class ExtractionRules:
 Extract the insurance company (carrier) that ISSUED this commission statement.
 This is the company PROVIDING the insurance coverage (NOT the broker/agent receiving payment).
 
-### NEW PRIORITY: Full Name First, Logo Second
+### CRITICAL: CARRIER vs BROKER DISTINCTION
+
+**UNDERSTAND THE DIFFERENCE (THIS IS ESSENTIAL):**
+
+**CARRIER** = Insurance company that ISSUED the statement
+- Shown in LOGO/company branding
+- Example: Allied Benefit Systems, Aetna, Blue Cross Blue Shield, UnitedHealthcare, Cigna, Humana, breckpoint
+- This is the insurance company providing coverage
+
+**BROKER** = Agency/company RECEIVING the commissions  
+- Shown near "Agent:", "Broker:", "Prepared For:", "Producer Name:" labels
+- Example: Innovative BPS, ABC Insurance Agency
+- This is the recipient of the statement
+
+**🔴 NEVER CONFUSE THESE TWO ENTITIES 🔴**
+
+### NEW PRIORITY: Logo First, Full Name Search Second
 
 **CRITICAL CHANGE - READ CAREFULLY:**
 
-1. **FIRST: Search for FULL company name in document text**
-   - Look in headers, footers, copyright text, "Prepared by:", document titles
-   - Full names are often in text even if logo shows abbreviation
-   - Example: Logo might show "Allied" but footer shows "Allied Benefit Systems"
+1. **FIRST: Check LOGO AREA (Top 20% of first page) - HIGHEST PRIORITY**
+   - Look for company logo with distinctive branding
+   - Visual cues: Colorful graphics, wordmarks, distinctive design
+   - Extract the exact text visible IN or ADJACENT to the logo
+   - Example: If you see "breckpoint" logo with colorful branding → Extract "breckpoint"
+   - **WEIGHT: 0.95-0.98 confidence**
    
-2. **SECOND: If full name not found, check logo**
-   - Use logo as backup only
-   - If logo shows abbreviated name (e.g., "Allied"), search ENTIRE document for full name
+2. **SECOND: If logo text appears abbreviated, search for full name**
+   - Check footers (bottom 15% of all pages)
+   - Check copyright statements
+   - Look for full company name in footer branding
+   - Example: Logo shows "Allied" → Search footers → Find "Allied Benefit Systems" → Extract "Allied Benefit Systems"
    
-3. **VALIDATION: Check against known carriers**
-   - If extracted name is unusually short (1-2 words), scan document for longer version
-   - Known carriers: UnitedHealthcare, Blue Cross Blue Shield, Allied Benefit Systems, Aetna, Cigna, Humana
+3. **THIRD: If no logo visible, check FOOTER BRANDING**
+   - Bottom 15% of any page
+   - Footer logos and full company names
+   - Copyright statements often contain full legal name
+   - **WEIGHT: 0.90-0.95 confidence**
 
-**Example Decision Process:**
-```
-Document Analysis:
-- Logo (top): "Allied" (abbreviated)
-- Footer text: "Allied Benefit Systems" (full name)
-- Copyright: "© 2024 Allied Benefit Systems, LLC"
-
-Decision: Extract "Allied Benefit Systems" (from footer/copyright)
-✅ Reason: Full name takes priority over logo abbreviation
-```
-
-**NEW RULE: If Logo Shows Abbreviation**
-
-If the logo/header shows what appears to be an abbreviated name:
-1. Scan the entire first page for a longer version of the name
-2. Check footers on all pages
-3. Look for copyright statements
-4. If found, use the FULL name, not the abbreviation
-
-Example:
-- Logo: "Allied" → Search document → Find "Allied Benefit Systems" → Extract "Allied Benefit Systems"
+4. **LAST RESORT: Document header TEXT (USE WITH EXTREME CAUTION)**
+   - Only if NO logo found anywhere
+   - **WARNING:** Headers often show BROKER name, not CARRIER name
+   - Verify this is the insurance company, not the recipient agency
+   - **WEIGHT: 0.70-0.85 confidence**
 
 ### Where to Look (Priority Order) 🎯
 
-**1. DOCUMENT HEADER/FOOTER TEXT (Top priority)**
-- Look for FULL company name in text (not just logos)
-- Common locations: "Prepared by:", "This statement from:", copyright text
-- **WEIGHT: 0.95-0.98 confidence if full name found in text**
+**1. LOGO AREA (HIGHEST PRIORITY for carrier identification)**
+- Top 20% of first page - look for LOGO with company branding
+- Logo shows the CARRIER (insurance company that issued the statement)
+- Extract the exact text visible in/near the logo
+- Visual indicators: Colorful branding, distinctive wordmark, company logo graphics
+- If logo text appears abbreviated, search footers/copyright for full name
+- **WEIGHT: 0.95-0.98 confidence**
 
-**2. HEADER LOGO AREA (Secondary priority)**
-- Company logos and branding (top 20% of first page)
-- **WARNING:** Logos often show abbreviated names
-- **ACTION:** If logo appears abbreviated, search document for full name
-- **WEIGHT: 0.90-0.95 confidence if logo only**
-
-**3. FOOTER BRANDING (Tertiary priority)**
-- Company logo/name in footer (bottom 15% of pages)
-- Copyright statements often contain full legal name
+**2. FOOTER/COPYRIGHT TEXT (Secondary priority)**
+- Bottom 15% of any page - footer logos and company names
+- Copyright statements often contain full legal name of carrier
+- Example: "© 2024 Allied Benefit Systems, LLC"
 - **WEIGHT: 0.90-0.95 confidence**
 
-**4. BODY TEXT (Fallback)**
+**3. DOCUMENT TITLE/HEADER TEXT (Tertiary - USE WITH EXTREME CAUTION)**
+- Only if NO logo found anywhere
+- **CRITICAL WARNING:** Headers often show BROKER name, not CARRIER name
+- Verify this is the insurance company, not the recipient agency
+- Labels like "Agent:", "Broker:", "Prepared For:", "Producer Name:" indicate the BROKER (recipient), NOT the carrier
+- **WEIGHT: 0.70-0.85 confidence**
+
+**4. BODY TEXT (Last resort fallback)**
 - Carrier mentioned in document body
 - **WEIGHT: 0.70-0.85 confidence**
+
+### CRITICAL DISTINCTION RULES ⚠️
+
+**Labels that indicate BROKER (not carrier):**
+- "Agent:" → The company listed is the BROKER, not the carrier
+- "Broker:" → The company listed is the BROKER, not the carrier
+- "Prepared For:" → The company listed is the BROKER, not the carrier
+- "Producer Name:" → The company listed is the BROKER, not the carrier
+- "Agency:" → The company listed is the BROKER, not the carrier
+
+**Where to find CARRIER:**
+- Logo branding area (top 20% of first page) ← PRIMARY SOURCE
+- Footer logos and company names ← SECONDARY SOURCE
+- Copyright statements ← TERTIARY SOURCE
+
+**Example Confusion to AVOID:**
+```
+Document has:
+- Logo (top): "breckpoint" (with colorful logo) ← THIS IS THE CARRIER
+- Header text: "Innovative BPS" near "Prepared For:" label ← THIS IS THE BROKER
+
+CORRECT: Extract "breckpoint" (the carrier from logo)
+WRONG: Extract "Innovative BPS" (this is the broker/recipient)
+```
 
 ### Extraction Rules - CHARACTER-LEVEL PRECISION ✅
 
@@ -244,24 +279,57 @@ Return in this exact format:
     Identify the insurance carrier (company) that issued this commission statement
   </objective>
   
+  <critical_distinction>
+    <carrier>Insurance company that ISSUED the statement - shown in LOGO and company branding</carrier>
+    <broker>Agency/company RECEIVING commissions - shown near "Agent", "Broker", "Prepared For" labels</broker>
+    <warning>NEVER confuse carrier (issuer) with broker (recipient)</warning>
+  </critical_distinction>
+  
   <search_locations priority="sequential">
     <location priority="1">
-      <name>Header Logo Area</name>
-      <description>Top 20% of first page - look for company logos and branding</description>
-      <visual_cues>Large text, distinctive branding, company letterhead</visual_cues>
+      <name>Logo Area (HIGHEST PRIORITY)</name>
+      <description>Top 20% of first page - look for company LOGO with distinctive branding</description>
+      <visual_cues>
+        - Colorful logo graphics
+        - Company branding/wordmark
+        - Distinctive visual identity
+        - Usually largest branding element on page
+      </visual_cues>
+      <extraction_rule>Extract the exact text visible in or immediately adjacent to the logo</extraction_rule>
+      <example>
+        If you see "breckpoint" logo with colorful branding → Extract "breckpoint"
+        If you see logo shows "Allied" → Search footers → Find "Allied Benefit Systems" → Extract "Allied Benefit Systems"
+      </example>
       <confidence_weight>0.95-0.98</confidence_weight>
     </location>
     
     <location priority="2">
       <name>Footer Branding</name>
-      <description>Bottom 15% of any page - footer logos and company names</description>
+      <description>Bottom 15% of any page - footer logos and full company names</description>
+      <extraction_rule>Look for full legal company name in copyright statements</extraction_rule>
+      <example>© 2024 Allied Benefit Systems, LLC → Extract "Allied Benefit Systems"</example>
       <confidence_weight>0.90-0.95</confidence_weight>
     </location>
     
     <location priority="3">
-      <name>Document Title/Header</name>
-      <description>Main heading or title of document</description>
-      <confidence_weight>0.85-0.90</confidence_weight>
+      <name>Document Title/Header Text (USE WITH CAUTION)</name>
+      <description>Main heading or title of document - ONLY if no logo found</description>
+      <critical_warning>
+        Headers often show BROKER name (recipient), not CARRIER name (issuer).
+        Verify this is the insurance company, not the agency receiving commissions.
+      </critical_warning>
+      <broker_indicators>
+        Labels that indicate BROKER (not carrier):
+        - "Agent:" - company listed is the BROKER
+        - "Broker:" - company listed is the BROKER
+        - "Prepared For:" - company listed is the BROKER
+        - "Producer Name:" - company listed is the BROKER
+      </broker_indicators>
+      <validation>
+        If extracted name appears near "Agent:", "Broker:", "Prepared For:" labels,
+        re-scan for the actual insurance carrier logo/branding
+      </validation>
+      <confidence_weight>0.70-0.85</confidence_weight>
     </location>
   </search_locations>
   
@@ -674,24 +742,41 @@ Return in this exact structure:
             
             These rows should be EXCLUDED from groups_and_companies extraction.
             
+            🔴 CRITICAL: These are EXACT PHRASES that must match for exclusion.
+            
             Returns:
                 List of lowercase keywords to check against group names/numbers
             """
             return [
-                # Total/Summary rows
-                'total for group',
-                'total for vendor',
-                'total compensation',
+                # 🔴 HIGHEST PRIORITY - Exact phrase matches (from user's document)
+                'total for group:',  # Most common summary pattern
+                'total for vendor:',  # Grand total pattern
+                'sub-total',
+                'subtotal:',
                 'grand total',
-                'subtotal',
-                'total',  # General catch-all
+                'writing agent number:',
+                'writing agent 2 no:',
+                'writing agent name:',
+                'writing agent 1 name:',
+                'writing agent 1 number:',
+                'writing agent 2 name:',
+                'agent 2 name:',
+                'agent 2 number:',
+                'producer name:',
+                'producer number:',
+                
+                # Total/Summary rows (secondary)
+                'total for group',  # Without colon
+                'total for vendor',  # Without colon
+                'total compensation',
+                'total',  # General catch-all (use carefully)
                 'summary',
                 'sum',
                 'overall',
                 'aggregate',
                 'combined',
                 'consolidated',
-                'net',
+                'net total',
                 'final',
                 
                 # Page/Section totals
@@ -703,27 +788,50 @@ Return in this exact structure:
                 'group total',
                 'vendor total',
                 
-                # Agent metadata rows
-                'writing agent name',
-                'writing agent number',
-                'writing agent 1 name',
-                'writing agent 1 number',
-                'writing agent 2 name',
-                'writing agent 2 number',
-                'agent 2 name',
-                'agent 2 number',
+                # Agent metadata rows (alternative formats)
                 'agent name:',
                 'agent number:',
-                'producer name:',
-                'producer number:',
+                'agent:',
+                'writing agent:',
                 
                 # Empty/placeholder indicators
                 '—',  # Em dash used as placeholder
-                '-',  # Hyphen used as placeholder
+                '-',  # Hyphen used as placeholder (only if standalone)
                 'n/a',
                 'na',
                 'none',
                 'blank',
+            ]
+        
+        @staticmethod
+        def get_explicit_exclusion_patterns() -> list:
+            """
+            Get explicit regex patterns for EXACT phrase matching.
+            
+            These patterns match the EXACT phrases from the user's analysis document.
+            They are more precise than keyword matching.
+            
+            Returns:
+                List of compiled regex patterns for exclusion
+            """
+            import re
+            return [
+                re.compile(r'^Total for Group:\s*', re.IGNORECASE),
+                re.compile(r'^Total for Vendor:\s*', re.IGNORECASE),
+                re.compile(r'^Sub-?total:?\s*', re.IGNORECASE),
+                re.compile(r'^Grand Total:?\s*', re.IGNORECASE),
+                re.compile(r'^Writing Agent Number:\s*', re.IGNORECASE),
+                re.compile(r'^Writing Agent 2 No:\s*', re.IGNORECASE),
+                re.compile(r'^Writing Agent Name:\s*', re.IGNORECASE),
+                re.compile(r'^Writing Agent 1 Name:\s*', re.IGNORECASE),
+                re.compile(r'^Writing Agent 1 Number:\s*', re.IGNORECASE),
+                re.compile(r'^Agent 2 Name:\s*', re.IGNORECASE),
+                re.compile(r'^Agent 2 Number:\s*', re.IGNORECASE),
+                re.compile(r'^Producer Name:\s*', re.IGNORECASE),
+                re.compile(r'^Producer Number:\s*', re.IGNORECASE),
+                # Pattern for detecting totals in company name field
+                re.compile(r'^.*\s+Total$', re.IGNORECASE),
+                re.compile(r'^Total\s+.*$', re.IGNORECASE),
             ]
         
         @staticmethod

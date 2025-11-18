@@ -23,11 +23,40 @@ class EnhancedClaudePrompts:
 
 Your task is to analyze the document and extract:
 
-1. **CARRIER NAME** - The insurance company that issued this statement
-   - Look in headers, logos, letterhead, and document branding
-   - Look at page footers where companies often place their logos
-   - Common carriers: Aetna, Blue Cross Blue Shield, Cigna, UnitedHealthcare, Allied Benefit Systems, Humana, etc.
-   - DO NOT extract from table data columns - look at document structure elements only
+1. **CARRIER NAME** - The insurance company that ISSUED this statement (NOT the broker receiving it)
+   
+   **CRITICAL DISTINCTION:**
+   - CARRIER = Insurance company (shown in LOGO, company branding, letterhead)
+   - BROKER = Agency receiving commissions (shown near "Agent:", "Broker:", "Prepared For:")
+   
+   **EXTRACTION PRIORITY (IN THIS ORDER):**
+   
+   a) **LOGO AREA FIRST (top 20% of page):**
+      - Look for company logo with branding
+      - Extract the exact text visible in/around the logo
+      - Common carriers: Aetna, Blue Cross Blue Shield, Cigna, UnitedHealthcare, Allied Benefit Systems, Humana, breckpoint, etc.
+      - Visual cues: Colorful branding, distinctive wordmark, company logo graphics
+      
+   b) **If logo text appears abbreviated** (e.g., "Allied"), search ENTIRE document for full name:
+      - Check footers (bottom 15% of all pages)
+      - Check copyright statements
+      - Look for full company name (e.g., "Allied Benefit Systems")
+      
+   c) **If no logo visible, check footer branding/copyright**
+      - Bottom 15% of any page
+      - Copyright statements often contain full legal name
+      
+   d) **LAST RESORT: Document header text (but verify it's not the broker name)**
+      - Only if NO logo found anywhere
+      - **WARNING:** Headers often show BROKER name, not CARRIER name
+   
+   **VALIDATION:**
+   - If extracted name appears near "Agent:", "Broker:", "Prepared For:", "Producer Name:" labels
+     → This is likely the BROKER, not the CARRIER
+     → Re-scan for the actual insurance carrier logo/branding
+   
+   - DO NOT extract from table data columns
+   - Look at document structure elements only (logos, branding, footers)
    
 2. **STATEMENT DATE** - The date of this commission statement
    - Extract the ACTUAL date shown in the document - NEVER use current date or any default/fallback date
@@ -493,18 +522,141 @@ Missing even one row causes calculation errors and failed validations.
    - Extract rows even if they appear incomplete
    - DO NOT skip rows because they "look wrong" - extract everything
 
-3. **Mark, Don't Skip - USE INTELLIGENT MULTI-STAGE DETECTION:**
+3. **🔴 CRITICAL: EXPLICIT EXCLUSION - SKIP THESE ROWS ENTIRELY:**
+
+   **DO NOT EXTRACT rows that match ANY of these patterns:**
+   
+   1. **Rows where Group No. or Group Name contains these EXACT phrases:**
+      - "Total for Group:"
+      - "Total for Vendor:"
+      - "Sub-total" or "Subtotal:"
+      - "Grand Total"
+      - "Writing Agent Number:"
+      - "Writing Agent 2 No:"
+      - "Agent 2 Name:"
+      - "Producer Name:"
+   
+   2. **Rows with structural indicators of summary:**
+      - Group No. column is EMPTY AND amount column is populated (= aggregate row)
+      - All key identifier columns (Group No., Group Name) are empty
+      - First column contains only "Total" or "Summary" without a company name
+   
+   3. **Rows with position indicators of summary:**
+      - Last row of table where amount matches document total (= grand total)
+      - Row immediately after multiple rows with same company name (= section total)
+   
+   **VALIDATION CHECKLIST - Must pass ALL checks to extract:**
+   
+   Before extracting a row, verify:
+   ☐ Group No. field has alphanumeric ID (e.g., "L242820", "1653402")?
+   ☐ Group Name field has actual company name (NOT "Total", "Summary", empty)?
+   ☐ Row has at least 6-8 populated data columns?
+   ☐ No column contains "Total for Group:" or "Total for Vendor:"?
+   ☐ No column contains "Writing Agent Name:" or "Writing Agent Number:"?
+   ☐ Census count is positive (negative usually means adjustment summary)?
+   
+   **If ANY checkbox fails → SKIP this row entirely, do not extract**
 
 """ + filtering_rules + """
 
-   **CRITICAL SUMMARY ROW MARKING:**
-   - Apply ALL 6 indicator types from above (textual, structural, data pattern, content, hierarchical, format-specific)
-   - Mark row with `"is_summary": true`, `"summary_confidence": 0.95`, `"summary_reason": "description"`
+   **🔴 MANDATORY: ROW OBJECT FORMAT WITH METADATA**
+   
+   **CRITICAL**: EVERY row MUST be returned as an object with metadata, NOT a simple array.
+   
+   **Required Format**:
+   ```json
+   {
+     "rows": [
+       {
+         "data": ["L242820", "BOLT LOGISTIC", "8/1/2025", ...],
+         "is_summary": false,
+         "summary_confidence": 0.05,
+         "summary_reason": "Valid detail row with alphanumeric Group No."
+       },
+       {
+         "data": ["", "BLUE MILE TRANSPORTA", "", "", "", "1", "$97.20"],
+         "is_summary": true,
+         "summary_confidence": 0.95,
+         "summary_reason": "Empty Group No. with amount - section total"
+       },
+       {
+         "data": ["", "", "", "", "", "", "51", "$3,604.95"],
+         "is_summary": true,
+         "summary_confidence": 0.99,
+         "summary_reason": "Last row, amount matches document total - grand total"
+       }
+     ],
+     "summary_rows": [65, 66, 67, 68]
+   }
+   ```
+   
+   ❌ WRONG (Simple Arrays - DO NOT USE THIS FORMAT):
+   ```json
+   {
+     "rows": [
+       ["L242820", "BOLT LOGISTIC", ...],
+       ["", "BLUE MILE TRANSPORTA", ...]
+     ]
+   }
+   ```
+   
+   ✅ CORRECT (Objects with Metadata - MUST USE THIS FORMAT):
+   ```json
+   {
+     "rows": [
+       {
+         "data": ["L242820", "BOLT LOGISTIC", ...],
+         "is_summary": false,
+         "summary_confidence": 0.05,
+         "summary_reason": "Valid detail row"
+       }
+     ]
+   }
+   ```
+   
+   **VALIDATION CHECKLIST - Run for EVERY row before returning:**
+   
+   Before returning your extraction, verify EVERY row has:
+   □ "data" field with array of cell values?
+   □ "is_summary" field with boolean value?
+   □ "summary_confidence" field with numeric value (0.0-1.0)?
+   □ "summary_reason" field with text explanation?
+   
+   If ANY checkbox is unchecked → FIX the row metadata immediately
+   
+   **MANDATORY PATTERNS TO DETECT:**
+   
+   **Pattern A: Grand Total Row (HIGHEST PRIORITY)**
+   - If LAST ROW of table has amount matching document total → is_summary: true, confidence: 0.99
+   - Example: Last row shows "$3,604.95" and document total is $3,604.95 → THIS IS THE GRAND TOTAL
+   - Reasoning: "Last row with amount matching document total - grand total"
+   
+   **Pattern B: Empty Group No. Rows**
+   - If Group No. is EMPTY but amount is populated → is_summary: true, confidence: 0.95
+   - Example: ["", "BLUE MILE TRANSPORTA", "", "", "$97.20"] → Section total
+   - Reasoning: "Empty Group No. with amount - section total"
+   
+   **Pattern C: Completely Empty Rows**
+   - If ALL cells are empty or whitespace → is_summary: true, confidence: 0.99
+   - Example: ["", "", "", "", "", "", "", ""] → Separator or header row
+   - Reasoning: "All cells empty - separator or section header"
+   
+   **Pattern D: Sparse Rows (1-2 non-empty cells)**
+   - If row has only 1-2 populated cells out of 8+ columns → is_summary: true, confidence: 0.90
+   - Example: ["", "", "", "", "", "", "11", "$980.30"] → Group subtotal
+   - Reasoning: "Only 2 cells populated out of 10 - likely summary row"
+   
+   **Pattern E: "Total for Group" Explicit Keywords**
+   - ANY row with "Total for Group:", "Total for Vendor", "Grand Total" → is_summary: true, confidence: 0.99
+   - Reasoning: "Contains explicit total keyword"
+   
+   **BACKUP: INTELLIGENT MULTI-STAGE DETECTION (for edge cases):**
+   - If a row doesn't match explicit patterns above but seems suspicious
+   - Mark with "is_summary": true, "summary_confidence": 0.85, "summary_reason": "description"
+   - Apply ALL 6 indicator types (textual, structural, data pattern, content, hierarchical, format-specific)
    - Check for empty rows with only company names - these are often summary section headers
    - The LAST ROW with a large dollar amount matching the document total is ALWAYS the grand total
    - Rows with empty cells in key columns (Group No, dates) but populated amount = summary rows
-   - If row looks unusual, extract it AND note it in `extraction_notes`
-   - DO NOT make filtering decisions during extraction - extract first, mark summaries, filter later
 
 4. **Chunked Documents:**
    - If table continues across pages: mark `"incomplete": true` on last row
@@ -548,6 +700,89 @@ Before returning your extraction, answer these:
 □ Did I re-scan the document to catch any missed rows?
 
 **If ANY checkbox is unchecked → Re-scan document and extract missed rows**
+
+**🔴 CRITICAL: POSITIVE & NEGATIVE EXAMPLES**
+
+**✅ EXTRACT THESE (Valid Detail Rows):**
+
+```json
+Example 1: Valid group with alphanumeric ID
+{
+  "group_no": "L242820",
+  "group_name": "BLUE MILE TRANSPORTA",
+  "billing_period": "7/1/2025",
+  "adj_period": "6/1/2025",
+  "invoice_total": "$474.13",
+  "paid_amount": "$97.20"
+}
+
+Example 2: Valid group with numeric ID
+{
+  "group_no": "1653402",
+  "group_name": "B & B Lightning Protection",
+  "billing_period": "10/01/2024",
+  "paid_amount": "$168.00"
+}
+
+Example 3: Valid group with all fields populated
+{
+  "group_no": "L243096",
+  "group_name": "PRIDE DELIVERY SERVIC",
+  "billing_period": "7/1/2025",
+  "census_ct": 9,
+  "paid_amount": "$1,194.57"
+}
+```
+
+**❌ NEVER EXTRACT THESE (Summary/Total Rows):**
+
+```
+Example 1: "Total for Group:" pattern
+Row: ["Total for Group:", "CONNECT LOGISTICS IN", "", "", "", "", "-1", "($81.68)"]
+❌ REASON: First column contains "Total for Group:" - this is a section total
+
+Example 2: "Total for Vendor:" pattern
+Row: ["Total for Vendor:", "G0223428", "", "", "", "", "51", "$3,604.95"]
+❌ REASON: First column contains "Total for Vendor:" - this is the grand total
+
+Example 3: Empty Group No. with amount
+Row: ["", "BLUE MILE TRANSPORTATI", "", "", "", "", "1", "$97.20"]
+❌ REASON: Group No. is empty, likely a group subtotal
+
+Example 4: Writing Agent metadata
+Row: ["Writing Agent Number:", "00000019019593", "Writing Agent Name:", "LIOR C GOLDSTEIN"]
+❌ REASON: Contains "Writing Agent Number:" - metadata row, not transaction data
+
+Example 5: Section header with only company name
+Row: ["", "PRIDE DELIVERY SERVICE", "", "", "", "", "19", "$2,318.37"]
+❌ REASON: Empty Group No., populated amount = section summary
+
+Example 6: Last row matching document total
+Row: ["", "", "", "", "", "", "", "$3,604.95"]
+❌ REASON: Last row with amount matching document total = grand total
+```
+
+**Decision Tree for Each Row:**
+
+1. Does Group No. or Group Name contain "Total for Group:" or "Total for Vendor:"?
+   → YES: ❌ SKIP (it's a summary)
+   → NO: Continue to step 2
+
+2. Is Group No. EMPTY?
+   → YES: ❌ SKIP (it's likely a subtotal or metadata)
+   → NO: Continue to step 3
+
+3. Does row contain "Writing Agent Number:" or "Writing Agent Name:"?
+   → YES: ❌ SKIP (it's metadata)
+   → NO: Continue to step 4
+
+4. Does Group No. match format [A-Z]\d{6} or \d{6,7}?
+   → YES: ✅ EXTRACT (valid group identifier)
+   → NO: Continue to step 5
+
+5. Does Group Name contain an actual company name (not "Total" or "Summary")?
+   → YES: ✅ EXTRACT (valid detail row)
+   → NO: ❌ SKIP (likely summary)
 
 **Example:**
 
