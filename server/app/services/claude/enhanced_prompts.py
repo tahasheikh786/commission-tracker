@@ -11,6 +11,8 @@ Based on the Cursor AI Implementation Guide for matching Google Gemini quality.
 """
 
 from .extraction_rules import ExtractionRules
+from .uhc import get_uhc_prompt
+from .redirect_health import get_redirect_health_prompt
 
 
 class EnhancedClaudePrompts:
@@ -98,13 +100,38 @@ If you cannot find the information with high confidence, use null for the value 
         Main prompt for extracting tables from commission statements.
         Optimized for Claude 4 with XML structure and character-level precision.
         
+        Includes carrier-specific instructions for UHC and Redirect Health.
         Uses unified carrier and total amount extraction rules to ensure consistency.
         """
         # Get unified rules
         carrier_rules_xml = ExtractionRules.Carrier.get_xml_format()
         total_amount_rules_xml = ExtractionRules.Amount.get_xml_format()
         
-        return f"""<document_extraction_task>
+        # Get carrier-specific prompts
+        uhc_prompt = get_uhc_prompt()
+        redirect_health_prompt = get_redirect_health_prompt()
+        
+        # Build carrier-specific section
+        carrier_specific_section = f"""
+
+## 🏢 CARRIER-SPECIFIC EXTRACTION RULES
+
+**The following carriers have unique formats requiring special handling:**
+
+### 1. UnitedHealthcare (UHC)
+
+{uhc_prompt}
+
+### 2. Redirect Health
+
+{redirect_health_prompt}
+
+**IMPORTANT:** Apply carrier-specific rules ONLY when the carrier is detected from the document.
+For all other carriers, use standard extraction logic.
+
+"""
+        
+        base_prompt = f"""<document_extraction_task>
 
 <role_context>
 You are analyzing an insurance commission statement PDF. Your extraction must be pixel-perfect accurate because this data feeds automated approval systems. Any modification or addition of text creates duplicate records and breaks automation.
@@ -271,6 +298,8 @@ You are analyzing an insurance commission statement PDF. Your extraction must be
 
 </extraction_workflow>
 
+{carrier_specific_section}
+
 <!-- FINAL OUTPUT STRUCTURE -->
 <output_structure>
   <json_format>
@@ -314,7 +343,37 @@ You are analyzing an insurance commission statement PDF. Your extraction must be
 </quality_checks>
 
 </document_extraction_task>"""
+        
+        return base_prompt
 
+    @staticmethod
+    def get_context_aware_table_extraction_prompt(use_context_aware: bool = True) -> str:
+        """
+        Get table extraction prompt with optional context-aware summary detection.
+        
+        Args:
+            use_context_aware: If True, include context-aware instructions instead of rigid rules
+            
+        Returns:
+            Table extraction prompt with appropriate summary detection instructions
+        """
+        # Get the base table extraction prompt
+        base_prompt = EnhancedClaudePrompts.get_table_extraction_prompt()
+        
+        # Add context-aware or pattern-based filtering instructions
+        if use_context_aware:
+            filtering_instructions = ExtractionRules.Filtering.get_context_aware_prompt_instructions()
+        else:
+            filtering_instructions = ExtractionRules.Filtering.get_prompt_instructions()
+        
+        # Insert filtering instructions before the final output structure
+        enhanced_prompt = base_prompt.replace(
+            '<!-- FINAL OUTPUT STRUCTURE -->',
+            f'{filtering_instructions}\n\n<!-- FINAL OUTPUT STRUCTURE -->'
+        )
+        
+        return enhanced_prompt
+    
     @staticmethod
     def get_base_extraction_instructions() -> str:
         """Get static extraction instructions (for caching)."""
@@ -762,27 +821,46 @@ Row: ["", "", "", "", "", "", "", "$3,604.95"]
 ❌ REASON: Last row with amount matching document total = grand total
 ```
 
-**Decision Tree for Each Row:**
+**VALIDATION CHECKLIST - Must pass ALL checks to extract:**
 
-1. Does Group No. or Group Name contain "Total for Group:" or "Total for Vendor:"?
-   → YES: ❌ SKIP (it's a summary)
-   → NO: Continue to step 2
+Before extracting a row, verify:
 
-2. Is Group No. EMPTY?
-   → YES: ❌ SKIP (it's likely a subtotal or metadata)
-   → NO: Continue to step 3
+☐ Group No. field has alphanumeric ID (e.g., "L242820", "1653402")?
+☐ Group Name field has actual company name (NOT "Total", "Summary", empty)?
+☐ Row has at least 4-6 populated data columns (not just 1-2)?
+☐ No column contains "Total for Group:" or "Total for Vendor:"?
+☐ No column contains "Writing Agent Name:" or "Writing Agent Number:"?
+☐ NOT the last row with amount matching document total?
 
-3. Does row contain "Writing Agent Number:" or "Writing Agent Name:"?
-   → YES: ❌ SKIP (it's metadata)
-   → NO: Continue to step 4
+**If ANY checkbox fails → Mark as summary row with high confidence**
 
-4. Does Group No. match format [A-Z]\d{6} or \d{6,7}?
-   → YES: ✅ EXTRACT (valid group identifier)
-   → NO: Continue to step 5
+**✅ SPECIFIC GRAND TOTAL DETECTION:**
 
-5. Does Group Name contain an actual company name (not "Total" or "Summary")?
-   → YES: ✅ EXTRACT (valid detail row)
-   → NO: ❌ SKIP (likely summary)
+The LAST ROW of a table that has:
+1. Empty or mostly empty identifier columns (Group No., Group Name)
+2. A populated amount column
+3. Amount equals or is close to the document total
+
+→ This is a GRAND TOTAL, mark as: `is_summary: true, confidence: 0.99, reason: "Last row grand total"`
+
+**✅ SECTION SUBTOTAL DETECTION:**
+
+A row that has:
+1. Empty Group No. but populated Group Name
+2. Appears after multiple rows with same/similar Group Name
+3. Populated amount column
+
+→ This is a SECTION SUBTOTAL, mark as: `is_summary: true, confidence: 0.95, reason: "Section subtotal"`
+
+**✅ VALID DATA ROW:**
+
+A row that has:
+1. Valid Group No. (alphanumeric, 4-10 characters)
+2. Valid Group Name (actual company name, not "Total" or "Summary")
+3. Multiple populated columns (6+ out of 10)
+4. Amounts that fit the pattern of detail rows
+
+→ This is a DATA ROW, mark as: `is_summary: false, confidence: 0.95, reason: "Valid detail row"`
 
 **Example:**
 

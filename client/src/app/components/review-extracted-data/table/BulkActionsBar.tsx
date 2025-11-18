@@ -6,25 +6,33 @@
 'use client';
 
 import React from 'react';
-import { Trash2, X, Tag } from 'lucide-react';
+import { Trash2, X, Tag, XCircle } from 'lucide-react';
 
 interface BulkActionsBarProps {
   selectedCount: number;
+  selectedSummaryCount: number; // Number of selected rows that are summary rows
   onDeleteSelected: () => void;
   onMarkAsSummary: () => void;
+  onUnmarkSummary: () => void;
   onClearSelection: () => void;
 }
 
 export default function BulkActionsBar({
   selectedCount,
+  selectedSummaryCount,
   onDeleteSelected,
   onMarkAsSummary,
+  onUnmarkSummary,
   onClearSelection
 }: BulkActionsBarProps) {
   if (selectedCount === 0) return null;
 
+  // Determine which buttons to show
+  const hasNonSummaryRows = selectedSummaryCount < selectedCount;
+  const hasSummaryRows = selectedSummaryCount > 0;
+
   return (
-    <div className="fixed bottom-20 left-0 right-0 bg-gradient-to-r from-blue-600 to-purple-600 dark:from-blue-800 dark:to-purple-800 text-white px-6 py-4 shadow-2xl z-30 animate-slide-up">
+    <div className="border-t-4 border-blue-500 dark:border-blue-600 bg-gradient-to-r from-blue-600 to-purple-600 dark:from-blue-800 dark:to-purple-800 text-white px-6 py-4 shadow-2xl flex-shrink-0">
       <div className="flex items-center justify-between max-w-7xl mx-auto">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
@@ -38,14 +46,29 @@ export default function BulkActionsBar({
         </div>
 
         <div className="flex items-center gap-3">
-          <button
-            onClick={onMarkAsSummary}
-            className="flex items-center gap-2 px-4 py-2 bg-orange-500 dark:bg-orange-600 hover:bg-orange-600 dark:hover:bg-orange-700 rounded-lg font-medium transition-all hover:scale-105 active:scale-95"
-            title="Mark selected rows as summary rows"
-          >
-            <Tag className="w-4 h-4" />
-            Mark as Summary
-          </button>
+          {/* Show Mark as Summary if there are non-summary rows selected */}
+          {hasNonSummaryRows && (
+            <button
+              onClick={onMarkAsSummary}
+              className="flex items-center gap-2 px-4 py-2 bg-orange-500 dark:bg-orange-600 hover:bg-orange-600 dark:hover:bg-orange-700 rounded-lg font-medium transition-all hover:scale-105 active:scale-95"
+              title="Mark selected rows as summary rows"
+            >
+              <Tag className="w-4 h-4" />
+              Mark as Summary
+            </button>
+          )}
+          
+          {/* Show Unmark Summary if there are summary rows selected */}
+          {hasSummaryRows && (
+            <button
+              onClick={onUnmarkSummary}
+              className="flex items-center gap-2 px-4 py-2 bg-orange-500 dark:bg-orange-600 hover:bg-orange-600 dark:hover:bg-orange-700 rounded-lg font-medium transition-all hover:scale-105 active:scale-95"
+              title="Unmark selected summary rows"
+            >
+              <XCircle className="w-4 h-4" />
+              Unmark Summary
+            </button>
+          )}
           
           <button
             onClick={onDeleteSelected}

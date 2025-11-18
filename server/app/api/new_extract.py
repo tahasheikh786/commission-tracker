@@ -12,7 +12,6 @@ from app.config import get_db
 from app.utils.db_retry import with_db_retry
 from app.dependencies.auth_dependencies import get_current_user_hybrid
 from app.db.models import User
-from app.services.user_profile_service import UserProfileService
 from app.services.audit_logging_service import AuditLoggingService
 import asyncio
 import os
@@ -1031,32 +1030,15 @@ async def extract_tables_smart(
         }
         
         # Record user contribution (deferred until approval)
-        # CRITICAL CHANGE: User contributions are now recorded during approval, not extraction
+        # CRITICAL: User contributions are ONLY recorded during approval, not extraction
         # This is because statement_uploads records are only created after approval
         # to prevent ghost/orphan records. The contribution will be recorded when
         # the user approves the statement via review.py or auto_approval.py
-        try:
-            profile_service = UserProfileService(db)
-            await profile_service.record_user_contribution(
-                user_id=current_user.id,
-                upload_id=upload_id_uuid,
-                contribution_type="upload",
-                contribution_data={
-                    "file_name": file.filename,
-                    "file_size": file_size,
-                    "file_hash": file_hash,
-                    "extraction_method": extraction_method,
-                    "confidence_threshold": 0.6,
-                    "enable_ocr": True,
-                    "enable_multipage": True
-                }
-            )
-            logger.info(f"✅ User contribution recorded for upload {upload_id_uuid}")
-        except Exception as e:
-            # Expected: Foreign key constraint will fail since statement_upload doesn't exist yet
-            # This is by design - contributions will be recorded during approval instead
-            logger.info(f"ℹ️ User contribution deferred until approval (statement not yet persisted): {str(e)}")
-            # Don't fail the extraction - contribution can be recorded later
+        # 
+        # DO NOT attempt to record contribution here - it will always fail with a
+        # foreign key constraint error since the statement_uploads record doesn't exist yet.
+        # Both review.py and auto_approval.py handle contribution recording after the
+        # statement is persisted to the database.
         
         # Log file upload for audit
         await audit_service.log_file_upload(

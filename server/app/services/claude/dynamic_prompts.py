@@ -5,6 +5,7 @@ This module contains sophisticated prompts optimized for Claude's document analy
 """
 
 from .uhc import get_uhc_prompt
+from .redirect_health import get_redirect_health_prompt
 
 PROMPT_TEMPLATES = [
     {
@@ -26,6 +27,10 @@ PROMPT_TEMPLATES = [
     {
         "name": "UnitedHealth",
         "configuration": get_uhc_prompt()
+    },
+    {
+        "name": "Redirect Health",
+        "configuration": get_redirect_health_prompt()
     }
 ]
 
@@ -46,14 +51,17 @@ class ClaudeDynamicPrompts:
         
         # Normalize the input name: remove spaces, convert to lowercase
         normalized_input = name.replace(" ", "").replace("-", "").lower()
+        logger.info(f"🔍 Looking up carrier prompt: '{name}' → normalized: '{normalized_input}'")
         
         for template in PROMPT_TEMPLATES:
             # Normalize template name for comparison
             normalized_template = template["name"].replace(" ", "").replace("-", "").lower()
+            logger.info(f"   Comparing with template: '{template['name']}' → normalized: '{normalized_template}'")
             if normalized_template == normalized_input:
-                logger.info(f"✅ Using carrier-specific prompt for: {name}")
+                logger.info(f"✅ MATCH FOUND! Using carrier-specific prompt for: {name}")
                 return template["configuration"]
         
         # No matching carrier-specific prompt found - return empty string
-        logger.info(f"No carrier-specific prompt found for '{name}', using standard prompt only")
+        logger.info(f"❌ No carrier-specific prompt found for '{name}', using standard prompt only")
+        logger.info(f"   Available carriers: {[t['name'] for t in PROMPT_TEMPLATES]}")
         return ""

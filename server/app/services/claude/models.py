@@ -6,7 +6,7 @@ and response formatting.
 """
 
 from typing import Dict, Any, List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class ClaudeTableData(BaseModel):
@@ -21,6 +21,30 @@ class ClaudeTableData(BaseModel):
     borderless: bool = Field(default=False, description="Whether table has no visible borders")
     hierarchical: bool = Field(default=False, description="Whether table has hierarchical structure")
     company_sections: List[str] = Field(default_factory=list, description="Detected company section headers")
+    
+    @field_validator('headers', mode='before')
+    @classmethod
+    def sanitize_headers(cls, v):
+        """Ensure all headers are strings, converting None to empty string."""
+        if not isinstance(v, list):
+            return v
+        return [str(h) if h is not None else "" for h in v]
+    
+    @field_validator('rows', mode='before')
+    @classmethod
+    def sanitize_rows(cls, v):
+        """Ensure all row cells are strings, converting None to empty string."""
+        if not isinstance(v, list):
+            return v
+        
+        sanitized_rows = []
+        for row in v:
+            if isinstance(row, list):
+                sanitized_row = [str(cell) if cell is not None else "" for cell in row]
+                sanitized_rows.append(sanitized_row)
+            else:
+                sanitized_rows.append(row)
+        return sanitized_rows
 
 
 class ClaudeDocumentMetadata(BaseModel):

@@ -6,7 +6,7 @@ and response formatting.
 """
 
 from typing import Dict, Any, List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class DocumentIntelligence(BaseModel):
@@ -29,6 +29,30 @@ class TableData(BaseModel):
     table_type: str = Field(default="commission_table", description="Type of table")
     company_name: Optional[str] = Field(default=None, description="Company name if detected")
     confidence: Optional[float] = Field(default=None, description="Confidence score for this table (0.0-1.0)")
+    
+    @field_validator('headers', mode='before')
+    @classmethod
+    def sanitize_headers(cls, v):
+        """Ensure all headers are strings, converting None to empty string."""
+        if not isinstance(v, list):
+            return v
+        return [str(h) if h is not None else "" for h in v]
+    
+    @field_validator('rows', mode='before')
+    @classmethod
+    def sanitize_rows(cls, v):
+        """Ensure all row cells are strings, converting None to empty string."""
+        if not isinstance(v, list):
+            return v
+        
+        sanitized_rows = []
+        for row in v:
+            if isinstance(row, list):
+                sanitized_row = [str(cell) if cell is not None else "" for cell in row]
+                sanitized_rows.append(sanitized_row)
+            else:
+                sanitized_rows.append(row)
+        return sanitized_rows
 
 
 class TableIntelligence(BaseModel):

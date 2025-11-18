@@ -20,6 +20,59 @@ HEADER_SIMILARITY_THRESHOLD = 0.8
 PATTERN_MATCH_THRESHOLD = 0.6
 
 
+def sanitize_table_data_for_pydantic(table_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Sanitize table data to ensure all cell values are strings for Pydantic validation.
+    
+    Converts None values to empty strings and ensures all cells are string type.
+    This is a defensive function to prevent Pydantic validation errors when table
+    extraction returns None values (e.g., in summary rows or optional columns).
+    
+    Args:
+        table_data: Dictionary containing 'headers' and 'rows' keys
+        
+    Returns:
+        Sanitized table data with all cells as strings
+        
+    Example:
+        >>> table = {'headers': ['A', 'B', None], 'rows': [['1', None, '3']]}
+        >>> sanitize_table_data_for_pydantic(table)
+        {'headers': ['A', 'B', ''], 'rows': [['1', '', '3']]}
+    """
+    sanitized = table_data.copy()
+    
+    # Sanitize rows: convert None to empty string and ensure all values are strings
+    if 'rows' in sanitized and isinstance(sanitized['rows'], list):
+        sanitized_rows = []
+        for row in sanitized['rows']:
+            if isinstance(row, list):
+                sanitized_row = [
+                    str(cell) if cell is not None else "" 
+                    for cell in row
+                ]
+                sanitized_rows.append(sanitized_row)
+            else:
+                # If row is not a list (shouldn't happen), keep as is
+                sanitized_rows.append(row)
+        sanitized['rows'] = sanitized_rows
+    
+    # Sanitize headers: ensure all are strings
+    if 'headers' in sanitized and isinstance(sanitized['headers'], list):
+        sanitized['headers'] = [
+            str(header) if header is not None else "" 
+            for header in sanitized['headers']
+        ]
+    
+    # Also handle 'header' (singular) as some parts of the codebase use this key
+    if 'header' in sanitized and isinstance(sanitized['header'], list):
+        sanitized['header'] = [
+            str(header) if header is not None else "" 
+            for header in sanitized['header']
+        ]
+    
+    return sanitized
+
+
 def normalize_statement_date(date_string: str) -> str:
     """
     Extract and normalize the primary date from various date formats.

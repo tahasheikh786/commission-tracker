@@ -721,21 +721,26 @@ class ClaudeResponseParser:
     @staticmethod
     def _detect_missed_summary_rows(table: Dict[str, Any], document_metadata: Dict[str, Any]) -> Dict[str, Any]:
         """
-        🛡️ SAFETY NET: Detect grand total rows that Claude missed marking as summary rows.
+        🛡️ SAFETY NET: Detect and correct summary row misclassifications.
+        
+        This method:
+        1. Detects grand total rows that Claude missed marking as summaries
+        2. 🔴 FIXES FALSE POSITIVES: Corrects initial rows incorrectly marked as summaries
         
         Claude sometimes fails to mark rows as summaries when:
         - Group Number is blank/empty
         - Group Name is blank/empty  
         - Only the amount column contains the grand total
         
-        This method uses heuristics to catch these missed cases.
+        🔴 BUG FIX: Claude sometimes INCORRECTLY marks the first few rows as summaries
+        when they're actually valid data rows. This method detects and corrects these.
         
         Args:
             table: Table dict with headers, rows, and summary_rows
             document_metadata: Document metadata containing total_amount if available
             
         Returns:
-            Updated table dict with additional summary rows marked
+            Updated table dict with corrected summary rows
         """
         import re
         
@@ -750,15 +755,83 @@ class ClaudeResponseParser:
         group_name_idx = None
         group_no_idx = None
         amount_idx = None
+        group_id_idx = None
         
         for idx, header in enumerate(headers):
             header_lower = str(header).lower()
             if 'group no' in header_lower or 'policy no' in header_lower or 'group number' in header_lower:
                 group_no_idx = idx
+            elif 'group id' in header_lower or 'group_id' in header_lower or 'policy id' in header_lower:
+                group_id_idx = idx
             elif any(kw in header_lower for kw in ['group name', 'company', 'client name', 'customer']) and 'no' not in header_lower:
                 group_name_idx = idx
             elif any(kw in header_lower for kw in ['paid amount', 'commission earned', 'commission', 'paid']):
                 amount_idx = idx
+        
+        # 🔴 BUG FIX: Check for false positive summary rows at the BEGINNING of the table
+        # Claude sometimes incorrectly marks the first few rows as summaries
+        false_positive_removals = []
+        
+        # Check the first 5 rows (or fewer if table is small)
+        check_limit = min(5, len(rows))
+        for row_idx in range(check_limit):
+            if row_idx not in summary_rows:
+                continue  # Not marked as summary, skip
+            
+            row = rows[row_idx]
+            
+            # Check if this row looks like a VALID DATA ROW (not a summary)
+            # Valid data row indicators:
+            # 1. Has a valid Group Number/Group ID (alphanumeric, not empty, not "Total")
+            # 2. Has a valid Group Name (not empty, not containing "Total for")
+            # 3. Has multiple populated columns (6+ typically)
+            
+            has_valid_group_id = False
+            has_valid_group_name = False
+            populated_col_count = 0
+            
+            # Check Group Number/ID
+            group_id_col = group_no_idx if group_no_idx is not None else group_id_idx
+            if group_id_col is not None and group_id_col < len(row):
+                group_id_val = str(row[group_id_col]).strip()
+                # Valid if: non-empty, alphanumeric, not "Total" or "Summary"
+                if group_id_val and group_id_val not in ['', '-', 'N/A', 'n/a']:
+                    if not any(kw in group_id_val.lower() for kw in ['total', 'summary', 'subtotal', 'grand']):
+                        # Check if it's alphanumeric (like "L203215" or "1653402")
+                        if re.match(r'^[A-Z0-9][A-Z0-9\-]*$', group_id_val, re.IGNORECASE):
+                            has_valid_group_id = True
+            
+            # Check Group Name
+            if group_name_idx is not None and group_name_idx < len(row):
+                group_name_val = str(row[group_name_idx]).strip()
+                # Valid if: non-empty, doesn't start with "Total for" or "Writing Agent"
+                if group_name_val and group_name_val not in ['', '-', 'N/A', 'n/a']:
+                    if not any(pattern in group_name_val for pattern in ['Total for', 'Writing Agent', 'Producer Name', 'Grand Total', 'Sub-total']):
+                        has_valid_group_name = True
+            
+            # Count populated columns
+            for cell in row:
+                cell_str = str(cell).strip()
+                if cell_str and cell_str not in ['', '-', 'N/A', 'n/a']:
+                    populated_col_count += 1
+            
+            # 🔴 DECISION: If this row has valid identifiers and many populated columns,
+            # it's likely a DATA ROW that was incorrectly marked as summary
+            if has_valid_group_id and has_valid_group_name and populated_col_count >= 6:
+                logger.warning(
+                    f"🔴 BUG FIX: Row {row_idx} was marked as summary but looks like valid data row "
+                    f"(Group ID: {row[group_id_col] if group_id_col is not None else 'N/A'}, "
+                    f"Group Name: {row[group_name_idx] if group_name_idx is not None else 'N/A'}, "
+                    f"Populated cols: {populated_col_count}) - UNMARKING as summary"
+                )
+                false_positive_removals.append(row_idx)
+        
+        # Remove false positives from summary_rows
+        for row_idx in false_positive_removals:
+            summary_rows.discard(row_idx)
+        
+        if false_positive_removals:
+            logger.info(f"✅ Corrected {len(false_positive_removals)} false positive summary rows at start of table: {false_positive_removals}")
         
         # Get document total if available
         doc_total = None
@@ -864,10 +937,17 @@ class ClaudeResponseParser:
                     continue
         
         # Update summary_rows list
-        if additional_summary_rows:
+        # 🔴 CRITICAL: Always update the table with corrected summary_rows
+        # (either with false positives removed, or additional rows added, or both)
+        if additional_summary_rows or false_positive_removals:
             all_summary_rows = sorted(list(summary_rows) + additional_summary_rows)
             table['summary_rows'] = all_summary_rows
-            logger.info(f"🛡️ Safety net: Added {len(additional_summary_rows)} missed summary rows. Total summary rows: {len(all_summary_rows)}")
+            
+            if additional_summary_rows:
+                logger.info(f"🛡️ Safety net: Added {len(additional_summary_rows)} missed summary rows. Total summary rows: {len(all_summary_rows)}")
+            
+            if false_positive_removals:
+                logger.info(f"✅ Corrected summary rows: removed {len(false_positive_removals)} false positives, added {len(additional_summary_rows)} missed rows")
         
         return table
     

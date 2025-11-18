@@ -7,7 +7,7 @@ from typing import Dict, List, Any, Optional
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.db.models import SummaryRowPattern, Company
@@ -55,6 +55,30 @@ SUMMARY_KEYWORDS = [
 class TableData(BaseModel):
     header: List[str]
     rows: List[List[str]]
+    
+    @field_validator('header', mode='before')
+    @classmethod
+    def sanitize_header(cls, v):
+        """Ensure all headers are strings, converting None to empty string."""
+        if not isinstance(v, list):
+            return v
+        return [str(h) if h is not None else "" for h in v]
+    
+    @field_validator('rows', mode='before')
+    @classmethod
+    def sanitize_rows(cls, v):
+        """Ensure all row cells are strings, converting None to empty string."""
+        if not isinstance(v, list):
+            return v
+        
+        sanitized_rows = []
+        for row in v:
+            if isinstance(row, list):
+                sanitized_row = [str(cell) if cell is not None else "" for cell in row]
+                sanitized_rows.append(sanitized_row)
+            else:
+                sanitized_rows.append(row)
+        return sanitized_rows
 
 
 class LearnPatternRequest(BaseModel):

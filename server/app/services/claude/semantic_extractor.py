@@ -10,12 +10,14 @@ Key Capabilities:
 - Hierarchical structure detection
 - Business pattern recognition
 - Anomaly detection
+- Context-aware summary row detection (LLM-driven, no hard-coded patterns)
 """
 
 import logging
 from typing import Dict, Any, List, Optional
 import json
 from .extraction_rules import ExtractionRules
+from .context_aware_extraction import ContextAwareExtractionService
 
 logger = logging.getLogger(__name__)
 
@@ -28,9 +30,28 @@ class SemanticExtractionService:
     and patterns.
     """
     
-    def __init__(self):
-        """Initialize semantic extraction service"""
-        logger.info("✅ Semantic Extraction Service initialized")
+    def __init__(self, use_context_aware_detection: bool = True):
+        """
+        Initialize semantic extraction service.
+        
+        Args:
+            use_context_aware_detection: If True, use LLM-driven context-aware detection
+                                          for summary rows. If False, use legacy pattern-based detection.
+        """
+        self.use_context_aware_detection = use_context_aware_detection
+        self.context_aware_service = None
+        
+        # Initialize context-aware service if enabled
+        if self.use_context_aware_detection:
+            try:
+                self.context_aware_service = ContextAwareExtractionService()
+                logger.info("✅ Semantic Extraction Service initialized with context-aware detection")
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to initialize context-aware detection: {e}. Falling back to pattern-based detection.")
+                self.use_context_aware_detection = False
+                logger.info("✅ Semantic Extraction Service initialized with pattern-based detection (fallback)")
+        else:
+            logger.info("✅ Semantic Extraction Service initialized with pattern-based detection")
     
     async def extract_entities_and_relationships(
         self,
@@ -52,6 +73,15 @@ class SemanticExtractionService:
             
             # Use enhanced extraction if available, otherwise use raw
             extraction_source = enhanced_extraction if enhanced_extraction else raw_extraction
+            
+            # ✅ NEW: Validate summary row markers FIRST
+            tables = extraction_source.get('tables', [])
+            if tables:
+                validation = self._validate_summary_row_markers(tables)
+                if validation['warnings']:
+                    logger.warning(f"⚠️ Summary row validation found {len(validation['warnings'])} warnings")
+                    for warning in validation['warnings']:
+                        logger.warning(f"  - {warning}")
             
             # Phase 2.1: Extract and enrich entities
             entities = self._extract_entities(extraction_source, raw_extraction)
@@ -231,16 +261,35 @@ class SemanticExtractionService:
         if 'groups_and_companies' in data and isinstance(data['groups_and_companies'], list):
             raw_groups = data['groups_and_companies']
             logger.info(f"✅ Using Claude's extracted groups/companies (before filtering): {len(raw_groups)} groups")
-            # Apply post-processing filter to remove any summary rows that slipped through Claude's filter
-            filtered_groups = self._filter_summary_rows(raw_groups)
-            logger.info(f"📊 After semantic filtering: {len(raw_groups)} → {len(filtered_groups)} actual groups (removed {len(raw_groups) - len(filtered_groups)} summary rows)")
+            
+            # 🔴 CRITICAL: First check if tables have summary_rows metadata from Claude
+            # If Claude already marked summary rows in the table, use that information
+            tables = data.get('raw_tables') or data.get('tables', [])
+            claude_marked_summary_indices = set()
+            
+            if tables:
+                for table in tables:
+                    summary_indices = table.get('summary_rows', []) or table.get('summaryRows', [])
+                    if summary_indices:
+                        claude_marked_summary_indices.update(summary_indices)
+                        logger.info(f"📋 Claude marked {len(summary_indices)} rows as summaries in table metadata")
+            
+            # If Claude marked summary rows, filter groups using table-based matching
+            if claude_marked_summary_indices and tables:
+                filtered_groups = self._filter_groups_by_table_summary_metadata(
+                    raw_groups, tables, claude_marked_summary_indices
+                )
+                logger.info(f"📊 After table-based filtering: {len(raw_groups)} → {len(filtered_groups)} actual groups (removed {len(raw_groups) - len(filtered_groups)} summary rows based on Claude's table metadata)")
+            else:
+                # Apply post-processing filter to remove any summary rows that slipped through Claude's filter
+                filtered_groups = self._filter_summary_rows(raw_groups)
+                logger.info(f"📊 After semantic filtering: {len(raw_groups)} → {len(filtered_groups)} actual groups (removed {len(raw_groups) - len(filtered_groups)} summary rows)")
             
             # 🔴 CRITICAL FIX: Mark filtered-out groups as summary rows in table metadata
             # This ensures downstream calculations skip these rows
             excluded_groups = [g for g in raw_groups if g not in filtered_groups]
             if excluded_groups:
                 # Get tables from data (try both 'raw_tables' and 'tables' keys)
-                tables = data.get('raw_tables') or data.get('tables', [])
                 if tables:
                     self._mark_filtered_groups_in_tables(tables, excluded_groups)
             
@@ -399,12 +448,251 @@ class SemanticExtractionService:
         if marked_count > 0:
             logger.info(f"🔍 Marked {marked_count} table rows as summary rows based on semantic filtering")
     
+    def _filter_groups_by_table_summary_metadata(
+        self,
+        groups: List[Dict[str, Any]],
+        tables: List[Dict[str, Any]],
+        summary_row_indices: set
+    ) -> List[Dict[str, Any]]:
+        """
+        Filter groups based on table summary row metadata from Claude.
+        
+        ✅ FIXED: Precise signature-based matching to prevent false positives.
+        TRUSTS CLAUDE'S SUMMARY DETECTION - only excludes exact matches.
+        
+        Args:
+            groups: List of group dictionaries from Claude's extraction
+            tables: List of table dictionaries with rows and metadata
+            summary_row_indices: Set of row indices marked as summary rows by Claude
+            
+        Returns:
+            Filtered list with groups corresponding to summary rows removed
+        """
+        if not groups or not tables or not summary_row_indices:
+            return groups
+        
+        # ✅ DEBUG: Log BEFORE filtering
+        logger.info("="*80)
+        logger.info("🔍 SEMANTIC FILTERING DEBUG")
+        logger.info(f"Input: {len(groups)} groups to filter")
+        logger.info(f"Tables: {len(tables)} tables")
+        logger.info(f"Claude marked summary row indices: {sorted(summary_row_indices)}")
+        
+        logger.info("\n📋 Groups to filter:")
+        for idx, group in enumerate(groups):
+            group_name = group.get('group_name', '') or group.get('company_name', '')
+            group_no = group.get('group_number', '') or group.get('group_no', '')
+            logger.info(f"  [{idx:2d}] {group_no:15s} | {group_name}")
+        
+        # ✅ Build precise mapping of Claude's marked summary rows
+        summary_row_signatures = set()
+        
+        for table in tables:
+            rows = table.get('rows', [])
+            headers = table.get('headers', []) or table.get('header', [])
+            
+            # Find column indices
+            group_name_idx = None
+            group_no_idx = None
+            
+            for idx, header in enumerate(headers):
+                header_lower = str(header).lower()
+                if 'group no' in header_lower or 'group number' in header_lower or 'group id' in header_lower:
+                    group_no_idx = idx
+                if 'group name' in header_lower or 'company' in header_lower or 'client name' in header_lower or 'customer' in header_lower:
+                    if 'no' not in header_lower:  # Avoid matching "Group No"
+                        group_name_idx = idx
+            
+            # Extract signatures ONLY from Claude-marked summary rows
+            for row_idx, row in enumerate(rows):
+                if row_idx not in summary_row_indices:
+                    continue  # Skip non-summary rows
+                
+                # Extract row data (handle both list and dict formats)
+                if isinstance(row, dict):
+                    row_data = row.get('data', row)
+                else:
+                    row_data = row
+                
+                # Extract identifiers from summary row
+                row_group_no = ''
+                row_group_name = ''
+                
+                if group_no_idx is not None and group_no_idx < len(row_data):
+                    row_group_no = str(row_data[group_no_idx]).strip()
+                
+                if group_name_idx is not None and group_name_idx < len(row_data):
+                    row_group_name = str(row_data[group_name_idx]).strip()
+                
+                # ✅ TRUST CLAUDE: Only create signature if BOTH identifiers are non-empty
+                # If both are empty, it's a grand total row (no specific group to exclude)
+                if row_group_no and row_group_name:
+                    # Create signature: "GROUP_NO|GROUP_NAME"
+                    signature = f"{row_group_no}|{row_group_name}"
+                    summary_row_signatures.add(signature)
+                    logger.debug(f"📍 Summary signature: {signature}")
+                elif not row_group_no and not row_group_name:
+                    # Grand total row (all identifiers empty)
+                    logger.debug(f"📍 Grand total row {row_idx} (empty identifiers - no group to exclude)")
+                else:
+                    # One identifier empty - log for visibility but don't exclude
+                    logger.debug(f"📍 Partial row {row_idx}: no='{row_group_no}', name='{row_group_name}' (keeping as-is)")
+        
+        logger.info(f"\n🔍 Built {len(summary_row_signatures)} summary row signatures from Claude's marks")
+        if summary_row_signatures:
+            logger.info("📍 Summary signatures:")
+            for sig in sorted(summary_row_signatures):
+                logger.info(f"     {sig}")
+        
+        # ✅ Filter groups using PRECISE signature matching ONLY
+        filtered_groups = []
+        excluded_count = 0
+        
+        for group_idx, group in enumerate(groups):
+            group_name = group.get('group_name', '') or group.get('company_name', '')
+            group_no = group.get('group_number', '') or group.get('group_no', '')
+            
+            if not group_name:
+                # No group name = invalid group, exclude
+                excluded_count += 1
+                logger.debug(f"🔴 EXCLUDED: Group {group_idx} has no group name")
+                continue
+            
+            # ✅ Create signature for this group
+            group_signature = f"{group_no}|{group_name}"
+            
+            # ✅ PRECISE MATCH: Only exclude if this EXACT signature exists in Claude's summary rows
+            if group_signature in summary_row_signatures:
+                excluded_count += 1
+                logger.info(f"🔴 EXCLUDED: Group {group_idx}: {group_signature} (matches Claude's summary row)")
+            else:
+                # ✅ VALID GROUP: Include it (Claude didn't mark it as summary)
+                filtered_groups.append(group)
+                logger.debug(f"✅ INCLUDED: Group {group_idx}: {group_signature}")
+        
+        # ✅ DEBUG: Log AFTER filtering
+        logger.info(f"\n✅ Filtered groups ({len(filtered_groups)}):")
+        for idx, group in enumerate(filtered_groups):
+            group_name = group.get('group_name', '') or group.get('company_name', '')
+            group_no = group.get('group_number', '') or group.get('group_no', '')
+            logger.info(f"  [{idx:2d}] {group_no:15s} | {group_name}")
+        
+        logger.info(f"\n🔴 Excluded: {excluded_count} groups")
+        logger.info(f"✅ Filtering complete: {len(groups)} → {len(filtered_groups)} groups (excluded {excluded_count})")
+        logger.info("="*80)
+        
+        return filtered_groups
+    
+    def _validate_summary_row_markers(
+        self,
+        tables: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """
+        Validate that Claude's summary row markers are reasonable.
+        
+        This validation checks for anomalies in summary row marking that might
+        indicate over-marking or incorrect classification.
+        
+        Args:
+            tables: List of table dictionaries with rows and metadata
+            
+        Returns:
+            Validation report with warnings if markers seem incorrect
+        """
+        validation = {
+            'total_tables': len(tables),
+            'total_rows': 0,
+            'total_summary_rows': 0,
+            'warnings': [],
+            'table_stats': []
+        }
+        
+        for table_idx, table in enumerate(tables):
+            rows = table.get('rows', [])
+            summary_rows = set(table.get('summary_rows', []) or table.get('summaryRows', []))
+            
+            table_total_rows = len(rows)
+            table_summary_rows = len(summary_rows)
+            
+            validation['total_rows'] += table_total_rows
+            validation['total_summary_rows'] += table_summary_rows
+            
+            # Calculate ratio
+            summary_ratio = table_summary_rows / table_total_rows if table_total_rows > 0 else 0
+            
+            table_stat = {
+                'table_idx': table_idx,
+                'total_rows': table_total_rows,
+                'summary_rows': table_summary_rows,
+                'summary_ratio': summary_ratio
+            }
+            
+            # ✅ WARNING: High summary ratio (> 20%) suggests over-marking
+            if summary_ratio > 0.20:
+                warning = f"Table {table_idx}: High summary ratio ({summary_ratio:.1%}) - {table_summary_rows}/{table_total_rows} rows marked as summaries"
+                validation['warnings'].append(warning)
+                logger.warning(warning)
+            
+            # ✅ WARNING: First few rows marked as summary (unusual - likely already corrected by utils.py)
+            # Note: This warning should rarely trigger now due to false positive correction in utils.py
+            first_few_marked = [i for i in range(min(5, table_total_rows)) if i in summary_rows]
+            if first_few_marked:
+                # Check if these are legitimately summary rows (empty identifiers)
+                headers = table.get('headers', []) or table.get('header', [])
+                rows = table.get('rows', [])
+                
+                # Find Group ID/Name columns
+                group_id_col = None
+                group_name_col = None
+                for idx, header in enumerate(headers):
+                    header_lower = str(header).lower()
+                    if any(kw in header_lower for kw in ['group no', 'group id', 'policy no']):
+                        group_id_col = idx
+                    elif any(kw in header_lower for kw in ['group name', 'company', 'client name']) and 'no' not in header_lower:
+                        group_name_col = idx
+                
+                # Verify if these are truly summary rows (empty identifiers)
+                suspicious_marks = []
+                for row_idx in first_few_marked:
+                    if row_idx < len(rows):
+                        row = rows[row_idx]
+                        has_valid_id = False
+                        
+                        # Check if row has valid identifiers (shouldn't be summary)
+                        if group_id_col is not None and group_id_col < len(row):
+                            val = str(row[group_id_col]).strip()
+                            if val and val not in ['', '-', 'N/A']:
+                                has_valid_id = True
+                        
+                        if has_valid_id:
+                            suspicious_marks.append(row_idx)
+                
+                if suspicious_marks:
+                    warning = f"Table {table_idx}: First few rows {suspicious_marks} marked as summary despite having valid identifiers - may need review"
+                    validation['warnings'].append(warning)
+                    logger.warning(warning)
+            
+            validation['table_stats'].append(table_stat)
+        
+        # Overall ratio check
+        overall_ratio = validation['total_summary_rows'] / validation['total_rows'] if validation['total_rows'] > 0 else 0
+        validation['overall_summary_ratio'] = overall_ratio
+        
+        if overall_ratio > 0.15:
+            warning = f"Overall high summary ratio ({overall_ratio:.1%}) across all tables - review marking logic"
+            validation['warnings'].append(warning)
+            logger.warning(warning)
+        
+        logger.info(f"✅ Summary row validation: {validation['total_summary_rows']}/{validation['total_rows']} ({overall_ratio:.1%}) marked as summaries")
+        
+        return validation
+    
     def _filter_summary_rows(self, groups: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
-        ✅ FIXED: Filter out summary rows that Claude already marked.
+        Filter out summary rows using either context-aware LLM detection or pattern-based detection.
         
-        Claude marks summary rows in the 'summaryRows' or 'summary_rows' field in tables.
-        We also apply pattern-based detection as a backup safety net.
+        If context-aware detection is enabled, uses Claude's intelligent understanding of table
+        structure and relationships. Otherwise, falls back to pattern-based filtering.
         
         This is a critical safety net to catch any summary rows that Claude
         might have included despite prompt instructions.
@@ -412,23 +700,139 @@ class SemanticExtractionService:
         if not groups:
             return groups
         
-        # First use unified filtering method (pattern-based)
+        # Use context-aware detection if enabled and available
+        if self.use_context_aware_detection and self.context_aware_service:
+            try:
+                return self._filter_summary_rows_context_aware(groups)
+            except Exception as e:
+                logger.warning(f"⚠️ Context-aware filtering failed: {e}. Falling back to pattern-based detection.")
+                # Fall through to pattern-based detection
+        
+        # Pattern-based detection (legacy/fallback)
+        return self._filter_summary_rows_pattern_based(groups)
+    
+    def _filter_summary_rows_context_aware(self, groups: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Context-aware summary row filtering using LLM intelligence.
+        
+        This method converts groups to table format, uses Claude to intelligently identify
+        summary rows based on context and patterns, then filters accordingly.
+        
+        Args:
+            groups: List of group dictionaries
+            
+        Returns:
+            Filtered list with summary rows removed
+        """
+        if not groups:
+            return groups
+        
+        logger.info(f"🧠 Using context-aware LLM detection for {len(groups)} groups")
+        
+        # Convert groups to table format for analysis
+        table_text = self._convert_groups_to_table_text(groups)
+        
+        # Extract document context if available
+        document_context = "Commission statement with group/company data"
+        
+        # Use context-aware service to classify rows
+        # Use combined prompt for speed (single-pass)
+        result = self.context_aware_service.extract_with_context(
+            table_text=table_text,
+            document_context=document_context,
+            document_total=None,
+            use_combined_prompt=True  # Faster for this use case
+        )
+        
+        # Get summary row indices identified by Claude
+        summary_row_indices = set(result.get('summary_rows', []))
+        
+        if summary_row_indices:
+            logger.info(f"🔍 Context-aware detection identified {len(summary_row_indices)} summary rows: {sorted(summary_row_indices)}")
+        
+        # Filter out summary rows
+        filtered_groups = [
+            group for idx, group in enumerate(groups)
+            if idx not in summary_row_indices
+        ]
+        
+        # Log filtering results
+        filtered_count = len(groups) - len(filtered_groups)
+        if filtered_count > 0:
+            logger.info(f"✅ Context-aware filtering: {len(groups)} → {len(filtered_groups)} groups (removed {filtered_count} summary rows)")
+            
+            # Log what was filtered for debugging
+            for idx in sorted(summary_row_indices):
+                if idx < len(groups):
+                    group = groups[idx]
+                    logger.debug(
+                        f"   FILTERED (Context-Aware): {group.get('group_number', 'N/A')} - "
+                        f"{group.get('group_name', '') or group.get('company_name', 'N/A')}"
+                    )
+        else:
+            logger.info(f"✅ Context-aware filtering: All {len(groups)} groups passed (no summary rows detected)")
+        
+        # Apply duplicate detection as additional safety
+        unique_filtered_groups = self._remove_duplicate_companies(filtered_groups)
+        
+        return unique_filtered_groups
+    
+    def _filter_summary_rows_pattern_based(self, groups: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Pattern-based summary row filtering (legacy method).
+        
+        Uses hard-coded rules and patterns to identify summary rows.
+        This is the fallback when context-aware detection is not available.
+        
+        Args:
+            groups: List of group dictionaries
+            
+        Returns:
+            Filtered list with summary rows removed
+        """
+        logger.info(f"🔧 Using pattern-based detection for {len(groups)} groups")
+        
+        # Use unified filtering method (pattern-based)
         filtered_groups, excluded_groups = ExtractionRules.Filtering.filter_groups(groups)
         
         # Log filtering results from pattern-based filtering
         pattern_filtered_count = len(excluded_groups)
         if pattern_filtered_count > 0:
-            logger.info(f"✅ _filter_summary_rows (Pattern): Filtered out {pattern_filtered_count} summary/total rows from {len(groups)} total")
+            logger.info(f"✅ Pattern-based filtering: Filtered out {pattern_filtered_count} summary/total rows from {len(groups)} total")
             # Log what was filtered for debugging
             for excluded in excluded_groups:
                 logger.debug(f"   FILTERED (Pattern): {excluded.get('group_number', 'N/A')} - {excluded.get('group_name', 'N/A')} - Reason: {excluded.get('reason', 'Unknown')}")
         
-        # ✅ ADDITIONAL FILTER: Detect duplicate company names (summary rows often duplicate)
+        # Apply duplicate detection
+        unique_filtered_groups = self._remove_duplicate_companies(filtered_groups)
+        
+        total_filtered = len(groups) - len(unique_filtered_groups)
+        if total_filtered > 0:
+            logger.info(
+                f"✅ Pattern-based filtering complete: "
+                f"{len(groups)} → {len(unique_filtered_groups)} groups "
+                f"(removed {total_filtered} summary/duplicate rows)"
+            )
+        else:
+            logger.info(f"✅ Pattern-based filtering: All {len(groups)} groups passed (no summary rows detected)")
+        
+        return unique_filtered_groups
+    
+    def _remove_duplicate_companies(self, groups: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Remove duplicate company names (summary rows often duplicate).
+        
+        Args:
+            groups: List of group dictionaries
+            
+        Returns:
+            List with duplicates removed
+        """
         unique_filtered_groups = []
         seen_company_names = set()
         duplicate_count = 0
         
-        for group in filtered_groups:
+        for group in groups:
             company_name = group.get('company_name', '') or group.get('group_name', '')
             
             # Skip if we've already seen this exact company name
@@ -446,19 +850,39 @@ class SemanticExtractionService:
             unique_filtered_groups.append(group)
         
         if duplicate_count > 0:
-            logger.info(f"✅ _filter_summary_rows (Duplicate): Removed {duplicate_count} duplicate company entries")
-        
-        total_filtered = len(groups) - len(unique_filtered_groups)
-        if total_filtered > 0:
-            logger.info(
-                f"✅ Summary row filtering complete: "
-                f"{len(groups)} → {len(unique_filtered_groups)} groups "
-                f"(removed {total_filtered} summary/duplicate rows: {pattern_filtered_count} pattern + {duplicate_count} duplicate)"
-            )
-        else:
-            logger.info(f"✅ _filter_summary_rows: All {len(groups)} groups passed filtering (no summary rows detected)")
+            logger.info(f"✅ Removed {duplicate_count} duplicate company entries")
         
         return unique_filtered_groups
+    
+    def _convert_groups_to_table_text(self, groups: List[Dict[str, Any]]) -> str:
+        """
+        Convert groups to table text format for context-aware analysis.
+        
+        Args:
+            groups: List of group dictionaries
+            
+        Returns:
+            Table text representation
+        """
+        if not groups:
+            return ""
+        
+        # Build table with common fields
+        lines = []
+        
+        # Header
+        lines.append("Group Number | Group/Company Name | Paid Amount")
+        lines.append("-" * 80)
+        
+        # Rows
+        for group in groups:
+            group_no = group.get('group_number', '') or ''
+            group_name = group.get('group_name', '') or group.get('company_name', '') or ''
+            paid_amount = group.get('paid_amount', '') or ''
+            
+            lines.append(f"{group_no} | {group_name} | {paid_amount}")
+        
+        return "\n".join(lines)
     
     def _extract_document_metadata(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Extract document metadata"""

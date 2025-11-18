@@ -128,17 +128,21 @@ async def auto_approve_statement(
         
         # Step 1: Save tables (same as manual flow)
         from app.api.table_editor import save_tables, SaveTablesRequest, TableData
+        from app.services.extraction_utils import sanitize_table_data_for_pydantic
         
         # Convert filtered commission tables to TableData objects
         table_data_list = []
         for table in commission_tables:
+            # Sanitize table data to handle None values before Pydantic validation
+            sanitized_table = sanitize_table_data_for_pydantic(table)
+            
             table_data = TableData(
-                header=table.get("headers", table.get("header", [])),
-                rows=table.get("rows", []),
-                name=table.get("name", ""),
-                summaryRows=table.get("summaryRows", []),
-                extractor=table.get("extractor", ""),
-                metadata=table.get("metadata", {})
+                header=sanitized_table.get("headers", sanitized_table.get("header", [])),
+                rows=sanitized_table.get("rows", []),
+                name=sanitized_table.get("name", ""),
+                summaryRows=sanitized_table.get("summaryRows", []),
+                extractor=sanitized_table.get("extractor", ""),
+                metadata=sanitized_table.get("metadata", {})
             )
             table_data_list.append(table_data)
         

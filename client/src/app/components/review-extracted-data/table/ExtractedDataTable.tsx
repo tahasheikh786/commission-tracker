@@ -91,6 +91,23 @@ export default function ExtractedDataTable({
     toast.success(`Marked ${selectedIndices.length} row(s) as summary`);
   }, [selection, summaryDetection]);
 
+  // Handle unmark summary
+  const handleUnmarkSummary = useCallback(() => {
+    const selectedIndices = Array.from(selection.selectedRows);
+    selectedIndices.forEach(idx => {
+      summaryDetection.unmarkSummaryRow(idx);
+    });
+    selection.clearSelection();
+    toast.success(`Unmarked ${selectedIndices.length} row(s) as summary`);
+  }, [selection, summaryDetection]);
+
+  // Calculate how many selected rows are summary rows
+  const selectedSummaryCount = useMemo(() => {
+    return Array.from(selection.selectedRows).filter(idx => 
+      summaryDetection.isSummaryRow(idx)
+    ).length;
+  }, [selection.selectedRows, summaryDetection]);
+
   // Handle auto-detect summary rows
   const handleAutoDetect = useCallback(() => {
     const count = summaryDetection.autoDetectSummaryRows();
@@ -244,8 +261,10 @@ export default function ExtractedDataTable({
       {/* Bulk Actions Bar */}
       <BulkActionsBar
         selectedCount={selection.selectedRows.size}
+        selectedSummaryCount={selectedSummaryCount}
         onDeleteSelected={handleDeleteSelected}
         onMarkAsSummary={handleMarkAsSummary}
+        onUnmarkSummary={handleUnmarkSummary}
         onClearSelection={selection.clearSelection}
       />
     </div>

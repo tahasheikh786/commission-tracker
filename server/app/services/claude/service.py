@@ -108,7 +108,11 @@ class ClaudeDocumentAIService:
         self.error_handler = ClaudeErrorHandler()
         self.dynamic_prompts = ClaudeDynamicPrompts()
         self.enhanced_prompts = EnhancedClaudePrompts()
-        self.semantic_extractor = SemanticExtractionService()
+        
+        # Initialize semantic extractor with context-aware detection enabled by default
+        # This uses LLM-driven summary row detection instead of hard-coded patterns
+        use_context_aware = self.config.get('use_context_aware_detection', True)
+        self.semantic_extractor = SemanticExtractionService(use_context_aware_detection=use_context_aware)
         
         # Initialize rate limiter for Claude API (CRITICAL for preventing 429 errors)
         # ✅ CRITICAL FIX: Now tracks BOTH input and output tokens separately
@@ -449,7 +453,7 @@ class ClaudeDocumentAIService:
             # Instead of hardcoded page threshold (>8), estimate tokens first
             # This prevents 36K token limit errors on 7-page files with dense content
             
-            # Get prompts for extraction
+            # Get prompts for extraction (same as UHC and all other carriers)
             dynamic_prompt = self.dynamic_prompts.get_prompt_by_name(carrier_name)
             critical_carrier_instructions = self.enhanced_prompts.get_table_extraction_prompt()
             base_extraction_prompt = self.enhanced_prompts.get_document_intelligence_extraction_prompt()
@@ -1896,7 +1900,7 @@ class ClaudeDocumentAIService:
                 "Retrying with alternative Claude model"
             )
         
-        # Get prompts for extraction
+        # Get prompts for extraction (same as UHC and all other carriers)
         dynamic_prompt = self.dynamic_prompts.get_prompt_by_name(carrier_name)
         if dynamic_prompt:
             logger.info(f"🎯 Fallback: Using carrier-specific dynamic prompt for: {carrier_name}")
@@ -1904,8 +1908,6 @@ class ClaudeDocumentAIService:
         # ✅ CRITICAL FIX: Use enhanced prompts + critical carrier instructions for fallback too
         critical_carrier_instructions = self.enhanced_prompts.get_table_extraction_prompt()
         base_extraction_prompt = self.enhanced_prompts.get_document_intelligence_extraction_prompt()
-        
-        # Combine: base + critical requirements + carrier-specific
         full_prompt = base_extraction_prompt + "\n\n" + critical_carrier_instructions + dynamic_prompt
         system_prompt = self.enhanced_prompts.get_base_extraction_instructions()
         

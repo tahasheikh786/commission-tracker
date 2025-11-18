@@ -172,15 +172,7 @@ export default function AIFieldMapperTable({
   // ⚠️ IMPORTANT: Only depend on databaseFieldSelections to avoid infinite loops
   useEffect(() => {
     if (Object.keys(databaseFieldSelections).length > 0 && onStateChange) {
-      console.log('╔═════════════════════════════════════════════════════════');
-      console.log('║ 📤 NOTIFYING PARENT: Dropdown Selections Changed');
-      console.log('╠═════════════════════════════════════════════════════════');
-      console.log('║ Total selections:', Object.keys(databaseFieldSelections).length);
-      Object.entries(databaseFieldSelections).forEach(([field, dbFieldId]) => {
-        const dbField = databaseFields.find(f => String(f.id) === String(dbFieldId));
-        console.log(`║   "${field}" → "${dbField?.display_name || 'Unknown'}" (ID: ${dbFieldId})`);
-      });
-      console.log('╚═════════════════════════════════════════════════════════');
+     
       
       // Call onStateChange directly with current state snapshot
       // Don't use checkAndNotifyStateChange to avoid triggering other state changes
@@ -222,23 +214,14 @@ export default function AIFieldMapperTable({
     const previousSelection = databaseFieldSelections[fieldId];
     const previousField = databaseFields.find(f => String(f.id) === String(previousSelection));
     
-    console.log('┌─────────────────────────────────────────────────────────');
-    console.log('│ 🔄 USER CHANGED MAPPING');
-    console.log('├─────────────────────────────────────────────────────────');
-    console.log(`│ Statement Field: "${fieldId}"`);
-    console.log(`│ Previous Mapping: "${previousField?.display_name || 'None'}" (ID: ${previousSelection})`);
-    console.log(`│ New Mapping: "${dbField?.display_name || 'Unknown'}" (ID: ${dbFieldId})`);
-    console.log('├─────────────────────────────────────────────────────────');
-    console.log(`│ Total selections before: ${Object.keys(databaseFieldSelections).length}`);
+    
     
     setDatabaseFieldSelections(prev => {
       const updated = {
         ...prev,
         [fieldId]: dbFieldId
       };
-      console.log(`│ Total selections after: ${Object.keys(updated).length}`);
-      console.log('│ Updated selections:', updated);
-      console.log('└─────────────────────────────────────────────────────────');
+      
       return updated;
     });
     
@@ -298,9 +281,6 @@ export default function AIFieldMapperTable({
                 value={selectedTableIndex}
                 onChange={(e) => {
                   const newIndex = parseInt(e.target.value);
-                  console.log(`📊 ============ TABLE SWITCHED ============`);
-                  console.log(`📊 User switched from table ${selectedTableIndex} to table ${newIndex}`);
-                  console.log(`📊 New table:`, availableTables[newIndex]);
                   if (onTableChange) {
                     onTableChange(newIndex);
                   }

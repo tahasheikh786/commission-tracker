@@ -835,6 +835,58 @@ Return in this exact structure:
             ]
         
         @staticmethod
+        def get_context_aware_prompt_instructions() -> str:
+            """
+            Context-aware instructions for Claude to intelligently identify summary rows.
+            
+            Uses Claude's natural understanding of table structure and relationships
+            instead of hard-coded patterns.
+            
+            Returns:
+                Context-aware filtering instructions for Claude
+            """
+            return """
+## 🧠 INTELLIGENT SUMMARY ROW DETECTION (Context-Aware)
+
+**APPROACH: Use your understanding of table structure and business logic to identify summary rows.**
+
+Instead of following rigid rules, analyze the table's natural structure and relationships:
+
+### Think Like a Business Analyst:
+
+1. **Understand the Table's Purpose**
+   - What is this table tracking? (commissions, transactions, groups, etc.)
+   - How is the data organized? (by company, by agent, by date, etc.)
+   - What's the natural hierarchy?
+
+2. **Analyze Row Relationships**
+   - Do some rows aggregate data from others?
+   - Are there rows that sum amounts from multiple entries?
+   - Which rows represent individual transactions vs totals?
+
+3. **Look for Contextual Indicators**
+   - Position: Summary rows often appear at section ends
+   - Sparsity: Summary rows may have fewer populated fields
+   - Amounts: Summary amounts often equal sums of detail rows
+   - Text patterns: Words like "Total" may indicate summaries (but check context!)
+
+4. **Handle Edge Cases Intelligently**
+   - "Total Logistics LLC" is a company name, not a summary
+   - Check if "Total" is part of a business name (has LLC, INC, CORP)
+   - Empty identifier columns + amounts often = summary row
+   - Single large transactions are still data rows
+
+### Critical: Extract ALL rows and mark summaries
+
+For each row, add metadata:
+- `"is_summary": true/false` - Your classification
+- `"summary_confidence": 0.0-1.0` - How confident you are
+- `"summary_reason": "..."` - Why you classified it this way
+
+**Let your intelligence guide you, not rigid rules. Understand the data, don't just match patterns.**
+"""
+        
+        @staticmethod
         def get_prompt_instructions() -> str:
             """
             Instructions for Claude to intelligently identify summary rows during extraction.
