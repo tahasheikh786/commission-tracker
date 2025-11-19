@@ -25,6 +25,7 @@ from fastapi.responses import JSONResponse
 import re
 import hashlib
 from app.services.cancellation_manager import cancellation_manager
+from app.constants.statuses import VALID_PERSISTENT_STATUSES
 
 router = APIRouter(prefix="/api", tags=["new-extract"])
 logger = logging.getLogger(__name__)
@@ -107,26 +108,29 @@ async def extract_tables_smart(
             detail=f"Unsupported file type. Allowed: {', '.join(allowed_extensions)}"
         )
     
-    # Save uploaded file
-    file_path = os.path.join(UPLOAD_DIR, file.filename)
+    # ✅ STEP 1: Read file content FIRST (required for hash calculation)
     file_content = await file.read()
     
-    # Calculate file size and hash for duplicate detection
+    # ✅ STEP 2: Calculate file hash IMMEDIATELY (before any other operations)
     file_size = len(file_content)
     file_hash = hashlib.sha256(file_content).hexdigest()
-    logger.info(f"📁 File: {file.filename}, Size: {file_size} bytes, User: {current_user.id}")
     
+    logger.info(f"📁 File: {file.filename}, Size: {file_size} bytes, Hash: {file_hash[:16]}..., User: {current_user.id}")
+    
+    # ✅ STEP 3: DUPLICATE CHECK FIRST - BEFORE GCS upload and file saving
     # Check for duplicates ONLY in successfully extracted files
     # This allows re-upload of failed/cancelled/processing files
-    # CRITICAL: Exclude 'pending' status to allow re-upload of failed/stuck uploads
+    # CRITICAL: Use correct status values from constants module
+    logger.info(f"🔍 Checking for duplicates BEFORE proceeding with upload...")
+    
     existing_upload = await crud.get_statement_by_file_hash_and_status(
         db=db,
         file_hash=file_hash,
-        valid_statuses=['approved', 'needsreview', 'rejected']
+        valid_statuses=VALID_PERSISTENT_STATUSES  # ✅ Use correct status constants: ['Approved', 'needs_review']
     )
     
     if existing_upload:
-        # Return 409 Conflict with duplicate information
+        logger.warning(f"🚫 DUPLICATE DETECTED: File hash {file_hash[:16]}... already exists (upload_id: {existing_upload.id})")
         
         # Generate GCS URL for the existing file
         existing_gcs_url = None
@@ -140,7 +144,7 @@ async def extract_tables_smart(
         if existing_upload.uploaded_at:
             upload_date = existing_upload.uploaded_at.strftime("%B %d, %Y at %I:%M %p")
         
-        # Return 409 Conflict status with clear error message
+        # ✅ Return 409 IMMEDIATELY - no GCS upload, no file saving, no metadata preparation
         return JSONResponse(
             status_code=409,
             content={
@@ -149,7 +153,7 @@ async def extract_tables_smart(
                 "error": f"This file has already been uploaded on {upload_date}.",
                 "message": f"Duplicate file detected. This file was previously uploaded on {upload_date}. Please upload a different file or use the existing one.",
                 "duplicate_info": {
-                    "type": existing_upload.status,  # Fixed: use existing_upload.status instead of undefined duplicate_check
+                    "type": existing_upload.status,
                     "existing_upload_id": str(existing_upload.id),
                     "existing_file_name": existing_upload.file_name,
                     "existing_upload_date": existing_upload.uploaded_at.isoformat() if existing_upload.uploaded_at else None,
@@ -161,10 +165,16 @@ async def extract_tables_smart(
             }
         )
     
+    # ✅ No duplicate found - proceed with normal upload flow
+    logger.info(f"✅ No duplicate found - proceeding with upload for file: {file.filename}")
+    
+    # Prepare file path for saving (only if not a duplicate)
+    file_path = os.path.join(UPLOAD_DIR, file.filename)
+    
     try:
         logger.info(f"🚀 Starting extraction: {file.filename} (ID: {upload_id_str})")
         
-        # Save uploaded file
+        # Save uploaded file to disk (only after duplicate check passes)
         with open(file_path, "wb") as buffer:
             buffer.write(file_content)
 

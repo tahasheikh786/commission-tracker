@@ -429,9 +429,10 @@ export default function SummaryUploadZone({
     } catch (error: any) {
       setIsUploading(false);
       
-      // Handle 409 conflict (duplicate file) specifically
+      // ✅ Enhanced 409 duplicate handling - backend rejects duplicates immediately
       if (error.response?.status === 409) {
         const conflictData = error.response?.data;
+        
         if (conflictData?.status === 'duplicate_detected') {
           const duplicateInfo = conflictData.duplicate_info;
           const uploadDate = duplicateInfo?.existing_upload_date_formatted || 'a previous date';
@@ -440,16 +441,17 @@ export default function SummaryUploadZone({
           const errorMsg = `This file was already uploaded on ${uploadDate}. Please upload a different file or check your existing uploads.`;
           setError(errorMsg);
           
-          // Show toast notification
+          // ✅ Show prominent toast notification with enhanced styling
           toast.error('Duplicate File Detected', {
             duration: 5000,
-            icon: '⚠️',
+            icon: '🔄',
           });
           
-          return;
+          return; // Stop here - don't proceed with upload
         }
       }
       
+      // Handle other errors
       const errorMessage = error.response?.data?.error || error.message || 'Upload failed';
       setError(getCommissionSpecificErrorMessage(errorMessage, file.name));
       toast.error('Upload failed. Please try again.');
