@@ -703,9 +703,12 @@ class ClaudeResponseParser:
                     if 'summary_rows' not in table:
                         table['summary_rows'] = []
                 
-                # 🛡️ SAFETY NET: Detect missed grand total rows
-                # Claude sometimes misses grand total rows when Group Number/Name are empty
-                table = ClaudeResponseParser._detect_missed_summary_rows(table, parsed.get('document_metadata', {}))
+                # ✅ Apply false positive correction only (trust Claude for everything else)
+                # Only fix cases where Claude incorrectly marked valid data rows as summaries
+                table = ClaudeResponseParser._fix_false_positive_summary_markers(table)
+                
+                # ✅ NEW: Detect any summary rows Claude may have missed (false negatives)
+                table = ClaudeResponseParser._detect_missing_summary_rows(table)
                 
                 # Update summary_row_indices after safety net detection
                 if isinstance(first_row, dict) and 'data' in first_row:
@@ -719,28 +722,20 @@ class ClaudeResponseParser:
         return parsed
     
     @staticmethod
-    def _detect_missed_summary_rows(table: Dict[str, Any], document_metadata: Dict[str, Any]) -> Dict[str, Any]:
+    def _fix_false_positive_summary_markers(table: Dict[str, Any]) -> Dict[str, Any]:
         """
-        🛡️ SAFETY NET: Detect and correct summary row misclassifications.
+        ✅ Fix false positive summary markers from Claude.
         
-        This method:
-        1. Detects grand total rows that Claude missed marking as summaries
-        2. 🔴 FIXES FALSE POSITIVES: Corrects initial rows incorrectly marked as summaries
+        Claude sometimes incorrectly marks valid data rows as summaries, especially
+        at the beginning of tables. This method corrects those cases ONLY.
         
-        Claude sometimes fails to mark rows as summaries when:
-        - Group Number is blank/empty
-        - Group Name is blank/empty  
-        - Only the amount column contains the grand total
-        
-        🔴 BUG FIX: Claude sometimes INCORRECTLY marks the first few rows as summaries
-        when they're actually valid data rows. This method detects and corrects these.
+        We trust Claude for everything else - no additional Python validation logic.
         
         Args:
             table: Table dict with headers, rows, and summary_rows
-            document_metadata: Document metadata containing total_amount if available
             
         Returns:
-            Updated table dict with corrected summary rows
+            Updated table dict with false positives removed
         """
         import re
         
@@ -754,7 +749,6 @@ class ClaudeResponseParser:
         # Find key column indices
         group_name_idx = None
         group_no_idx = None
-        amount_idx = None
         group_id_idx = None
         
         for idx, header in enumerate(headers):
@@ -765,15 +759,13 @@ class ClaudeResponseParser:
                 group_id_idx = idx
             elif any(kw in header_lower for kw in ['group name', 'company', 'client name', 'customer']) and 'no' not in header_lower:
                 group_name_idx = idx
-            elif any(kw in header_lower for kw in ['paid amount', 'commission earned', 'commission', 'paid']):
-                amount_idx = idx
         
-        # 🔴 BUG FIX: Check for false positive summary rows at the BEGINNING of the table
-        # Claude sometimes incorrectly marks the first few rows as summaries
+        # Check for false positive summary rows across the ENTIRE table
+        # Claude sometimes incorrectly marks valid data rows as summaries
         false_positive_removals = []
         
-        # Check the first 5 rows (or fewer if table is small)
-        check_limit = min(5, len(rows))
+        # ✅ CRITICAL FIX: Check ALL rows, not just first 5 (to catch end-of-table issues)
+        check_limit = len(rows)
         for row_idx in range(check_limit):
             if row_idx not in summary_rows:
                 continue  # Not marked as summary, skip
@@ -815,14 +807,14 @@ class ClaudeResponseParser:
                 if cell_str and cell_str not in ['', '-', 'N/A', 'n/a']:
                     populated_col_count += 1
             
-            # 🔴 DECISION: If this row has valid identifiers and many populated columns,
+            # DECISION: If this row has valid identifiers and many populated columns,
             # it's likely a DATA ROW that was incorrectly marked as summary
             if has_valid_group_id and has_valid_group_name and populated_col_count >= 6:
                 logger.warning(
-                    f"🔴 BUG FIX: Row {row_idx} was marked as summary but looks like valid data row "
+                    f"🔴 False Positive Fix: Row {row_idx} was marked as summary but has valid data "
                     f"(Group ID: {row[group_id_col] if group_id_col is not None else 'N/A'}, "
                     f"Group Name: {row[group_name_idx] if group_name_idx is not None else 'N/A'}, "
-                    f"Populated cols: {populated_col_count}) - UNMARKING as summary"
+                    f"Populated cols: {populated_col_count}) - UNMARKING"
                 )
                 false_positive_removals.append(row_idx)
         
@@ -831,123 +823,114 @@ class ClaudeResponseParser:
             summary_rows.discard(row_idx)
         
         if false_positive_removals:
-            logger.info(f"✅ Corrected {len(false_positive_removals)} false positive summary rows at start of table: {false_positive_removals}")
+            table['summary_rows'] = sorted(list(summary_rows))
+            logger.info(f"✅ Fixed {len(false_positive_removals)} false positive summary markers: {false_positive_removals}")
         
-        # Get document total if available
-        doc_total = None
-        if document_metadata:
-            doc_total_val = document_metadata.get('total_amount')
-            if doc_total_val:
-                try:
-                    doc_total = float(doc_total_val)
-                except (ValueError, TypeError):
-                    pass
+        return table
+    
+    @staticmethod
+    def _detect_missing_summary_rows(table: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        ✅ Detect summary rows that Claude may have missed (false negatives).
         
-        additional_summary_rows = []
+        This catches rows that should be marked as summaries but weren't, particularly:
+        - Last rows with empty Group No. and substantial amounts (grand totals)
+        - Rows with explicit "Total" keywords and empty identifiers
+        - Rows with ALL identifiers empty but amount populated
         
-        # Strategy 1: Check last row for grand total
-        # Last row often contains the grand total with blank group name/number
-        last_row_idx = len(rows) - 1
-        if last_row_idx not in summary_rows:
-            last_row = rows[last_row_idx]
+        Args:
+            table: Table dict with headers, rows, and summary_rows
             
-            # Check if first few columns are empty/blank
-            leading_empty = True
-            if group_no_idx is not None and group_no_idx < len(last_row):
-                val = str(last_row[group_no_idx]).strip()
-                if val and val not in ['', '-', 'N/A', 'n/a']:
-                    leading_empty = False
+        Returns:
+            Updated table dict with newly detected summary rows added
+        """
+        import re
+        
+        headers = table.get('headers', [])
+        rows = table.get('rows', [])
+        summary_rows = set(table.get('summary_rows', []))
+        
+        if not rows:
+            return table
+        
+        # Find key column indices
+        group_no_idx = None
+        group_name_idx = None
+        amount_idx = None
+        
+        for idx, header in enumerate(headers):
+            header_lower = str(header).lower()
+            if 'group no' in header_lower or 'policy no' in header_lower or 'group number' in header_lower:
+                group_no_idx = idx
+            elif any(kw in header_lower for kw in ['group name', 'company', 'client name', 'customer']) and 'no' not in header_lower:
+                group_name_idx = idx
+            elif any(kw in header_lower for kw in ['paid amount', 'commission', 'total', 'amount paid']):
+                amount_idx = idx
+        
+        if group_no_idx is None or amount_idx is None:
+            return table  # Can't validate without key columns
+        
+        newly_marked = []
+        
+        # Check LAST 3 rows (common location for grand totals)
+        for row_idx in range(max(0, len(rows) - 3), len(rows)):
+            if row_idx in summary_rows:
+                continue  # Already marked
             
-            if group_name_idx is not None and group_name_idx < len(last_row) and leading_empty:
-                val = str(last_row[group_name_idx]).strip()
-                if val and val not in ['', '-', 'N/A', 'n/a']:
-                    leading_empty = False
+            row = rows[row_idx]
             
-            # ✅ NEW: Also check if ALL required columns are empty (not just leading)
-            # This catches cases where row is ["", "", "", "", "", "", "", "$77,137.16"]
-            all_key_cols_empty = True
-            for col_idx in range(len(last_row)):
-                if col_idx == amount_idx:
-                    continue  # Skip the amount column itself
-                val = str(last_row[col_idx]).strip()
-                if val and val not in ['', '-', 'N/A', 'n/a', '$0.00', '$0', '0.00', '0']:
-                    all_key_cols_empty = False
-                    break
+            # Extract values
+            group_no = str(row[group_no_idx]).strip() if group_no_idx < len(row) else ""
+            group_name = str(row[group_name_idx]).strip() if group_name_idx and group_name_idx < len(row) else ""
+            amount_str = str(row[amount_idx]).strip() if amount_idx < len(row) else ""
             
-            # If leading columns are empty OR all key columns are empty but amount column has a value
-            if (leading_empty or all_key_cols_empty) and amount_idx is not None and amount_idx < len(last_row):
-                amount_str = str(last_row[amount_idx]).strip()
-                if amount_str and amount_str not in ['', '-', 'N/A', 'n/a', '$0.00', '$0', '0.00', '0']:
-                    # Parse the amount
+            # STRONG INDICATOR 1: Last row with empty Group No. and substantial amount
+            if row_idx == len(rows) - 1:
+                if not group_no and amount_str:
+                    # Check if amount is substantial (parse and compare)
                     try:
                         # Remove currency symbols, commas, parentheses
-                        clean_amount = re.sub(r'[$,\s]', '', amount_str)
-                        clean_amount = clean_amount.replace('(', '-').replace(')', '')
-                        last_row_amount = float(clean_amount)
-                        
-                        # ✅ ENHANCED: Calculate sum of all non-summary rows for comparison
-                        other_total = 0
-                        for i, row in enumerate(rows):
-                            if i == last_row_idx or i in summary_rows:
-                                continue
-                            if amount_idx < len(row):
-                                try:
-                                    val_str = str(row[amount_idx]).strip()
-                                    clean_val = re.sub(r'[$,\s]', '', val_str)
-                                    clean_val = clean_val.replace('(', '-').replace(')', '')
-                                    other_total += float(clean_val)
-                                except (ValueError, TypeError):
-                                    pass
-                        
-                        # ✅ CRITICAL: If last row amount is close to sum of other rows, it's a grand total
-                        # Use absolute difference check (allow for rounding)
-                        if abs(last_row_amount - other_total) < 1.0:
-                            logger.warning(f"🛡️ Safety net: Last row {last_row_idx} (${last_row_amount:.2f}) matches sum of other rows (${other_total:.2f}) - marking as summary")
-                            additional_summary_rows.append(last_row_idx)
-                        # Also check against document total if available
-                        elif doc_total and abs(last_row_amount - doc_total) < 0.01:
-                            logger.warning(f"🛡️ Safety net: Last row {last_row_idx} matches document total ${doc_total:.2f} - marking as summary")
-                            additional_summary_rows.append(last_row_idx)
-                        # ✅ NEW: If it's suspiciously large and all key columns are empty, likely a total
-                        elif abs(last_row_amount) > 10000 and all_key_cols_empty:
-                            logger.warning(f"🛡️ Safety net: Last row {last_row_idx} (${last_row_amount:.2f}) is large with all key columns empty - marking as summary")
-                            additional_summary_rows.append(last_row_idx)
-                    except (ValueError, TypeError):
+                        clean_amount = amount_str.replace('$', '').replace(',', '').replace('(', '-').replace(')', '')
+                        amount_val = float(clean_amount)
+                        if abs(amount_val) > 100:  # Substantial amount threshold
+                            summary_rows.add(row_idx)
+                            newly_marked.append(row_idx)
+                            logger.info(
+                                f"✅ False Negative Fix: Row {row_idx} (LAST ROW) marked as summary "
+                                f"(empty Group No., amount: {amount_str})"
+                            )
+                    except (ValueError, AttributeError):
                         pass
+            
+            # STRONG INDICATOR 2: Row contains explicit "Total" keyword
+            if any('total' in str(cell).lower() for cell in row):
+                if not group_no:  # Empty Group No. + "Total" keyword
+                    summary_rows.add(row_idx)
+                    newly_marked.append(row_idx)
+                    logger.info(
+                        f"✅ False Negative Fix: Row {row_idx} marked as summary "
+                        f"(contains 'Total' with empty Group No.)"
+                    )
+            
+            # STRONG INDICATOR 3: ALL identifiers empty with amount populated
+            if not group_no and not group_name and amount_str:
+                # Additional check: make sure amount is significant
+                try:
+                    clean_amount = amount_str.replace('$', '').replace(',', '').replace('(', '-').replace(')', '')
+                    amount_val = float(clean_amount)
+                    if abs(amount_val) > 10:  # Minimum threshold
+                        summary_rows.add(row_idx)
+                        newly_marked.append(row_idx)
+                        logger.info(
+                            f"✅ False Negative Fix: Row {row_idx} marked as summary "
+                            f"(all identifiers empty, amount populated: {amount_str})"
+                        )
+                except (ValueError, AttributeError):
+                    pass
         
-        # Strategy 2: Check for rows with "Total" keywords that were missed
-        for row_idx, row in enumerate(rows):
-            if row_idx in summary_rows or row_idx in additional_summary_rows:
-                continue
-            
-            # Check group number for total keywords
-            if group_no_idx is not None and group_no_idx < len(row):
-                val = str(row[group_no_idx]).lower().strip()
-                if any(kw in val for kw in ['total', 'subtotal', 'grand', 'summary', 'combined']):
-                    logger.warning(f"🛡️ Safety net: Row {row_idx} has 'total' keyword in group number: '{row[group_no_idx]}' - marking as summary")
-                    additional_summary_rows.append(row_idx)
-                    continue
-            
-            # Check group name for total keywords
-            if group_name_idx is not None and group_name_idx < len(row):
-                val = str(row[group_name_idx]).lower().strip()
-                if any(kw in val for kw in ['total', 'subtotal', 'grand', 'summary', 'combined']):
-                    logger.warning(f"🛡️ Safety net: Row {row_idx} has 'total' keyword in group name: '{row[group_name_idx]}' - marking as summary")
-                    additional_summary_rows.append(row_idx)
-                    continue
-        
-        # Update summary_rows list
-        # 🔴 CRITICAL: Always update the table with corrected summary_rows
-        # (either with false positives removed, or additional rows added, or both)
-        if additional_summary_rows or false_positive_removals:
-            all_summary_rows = sorted(list(summary_rows) + additional_summary_rows)
-            table['summary_rows'] = all_summary_rows
-            
-            if additional_summary_rows:
-                logger.info(f"🛡️ Safety net: Added {len(additional_summary_rows)} missed summary rows. Total summary rows: {len(all_summary_rows)}")
-            
-            if false_positive_removals:
-                logger.info(f"✅ Corrected summary rows: removed {len(false_positive_removals)} false positives, added {len(additional_summary_rows)} missed rows")
+        if newly_marked:
+            table['summary_rows'] = sorted(list(summary_rows))
+            logger.info(f"✅ Added {len(newly_marked)} missing summary rows: {newly_marked}")
         
         return table
     

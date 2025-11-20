@@ -223,6 +223,9 @@ class GCSService:
         """
         Generate a signed URL for a file in GCS with proper headers for PDF inline viewing.
         
+        ✅ PRODUCTION FIX: Enhanced with better error handling and logging for production debugging.
+        Generates signed URLs with inline viewing headers to prevent download prompts.
+        
         Args:
             gcs_key: GCS object key (path in bucket)
             expiration_hours: Hours until the URL expires
@@ -231,16 +234,21 @@ class GCSService:
             str: Signed URL with proper response headers, or None if generation failed
         """
         if not self.is_available():
-            logger.error("GCS not available or not properly configured")
+            logger.error("❌ GCS not available or not properly configured")
+            logger.error("   Check GOOGLE_APPLICATION_CREDENTIALS environment variable")
+            logger.error("   Check service account has signBlob permission")
             return None
         
         try:
+            logger.info(f"🔐 Generating signed URL for: {gcs_key}")
+            
             # Get blob
             blob = self.bucket.blob(gcs_key)
             
             # Check if blob exists
             if not blob.exists():
-                logger.error(f"File not found in GCS: {gcs_key}")
+                logger.error(f"❌ File not found in GCS: {gcs_key}")
+                logger.error(f"   Bucket: {self.bucket_name}")
                 return None
             
             # Determine content type based on file extension
@@ -248,25 +256,39 @@ class GCSService:
             
             # Generate signed URL with proper response headers for PDF inline viewing
             expiration = datetime.utcnow() + timedelta(hours=expiration_hours)
+            
+            logger.info(f"📝 Generating signed URL with:")
+            logger.info(f"   - Content-Type: {content_type}")
+            logger.info(f"   - Content-Disposition: inline")
+            logger.info(f"   - Expiration: {expiration_hours} hour(s)")
+            
             url = blob.generate_signed_url(
                 version="v4",
                 expiration=expiration,
                 method="GET",
                 response_type=content_type,
-                response_disposition='inline'  # Critical for inline viewing instead of download
+                response_disposition='inline'  # ✅ CRITICAL: Enables inline viewing instead of download
             )
             
             logger.info(f"✅ Generated signed URL for GCS file with inline headers: {gcs_key}")
+            logger.info(f"   URL expires at: {expiration}")
             return url
             
         except NotFound:
-            logger.error(f"File not found in GCS: {gcs_key}")
+            logger.error(f"❌ File not found in GCS: {gcs_key}")
+            logger.error(f"   Bucket: {self.bucket_name}")
             return None
         except GoogleCloudError as e:
-            logger.error(f"GCS signed URL error: {e}")
+            logger.error(f"❌ GCS signed URL error: {e}")
+            logger.error(f"   This may indicate:")
+            logger.error(f"   1. Service account missing iam.serviceAccounts.signBlob permission")
+            logger.error(f"   2. CORS not configured on GCS bucket")
+            logger.error(f"   3. Network connectivity issues")
             return None
         except Exception as e:
-            logger.error(f"Unexpected error generating signed URL: {e}")
+            logger.error(f"❌ Unexpected error generating signed URL: {e}")
+            logger.error(f"   GCS Key: {gcs_key}")
+            logger.error(f"   Bucket: {self.bucket_name}")
             return None
     
     def copy_file(self, source_key: str, dest_key: str) -> bool:

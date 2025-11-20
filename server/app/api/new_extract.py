@@ -864,9 +864,18 @@ async def extract_tables_smart(
                         # Call the enhanced extraction analysis endpoint for both field mapping and plan detection
                         from app.api.ai_intelligent_mapping import enhanced_extraction_analysis
                         
+                        # ✅ CRITICAL FIX: Normalize headers before AI mapping (remove newlines)
+                        original_headers = selected_table.get('header', [])
+                        normalized_headers = [h.replace('\n', ' ').strip() for h in original_headers]
+                        
+                        logger.info(f"📋 Normalizing headers for AI mapping:")
+                        for orig, norm in zip(original_headers, normalized_headers):
+                            if orig != norm:
+                                logger.info(f"   '{orig}' → '{norm}'")
+                        
                         # Prepare request data
                         analysis_request = {
-                            "extracted_headers": selected_table['header'],
+                            "extracted_headers": normalized_headers,  # ✅ Use normalized headers
                             "table_sample_data": selected_table.get('rows', [])[:5],
                             "document_context": {
                                 'carrier_name': carrier.name if carrier else None,
@@ -889,15 +898,48 @@ async def extract_tables_smart(
                             # Extract field mapping data
                             field_mapping = ai_analysis_result.get('field_mapping', {})
                             if field_mapping.get('success'):
+                                mappings = field_mapping.get('mappings', [])
+                                
+                                # ✅ CRITICAL FIX: Add sample data to each mapping
+                                selected_table_headers = selected_table.get('header', [])
+                                selected_table_rows = selected_table.get('rows', [])
+                                
+                                for mapping in mappings:
+                                    extracted_field = mapping.get('extracted_field')
+                                    
+                                    # Find column index for this field
+                                    col_idx = None
+                                    for idx, header in enumerate(selected_table_headers):
+                                        # Normalize both for comparison (remove newlines)
+                                        normalized_header = header.replace('\n', ' ').strip()
+                                        normalized_field = extracted_field.replace('\n', ' ').strip()
+                                        if normalized_header == normalized_field:
+                                            col_idx = idx
+                                            break
+                                    
+                                    # Extract sample value from first non-empty row
+                                    sample_value = ''
+                                    if col_idx is not None and selected_table_rows:
+                                        for row in selected_table_rows[:5]:  # Check first 5 rows
+                                            if col_idx < len(row) and row[col_idx]:
+                                                cell_value = str(row[col_idx]).strip()
+                                                if cell_value and cell_value != '':
+                                                    sample_value = cell_value
+                                                    break
+                                    
+                                    # Add sample value to mapping
+                                    mapping['sample_value'] = sample_value
+                                    logger.debug(f"   Sample for '{extracted_field}': '{sample_value}'")
+                                
                                 ai_field_mapping_data = {
                                     "ai_enabled": True,
-                                    "mappings": field_mapping.get('mappings', []),
+                                    "mappings": mappings,
                                     "unmapped_fields": field_mapping.get('unmapped_fields', []),
                                     "confidence": field_mapping.get('confidence', 0.0),
                                     "learned_format_used": field_mapping.get('learned_format_used', False),
                                     "timestamp": ai_analysis_result.get('timestamp')
                                 }
-                                logger.info(f"✅ AI Field Mapping: {len(ai_field_mapping_data.get('mappings', []))} mappings with {ai_field_mapping_data.get('confidence', 0):.2f} confidence")
+                                logger.info(f"✅ AI Field Mapping: {len(mappings)} mappings with sample data, confidence {field_mapping.get('confidence', 0):.2f}")
                             else:
                                 ai_field_mapping_data = {"ai_enabled": False, "error": "Field mapping failed"}
                             
@@ -1130,13 +1172,87 @@ async def extract_tables_smart(
             await connection_manager.emit_upload_step(upload_id, 'preparing_results', 95)
         
         # Add server-specific fields to response
-        # ✅ Extract total_amount from document_metadata if available
+        # ✅ Extract total_amount (commission) and total_invoice from document_metadata if available
         extracted_total = 0.0
+        extracted_invoice_total = 0.0
+        
         if document_metadata and 'total_amount' in document_metadata:
             try:
                 extracted_total = float(document_metadata.get('total_amount', 0))
             except (ValueError, TypeError):
                 extracted_total = 0.0
+        
+        # ✅ CRITICAL FIX: Extract invoice total from document_metadata
+        if document_metadata and 'total_invoice' in document_metadata:
+            try:
+                extracted_invoice_total = float(document_metadata.get('total_invoice', 0))
+            except (ValueError, TypeError):
+                extracted_invoice_total = 0.0
+        
+        # ✅ CRITICAL FIX: Calculate invoice total from ALL tables (not just selected_table)
+        if extracted_invoice_total == 0.0 and extraction_result.get('tables'):
+            try:
+                all_tables = extraction_result.get('tables', [])
+                logger.info(f"📊 Calculating invoice total from {len(all_tables)} tables")
+                
+                total_invoice_sum = 0.0
+                
+                for table_idx, table in enumerate(all_tables):
+                    headers = table.get('header', []) or table.get('headers', [])
+                    rows = table.get('rows', [])
+                    summary_rows = set(table.get('summary_rows', []))
+                    
+                    if not headers or not rows:
+                        continue
+                    
+                    # Look for invoice amount/total column
+                    invoice_col_idx = None
+                    for idx, header in enumerate(headers):
+                        h_lower = str(header).lower().replace('\n', ' ')
+                        if any(kw in h_lower for kw in ['invoice amount', 'invoice total', 'total invoice']):
+                            invoice_col_idx = idx
+                            logger.info(f"📊 Table {table_idx}: Found invoice column at index {idx}: '{header}'")
+                            break
+                    
+                    if invoice_col_idx is not None:
+                        # Strategy 1: Try to get from summary row first (most accurate)
+                        for row_idx in summary_rows:
+                            if row_idx < len(rows):
+                                row = rows[row_idx]
+                                if invoice_col_idx < len(row):
+                                    cell_value = str(row[invoice_col_idx]).replace('$', '').replace(',', '').strip()
+                                    try:
+                                        table_invoice_total = float(cell_value)
+                                        total_invoice_sum += table_invoice_total
+                                        logger.info(f"✅ Table {table_idx}: Extracted from summary row: ${table_invoice_total:,.2f}")
+                                        break
+                                    except ValueError:
+                                        continue
+                        else:
+                            # Strategy 2: Sum all non-summary rows
+                            table_invoice_sum = 0.0
+                            for row_idx, row in enumerate(rows):
+                                if row_idx not in summary_rows and invoice_col_idx < len(row):
+                                    cell_value = str(row[invoice_col_idx]).replace('$', '').replace(',', '').strip()
+                                    try:
+                                        amount = float(cell_value)
+                                        if amount > 0:  # Only add positive values
+                                            table_invoice_sum += amount
+                                    except ValueError:
+                                        continue
+                            
+                            if table_invoice_sum > 0:
+                                total_invoice_sum += table_invoice_sum
+                                logger.info(f"✅ Table {table_idx}: Calculated from rows: ${table_invoice_sum:,.2f}")
+                
+                if total_invoice_sum > 0:
+                    extracted_invoice_total = total_invoice_sum
+                    logger.info(f"✅ TOTAL invoice amount from all tables: ${extracted_invoice_total:,.2f}")
+                else:
+                    logger.warning(f"⚠️ Could not calculate invoice total from tables")
+                    
+            except Exception as e:
+                logger.warning(f"Failed to extract invoice total from tables: {e}")
         
         client_response.update({
             "success": True,
@@ -1146,7 +1262,8 @@ async def extract_tables_smart(
             "gcs_key": gcs_key,
             "file_name": gcs_key,  # Use full GCS path as file_name for PDF preview
             "conversational_summary": conversational_summary,  # ← NEW: Include in response
-            "extracted_total": extracted_total  # ✅ NEW: Include extracted total for auto-approval
+            "extracted_total": extracted_total,  # ✅ Commission total for auto-approval
+            "extracted_invoice_total": extracted_invoice_total  # ✅ CRITICAL FIX: Invoice total for dashboard
         })
         
         # Emit WebSocket: EXTRACTION_COMPLETE with full results

@@ -1,0 +1,886 @@
+{
+    "success": true,
+    "upload_id": "8259980e-7afb-4e8d-a0e5-ca4fc3886e0f",
+    "tables": [
+        {
+            "table_id": 1,
+            "page_number": 1,
+            "title": "Group Invoices for Broker Commissions",
+            "headers": [
+                "Group ID",
+                "Group Name",
+                "Invoice Amount",
+                "Commissionable \nAmount",
+                "Comm. Rate",
+                "Commission \nAmount"
+            ],
+            "rows": [
+                [
+                    "G-RDA012300035",
+                    "Bear Pack Logistics, LLC",
+                    "$11,731.00",
+                    "$11,231.00",
+                    "2.00%",
+                    "$224.62"
+                ],
+                [
+                    "G-RDA012300075",
+                    "CG23 Logistics",
+                    "$10,084.00",
+                    "$9,324.00",
+                    "2.00%",
+                    "$186.48"
+                ],
+                [
+                    "G-RDA012300060",
+                    "DT Logistics LLC",
+                    "$5,214.00",
+                    "$4,774.00",
+                    "2.00%",
+                    "$95.48"
+                ],
+                [
+                    "G-RDA012300062",
+                    "Ozarks Last Mile",
+                    "$12,900.00",
+                    "$11,540.00",
+                    "2.00%",
+                    "$230.80"
+                ],
+                [
+                    "G-RDA012300061",
+                    "People's Transit",
+                    "$13,888.00",
+                    "$13,888.00",
+                    "2.00%",
+                    "$277.76"
+                ],
+                [
+                    "G-RDA012300067",
+                    "Alcala Logistics",
+                    "$11,696.00",
+                    "$11,696.00",
+                    "6.00%",
+                    "$701.76"
+                ],
+                [
+                    "G-RDA012300064",
+                    "Anam Logistics",
+                    "$3,858.00",
+                    "$3,858.00",
+                    "6.00%",
+                    "$231.48"
+                ],
+                [
+                    "G-RDA001230067",
+                    "Atlas Logistics Services",
+                    "$2,905.00",
+                    "$2,905.00",
+                    "6.00%",
+                    "$174.30"
+                ],
+                [
+                    "G-RDA0123069",
+                    "BAMAC Enterprise LLC",
+                    "$6,953.00",
+                    "$6,953.00",
+                    "6.00%",
+                    "$417.18"
+                ],
+                [
+                    "G-RDA012300035",
+                    "Bear Pack Logistics, LLC",
+                    "$11,731.00",
+                    "$11,231.00",
+                    "6.00%",
+                    "$673.86"
+                ],
+                [
+                    "G-RDA0123075",
+                    "Cannon Logistics, LLC",
+                    "$5,248.00",
+                    "$5,248.00",
+                    "6.00%",
+                    "$314.88"
+                ],
+                [
+                    "G-RDA012300075",
+                    "CG23 Logistics",
+                    "$10,084.00",
+                    "$9,324.00",
+                    "6.00%",
+                    "$559.44"
+                ],
+                [
+                    "G-RDA012300060",
+                    "DT Logistics LLC",
+                    "$5,214.00",
+                    "$4,774.00",
+                    "6.00%",
+                    "$286.44"
+                ],
+                [
+                    "G-RDA01230024",
+                    "JDW Logistics",
+                    "$6,896.00",
+                    "$6,896.00",
+                    "6.00%",
+                    "$413.76"
+                ],
+                [
+                    "G-RDA0123091",
+                    "Legacy Delivery and Logistics",
+                    "$7,978.00",
+                    "$7,978.00",
+                    "6.00%",
+                    "$478.68"
+                ],
+                [
+                    "G-RDA012300062",
+                    "Ozarks Last Mile",
+                    "$12,900.00",
+                    "$11,540.00",
+                    "6.00%",
+                    "$692.40"
+                ],
+                [
+                    "G-RDA012300061",
+                    "People's Transit",
+                    "$13,888.00",
+                    "$13,888.00",
+                    "6.00%",
+                    "$833.28"
+                ],
+                [
+                    "G-RDA0123087",
+                    "Pria Logistics",
+                    "$6,595.00",
+                    "$6,595.00",
+                    "6.00%",
+                    "$395.70"
+                ],
+                [
+                    "G-RDA012300068",
+                    "Salute Logistics, LLC",
+                    "$7,535.00",
+                    "$7,535.00",
+                    "6.00%",
+                    "$452.10"
+                ],
+                [
+                    "",
+                    "TOTAL",
+                    "$167,298.00",
+                    "$161,178.00",
+                    "",
+                    "$7,640.40"
+                ]
+            ],
+            "summary_rows": [
+                19
+            ],
+            "metadata": {
+                "total_tables_merged": 1,
+                "total_rows": 20,
+                "canonical_header": [
+                    "Group ID",
+                    "Group Name",
+                    "Invoice Amount",
+                    "Commissionable \nAmount",
+                    "Comm. Rate",
+                    "Commission \nAmount"
+                ],
+                "merged_from_tables": [
+                    0
+                ]
+            },
+            "header": [
+                "Group ID",
+                "Group Name",
+                "Invoice Amount",
+                "Commissionable \nAmount",
+                "Comm. Rate",
+                "Commission \nAmount"
+            ]
+        },
+        {
+            "table_id": 2,
+            "page_number": 2,
+            "title": "Group Invoices for Broker Commissions",
+            "headers": [
+                "Group ID",
+                "Group Name",
+                "Invoice Amount",
+                "Commissionable \nAmount",
+                "Allowance Type",
+                "Commission \nAmount"
+            ],
+            "rows": [
+                [
+                    "G-RDA012300035",
+                    "Bear Pack Logistics, LLC",
+                    "$11,731.00",
+                    "$11,731.00",
+                    "PEPM",
+                    "$500.00"
+                ],
+                [
+                    "G-RDA012300075",
+                    "CG23 Logistics",
+                    "$10,084.00",
+                    "$10,084.00",
+                    "PEPM",
+                    "$760.00"
+                ],
+                [
+                    "G-RDA012300060",
+                    "DT Logistics LLC",
+                    "$5,214.00",
+                    "$5,214.00",
+                    "PEPM",
+                    "$440.00"
+                ],
+                [
+                    "G-RDA012300062",
+                    "Ozarks Last Mile",
+                    "$12,900.00",
+                    "$12,900.00",
+                    "PEPM",
+                    "$1,360.00"
+                ],
+                [
+                    "",
+                    "TOTAL",
+                    "$39,929.00",
+                    "$39,929.00",
+                    "",
+                    "$3,060.00"
+                ]
+            ],
+            "summary_rows": [
+                4
+            ],
+            "metadata": {
+                "total_tables_merged": 1,
+                "total_rows": 5,
+                "canonical_header": [
+                    "Group ID",
+                    "Group Name",
+                    "Invoice Amount",
+                    "Commissionable \nAmount",
+                    "Allowance Type",
+                    "Commission \nAmount"
+                ],
+                "merged_from_tables": [
+                    0
+                ]
+            },
+            "header": [
+                "Group ID",
+                "Group Name",
+                "Invoice Amount",
+                "Commissionable \nAmount",
+                "Allowance Type",
+                "Commission \nAmount"
+            ]
+        },
+        {
+            "table_id": 3,
+            "page_number": 2,
+            "title": "Total",
+            "headers": [
+                "Invoice amount",
+                "Commissionable \nAmount",
+                "Commission \nAmount"
+            ],
+            "rows": [
+                [
+                    "$113,481.00",
+                    "$110,421.00",
+                    "$10,700.40"
+                ]
+            ],
+            "summary_rows": [
+                0
+            ],
+            "metadata": {
+                "total_tables_merged": 1,
+                "total_rows": 1,
+                "canonical_header": [
+                    "Invoice amount",
+                    "Commissionable \nAmount",
+                    "Commission \nAmount"
+                ],
+                "merged_from_tables": [
+                    0
+                ]
+            },
+            "header": [
+                "Invoice amount",
+                "Commissionable \nAmount",
+                "Commission \nAmount"
+            ]
+        }
+    ],
+    "file_name": "statements/8340174b-f6ed-42eb-976d-4868bb06c844/2025.07.pdf",
+    "gcs_url": "https://storage.googleapis.com/pdf_extraction_files_saver/statements/8340174b-f6ed-42eb-976d-4868bb06c844/2025.07.pdf?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=docsai-table-extractor%40pdf-tables-extractor-465009.iam.gserviceaccount.com%2F20251120%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20251120T133726Z&X-Goog-Expires=3599&X-Goog-SignedHeaders=host&response-content-disposition=inline&response-content-type=application%2Fpdf&X-Goog-Signature=3fa617e5b8c32baff09e43b118c115e5390c5c2bb71940b084a3b806c1d722c8f534b757d2c219d8521bcdd1d4ee590a10623d27646952150ea1aef887df215622f637e2a753495e1bb5073afd465b7931467147eeb499edc641aa6c71ddacd0a12c9ba0c7a014334936129af170ac73590f178a5db0b568a32bc31bca5fa6b2b93ccc3cd0185bb4170ca0186252ba7026ae4f5ec92c7ad8b31342e495fa235a891165c9d11b59c4d32c0e2e54cd34e14588f55cd05eb5169791888fde3cad6b27943de6067d001e9e54610af49e169613ccf7a023044b2a1f87dfc7d9f4f7d0617712460549d8389d01ebc5c92b90e8cf8c13bb63169524226704e25a52b3c7",
+    "gcs_key": "statements/8340174b-f6ed-42eb-976d-4868bb06c844/2025.07.pdf",
+    "company_id": "8340174b-f6ed-42eb-976d-4868bb06c844",
+    "carrier_id": "8340174b-f6ed-42eb-976d-4868bb06c844",
+    "extraction_method": "smart",
+    "file_type": "pdf",
+    "processing_time": 418.951262,
+    "quality_summary": {
+        "overall_confidence": 0.95,
+        "extraction_method": "gpt5_vision_structured_outputs",
+        "quality_grade": "A"
+    },
+    "extraction_config": {},
+    "format_learning": {
+        "found_match": true,
+        "match_score": 0.8400000000000001,
+        "learned_format": {
+            "format_signature": "f0d2424f7efd76c2fcfb224d0246d1f1",
+            "headers": [
+                "Group ID",
+                "Group Name",
+                "Invoice Amount",
+                "Commissionable Amount",
+                "Comm. Rate",
+                "Commission Amount"
+            ],
+            "column_types": {
+                "Group ID": "string",
+                "Comm. Rate": "currency",
+                "Group Name": "string",
+                "Invoice Amount": "currency",
+                "Commission Amount": "currency",
+                "Commissionable Amount": "currency"
+            },
+            "column_patterns": {
+                "Comm. Rate": "^\\$?\\d{1,3}(,\\d{3})*(\\.\\d{2})?$",
+                "Invoice Amount": "^\\$?\\d{1,3}(,\\d{3})*(\\.\\d{2})?$",
+                "Commission Amount": "^\\$?\\d{1,3}(,\\d{3})*(\\.\\d{2})?$",
+                "Commissionable Amount": "^\\$?\\d{1,3}(,\\d{3})*(\\.\\d{2})?$"
+            },
+            "field_mapping": {
+                "Group ID": "Policy Number",
+                "Comm. Rate": "Commission Rate",
+                "Group Name": "Client Name",
+                "Invoice Amount": "Invoice Total",
+                "Commission Amount": "Commission Earned",
+                "Commissionable Amount": "Premium Total"
+            },
+            "table_editor_settings": {
+                "headers": [
+                    "Group ID",
+                    "Group Name",
+                    "Invoice Amount",
+                    "Commissionable Amount",
+                    "Comm. Rate",
+                    "Commission Amount"
+                ],
+                "summary_rows": [],
+                "corrected_carrier_name": "",
+                "corrected_statement_date": "2025-04-30",
+                "user_corrections": {
+                    "carrier_name": "",
+                    "statement_date": "2025-04-30"
+                }
+            },
+            "confidence_score": 90,
+            "usage_count": 23
+        },
+        "suggested_mapping": {
+            "Group ID": "Policy Number",
+            "Comm. Rate": "Commission Rate",
+            "Group Name": "Client Name",
+            "Invoice Amount": "Invoice Total",
+            "Commission Amount": "Commission Earned",
+            "Commissionable Amount": "Premium Total"
+        },
+        "table_editor_settings": {
+            "headers": [
+                "Group ID",
+                "Group Name",
+                "Invoice Amount",
+                "Commissionable Amount",
+                "Comm. Rate",
+                "Commission Amount"
+            ],
+            "summary_rows": [],
+            "corrected_carrier_name": "",
+            "corrected_statement_date": "2025-04-30",
+            "user_corrections": {
+                "carrier_name": "",
+                "statement_date": "2025-04-30"
+            }
+        },
+        "can_automate": false,
+        "automation_reason": "Statement date not detected - manual review required",
+        "requires_review": true,
+        "current_total_amount": 10700.4,
+        "learned_total_amount": null,
+        "total_validation": null
+    },
+    "metadata": {
+        "table_count": 3,
+        "quality_grade": "A",
+        "confidence_score": 0.95,
+        "token_usage": {
+            "total": 16244,
+            "input": 3140,
+            "output": 0
+        }
+    },
+    "extracted_carrier": "Redirect Health",
+    "extracted_date": null,
+    "document_metadata": {
+        "carrier_name": "Redirect Health",
+        "carrier_confidence": 0.99,
+        "statement_date": null,
+        "date_confidence": 0.95,
+        "broker_company": "Innovative BPS LLC",
+        "broker_confidence": 0.99,
+        "total_amount": 10700.4,
+        "total_amount_confidence": 0.85,
+        "total_pages": 2,
+        "extraction_method": "gpt5_vision",
+        "total_amount_label": "Total Amount",
+        "total_extraction_method": "document_metadata",
+        "total_confidence": 0.95
+    },
+    "upload_metadata": {
+        "upload_id": "8259980e-7afb-4e8d-a0e5-ca4fc3886e0f",
+        "company_id": "d883a865-a54f-41d6-968e-f94c3cb3f589",
+        "carrier_id": "8340174b-f6ed-42eb-976d-4868bb06c844",
+        "user_company_id": "d883a865-a54f-41d6-968e-f94c3cb3f589",
+        "user_id": "f6cf1764-5bfc-4352-abd9-81b72b7cf191",
+        "environment_id": "9f4a7a57-5715-4b1e-98a9-b9901726a485",
+        "file_name": "statements/8340174b-f6ed-42eb-976d-4868bb06c844/2025.07.pdf",
+        "file_hash": "78d4bf1925fb9790fb8d2ce7f9821c785cd1d6cf9cd0a9cc293b09a96d73b752",
+        "file_size": 75304,
+        "uploaded_at": "2025-11-20T13:30:29.755896",
+        "extraction_method": "smart",
+        "file_type": "pdf",
+        "start_time": "2025-11-20T15:30:26.226390",
+        "extraction_completed": true,
+        "completion_time": "2025-11-20T13:37:25.177582",
+        "tables_count": 3,
+        "extraction_method_used": "smart",
+        "raw_data": [
+            {
+                "table_id": 1,
+                "page_number": 1,
+                "title": "Group Invoices for Broker Commissions",
+                "headers": [
+                    "Group ID",
+                    "Group Name",
+                    "Invoice Amount",
+                    "Commissionable \nAmount",
+                    "Comm. Rate",
+                    "Commission \nAmount"
+                ],
+                "rows": [
+                    [
+                        "G-RDA012300035",
+                        "Bear Pack Logistics, LLC",
+                        "$11,731.00",
+                        "$11,231.00",
+                        "2.00%",
+                        "$224.62"
+                    ],
+                    [
+                        "G-RDA012300075",
+                        "CG23 Logistics",
+                        "$10,084.00",
+                        "$9,324.00",
+                        "2.00%",
+                        "$186.48"
+                    ],
+                    [
+                        "G-RDA012300060",
+                        "DT Logistics LLC",
+                        "$5,214.00",
+                        "$4,774.00",
+                        "2.00%",
+                        "$95.48"
+                    ],
+                    [
+                        "G-RDA012300062",
+                        "Ozarks Last Mile",
+                        "$12,900.00",
+                        "$11,540.00",
+                        "2.00%",
+                        "$230.80"
+                    ],
+                    [
+                        "G-RDA012300061",
+                        "People's Transit",
+                        "$13,888.00",
+                        "$13,888.00",
+                        "2.00%",
+                        "$277.76"
+                    ],
+                    [
+                        "G-RDA012300067",
+                        "Alcala Logistics",
+                        "$11,696.00",
+                        "$11,696.00",
+                        "6.00%",
+                        "$701.76"
+                    ],
+                    [
+                        "G-RDA012300064",
+                        "Anam Logistics",
+                        "$3,858.00",
+                        "$3,858.00",
+                        "6.00%",
+                        "$231.48"
+                    ],
+                    [
+                        "G-RDA001230067",
+                        "Atlas Logistics Services",
+                        "$2,905.00",
+                        "$2,905.00",
+                        "6.00%",
+                        "$174.30"
+                    ],
+                    [
+                        "G-RDA0123069",
+                        "BAMAC Enterprise LLC",
+                        "$6,953.00",
+                        "$6,953.00",
+                        "6.00%",
+                        "$417.18"
+                    ],
+                    [
+                        "G-RDA012300035",
+                        "Bear Pack Logistics, LLC",
+                        "$11,731.00",
+                        "$11,231.00",
+                        "6.00%",
+                        "$673.86"
+                    ],
+                    [
+                        "G-RDA0123075",
+                        "Cannon Logistics, LLC",
+                        "$5,248.00",
+                        "$5,248.00",
+                        "6.00%",
+                        "$314.88"
+                    ],
+                    [
+                        "G-RDA012300075",
+                        "CG23 Logistics",
+                        "$10,084.00",
+                        "$9,324.00",
+                        "6.00%",
+                        "$559.44"
+                    ],
+                    [
+                        "G-RDA012300060",
+                        "DT Logistics LLC",
+                        "$5,214.00",
+                        "$4,774.00",
+                        "6.00%",
+                        "$286.44"
+                    ],
+                    [
+                        "G-RDA01230024",
+                        "JDW Logistics",
+                        "$6,896.00",
+                        "$6,896.00",
+                        "6.00%",
+                        "$413.76"
+                    ],
+                    [
+                        "G-RDA0123091",
+                        "Legacy Delivery and Logistics",
+                        "$7,978.00",
+                        "$7,978.00",
+                        "6.00%",
+                        "$478.68"
+                    ],
+                    [
+                        "G-RDA012300062",
+                        "Ozarks Last Mile",
+                        "$12,900.00",
+                        "$11,540.00",
+                        "6.00%",
+                        "$692.40"
+                    ],
+                    [
+                        "G-RDA012300061",
+                        "People's Transit",
+                        "$13,888.00",
+                        "$13,888.00",
+                        "6.00%",
+                        "$833.28"
+                    ],
+                    [
+                        "G-RDA0123087",
+                        "Pria Logistics",
+                        "$6,595.00",
+                        "$6,595.00",
+                        "6.00%",
+                        "$395.70"
+                    ],
+                    [
+                        "G-RDA012300068",
+                        "Salute Logistics, LLC",
+                        "$7,535.00",
+                        "$7,535.00",
+                        "6.00%",
+                        "$452.10"
+                    ],
+                    [
+                        "",
+                        "TOTAL",
+                        "$167,298.00",
+                        "$161,178.00",
+                        "",
+                        "$7,640.40"
+                    ]
+                ],
+                "summary_rows": [
+                    19
+                ],
+                "metadata": {
+                    "total_tables_merged": 1,
+                    "total_rows": 20,
+                    "canonical_header": [
+                        "Group ID",
+                        "Group Name",
+                        "Invoice Amount",
+                        "Commissionable \nAmount",
+                        "Comm. Rate",
+                        "Commission \nAmount"
+                    ],
+                    "merged_from_tables": [
+                        0
+                    ]
+                },
+                "header": [
+                    "Group ID",
+                    "Group Name",
+                    "Invoice Amount",
+                    "Commissionable \nAmount",
+                    "Comm. Rate",
+                    "Commission \nAmount"
+                ]
+            },
+            {
+                "table_id": 2,
+                "page_number": 2,
+                "title": "Group Invoices for Broker Commissions",
+                "headers": [
+                    "Group ID",
+                    "Group Name",
+                    "Invoice Amount",
+                    "Commissionable \nAmount",
+                    "Allowance Type",
+                    "Commission \nAmount"
+                ],
+                "rows": [
+                    [
+                        "G-RDA012300035",
+                        "Bear Pack Logistics, LLC",
+                        "$11,731.00",
+                        "$11,731.00",
+                        "PEPM",
+                        "$500.00"
+                    ],
+                    [
+                        "G-RDA012300075",
+                        "CG23 Logistics",
+                        "$10,084.00",
+                        "$10,084.00",
+                        "PEPM",
+                        "$760.00"
+                    ],
+                    [
+                        "G-RDA012300060",
+                        "DT Logistics LLC",
+                        "$5,214.00",
+                        "$5,214.00",
+                        "PEPM",
+                        "$440.00"
+                    ],
+                    [
+                        "G-RDA012300062",
+                        "Ozarks Last Mile",
+                        "$12,900.00",
+                        "$12,900.00",
+                        "PEPM",
+                        "$1,360.00"
+                    ],
+                    [
+                        "",
+                        "TOTAL",
+                        "$39,929.00",
+                        "$39,929.00",
+                        "",
+                        "$3,060.00"
+                    ]
+                ],
+                "summary_rows": [
+                    4
+                ],
+                "metadata": {
+                    "total_tables_merged": 1,
+                    "total_rows": 5,
+                    "canonical_header": [
+                        "Group ID",
+                        "Group Name",
+                        "Invoice Amount",
+                        "Commissionable \nAmount",
+                        "Allowance Type",
+                        "Commission \nAmount"
+                    ],
+                    "merged_from_tables": [
+                        0
+                    ]
+                },
+                "header": [
+                    "Group ID",
+                    "Group Name",
+                    "Invoice Amount",
+                    "Commissionable \nAmount",
+                    "Allowance Type",
+                    "Commission \nAmount"
+                ]
+            },
+            {
+                "table_id": 3,
+                "page_number": 2,
+                "title": "Total",
+                "headers": [
+                    "Invoice amount",
+                    "Commissionable \nAmount",
+                    "Commission \nAmount"
+                ],
+                "rows": [
+                    [
+                        "$113,481.00",
+                        "$110,421.00",
+                        "$10,700.40"
+                    ]
+                ],
+                "summary_rows": [
+                    0
+                ],
+                "metadata": {
+                    "total_tables_merged": 1,
+                    "total_rows": 1,
+                    "canonical_header": [
+                        "Invoice amount",
+                        "Commissionable \nAmount",
+                        "Commission \nAmount"
+                    ],
+                    "merged_from_tables": [
+                        0
+                    ]
+                },
+                "header": [
+                    "Invoice amount",
+                    "Commissionable \nAmount",
+                    "Commission \nAmount"
+                ]
+            }
+        ],
+        "field_mapping": null
+    },
+    "environment_id": "9f4a7a57-5715-4b1e-98a9-b9901726a485",
+    "user_id": "f6cf1764-5bfc-4352-abd9-81b72b7cf191",
+    "uploaded_at": "2025-11-20T13:30:29.755896",
+    "file_hash": "78d4bf1925fb9790fb8d2ce7f9821c785cd1d6cf9cd0a9cc293b09a96d73b752",
+    "file_size": 75304,
+    "ai_intelligence": {
+        "enabled": true,
+        "field_mapping": {
+            "ai_enabled": true,
+            "mappings": [
+                {
+                    "extracted_field": "Group ID",
+                    "mapped_to": "Policy Number",
+                    "mapped_to_column": "policy_number",
+                    "database_field_id": "6b7616ba-7fd5-42b3-bc90-bbae7d62b7a4",
+                    "confidence": 0.95,
+                    "reasoning": "Learned from previous mapping (match score: 1.00)",
+                    "alternatives": [],
+                    "requires_review": false
+                },
+                {
+                    "extracted_field": "Group Name",
+                    "mapped_to": "Client Name",
+                    "mapped_to_column": "client_name",
+                    "database_field_id": "81fa3503-6213-4c14-b929-2d1c5af09561",
+                    "confidence": 0.95,
+                    "reasoning": "Learned from previous mapping (match score: 1.00)",
+                    "alternatives": [],
+                    "requires_review": false
+                },
+                {
+                    "extracted_field": "Invoice Amount",
+                    "mapped_to": "Invoice Total",
+                    "mapped_to_column": "invoice_total",
+                    "database_field_id": "237f54ea-4de6-4580-b19c-67c81dccf148",
+                    "confidence": 0.95,
+                    "reasoning": "Learned from previous mapping (match score: 1.00)",
+                    "alternatives": [],
+                    "requires_review": false
+                },
+                {
+                    "extracted_field": "Comm. Rate",
+                    "mapped_to": "Commission Rate",
+                    "mapped_to_column": "commission_rate",
+                    "database_field_id": "c8251025-c6d9-4c72-bd74-e00de05dcb58",
+                    "confidence": 0.95,
+                    "reasoning": "Learned from previous mapping (match score: 1.00)",
+                    "alternatives": [],
+                    "requires_review": false
+                }
+            ],
+            "unmapped_fields": [
+                "Commissionable \nAmount",
+                "Commission \nAmount"
+            ],
+            "confidence": 0.95,
+            "learned_format_used": true,
+            "timestamp": "2025-11-20T15:37:35.921261"
+        },
+        "plan_type_detection": {
+            "ai_enabled": true,
+            "detected_plan_types": [
+                {
+                    "plan_type": "Medical",
+                    "plan_type_id": "250cc087-07f9-450e-9913-9c08ba547872",
+                    "confidence": 0.9,
+                    "reasoning": "The document structure and invoice amounts are consistent with medical insurance plans. The carrier, Redirect Health, is known to specialize in medical insurance, and the amounts listed are typical of medical insurance premiums.",
+                    "evidence": [
+                        "Invoice amounts are consistent with medical insurance premiums",
+                        "Carrier specialization in medical insurance",
+                        "Group ID and Group Name structure typical of medical insurance statements"
+                    ],
+                    "requires_review": false
+                }
+            ],
+            "confidence": 0.9,
+            "multi_plan_document": false,
+            "statistics": {}
+        },
+        "table_selection": {
+            "enabled": true,
+            "selected_table_index": 0,
+            "reasoning": "Selected table 0 (table_type=, rows=20, commission_headers=3, score=85)",
+            "total_tables": 3,
+            "fallback_used": false
+        },
+        "overall_confidence": 0.95
+    },
+    "message": "Successfully extracted 3 tables using smart method.",
+    "extraction_id": "8259980e-7afb-4e8d-a0e5-ca4fc3886e0f",
+    "conversational_summary": "Commission statement from Redirect Health, dated Unknown, prepared for Innovative BPS LLC.",
+    "extracted_total": 10700.4
+}

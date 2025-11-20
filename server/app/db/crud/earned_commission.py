@@ -574,18 +574,24 @@ def extract_field_mappings_once(field_config):
             # Check for invoice total fields - STRICT MATCHING for user selections
             # 🔧 FIX 2: Changed from elif to if for independent checking
             if not mappings['invoice_total_field']:
+                source_lower = source_field.lower()
+                
                 # Priority 1: Exact match to "Invoice Total" (highest priority for user selection)
                 if target_lower in ['invoice total', 'invoicetotal', 'invoice_total']:
                     mappings['invoice_total_field'] = source_field
-                    print(f"✅ Found invoice total field (exact): {source_field} -> {target_mapping}")
-                # Priority 2: Other acceptable matches ONLY if no Invoice Total was mapped
+                    print(f"✅ Found invoice total field (exact target): {source_field} -> {target_mapping}")
+                # Priority 2: Check SOURCE field for "Invoice Amount" pattern
+                elif 'invoice' in source_lower and ('amount' in source_lower or 'total' in source_lower):
+                    mappings['invoice_total_field'] = source_field
+                    print(f"✅ Found invoice field from SOURCE pattern: {source_field} -> {target_mapping}")
+                # Priority 3: Other acceptable target matches
                 elif target_lower in ['premium amount', 'premiumamount', 'statement total amount', 'total amount']:
                     mappings['invoice_total_field'] = source_field
-                    print(f"✅ Found invoice total field (alternative): {source_field} -> {target_mapping}")
-                # Priority 3: Pattern matching only if no exact matches found
+                    print(f"✅ Found invoice total field (alternative target): {source_field} -> {target_mapping}")
+                # Priority 4: Pattern matching in target only if no exact matches found
                 elif ('invoice' in target_lower and 'total' in target_lower):
                     mappings['invoice_total_field'] = source_field
-                    print(f"✅ Found invoice total field (pattern): {source_field} -> {target_mapping}")
+                    print(f"✅ Found invoice total field (target pattern): {source_field} -> {target_mapping}")
     
     # If we didn't find the fields, try alternative field names
     if not mappings['client_name_field']:
@@ -614,6 +620,20 @@ def extract_field_mappings_once(field_config):
                 if any(keyword in source_field.lower() for keyword in ['paid amount', 'commission', 'earned', 'paid', 'amount']):
                     mappings['commission_earned_field'] = source_field
                     print(f"✅ Found alternative commission field: {source_field} -> {target_mapping}")
+                    break
+    
+    # ✅ CRITICAL FIX: Also check SOURCE field for invoice patterns (not just target)
+    if not mappings['invoice_total_field']:
+        print("⚠️  Invoice total field not found, trying SOURCE field patterns...")
+        for field in field_config:
+            if isinstance(field, dict):
+                source_field = field.get('field', '') or field.get('source_field', '') or field.get('display_name', '')
+                source_lower = source_field.lower()
+                
+                # Check SOURCE field for invoice patterns
+                if any(keyword in source_lower for keyword in ['invoice amount', 'invoice total', 'premium amount', 'total invoice']):
+                    mappings['invoice_total_field'] = source_field
+                    print(f"✅ Found invoice field from SOURCE: {source_field}")
                     break
     
     # Debug logging to help troubleshoot field mapping issues

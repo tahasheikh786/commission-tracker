@@ -837,53 +837,98 @@ Return in this exact structure:
         @staticmethod
         def get_context_aware_prompt_instructions() -> str:
             """
-            Context-aware instructions for Claude to intelligently identify summary rows.
+            Optimized 2025 prompt engineering instructions for summary detection.
+            Uses hierarchical STOP logic with clear priorities.
             
-            Uses Claude's natural understanding of table structure and relationships
-            instead of hard-coded patterns.
-            
-            Returns:
-                Context-aware filtering instructions for Claude
+            This returns the optimized hierarchical prompt structure with STOP at first match.
             """
             return """
-## 🧠 INTELLIGENT SUMMARY ROW DETECTION (Context-Aware)
-
-**APPROACH: Use your understanding of table structure and business logic to identify summary rows.**
-
-Instead of following rigid rules, analyze the table's natural structure and relationships:
-
-### Think Like a Business Analyst:
-
-1. **Understand the Table's Purpose**
-   - What is this table tracking? (commissions, transactions, groups, etc.)
-   - How is the data organized? (by company, by agent, by date, etc.)
-   - What's the natural hierarchy?
-
-2. **Analyze Row Relationships**
-   - Do some rows aggregate data from others?
-   - Are there rows that sum amounts from multiple entries?
-   - Which rows represent individual transactions vs totals?
-
-3. **Look for Contextual Indicators**
-   - Position: Summary rows often appear at section ends
-   - Sparsity: Summary rows may have fewer populated fields
-   - Amounts: Summary amounts often equal sums of detail rows
-   - Text patterns: Words like "Total" may indicate summaries (but check context!)
-
-4. **Handle Edge Cases Intelligently**
-   - "Total Logistics LLC" is a company name, not a summary
-   - Check if "Total" is part of a business name (has LLC, INC, CORP)
-   - Empty identifier columns + amounts often = summary row
-   - Single large transactions are still data rows
-
-### Critical: Extract ALL rows and mark summaries
-
-For each row, add metadata:
-- `"is_summary": true/false` - Your classification
-- `"summary_confidence": 0.0-1.0` - How confident you are
-- `"summary_reason": "..."` - Why you classified it this way
-
-**Let your intelligence guide you, not rigid rules. Understand the data, don't just match patterns.**
+<summary_detection>
+  <approach>
+  Use semantic understanding to classify rows as DATA or SUMMARY.
+  Apply hierarchical priority rules (PRIORITY 1 → 2 → 3 → 4).
+  STOP at first match. Do NOT continue to next rule if one matches.
+  </approach>
+  
+  <priority_hierarchy>
+    <priority_1 confidence="0.99">
+      <name>Explicit Keywords with Colons</name>
+      <rule>Check if FIRST COLUMN contains exact phrases WITH colons</rule>
+      <keywords>
+        - "Total for Group:"
+        - "Total for Vendor:"
+        - "Grand Total:"
+        - "Subtotal:"
+        - "Writing Agent Number:"
+        - "Writing Agent Name:"
+        - "Agent 2 Name:"
+        - "Producer Name:"
+      </keywords>
+      <decision>If found → is_summary: true, confidence: 0.99 → STOP</decision>
+    </priority_1>
+    
+    <priority_2 confidence="0.95">
+      <name>Valid Group No + Company Name</name>
+      <rule>Check if row has valid business identifiers (ALL THREE must be true)</rule>
+      <conditions>
+        1. Group No matches pattern: L##### or ##### (5-7 digits)
+        2. Company Name populated (length > 2, actual text)
+        3. Company Name does NOT contain summary keywords (unless LLC/INC/CORP)
+      </conditions>
+      <decision>If ALL THREE true → is_summary: false, confidence: 0.95 → STOP</decision>
+      <special_cases>
+        - Negative amounts WITH valid IDs = DATA ROW (adjustments)
+        - Low census (1,2,3) WITH valid IDs = DATA ROW (small groups)
+        - "Total" in business name WITH LLC/INC/CORP = DATA ROW
+      </special_cases>
+    </priority_2>
+    
+    <priority_3 confidence="0.90">
+      <name>Empty Identifiers with Amount</name>
+      <rule>Check if both key identifier columns are empty but amount present</rule>
+      <conditions>
+        1. Group No is empty OR only symbols (—, -, n/a)
+        2. Company Name is empty OR only "Total"/"Summary"
+        3. Amount column is populated with currency value
+      </conditions>
+      <decision>If ALL THREE true → is_summary: true, confidence: 0.90 → STOP</decision>
+    </priority_3>
+    
+    <priority_4 confidence="0.40">
+      <name>Default Fallback</name>
+      <rule>If NO rules 1-3 matched</rule>
+      <decision>is_summary: false (default to DATA ROW), confidence: 0.40</decision>
+      <note>Should rarely happen. Flag for manual review.</note>
+    </priority_4>
+  </priority_hierarchy>
+  
+  <critical_reminders>
+    ✅ Negative amounts = DATA (adjustments, not summaries)
+    ✅ Low census (1,2,3) = DATA (small groups are real)
+    ✅ Company name contains "Total" = DATA if has LLC/INC/CORP
+    ❌ Do NOT use position (last row, first rows) as indicator
+    ❌ Do NOT use amount size as indicator
+    ❌ MUST STOP at first matching rule (don't continue evaluation)
+  </critical_reminders>
+  
+  <validation_checklist>
+    Before returning, verify for EVERY row:
+    □ "data" field with array values?
+    □ "is_summary" boolean?
+    □ "summary_confidence" 0.0-1.0?
+    □ "summary_reason" text?
+    □ Rules applied in order 1→2→3→4?
+    □ STOPPED at first match?
+  </validation_checklist>
+  
+  <expected_results>
+    Typical commission statement:
+    - Data rows: ~85% (most rows)
+    - Summary rows: ~15% (totals + metadata)
+    
+    ⚠️ WARNING: If > 20% marked as summaries, re-check rule application
+  </expected_results>
+</summary_detection>
 """
         
         @staticmethod

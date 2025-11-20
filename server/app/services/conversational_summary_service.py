@@ -3,17 +3,16 @@ Conversational Summary Service
 Transforms technical extraction data into natural, user-friendly summaries
 
 Inspired by Google Gemini's natural language approach to document summarization.
+
+⭐ NOW USES GPT-4 (OpenAI) instead of Claude for consistency with extraction pipeline
 """
 
 import logging
 import asyncio
 from typing import Dict, Any, Optional
 from datetime import datetime
-import anthropic
+from openai import AsyncOpenAI
 import os
-
-# ✅ CRITICAL FIX: Import rate limiter to prevent 429 errors
-from app.services.claude.utils import ClaudeTokenBucket
 
 logger = logging.getLogger(__name__)
 
@@ -24,27 +23,23 @@ class ConversationalSummaryService:
     
     Inspired by Google Gemini's natural language approach to document summarization.
     
-    ✅ CRITICAL FIX: Now includes rate limiting for output tokens.
+    ⭐ NOW USES GPT-4 (OpenAI) for consistency with GPT-5 Vision extraction pipeline
     """
     
     def __init__(self):
-        """Initialize with Claude for summary generation"""
-        self.client = anthropic.AsyncAnthropic(api_key=os.getenv("CLAUDE_API_KEY"))
-        # CRITICAL FIX: Fixed typo in model name (was missing hyphen between 4 and 5)
-        self.model = "claude-sonnet-4-5-20250929"  # Claude Sonnet 4.5 - Fast, high-quality model
+        """Initialize with OpenAI GPT for summary generation"""
+        api_key = os.getenv("OPENAI_API_KEY")
+        self.client = AsyncOpenAI(api_key=api_key) if api_key else None
+        self.model = "gpt-4o"  # GPT-4o - Fast, high-quality, multimodal model
         
-        # ✅ CRITICAL FIX: Initialize rate limiter to prevent 429 errors
-        self.rate_limiter = ClaudeTokenBucket(
-            requests_per_minute=50,
-            input_tokens_per_minute=40000,
-            output_tokens_per_minute=8000,
-            buffer_percentage=0.90
-        )
-        logger.info("✅ ConversationalSummaryService initialized with rate limiting")
+        if self.client:
+            logger.info("✅ ConversationalSummaryService initialized with GPT-4o")
+        else:
+            logger.warning("⚠️ ConversationalSummaryService initialized without OpenAI API key")
         
     def is_available(self) -> bool:
         """Check if service is ready"""
-        return bool(os.getenv("CLAUDE_API_KEY"))
+        return self.client is not None and bool(os.getenv("OPENAI_API_KEY"))
     
     def extract_structured_summary_data(
         self,
@@ -68,8 +63,8 @@ class ConversationalSummaryService:
             # Extract structured fields
             structured_data = {
                 'broker_id': doc_meta.get('statement_number') or doc_meta.get('document_number'),
-                'carrier_name': entities.get('carrier', {}).get('name') if entities else extraction_data.get('carrier_name'),
-                'broker_company': entities.get('broker', {}).get('company_name') if entities else extraction_data.get('broker_company'),
+                'carrier_name': entities.get('carrier', {}).get('name') if entities else (extraction_data.get('carrier', {}).get('name') or extraction_data.get('carrier_name')),
+                'broker_company': entities.get('broker', {}).get('company_name') if entities else (extraction_data.get('broker_agent', {}).get('company_name') or extraction_data.get('broker_company')),
                 'statement_date': doc_meta.get('statement_date'),
                 'payment_type': doc_meta.get('payment_type'),
                 'total_amount': None,  # Will be processed below
@@ -86,7 +81,10 @@ class ConversationalSummaryService:
                     pass
             
             if not structured_data.get('total_amount') and business_intel:
-                raw_amount = business_intel.get('total_commission_amount')
+                # Try multiple field names for total commission
+                raw_amount = (business_intel.get('total_commission_amount') or 
+                             business_intel.get('total_commission') or
+                             business_intel.get('total_amount'))
                 if raw_amount:
                     try:
                         if isinstance(raw_amount, str):
@@ -118,6 +116,14 @@ class ConversationalSummaryService:
                 structures = business_intel.get('commission_structures', [])
                 if structures:
                     structured_data['commission_structure'] = ', '.join(structures[:2])  # First 2
+            
+            # Extract census_count from business_intelligence first, then tables
+            if business_intel and business_intel.get('total_census_count'):
+                structured_data['census_count'] = str(business_intel.get('total_census_count'))
+            
+            # Extract billing_periods from business_intelligence first
+            if business_intel and business_intel.get('billing_period_range'):
+                structured_data['billing_periods'] = business_intel.get('billing_period_range')
             
             # Extract census_count from tables or groups
             if tables and len(tables) > 0:
@@ -208,62 +214,35 @@ class ConversationalSummaryService:
             # Get appropriate system prompt
             system_prompt = self._get_system_prompt(use_enhanced)
             
-            # ✅ CRITICAL FIX: Estimate tokens and check rate limits BEFORE calling API
-            # Reduced max_tokens to stay well within 8K OTPM limit (was 1200/1000, now 800/600)
-            max_output_tokens = 800 if use_enhanced else 600
+            # Set max tokens for OpenAI (no need for complex rate limiting since we're using GPT-4o)
+            max_output_tokens = 1200 if use_enhanced else 800
             
-            # Estimate input tokens (prompt + system prompt, ~4 chars per token)
-            estimated_input_tokens = (len(prompt) + len(system_prompt)) // 4
-            # Estimate output tokens (use max_tokens as estimate)
-            estimated_output_tokens = max_output_tokens
-            
-            logger.info(f"📊 Estimated tokens - Input: {estimated_input_tokens:,}, Output: {estimated_output_tokens:,}")
-            
-            # Wait if needed to respect rate limits
-            wait_time = await self.rate_limiter.wait_if_needed(estimated_input_tokens, estimated_output_tokens)
-            if wait_time > 1:
-                logger.info(f"⏱️  Waited {wait_time:.2f}s for rate limit compliance")
-            
-            # Call Claude with optimized parameters for natural language
-            # Using assistant prefill to force consistent output format (Anthropic best practice)
-            logger.info(f"🚀 Calling Claude API for summary generation...")
+            logger.info(f"🚀 Calling GPT-4o API for summary generation...")
             logger.info(f"   Model: {self.model}")
             logger.info(f"   Max tokens: {max_output_tokens}")
             logger.info(f"   Prompt length: {len(prompt)} chars")
             logger.info(f"   System prompt length: {len(system_prompt)} chars")
             
-            response = await self.client.messages.create(
+            # Call OpenAI GPT-4o with optimized parameters for natural language
+            response = await self.client.chat.completions.create(
                 model=self.model,
-                max_tokens=max_output_tokens,  # More tokens for enhanced summaries
+                max_completion_tokens=max_output_tokens,
                 temperature=0.7,  # Balanced creativity for natural language
-                system=system_prompt,
                 messages=[
-                    {"role": "user", "content": prompt},
-                    {"role": "assistant", "content": "This is"}  # ← PREFILL: Forces consistent start (NO trailing space!)
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": prompt}
                 ]
             )
             
-            # ✅ CRITICAL FIX: Track actual token usage after API call
-            actual_input_tokens = response.usage.input_tokens if hasattr(response, 'usage') else estimated_input_tokens
-            actual_output_tokens = response.usage.output_tokens if hasattr(response, 'usage') else estimated_output_tokens
+            # Track token usage
+            actual_input_tokens = response.usage.prompt_tokens if response.usage else 0
+            actual_output_tokens = response.usage.completion_tokens if response.usage else 0
             
-            # Update rate limiter with actual usage
-            async with self.rate_limiter.lock:
-                # Correct the estimates with actual values
-                self.rate_limiter.input_token_count = (
-                    self.rate_limiter.input_token_count - estimated_input_tokens + actual_input_tokens
-                )
-                self.rate_limiter.output_token_count = (
-                    self.rate_limiter.output_token_count - estimated_output_tokens + actual_output_tokens
-                )
+            logger.info(f"📊 Token usage - Input: {actual_input_tokens:,}, Output: {actual_output_tokens:,}")
+            logger.info(f"✅ GPT-4o API call successful")
             
-            logger.info(f"📊 Actual usage - Input: {actual_input_tokens:,}, Output: {actual_output_tokens:,}")
-            
-            logger.info(f"✅ Claude API call successful")
-            logger.info(f"   Response content blocks: {len(response.content)}")
-            
-            # Extract summary from response (prepend the prefill text with space)
-            raw_summary = response.content[0].text if response.content else ""
+            # Extract summary from response
+            raw_summary = response.choices[0].message.content if response.choices else ""
             
             # Try to parse as JSON (new structured format)
             try:
@@ -274,14 +253,14 @@ class ConversationalSummaryService:
                 json_match = re.search(r'\{[\s\S]*"conversational_summary"[\s\S]*\}', raw_summary)
                 
                 if json_match:
-                    logger.info("✅ Detected structured JSON response from Claude")
+                    logger.info("✅ Detected structured JSON response from GPT-4o")
                     json_str = json_match.group(0)
                     parsed = json.loads(json_str)
                     
-                    summary_text = ("This is " + parsed.get('conversational_summary', raw_summary)).strip()
+                    summary_text = parsed.get('conversational_summary', raw_summary).strip()
                     key_value_data = parsed.get('key_value_data', {})
                     
-                    logger.info(f"📊 Claude provided {len(key_value_data)} fields: {list(key_value_data.keys())}")
+                    logger.info(f"📊 GPT-4o provided {len(key_value_data)} fields: {list(key_value_data.keys())}")
                     
                     # Merge with extracted structured data (fallback for missing fields)
                     structured_data = self.extract_structured_summary_data(extraction_data)
@@ -297,12 +276,12 @@ class ConversationalSummaryService:
                 else:
                     # Old format - just text summary
                     logger.info("⚠️ No structured JSON found, using text-only summary")
-                    summary_text = ("This is " + raw_summary).strip()
+                    summary_text = raw_summary.strip()
                     final_structured_data = self.extract_structured_summary_data(extraction_data)
                     
             except Exception as e:
                 logger.warning(f"⚠️ Could not parse JSON response, using fallback: {e}")
-                summary_text = ("This is " + raw_summary).strip()
+                summary_text = raw_summary.strip()
                 final_structured_data = self.extract_structured_summary_data(extraction_data)
             
             logger.info(f"📄 Generated summary length: {len(summary_text)} characters")
@@ -313,7 +292,7 @@ class ConversationalSummaryService:
             return {
                 "success": True,
                 "summary": summary_text,
-                "structured_data": final_structured_data,  # Now includes Claude's key-value data
+                "structured_data": final_structured_data,  # Includes GPT-4o's key-value data
                 "processing_time": processing_time,
                 "model": self.model,
                 "approach": "conversational_natural_language_with_structured_output"
@@ -392,16 +371,39 @@ DON'T:
 </communication_rules>
 
 <output_format>
-Your summary structure:
+⭐ **CRITICAL**: You MUST return your response as JSON with two parts:
+
+{
+  "conversational_summary": "Your natural language summary here...",
+  "key_value_data": {
+    "carrier_name": "Exact carrier name",
+    "broker_company": "Exact broker company name",
+    "statement_date": "YYYY-MM-DD format",
+    "broker_id": "Document/statement number if present",
+    "payment_type": "EFT/Check/Wire",
+    "total_amount": "Numeric string (e.g., '1027.20')",
+    "company_count": "Number of companies/groups",
+    "top_contributors": [
+      {"name": "Company Name", "amount": "123.45"}
+    ],
+    "commission_structure": "Brief description of commission types",
+    "census_count": "Total census if present",
+    "billing_periods": "Period range if present"
+  }
+}
+
+Your conversational_summary structure (3-4 sentences):
 Sentence 1: Document type, carrier, broker, and date
 Sentence 2: Total amount, company count, and top 1-2 contributors with amounts
 Sentence 3: Plan type breakdown or notable characteristics (lump sums, incentives, PEPM structure)
 (Optional 4th): Additional context if document has unique features
 
 Keep it flowing and natural - these sentences should read as one cohesive paragraph.
+
+⚠️ IMPORTANT: Extract as many key_value_data fields as possible from the source data. Include ALL fields that have values.
 </output_format>
 
-Remember: You're not just reporting data - you're telling the story of this commission statement in a way that immediately makes sense to the user."""
+Remember: You're not just reporting data - you're telling the story of this commission statement AND providing structured fields for the UI."""
     
     def _build_summary_prompt(
         self,
@@ -690,13 +692,38 @@ Your summary should feel like Gemini's document summaries - comprehensive yet co
 </instructions>
 
 <output>
-Write ONLY the conversational summary paragraph. Do not include:
-- Preambles like "Here's a summary:" or "Based on the data:"
-- Closing remarks like "Let me know if you need more details"
-- Bullet points or structured lists
-- Field labels like "Carrier:" or "Total:"
+⭐ **CRITICAL OUTPUT FORMAT**: Return VALID JSON ONLY (no markdown, no code blocks):
 
-Start immediately with "This is a..." or "This document shows..." and provide the rich, flowing summary.
+{{
+  "conversational_summary": "Your natural, flowing 3-4 sentence summary starting with 'This is...'",
+  "key_value_data": {{
+    "carrier_name": "{carrier}",
+    "broker_company": "{broker}",
+    "statement_date": "{date}",
+    "broker_id": "{broker_id if broker_id else 'null'}",
+    "payment_type": "{payment_type}",
+    "total_amount": "{total_amount}",
+    "company_count": {company_count},
+    "top_contributors": [
+      {{"name": "Company Name", "amount": "123.45"}}
+    ],
+    "commission_structure": "Brief description",
+    "census_count": "Total census if available",
+    "billing_periods": "Period range if available"
+  }}
+}}
+
+**conversational_summary**: Write a natural, flowing paragraph (3-4 sentences) starting with "This is..." or "This document shows..."
+- NO preambles, NO closing remarks, NO bullet points, NO field labels
+- Pack maximum information with specific names, amounts, and details
+
+**key_value_data**: Extract ALL available fields from the data provided above
+- Use exact values from the source data
+- Convert amounts to numeric strings without $ or commas
+- Include company_count, top_contributors (top 2-3), commission structures, etc.
+- Set fields to null if not available (don't omit them)
+
+Return ONLY the JSON object. Do not wrap in markdown code blocks or add any text before/after.
 </output>"""
 
         return prompt
@@ -942,7 +969,30 @@ Start immediately with "This is a..." or "This document shows..." and provide th
         if doc_metadata and date == 'Unknown':
             date = doc_metadata.get('statement_date', 'Unknown')
         
-        summary = f"Commission statement from {carrier}, dated {date}, prepared for {broker}."
+        # ✅ ENHANCED: Build more detailed fallback summary
+        summary_parts = [f"Commission statement from {carrier}"]
+        
+        # Add date if available
+        if date and date != 'Unknown':
+            summary_parts.append(f"for period ending {date}")
+        
+        # Add broker if available
+        if broker and broker != 'Unknown':
+            summary_parts.append(f"prepared for {broker}")
+        
+        # Add total amount if available
+        total_amount = doc_metadata.get('total_amount') if doc_metadata else None
+        if total_amount:
+            summary_parts.append(f"Total commission: ${total_amount:,.2f}")
+        
+        # Add number of groups if available
+        tables = extraction_data.get('tables', [])
+        if tables:
+            total_rows = sum(len(table.get('rows', [])) for table in tables)
+            if total_rows > 0:
+                summary_parts.append(f"{total_rows} commission entries across {len(tables)} table(s)")
+        
+        summary = ". ".join(summary_parts) + "."
         
         logger.warning(f"   Fallback summary: {summary}")
         

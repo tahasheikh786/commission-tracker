@@ -10,11 +10,6 @@ This module implements research-backed prompt engineering techniques:
 Based on the Cursor AI Implementation Guide for matching Google Gemini quality.
 """
 
-from .extraction_rules import ExtractionRules
-from .uhc import get_uhc_prompt
-from .redirect_health import get_redirect_health_prompt
-
-
 class EnhancedClaudePrompts:
     """Enhanced prompts for intelligent document understanding"""
     
@@ -99,39 +94,8 @@ If you cannot find the information with high confidence, use null for the value 
         """
         Main prompt for extracting tables from commission statements.
         Optimized for Claude 4 with XML structure and character-level precision.
-        
-        Includes carrier-specific instructions for UHC and Redirect Health.
-        Uses unified carrier and total amount extraction rules to ensure consistency.
         """
-        # Get unified rules
-        carrier_rules_xml = ExtractionRules.Carrier.get_xml_format()
-        total_amount_rules_xml = ExtractionRules.Amount.get_xml_format()
-        
-        # Get carrier-specific prompts
-        uhc_prompt = get_uhc_prompt()
-        redirect_health_prompt = get_redirect_health_prompt()
-        
-        # Build carrier-specific section
-        carrier_specific_section = f"""
-
-## 🏢 CARRIER-SPECIFIC EXTRACTION RULES
-
-**The following carriers have unique formats requiring special handling:**
-
-### 1. UnitedHealthcare (UHC)
-
-{uhc_prompt}
-
-### 2. Redirect Health
-
-{redirect_health_prompt}
-
-**IMPORTANT:** Apply carrier-specific rules ONLY when the carrier is detected from the document.
-For all other carriers, use standard extraction logic.
-
-"""
-        
-        base_prompt = f"""<document_extraction_task>
+        return """<document_extraction_task>
 
 <role_context>
 You are analyzing an insurance commission statement PDF. Your extraction must be pixel-perfect accurate because this data feeds automated approval systems. Any modification or addition of text creates duplicate records and breaks automation.
@@ -142,12 +106,35 @@ You are analyzing an insurance commission statement PDF. Your extraction must be
 <!-- PHASE 1: DOCUMENT METADATA EXTRACTION -->
 <phase id="1" name="metadata_extraction" priority="critical">
 
-{carrier_rules_xml}
+<carrier_extraction>
+  <objective>Extract the insurance carrier name EXACTLY as shown</objective>
+  
+  <search_strategy>
+    <priority_areas>
+      1. Logo area (top 20% of page)
+      2. Company branding/letterhead
+      3. Footer copyright statements
+      4. Document header (verify not broker name)
+    </priority_areas>
+  </search_strategy>
+  
+  <critical_instructions>
+    <instruction>Extract EXACT text - preserve spacing, capitalization, punctuation</instruction>
+    <instruction>DO NOT add "Insurance", "Company", "Inc" unless visible</instruction>
+    <instruction>DO NOT confuse broker name (recipient) with carrier name (issuer)</instruction>
+  </critical_instructions>
+  
+  <output_format>
+    {{
+      "carrier_name": "Exact carrier name",
+      "carrier_confidence": 0.95,
+      "evidence": "Found in logo area at top of page"
+    }}
+  </output_format>
+</carrier_extraction>
 
 <statement_date_extraction>
-  <objective>
-    Extract the statement or reporting period date
-  </objective>
+  <objective>Extract the statement or reporting period date</objective>
   
   <search_strategy>
     <priority_labels>
@@ -216,8 +203,6 @@ You are analyzing an insurance commission statement PDF. Your extraction must be
   </output_format>
 </broker_company_extraction>
 
-{total_amount_rules_xml}
-
 </phase>
 
 <!-- PHASE 2: TABLE EXTRACTION -->
@@ -233,48 +218,6 @@ You are analyzing an insurance commission statement PDF. Your extraction must be
     - Monetary values with $ or decimal points
   </visual_indicators>
 </table_detection>
-
-<company_name_column_handling>
-  <scenario name="company_as_column">
-    <condition>Company names appear as regular column header</condition>
-    <action>Extract normally within existing table structure</action>
-  </scenario>
-  
-  <scenario name="company_in_summary_rows">
-    <condition>Company names appear in non-column format (summary rows, section headers)</condition>
-    <critical_action>
-      1. ADD "Company Name" as FIRST column in headers array
-      2. Populate this column with company name for each data row
-      3. Maintain alignment between company names and data rows
-      4. Track context as you process document sequentially
-    </critical_action>
-    
-    <example>
-      <document_structure>
-        Writing Agent: 271004-02 GOLDSTEIN, ANAT
-        Customer: 1653402
-        Customer Name: B &amp; B Lightning Protection
-        Med 10/01/2024 ($3,844.84) -3 NJ PEPM ...
-        Med 10/01/2024 $3,844.84 3 NJ PEPM ...
-        
-        Customer: 1674097  
-        Customer Name: MAMMOTH DELIVERY LLC
-        Med 12/01/2024 $55.58 3 WI PEPM ...
-      </document_structure>
-      
-      <extracted_table>
-        {{
-          "headers": ["Company Name", "Cov Type", "Bill Eff Date", "Billed Premium", ...],
-          "rows": [
-            ["B &amp; B Lightning Protection", "Med", "10/01/2024", "($3,844.84)", ...],
-            ["B &amp; B Lightning Protection", "Med", "10/01/2024", "$3,844.84", ...],
-            ["MAMMOTH DELIVERY LLC", "Med", "12/01/2024", "$55.58", ...]
-          ]
-        }}
-      </extracted_table>
-    </example>
-  </scenario>
-</company_name_column_handling>
 
 <table_output_format>
   {{
@@ -297,8 +240,6 @@ You are analyzing an insurance commission statement PDF. Your extraction must be
 </phase>
 
 </extraction_workflow>
-
-{carrier_specific_section}
 
 <!-- FINAL OUTPUT STRUCTURE -->
 <output_structure>
@@ -343,37 +284,7 @@ You are analyzing an insurance commission statement PDF. Your extraction must be
 </quality_checks>
 
 </document_extraction_task>"""
-        
-        return base_prompt
 
-    @staticmethod
-    def get_context_aware_table_extraction_prompt(use_context_aware: bool = True) -> str:
-        """
-        Get table extraction prompt with optional context-aware summary detection.
-        
-        Args:
-            use_context_aware: If True, include context-aware instructions instead of rigid rules
-            
-        Returns:
-            Table extraction prompt with appropriate summary detection instructions
-        """
-        # Get the base table extraction prompt
-        base_prompt = EnhancedClaudePrompts.get_table_extraction_prompt()
-        
-        # Add context-aware or pattern-based filtering instructions
-        if use_context_aware:
-            filtering_instructions = ExtractionRules.Filtering.get_context_aware_prompt_instructions()
-        else:
-            filtering_instructions = ExtractionRules.Filtering.get_prompt_instructions()
-        
-        # Insert filtering instructions before the final output structure
-        enhanced_prompt = base_prompt.replace(
-            '<!-- FINAL OUTPUT STRUCTURE -->',
-            f'{filtering_instructions}\n\n<!-- FINAL OUTPUT STRUCTURE -->'
-        )
-        
-        return enhanced_prompt
-    
     @staticmethod
     def get_base_extraction_instructions() -> str:
         """Get static extraction instructions (for caching)."""
@@ -423,32 +334,64 @@ Format your response as structured markdown without code blocks. Dont return tab
     @staticmethod
     def get_document_intelligence_system_prompt() -> str:
         """
-        System prompt for document intelligence extraction.
-        Optimized for Claude 4 with zero hallucination tolerance.
-        Enhanced with comprehensive summary row removal intelligence.
+        Phase 1: Document Intelligence System Prompt
+        
+        Sets the context for advanced vision-language understanding with
+        semantic entity extraction and business intelligence capabilities.
         """
-        return """You are an elite insurance document extraction specialist with expertise in commission statement analysis and intelligent summary row detection.
+        return """You are an elite financial document analyst specializing in insurance commission statements with advanced vision-language understanding capabilities.
 
-Your core competencies:
-- Precise character-level text extraction from PDF documents
-- Visual document structure analysis and entity recognition  
-- Commission data extraction with zero hallucination tolerance
-- Strict adherence to "what you see is what you extract" principle
-- Multi-stage intelligent summary row detection using textual, structural, positional, and content patterns
-- Contextual understanding of hierarchical data relationships
-- Confidence scoring for summary row classification
+<role>
+You possess:
+• Deep expertise in commission statement formats from all major carriers (Aetna, UnitedHealthcare, Cigna, Blue Cross, Allied, etc.)
+• Advanced visual document understanding with spatial reasoning
+• Business intelligence extraction capabilities
+• Entity relationship mapping skills
+• Pattern recognition for anomaly detection
+</role>
 
-Critical operating rules:
-1. Extract ONLY text that appears visually in the document
-2. Never add, modify, or infer information not explicitly shown
-3. Preserve exact formatting: spacing, capitalization, punctuation
-4. Stop at natural text boundaries (whitespace, line breaks, punctuation)
-5. When uncertain, provide low confidence scores rather than guessing
-6. Extract ALL rows (including summaries), mark summary rows with confidence scores
-7. Use multi-layered analysis for summary detection: not just keywords, but also structure, position, and context
-8. Understand business logic: distinguish between data rows and aggregation rows
-9. Apply carrier-specific patterns when detected (Allied Benefit, UHC, Cigna, etc.)
-10. Flag edge cases for manual review rather than making uncertain filtering decisions"""
+<capabilities>
+Vision-Language Integration:
+• Analyze document layout and structure using visual context
+• Understand hierarchical relationships through positioning
+• Detect table boundaries, headers, and groupings visually
+• Identify entities based on formatting, location, and typography
+
+Business Entity Extraction:
+• Carriers: Insurance companies issuing statements
+• Brokers/Agents: Entities receiving commissions
+• Writing Agents: Individual agents handling accounts
+• Groups/Companies: Client organizations generating commissions
+• Commission Types: PEPM, percentage-based, lump sum, incentives
+
+Semantic Understanding:
+• Commission structures and payment types
+• Billing periods and adjustment periods
+• Hierarchical groupings (parent-child relationships)
+• Financial patterns and anomalies
+</capabilities>
+
+<extraction_philosophy>
+Your goal is NOT to simply extract tables, but to UNDERSTAND the document as a business intelligence artifact:
+
+1. WHO: Identify all entities (carrier, broker, agents, companies)
+2. WHAT: Extract commission amounts, types, and structures
+3. WHEN: Capture dates, periods, and temporal relationships
+4. WHERE: Map organizational hierarchies and groupings
+5. HOW: Understand payment methods, structures, and business logic
+6. WHY: Detect patterns, anomalies, and notable characteristics
+</extraction_philosophy>
+
+<quality_standards>
+Your extraction must be:
+• ACCURATE: Every number, name, and date must be exact
+• COMPREHENSIVE: Capture all entities and relationships
+• SEMANTIC: Understand meaning, not just text
+• STRUCTURED: Organize data with clear hierarchies
+• INTELLIGENT: Identify patterns and key insights
+</quality_standards>
+
+You will be given PDF images of commission statements. Use your vision-language capabilities to analyze both the visual layout and textual content to produce intelligent, structured extraction results."""
 
     @staticmethod
     def get_document_intelligence_extraction_prompt() -> str:
@@ -457,17 +400,8 @@ Critical operating rules:
         
         Comprehensive prompt for extracting entities, relationships, and
         business intelligence from commission statements.
-        
-        Uses unified carrier extraction, total amount extraction, and summary row filtering rules
-        to ensure consistency across all extraction pipelines.
         """
-        # Get unified rules
-        carrier_rules = ExtractionRules.Carrier.get_critical_requirements()
-        total_amount_rules = ExtractionRules.Amount.get_extraction_strategy()
-        filtering_rules = ExtractionRules.Filtering.get_prompt_instructions()
-        
-        # Use string concatenation instead of f-string to avoid nesting issues
-        prompt = """<task>
+        return """<task>
 Perform comprehensive intelligent extraction from this commission statement PDF using your vision-language understanding.
 </task>
 
@@ -482,9 +416,13 @@ Examine the document visually to understand:
 
 **STEP 2: Entity Extraction with Visual Context**
 
-""" + carrier_rules + """
-
 <entities_to_extract>
+
+<carrier>
+• Name: The insurance company (look in headers, logos, footers)
+• Confidence: Your certainty level (0.0-1.0)
+• Evidence: Where you found it (e.g., "Header logo and letterhead")
+</carrier>
 
 <broker_agent>
 • Company Name: The receiving broker/agent organization
@@ -509,16 +447,10 @@ For each unique agent mentioned:
 • Report Date: If different from statement date
 • Date Range: If period-based (start and end dates)
 • Total Pages: Document length
-
-""" + total_amount_rules + """
-
 </document_metadata>
 
 <groups_and_companies>
-
-""" + filtering_rules + """
-
-For each ACTUAL group/company found (NOT summary rows):
+For each group/company found:
 • Group Number: Identifier
 • Group Name: Full company/group name
 • Billing Period: Date range
@@ -531,9 +463,11 @@ For each ACTUAL group/company found (NOT summary rows):
 • Paid Amount: Net commission
 • Special Notes: Any unique attributes
 </groups_and_companies>
+
 </entities_to_extract>
 
 **STEP 3: Hierarchical Structure Detection**
+
 <structure_analysis>
 Using visual cues (indentation, spacing, borders, grouping):
 • Identify parent-child relationships
@@ -544,6 +478,7 @@ Using visual cues (indentation, spacing, borders, grouping):
 </structure_analysis>
 
 **STEP 4: Business Intelligence Extraction**
+
 <business_intelligence>
 • Commission Structure: Identify types (PEPM, %, flat, tiered)
 • Payment Patterns: Who receives what and why
@@ -554,449 +489,17 @@ Using visual cues (indentation, spacing, borders, grouping):
 </business_intelligence>
 
 **STEP 5: Table Extraction with Context**
+
 Extract all tables with:
 • Headers: Preserve multi-line headers with proper joining
 • Data Rows: Include all data with exact values
-• Summary Rows: Flag totals and subtotals using intelligent multi-stage detection
+• Summary Rows: Flag totals and subtotals
 • Row Context: Identify what each row represents
 • Column Semantics: Understand what each column means
 • Relationships: Parent-child connections in hierarchical tables
 
-**🔴 CRITICAL: EXTRACT ALL ROWS - NO EXCEPTIONS**
-
-**PRIMARY DIRECTIVE:**
-Your #1 priority is to extract EVERY SINGLE visible data row from ALL tables in the document.
-Missing even one row causes calculation errors and failed validations.
-
-**MANDATORY ROW EXTRACTION RULES:**
-
-1. **Count and Verify:**
-   - Before starting: Count visible data rows in each table
-   - After extraction: Verify your count matches
-   - If mismatch: Re-scan document for missed rows
-
-2. **Extract ALL Rows:**
-   - Extract EVERY row you see, even if it looks like a duplicate
-   - Extract rows even if values seem unusual or negative
-   - Extract rows even if they appear incomplete
-   - DO NOT skip rows because they "look wrong" - extract everything
-
-3. **🔴 CRITICAL: EXPLICIT EXCLUSION - SKIP THESE ROWS ENTIRELY:**
-
-   **DO NOT EXTRACT rows that match ANY of these patterns:**
-   
-   1. **Rows where Group No. or Group Name contains these EXACT phrases:**
-      - "Total for Group:"
-      - "Total for Vendor:"
-      - "Sub-total" or "Subtotal:"
-      - "Grand Total"
-      - "Writing Agent Number:"
-      - "Writing Agent 2 No:"
-      - "Agent 2 Name:"
-      - "Producer Name:"
-   
-   2. **Rows with structural indicators of summary:**
-      - Group No. column is EMPTY AND amount column is populated (= aggregate row)
-      - All key identifier columns (Group No., Group Name) are empty
-      - First column contains only "Total" or "Summary" without a company name
-   
-   3. **Rows with position indicators of summary:**
-      - Last row of table where amount matches document total (= grand total)
-      - Row immediately after multiple rows with same company name (= section total)
-   
-   **VALIDATION CHECKLIST - Must pass ALL checks to extract:**
-   
-   Before extracting a row, verify:
-   ☐ Group No. field has alphanumeric ID (e.g., "L242820", "1653402")?
-   ☐ Group Name field has actual company name (NOT "Total", "Summary", empty)?
-   ☐ Row has at least 6-8 populated data columns?
-   ☐ No column contains "Total for Group:" or "Total for Vendor:"?
-   ☐ No column contains "Writing Agent Name:" or "Writing Agent Number:"?
-   ☐ Census count is positive (negative usually means adjustment summary)?
-   
-   **If ANY checkbox fails → SKIP this row entirely, do not extract**
-
-""" + filtering_rules + """
-
-   **🔴 MANDATORY: ROW OBJECT FORMAT WITH METADATA**
-   
-   **CRITICAL**: EVERY row MUST be returned as an object with metadata, NOT a simple array.
-   
-   **Required Format**:
-   ```json
-   {
-     "rows": [
-       {
-         "data": ["L242820", "BOLT LOGISTIC", "8/1/2025", ...],
-         "is_summary": false,
-         "summary_confidence": 0.05,
-         "summary_reason": "Valid detail row with alphanumeric Group No."
-       },
-       {
-         "data": ["", "BLUE MILE TRANSPORTA", "", "", "", "1", "$97.20"],
-         "is_summary": true,
-         "summary_confidence": 0.95,
-         "summary_reason": "Empty Group No. with amount - section total"
-       },
-       {
-         "data": ["", "", "", "", "", "", "51", "$3,604.95"],
-         "is_summary": true,
-         "summary_confidence": 0.99,
-         "summary_reason": "Last row, amount matches document total - grand total"
-       }
-     ],
-     "summary_rows": [65, 66, 67, 68]
-   }
-   ```
-   
-   ❌ WRONG (Simple Arrays - DO NOT USE THIS FORMAT):
-   ```json
-   {
-     "rows": [
-       ["L242820", "BOLT LOGISTIC", ...],
-       ["", "BLUE MILE TRANSPORTA", ...]
-     ]
-   }
-   ```
-   
-   ✅ CORRECT (Objects with Metadata - MUST USE THIS FORMAT):
-   ```json
-   {
-     "rows": [
-       {
-         "data": ["L242820", "BOLT LOGISTIC", ...],
-         "is_summary": false,
-         "summary_confidence": 0.05,
-         "summary_reason": "Valid detail row"
-       }
-     ]
-   }
-   ```
-   
-   **VALIDATION CHECKLIST - Run for EVERY row before returning:**
-   
-   Before returning your extraction, verify EVERY row has:
-   □ "data" field with array of cell values?
-   □ "is_summary" field with boolean value?
-   □ "summary_confidence" field with numeric value (0.0-1.0)?
-   □ "summary_reason" field with text explanation?
-   
-   If ANY checkbox is unchecked → FIX the row metadata immediately
-   
-   **MANDATORY PATTERNS TO DETECT:**
-   
-   **Pattern A: Grand Total Row (HIGHEST PRIORITY)**
-   - If LAST ROW of table has amount matching document total → is_summary: true, confidence: 0.99
-   - Example: Last row shows "$3,604.95" and document total is $3,604.95 → THIS IS THE GRAND TOTAL
-   - Reasoning: "Last row with amount matching document total - grand total"
-   
-   **Pattern B: Empty Group No. Rows**
-   - If Group No. is EMPTY but amount is populated → is_summary: true, confidence: 0.95
-   - Example: ["", "BLUE MILE TRANSPORTA", "", "", "$97.20"] → Section total
-   - Reasoning: "Empty Group No. with amount - section total"
-   
-   **Pattern C: Completely Empty Rows**
-   - If ALL cells are empty or whitespace → is_summary: true, confidence: 0.99
-   - Example: ["", "", "", "", "", "", "", ""] → Separator or header row
-   - Reasoning: "All cells empty - separator or section header"
-   
-   **Pattern D: Sparse Rows (1-2 non-empty cells)**
-   - If row has only 1-2 populated cells out of 8+ columns → is_summary: true, confidence: 0.90
-   - Example: ["", "", "", "", "", "", "11", "$980.30"] → Group subtotal
-   - Reasoning: "Only 2 cells populated out of 10 - likely summary row"
-   
-   **Pattern E: "Total for Group" Explicit Keywords**
-   - ANY row with "Total for Group:", "Total for Vendor", "Grand Total" → is_summary: true, confidence: 0.99
-   - Reasoning: "Contains explicit total keyword"
-   
-   **BACKUP: INTELLIGENT MULTI-STAGE DETECTION (for edge cases):**
-   - If a row doesn't match explicit patterns above but seems suspicious
-   - Mark with "is_summary": true, "summary_confidence": 0.85, "summary_reason": "description"
-   - Apply ALL 6 indicator types (textual, structural, data pattern, content, hierarchical, format-specific)
-   - Check for empty rows with only company names - these are often summary section headers
-   - The LAST ROW with a large dollar amount matching the document total is ALWAYS the grand total
-   - Rows with empty cells in key columns (Group No, dates) but populated amount = summary rows
-
-4. **Chunked Documents:**
-   - If table continues across pages: mark `"incomplete": true` on last row
-   - Next chunk: Check if first rows duplicate previous chunk's last rows
-   - Mark continued tables clearly so merging doesn't lose rows
-
-5. **🔴 MANDATORY SUMMARY ROW PATTERNS TO DETECT:**
-   
-   **Pattern A: Grand Total Row (MOST CRITICAL)**
-   - If the LAST row of a table has an amount that equals the document total → `is_summary: true, confidence: 0.99`
-   - Example: Last row shows "$3,604.95" and document total is $3,604.95 → THIS IS THE GRAND TOTAL
-   
-   **Pattern B: Empty/Sparse Rows**
-   - If a row has 3+ empty cells AND only has company name + one amount → `is_summary: true, confidence: 0.95`
-   - If Group Number is EMPTY but amount is populated → `is_summary: true, confidence: 0.95`
-   - If all columns empty except company name → `is_summary: true, confidence: 0.90` (section header)
-   
-   **Pattern C: "Total for Group" Rows**
-   - ANY row with "Total for Group:", "Total for Vendor", "Subtotal" → `is_summary: true, confidence: 0.99`
-   
-   **Pattern D: Writing Agent Section Headers**
-   - Rows showing "Writing Agent Name:", "Writing Agent 1 Name:" → `is_summary: true, confidence: 0.99`
-   
-   **Pattern E: Position-Based Detection**
-   - After 5+ consecutive rows with same company, a row with just company name and total → `is_summary: true, confidence: 0.90`
-   - Row immediately before a new company section starts → likely summary of previous section
-
-6. **Final Validation:**
-   - Count rows in your JSON output
-   - Compare to visible rows in document
-   - Verify you marked the LAST ROW as summary if it contains the document total
-   - If counts don't match: Re-scan and add missing rows
-
-**VERIFICATION CHECKLIST (Mandatory before returning):**
-
-Before returning your extraction, answer these:
-□ Did I count the visible data rows in each table?
-□ Does my extracted row count match the visible row count?
-□ Did I extract EVERY row, or did I skip any?
-□ If I skipped rows, did I document why in extraction_notes?
-□ Did I re-scan the document to catch any missed rows?
-
-**If ANY checkbox is unchecked → Re-scan document and extract missed rows**
-
-**🔴 CRITICAL: POSITIVE & NEGATIVE EXAMPLES**
-
-**✅ EXTRACT THESE (Valid Detail Rows):**
-
-```json
-Example 1: Valid group with alphanumeric ID
-{
-  "group_no": "L242820",
-  "group_name": "BLUE MILE TRANSPORTA",
-  "billing_period": "7/1/2025",
-  "adj_period": "6/1/2025",
-  "invoice_total": "$474.13",
-  "paid_amount": "$97.20"
-}
-
-Example 2: Valid group with numeric ID
-{
-  "group_no": "1653402",
-  "group_name": "B & B Lightning Protection",
-  "billing_period": "10/01/2024",
-  "paid_amount": "$168.00"
-}
-
-Example 3: Valid group with all fields populated
-{
-  "group_no": "L243096",
-  "group_name": "PRIDE DELIVERY SERVIC",
-  "billing_period": "7/1/2025",
-  "census_ct": 9,
-  "paid_amount": "$1,194.57"
-}
-```
-
-**❌ NEVER EXTRACT THESE (Summary/Total Rows):**
-
-```
-Example 1: "Total for Group:" pattern
-Row: ["Total for Group:", "CONNECT LOGISTICS IN", "", "", "", "", "-1", "($81.68)"]
-❌ REASON: First column contains "Total for Group:" - this is a section total
-
-Example 2: "Total for Vendor:" pattern
-Row: ["Total for Vendor:", "G0223428", "", "", "", "", "51", "$3,604.95"]
-❌ REASON: First column contains "Total for Vendor:" - this is the grand total
-
-Example 3: Empty Group No. with amount
-Row: ["", "BLUE MILE TRANSPORTATI", "", "", "", "", "1", "$97.20"]
-❌ REASON: Group No. is empty, likely a group subtotal
-
-Example 4: Writing Agent metadata
-Row: ["Writing Agent Number:", "00000019019593", "Writing Agent Name:", "LIOR C GOLDSTEIN"]
-❌ REASON: Contains "Writing Agent Number:" - metadata row, not transaction data
-
-Example 5: Section header with only company name
-Row: ["", "PRIDE DELIVERY SERVICE", "", "", "", "", "19", "$2,318.37"]
-❌ REASON: Empty Group No., populated amount = section summary
-
-Example 6: Last row matching document total
-Row: ["", "", "", "", "", "", "", "$3,604.95"]
-❌ REASON: Last row with amount matching document total = grand total
-```
-
-**VALIDATION CHECKLIST - Must pass ALL checks to extract:**
-
-Before extracting a row, verify:
-
-☐ Group No. field has alphanumeric ID (e.g., "L242820", "1653402")?
-☐ Group Name field has actual company name (NOT "Total", "Summary", empty)?
-☐ Row has at least 4-6 populated data columns (not just 1-2)?
-☐ No column contains "Total for Group:" or "Total for Vendor:"?
-☐ No column contains "Writing Agent Name:" or "Writing Agent Number:"?
-☐ NOT the last row with amount matching document total?
-
-**If ANY checkbox fails → Mark as summary row with high confidence**
-
-**✅ SPECIFIC GRAND TOTAL DETECTION:**
-
-The LAST ROW of a table that has:
-1. Empty or mostly empty identifier columns (Group No., Group Name)
-2. A populated amount column
-3. Amount equals or is close to the document total
-
-→ This is a GRAND TOTAL, mark as: `is_summary: true, confidence: 0.99, reason: "Last row grand total"`
-
-**✅ SECTION SUBTOTAL DETECTION:**
-
-A row that has:
-1. Empty Group No. but populated Group Name
-2. Appears after multiple rows with same/similar Group Name
-3. Populated amount column
-
-→ This is a SECTION SUBTOTAL, mark as: `is_summary: true, confidence: 0.95, reason: "Section subtotal"`
-
-**✅ VALID DATA ROW:**
-
-A row that has:
-1. Valid Group No. (alphanumeric, 4-10 characters)
-2. Valid Group Name (actual company name, not "Total" or "Summary")
-3. Multiple populated columns (6+ out of 10)
-4. Amounts that fit the pattern of detail rows
-
-→ This is a DATA ROW, mark as: `is_summary: false, confidence: 0.95, reason: "Valid detail row"`
-
-**Example:**
-
-```
-Table Analysis:
-- Visible data rows: 23
-- Extracted rows: 23 ✅
-- All rows accounted for: YES ✅
-
-If Visible: 23, Extracted: 21 ❌
-→ STOP: Re-scan document, find the 2 missing rows, extract them
-```
-
-**Remember:** It's better to extract too much (and filter later) than to miss rows.
-Missing rows = Failed validation = Manual review required = Bad user experience.
-
-**CRITICAL: COMPANY NAME COLUMN HANDLING**
-
-<company_name_extraction>
-When extracting data from commission statements, pay special attention to how company names are presented:
-
-**Case 1: Company Names as Table Column**
-- If company names appear as a regular column header (e.g., "Customer Name", "Company Name", "Group Name"), extract them normally within the existing table structure.
-
-**Case 2: Company Names in Summary Rows or Non-Column Format**
-- If company names do NOT appear as a column but instead appear in:
-  * Summary section rows (e.g., "Customer: 1653402" followed by "Customer Name: B & B Lightning Protection")
-  * Header rows above data groups
-  * Merged cells spanning multiple columns
-  * Section dividers or grouping labels
-  * Writing Agent grouping sections
-  * Any other non-columnar format
-
-**CRITICAL EXTRACTION RULE FOR NON-COLUMN COMPANY NAMES:**
-
-When company names are NOT in a column format, you MUST:
-
-1. **Detect the pattern**: Identify where company/group names appear (summary rows, headers, section dividers)
-2. **Add a "Company Name" or "Group Name" column** to your extracted table response (as the FIRST column in the headers array)
-3. **Populate this column** with the appropriate company/group name for each data row
-4. **Ensure each row** has its corresponding company name in this added column
-5. **Maintain alignment** so that each company name appears aligned with its respective data rows
-6. **Preserve the existing structure** - do not modify or remove any existing columns, only ADD the company name column
-7. **Track context**: As you process rows, keep track of which company/group section you're in
-
-**Example Extraction:**
-
-If the document shows company names in summary/grouping rows like:
-```
-Writing Agent: 271004-02 GOLDSTEIN, ANAT
-Customer: 1653402
-Customer Name: B & B Lightning Protection
-Med 10/01/2024 ($3,844.84) ($3,221.78) -3 Q NJ PEPM $56.00 100% Comm Comm ($168.00)
-Med 10/01/2024 $3,844.84 $623.06 3 V NJ PEPM $56.00 100% Comm Comm $168.00
-
-Customer: 1674097
-Customer Name: MAMMOTH DELIVERY LLC
-Med 12/01/2024 $55.58 $55.58 3 V WI PEPM $30.00 100% Fee Leve $90.00 $90.00 $90.00
-```
-
-Your extracted JSON should include:
-```json
-{
-  "headers": ["Company Name", "Cov Type", "Bill Eff Date", "Billed Premium", "Paid Premium", "Sub Adj count", "Typ", "Iss St", "Method", "Rate", "Split %", "Comp Typ", "Bus Type", "Billed Fee Amount", "Customer Paid Fee", "Paid Amount"],
-  "rows": [
-    ["B & B Lightning Protection", "Med", "10/01/2024", "($3,844.84)", "($3,221.78)", "-3", "Q", "NJ", "PEPM", "$56.00", "100%", "Comm", "Comm", "", "", "($168.00)"],
-    ["B & B Lightning Protection", "Med", "10/01/2024", "$3,844.84", "$623.06", "3", "V", "NJ", "PEPM", "$56.00", "100%", "Comm", "Comm", "", "", "$168.00"],
-    ["MAMMOTH DELIVERY LLC", "Med", "12/01/2024", "$55.58", "$55.58", "3", "V", "WI", "PEPM", "$30.00", "100%", "Fee", "Leve", "$90.00", "$90.00", "$90.00"]
-  ],
-  "groups_and_companies": [
-    {
-      "group_number": "1653402",
-      "group_name": "B & B Lightning Protection",
-      "writing_agent": "GOLDSTEIN, ANAT",
-      "total_paid": "0.00"
-    },
-    {
-      "group_number": "1674097",
-      "group_name": "MAMMOTH DELIVERY LLC",
-      "writing_agent": "GOLDSTEIN, ANAT",
-      "total_paid": "$667.15"
-    }
-  ]
-}
-```
-
-Key Points for Company Name Extraction:
-
-• The "Company Name" or "Group Name" column should be the FIRST column (leftmost position)
-• Every data row must have its associated company/group name populated
-• Do NOT skip rows or leave company names empty
-• If a company has multiple data rows, repeat the company name for each row
-• Track the current company context as you process the document sequentially
-• Maintain data integrity - ensure the company name matches the correct data rows based on document structure and visual grouping
-• This ensures extracted data maintains full context without losing company-to-data relationships
-• For hierarchical documents with Writing Agents → Companies → Data rows, maintain all levels of the hierarchy
-</company_name_extraction>
-
-**CHUNKED DOCUMENT HANDLING:**
-
-If you are processing a chunk of a larger document:
-
-1. **Extract ALL rows visible in this chunk**
-
-2. **If table continues from previous page:**
-   - Mark `"continued_from_previous": true`
-   - Include continuation rows in your extraction
-   
-3. **If table continues to next page:**
-   - Mark `"continues_to_next": true`
-   - Extract all visible rows up to the page boundary
-   
-4. **Row Count Reporting:**
-   - Report: `"rows_in_chunk": <count>`
-   - This helps validate merging accuracy
-
-5. **Overlap Handling:**
-   - If first few rows look identical to expected last rows of previous chunk:
-   - Still extract them (deduplication happens in post-processing)
-   - Mark: `"may_have_overlap": true`
-
-Example:
-
-```json
-{
-  "table": {
-    "continued_from_previous": true,
-    "continues_to_next": true,
-    "rows_in_chunk": 47,
-    "may_have_overlap": true,
-    "rows": [...]
-  }
-}
-```
-
 **OUTPUT FORMAT**
+
 Return your analysis in this JSON structure:
 
 {
@@ -1022,8 +525,6 @@ Return your analysis in this JSON structure:
     "payment_type": "EFT",
     "report_date": "2025-08-06",
     "total_pages": 7,
-    "total_amount": 3604.95,
-    "total_amount_label": "Total Compensation",
     "confidence": 0.97
   },
   "writing_agents": [
@@ -1121,8 +622,6 @@ Action: Extract both current and adjustment period dates
 </examples>
 
 Analyze the provided PDF images and return the complete JSON extraction following this structure."""
-        
-        return prompt
 
     @staticmethod
     def get_relationship_mapping_prompt(extracted_data: str) -> str:
@@ -1244,23 +743,10 @@ Generate summaries that match or exceed Google Gemini's quality:
         """
         Phase 3: Intelligent Summarization Prompt
         
-        Creates comprehensive, conversational summary with business intelligence
-        AND structured key-value data for UI display.
-        
-        ⭐ UPDATED: Now handles both entity-based AND table-based extraction data
+        Creates comprehensive, conversational summary with business intelligence.
         """
         return f"""<task>
 Create a comprehensive, conversational summary of this commission statement that captures all key business intelligence.
-
-🔴 CRITICAL: You MUST return BOTH outputs:
-1. A conversational summary (3-4 sentence paragraph)
-2. A structured key-value data object (JSON) for UI display
-
-⭐ IMPORTANT: The input data may contain either:
-   - Structured entities (carrier, broker, groups_and_companies, etc.) - use these directly
-   - OR raw table data (headers and rows) - analyze these to extract information
-   
-   Analyze whatever data is provided and extract as much information as possible.
 </task>
 
 <input_data>
@@ -1275,22 +761,6 @@ Create a comprehensive, conversational summary of this commission statement that
 
 <instructions>
 **STEP 1: Analyze the Data**
-
-⭐ CRITICAL: First check if you have structured entities OR raw table data:
-
-**If you have structured entities** (carrier, broker, groups_and_companies):
-• Use the entity data directly
-• Extract key information from business_intelligence
-• Identify relationships and patterns
-
-**If you have raw table data** (tables with headers and rows):
-• Analyze the table headers to identify key columns
-• Look for: Company/Group names, Commission amounts, Invoice totals, Dates, Rates
-• Identify summary rows (usually contain "Total", "Grand", "Subtotal")
-• Count unique companies/groups from the name column
-• Extract top 3 contributors by sorting commission amounts
-• Look for census counts, billing periods, plan types in the data
-
 Internally review:
 • What type of document is this?
 • Who are the key entities (carrier, broker, agents)?
@@ -1304,7 +774,7 @@ Create a 3-4 sentence paragraph that flows naturally:
 
 Sentence 1: Document identification
 • Type, carrier, broker, date, and document number
-• Example: "This is an ABSF Commission Payment Summary from Allied Benefit for INNOVATIVE BPS LLC, dated August 6, 2025 (document G0227540)"
+• Example: "This is an ABSF Commission Payment Summary from Allied Benefit for INNOVATIVE BPS LLC, dated August 6, 2025 (document G0223428)"
 
 Sentence 2: Financial overview with key contributors
 • Total amount, number of groups, and top 2-3 earners with amounts
@@ -1318,49 +788,7 @@ Sentence 4 (if applicable): Notable features
 • Special payments, anomalies, or unique characteristics
 • Example: "The statement includes both current period charges and prior period adjustments, with census counts ranging from -1 (adjustments) to 13 members"
 
-**STEP 3: Extract Structured Key-Value Data**
-Extract the following fields for UI display (MUST be scannable, short values):
-
-⭐ EXTRACTION STRATEGY:
-- If you have `document_metadata` → extract from there
-- If you have `tables` → analyze table data:
-  * Find "Paid Amount" or "Commission Earned" column and sum all values for total_amount
-  * Find "Group Name" or "Company Name" column and count unique entries for company_count
-  * Sort companies by amount to get top_contributors
-  * Look for "Census" or "Subscribers" column for census_count
-  * Look for "Billing Period" column for billing_periods
-
-MANDATORY (always try to find these):
-• broker_id: Document/statement/broker ID number
-• total_amount: Total commission/compensation (numeric only, no $ or commas) 
-  → If from tables: SUM all values in "Paid Amount" or "Commission Earned" column
-• carrier_name: Insurance carrier name
-• broker_company: Broker/agent company name  
-• statement_date: Statement date (YYYY-MM-DD format)
-
-OPTIONAL (include if found):
-• payment_type: EFT, Check, Wire, etc.
-• company_count: Number of companies/groups (as string)
-  → If from tables: COUNT unique values in "Group Name" or "Company Name" column
-• top_contributors: Array of top 1-3 companies with amounts (e.g., [{{"name": "Company A", "amount": "1027.20"}}])
-  → If from tables: Sort companies by commission amount (descending), take top 3
-• commission_structure: E.g., "PEPM", "Percentage-based", "Premium Equivalent"
-  → If from tables: Look in "Calculation Method" or "Rate" column
-• plan_types: E.g., "Medical, Dental, Vision"
-• census_count: Total members/subscribers (as string)
-  → If from tables: SUM all positive values in "Census" or "Census Ct." column
-• billing_periods: Date range covered (e.g., "Dec 2024 - Jan 2025")
-  → If from tables: Find MIN and MAX dates in "Billing Period" column
-• special_payments: Bonuses, incentives, etc. (as string)
-
-**RULES FOR KEY-VALUE DATA:**
-1. All amounts should be NUMERIC ONLY (no $, no commas) - e.g., "1027.20" not "$1,027.20"
-2. Dates in YYYY-MM-DD format
-3. Keep values SHORT (1-3 words preferred) for scannable display
-4. If a field is not found, OMIT it (don't include null/empty values)
-5. Be PRECISE - values must match extracted data exactly
-
-**STEP 4: Quality Check**
+**STEP 3: Quality Check**
 Ensure your summary:
 ☑ Names specific entities (carriers, brokers, agents, companies)
 ☑ Includes exact amounts and percentages
@@ -1371,82 +799,84 @@ Ensure your summary:
 ☑ Contains NO bullet points or field labels
 ☑ Reads like a human explaining to another human
 
-**🔴 CRITICAL: OUTPUT FORMAT**
+**OUTPUT FORMAT**
+⭐ **CRITICAL**: Return your response as VALID JSON with two parts (no markdown, no code blocks):
 
-You MUST return your response in this EXACT JSON format:
-
-```json
 {{
-  "conversational_summary": "This is an ABSF Commission Payment Summary from Allied Benefit...",
+  "conversational_summary": "Your natural language summary...",
   "key_value_data": {{
-    "broker_id": "G0227540",
-    "total_amount": "1027.20",
-    "carrier_name": "Allied Benefit",
-    "broker_company": "INNOVATIVE BPS LLC",
-    "statement_date": "2025-01-08",
-    "payment_type": "EFT",
-    "company_count": "1",
+    "carrier_name": "Exact carrier name from document",
+    "broker_company": "Exact broker/agent company name",
+    "statement_date": "YYYY-MM-DD format",
+    "broker_id": "Document/statement number",
+    "payment_type": "EFT/Check/Wire/etc",
+    "total_amount": "Numeric string (e.g., '3604.95')",
+    "company_count": Number of groups/companies,
     "top_contributors": [
-      {{"name": "SOAR LOGISTICS LL", "amount": "1027.20"}}
+      {{"name": "Company Name", "amount": "1384.84"}}
     ],
-    "commission_structure": "6% Premium Equivalent",
-    "census_count": "46",
-    "billing_periods": "Dec 2024 - Jan 2025"
+    "commission_structure": "Brief description (e.g., 'Premium Equivalent, PEPM')",
+    "census_count": "Total census if present",
+    "billing_periods": "Period range if present (e.g., 'July-August 2025')"
   }}
 }}
-```
 
-Return ONLY valid JSON. Do not include:
-• Preambles ("Here's the result:")
-• Markdown code fences (```json)
-• Closing remarks
-• Any text outside the JSON object
+**conversational_summary**: Write your natural, flowing 3-4 sentence paragraph
+• Start with "This is..." or "This document..."
+• NO preambles, closing remarks, bullet points, or field labels
+• Pack maximum information with specific names and amounts
 
-Start immediately with the JSON object.
+**key_value_data**: Extract ALL available structured fields
+• Use exact values from the source extraction data
+• Convert amounts to numeric strings (no $ or commas)
+• Include all fields listed above if data is available
+• Use null for missing fields (don't omit them)
+
+Return ONLY the JSON object. No markdown, no explanations, just pure JSON.
 </instructions>
 
 <examples>
-**Example 1 - Allied Benefit Statement (EXACT OUTPUT FORMAT):**
+**Example 1 - Allied Benefit Statement (JSON Output):**
 {{
   "conversational_summary": "This is an ABSF Commission Payment Summary from Allied Benefit for INNOVATIVE BPS LLC, dated August 6, 2025 (document G0223428), with EFT as the payment type. The document details $3,604.95 in total commissions across 11 groups covering various billing periods from July to August 2025, with LUDICROUS SPEED LOGI as the largest contributor at $1,384.84 (38% of total), followed by FUZION EXPRESS LL at $514.61, and G & N LOGISTICS LL at $468.84. ANAT GOLDSTEIN serves as the primary Writing Agent managing 8 groups using the Premium Equivalent calculation method (commission rates from 15.5% to 22.5%), while LIOR C GOLDSTEIN manages 3 groups, all processed with census counts ranging from -1 (indicating adjustments) to 13 members.",
   "key_value_data": {{
-    "broker_id": "G0223428",
-    "total_amount": "3604.95",
     "carrier_name": "Allied Benefit",
     "broker_company": "INNOVATIVE BPS LLC",
     "statement_date": "2025-08-06",
+    "broker_id": "G0223428",
     "payment_type": "EFT",
-    "company_count": "11",
+    "total_amount": "3604.95",
+    "company_count": 11,
     "top_contributors": [
       {{"name": "LUDICROUS SPEED LOGI", "amount": "1384.84"}},
       {{"name": "FUZION EXPRESS LL", "amount": "514.61"}},
       {{"name": "G & N LOGISTICS LL", "amount": "468.84"}}
     ],
-    "commission_structure": "Premium Equivalent",
-    "census_count": "Multiple (ranges -1 to 13)",
-    "billing_periods": "Jul - Aug 2025"
+    "commission_structure": "Premium Equivalent (15.5%-22.5%)",
+    "census_count": "46",
+    "billing_periods": "July-August 2025"
   }}
 }}
 
-**Example 2 - UnitedHealthcare Statement (EXACT OUTPUT FORMAT):**
+**Example 2 - UnitedHealthcare Statement (JSON Output):**
 {{
   "conversational_summary": "This is a UnitedHealthcare commission statement for ABC Insurance Services dated April 15, 2025, detailing $15,432.67 in total commissions from 12 employer groups covering 487 subscribers. The largest payments went to Tech Solutions Inc ($4,230.50), Metro Health Group ($3,890.25), and Retail Partners LLC ($2,100.00), representing a mix of Medical, Dental, and Vision plans with PEPM rates from $24-$52. The statement includes a $1,500 Q1 production bonus in addition to the base commissions, demonstrating strong performance across diversified product lines.",
   "key_value_data": {{
-    "broker_id": "UHC-2025-0415",
-    "total_amount": "15432.67",
     "carrier_name": "UnitedHealthcare",
     "broker_company": "ABC Insurance Services",
     "statement_date": "2025-04-15",
-    "company_count": "12",
+    "broker_id": null,
+    "payment_type": null,
+    "total_amount": "15432.67",
+    "company_count": 12,
     "top_contributors": [
       {{"name": "Tech Solutions Inc", "amount": "4230.50"}},
       {{"name": "Metro Health Group", "amount": "3890.25"}},
       {{"name": "Retail Partners LLC", "amount": "2100.00"}}
     ],
-    "commission_structure": "PEPM ($24-$52)",
-    "plan_types": "Medical, Dental, Vision",
+    "commission_structure": "Medical, Dental, Vision (PEPM $24-$52)",
     "census_count": "487",
-    "special_payments": "Q1 Bonus: $1,500"
+    "billing_periods": null
   }}
 }}
 </examples>
@@ -1464,4 +894,3 @@ Start immediately with the JSON object.
 
 Now generate the intelligent summary for the provided commission statement data.
 """
-

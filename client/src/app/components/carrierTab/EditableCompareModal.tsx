@@ -123,7 +123,7 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
 
  
 
-  // Load PDF URL
+  // Load PDF URL with fallback mechanism
   useEffect(() => {
     const fetchPdfUrl = async () => {
       if (!statement?.gcs_key && !statement?.file_name) {
@@ -136,16 +136,39 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
         const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
         const url = `${apiUrl}/api/pdf-preview?gcs_key=${encodeURIComponent(gcsKey)}`;
         
-        const response = await fetch(url, { credentials: 'include' });
+        const response = await fetch(url, { 
+          credentials: 'include',
+          headers: {
+            'Accept': 'application/json'
+          }
+        });
         
         if (response.ok) {
           const data = await response.json();
           setPdfUrl(data.url);
         } else {
-          console.error('Failed to fetch PDF');
+          // ✅ FALLBACK: Try direct GCS URL
+          console.warn('Signed URL failed, trying direct GCS URL');
+          const directUrl = `https://storage.googleapis.com/pdf_extraction_files_saver/${gcsKey}`;
+          setPdfUrl(directUrl);
+          
+          toast('PDF preview using fallback method', { 
+            duration: 2000,
+            icon: 'ℹ️'
+          });
         }
       } catch (err) {
         console.error('Error fetching PDF:', err);
+        
+        // ✅ FALLBACK: Try direct GCS URL on error
+        const gcsKey = statement.gcs_key || statement.file_name;
+        const directUrl = `https://storage.googleapis.com/pdf_extraction_files_saver/${gcsKey}`;
+        setPdfUrl(directUrl);
+        
+        toast('PDF preview may have limited functionality', { 
+          duration: 3000,
+          icon: '⚠️'
+        });
       } finally {
         setLoading(false);
       }
@@ -408,6 +431,9 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
 
   // Handle Save & Recalculate
   const handleSaveAndRecalculate = async () => {
+    console.log('=== REMAP DEBUG START ===');
+    console.log('Statement ID:', statement.id);
+    console.log('Statement carrier_id:', statement.carrier_id);
     
     setIsSaving(true);
     setSaveProgress(0);
@@ -420,6 +446,46 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
         toast.error('No carrier ID found for this statement');
         setIsSaving(false);
         return;
+      }
+      
+      // Validate we have minimum required data
+      if (!statement.id || !statement.file_name) {
+        toast.error('Statement data is incomplete. Please refresh and try again.');
+        setIsSaving(false);
+        return;
+      }
+      
+      // ✅ FIX 1: Fetch FULL statement data from backend to get file_hash, file_size, etc.
+      console.log('🔍 Fetching full statement data from backend...');
+      setSaveProgress(5);
+      
+      let fullStatement = null;
+      try {
+        const fullStatementResponse = await axios.get(
+          `${process.env.NEXT_PUBLIC_API_URL}/api/companies/${carrierId}/statements/`,
+          { withCredentials: true }
+        );
+        
+        fullStatement = fullStatementResponse.data.find(
+          (s: any) => s.id === statement.id
+        );
+        
+        if (fullStatement) {
+          console.log('✅ Full statement data retrieved:', {
+            id: fullStatement.id,
+            file_hash: fullStatement.file_hash,
+            file_size: fullStatement.file_size,
+            company_id: fullStatement.company_id,
+            carrier_id: fullStatement.carrier_id,
+            user_id: fullStatement.user_id,
+            environment_id: fullStatement.environment_id
+          });
+        } else {
+          console.warn('⚠️ Could not find full statement data, will use partial data');
+        }
+      } catch (fetchError) {
+        console.warn('⚠️ Failed to fetch full statement data, will continue with partial data:', fetchError);
+        // Continue without full data - backend will handle this case
       }
 
 
@@ -655,18 +721,24 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
 
    
 
-      // CRITICAL FIX: Include upload_metadata for backend to create DB record
+      // ✅ CRITICAL FIX: Build COMPLETE upload_metadata from full statement data
+      // Use full statement data if available, otherwise fall back to partial data
+      const statementData = fullStatement || statement;
+      
       const upload_metadata = {
-        company_id: statement.carrier_id,
-        carrier_id: statement.carrier_id,
-        user_id: statement.user_id,  // Include user_id for data isolation
-        environment_id: statement.environment_id,  // Include environment_id for environment isolation
-        file_name: statement.file_name,
-        file_hash: null,  // Not available in existing statements
-        file_size: null,  // Not available in existing statements
-        uploaded_at: statement.uploaded_at,
+        company_id: statementData.company_id || statementData.carrier_id,  // User's company (NOT carrier)
+        carrier_id: statementData.carrier_id,  // Insurance carrier
+        user_id: statementData.user_id,  // Include user_id for data isolation
+        environment_id: statementData.environment_id,  // Include environment_id for environment isolation
+        file_name: statementData.file_name || statementData.gcs_key,
+        file_hash: statementData.file_hash || null,  // ✅ NOW AVAILABLE from full statement
+        file_size: statementData.file_size || null,  // ✅ NOW AVAILABLE from full statement
+        uploaded_at: statementData.uploaded_at,
         raw_data: finalData
       };
+      
+      console.log('📋 Upload Metadata:', upload_metadata);
+      console.log('==================');
 
       // ✅ NEW: Use edited values for commission total, plan types, and date
       const updatedStatementDate = {

@@ -1,3 +1,7 @@
+# Load environment variables FIRST - CRITICAL for OPENAI_API_KEY
+from dotenv import load_dotenv
+load_dotenv()
+
 # Apply compatibility fixes first
 from app.new_extraction_services.utils.compatibility import apply_compatibility_fixes
 apply_compatibility_fixes()

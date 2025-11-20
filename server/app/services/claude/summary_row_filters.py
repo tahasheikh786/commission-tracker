@@ -1,7 +1,16 @@
 """
-Summary Row Pre-Filtering and Post-Validation Utilities
+⚠️ DEPRECATED: Summary Row Pre-Filtering and Post-Validation Utilities
 
-This module implements the hybrid approach for summary row detection:
+This module is DEPRECATED and no longer used in the pipeline.
+
+We now trust Claude's summary row detection completely:
+- Claude marks rows with is_summary/summary_confidence in the response
+- utils.py converts this to summary_rows indices
+- No additional Python validation is applied
+
+This file is kept for reference only. All functions here are unused.
+
+Previous approach (no longer used):
 1. Pre-filtering: Remove obvious summary rows before LLM processing
 2. Post-validation: Catch any escaped summary rows after LLM extraction
 
@@ -185,6 +194,8 @@ class SummaryRowPreFilter:
         """
         Check structural indicators of summary rows.
         
+        ✅ SIMPLIFIED: Only flag if BOTH identifiers are empty (conservative).
+        
         Returns:
             Tuple of (is_summary: bool, reason: str)
         """
@@ -202,18 +213,14 @@ class SummaryRowPreFilter:
             if 'group name' in header_lower or 'company' in header_lower or 'customer name' in header_lower:
                 group_name_idx = idx
         
-        # Check if Group No. is empty
-        if group_no_idx is not None and group_no_idx < len(row):
-            group_no = str(row[group_no_idx]).strip()
-            if not group_no or group_no in ['—', '-', 'n/a', 'na', 'none', '']:
-                return True, "Group No. is empty - likely aggregate row"
-        
-        # Check if both key columns are empty
+        # ✅ CONSERVATIVE: Only flag if BOTH key columns are empty
+        # (Empty Group No. alone is NOT enough - could be parsing error)
         if group_no_idx is not None and group_name_idx is not None:
             if group_no_idx < len(row) and group_name_idx < len(row):
                 group_no = str(row[group_no_idx]).strip()
                 group_name = str(row[group_name_idx]).strip()
                 
+                # Only mark as summary if BOTH are empty
                 if not group_no and not group_name:
                     return True, "Both Group No. and Group Name are empty - likely total row"
         
@@ -223,6 +230,9 @@ class SummaryRowPreFilter:
     def _validate_group_number(row: List[Any], headers: List[str]) -> Tuple[bool, str]:
         """
         Validate that row has a proper group number format.
+        
+        ✅ SIMPLIFIED: Only reject obviously invalid formats (like summary keywords).
+        Empty or unusual formats are allowed (could be data quality issues, not summary rows).
         
         Returns:
             Tuple of (is_valid: bool, reason: str)
@@ -239,34 +249,28 @@ class SummaryRowPreFilter:
                 break
         
         if group_no_idx is None or group_no_idx >= len(row):
-            # No Group No. column found or index out of bounds
-            # Try using first column as group number
-            group_no_idx = 0
+            # No Group No. column found - can't validate
+            # Be conservative: assume valid
+            return True, "No Group No. column found - assuming valid"
         
         group_no = str(row[group_no_idx]).strip()
         
+        # ✅ CONSERVATIVE: Empty is OK (might be data quality issue, not summary)
+        # Let other validators catch true summary rows
         if not group_no:
-            return False, "Group number is empty"
+            return True, "Empty Group No. - will be validated by other checks"
         
-        # Valid formats:
-        # - Letter followed by 6 digits (e.g., L242820)
-        # - 6-7 digits (e.g., 1653402)
-        # - Alphanumeric with reasonable length
+        # ✅ Only reject if it's obviously a summary keyword
+        summary_indicators = ['total', 'summary', 'subtotal', 'grand']
+        if any(indicator in group_no.lower() for indicator in summary_indicators):
+            return False, f"Group number contains summary keyword: '{group_no}'"
         
-        # Check for valid formats
-        if re.match(r'^[A-Z]\d{6}$', group_no):
-            return True, "Valid alphanumeric group number"
-        
-        if re.match(r'^\d{6,7}$', group_no):
-            return True, "Valid numeric group number"
-        
-        # Check if it's a reasonable alphanumeric ID (not a summary keyword)
-        if re.match(r'^[A-Z0-9]{4,10}$', group_no):
-            # Additional check: make sure it's not a summary keyword
-            if 'total' not in group_no.lower() and 'summary' not in group_no.lower():
-                return True, "Valid alphanumeric identifier"
-        
-        return False, f"Group number format invalid: '{group_no}'"
+        # ✅ Default: Accept the row (conservative approach)
+        # Valid formats include:
+        # - L123456 (letter + 6 digits)
+        # - 1234567 (numeric)
+        # - Any alphanumeric (could be carrier-specific format)
+        return True, "Valid or acceptable group number format"
 
 
 class SummaryRowPostValidator:
@@ -450,7 +454,8 @@ class SummaryRowPostValidator:
         """
         Validate a single row against summary patterns.
         
-        ✅ ENHANCED: Added specific patterns from Allied Benefit statements.
+        ✅ SIMPLIFIED: Only catch OBVIOUS summary rows that slipped through.
+        Conservative approach - when in doubt, treat as valid data row.
         
         Returns:
             Tuple of (is_valid: bool, reason: str)
@@ -458,54 +463,48 @@ class SummaryRowPostValidator:
         if not row:
             return False, "Empty row"
         
-        # ✅ NEW: Check for all-empty rows (separators/headers/placeholders)
-        non_empty_cells = [cell for cell in row if cell and str(cell).strip() and str(cell).strip() not in ['—', '-', '']]
-        
-        if len(non_empty_cells) == 0:
-            return False, "All cells empty - separator or header row"
-        
-        # ✅ NEW: Check for mostly-empty rows with only 1-2 values
-        if len(non_empty_cells) <= 2:
-            return False, f"Only {len(non_empty_cells)} non-empty cells - likely summary row"
-        
         # Convert row to string for checking
         row_text = ' '.join(str(cell) for cell in row if cell).lower()
         
-        # Invalid patterns (from user's document)
-        INVALID_PATTERNS = [
-            r'total\s+for\s+(group|vendor)',
-            r'sub-?total',
-            r'grand\s+total',
-            r'writing\s+agent\s+(number|2\s+no|name)',
-            r'agent\s+2\s+(name|number)',
-            r'producer\s+(name|number)',
+        # ✅ ONLY check for explicit keywords (high confidence)
+        explicit_keywords = [
+            "total for group",
+            "total for vendor", 
+            "grand total",
+            "sub-total",
+            "subtotal",
+            "writing agent number",
+            "writing agent name",
+            "agent 2 name",
+            "producer name"
         ]
         
-        for pattern in INVALID_PATTERNS:
-            if re.search(pattern, row_text, re.IGNORECASE):
-                return False, f"Contains invalid pattern: {pattern}"
+        for keyword in explicit_keywords:
+            if keyword in row_text:
+                return False, f"Contains explicit summary keyword: '{keyword}'"
         
-        # Check Group No. format (if we can identify the column)
+        # ✅ Check for completely empty identifier columns (BOTH must be empty)
         group_no_idx = None
+        group_name_idx = None
+        
         for idx, header in enumerate(headers):
             header_lower = str(header).lower()
             if 'group no' in header_lower or 'group number' in header_lower:
                 group_no_idx = idx
-                break
+            if 'group name' in header_lower or 'company' in header_lower:
+                group_name_idx = idx
         
-        if group_no_idx is not None and group_no_idx < len(row):
-            group_no = str(row[group_no_idx]).strip()
-            
-            # ✅ NEW: Explicit empty check with more variations
-            if not group_no or group_no in ['—', '-', 'n/a', 'na', 'none', '', 'null', 'N/A', 'NA']:
-                return False, "Group No. is empty - likely summary or total row"
-            
-            # Validate group number format
-            if not (re.match(r'^[A-Z]\d{6}$', group_no) or 
-                    re.match(r'^\d{6,7}$', group_no) or 
-                    re.match(r'^[A-Z0-9]{4,10}$', group_no)):
-                return False, f"Invalid group number format: '{group_no}'"
+        # Only flag if BOTH identifiers are empty
+        if group_no_idx is not None and group_name_idx is not None:
+            if group_no_idx < len(row) and group_name_idx < len(row):
+                group_no = str(row[group_no_idx]).strip()
+                group_name = str(row[group_name_idx]).strip()
+                
+                # Both empty = likely summary
+                if not group_no and not group_name:
+                    return False, "Both Group No. and Group Name are empty"
         
+        # Default: Assume valid data row (conservative approach)
         return True, "Valid detail row"
 
 

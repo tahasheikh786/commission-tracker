@@ -315,13 +315,37 @@ async def save_statement_review(
     result = await db.execute(select(StatementUploadModel).where(StatementUploadModel.id == upload_id_uuid))
     db_upload = result.scalar_one_or_none()
     
-    # CRITICAL CHANGE: CREATE record if it doesn't exist
+    # CRITICAL CHANGE: CREATE record if it doesn't exist (for remap flow)
     if not db_upload:
-        print(f"💾 Upload not found for ID: {upload_id_uuid} - Creating new record")
+        logger.info(f"💾 Upload not found for ID: {upload_id_uuid} - This is unexpected for remap flow")
+        logger.warning(f"⚠️ Statement {upload_id_uuid} should already exist in database for remap operation")
         
         if not upload_metadata:
-            print(f"❌ Cannot create record without upload_metadata!")
+            logger.error(f"❌ Cannot create record without upload_metadata!")
+            logger.error(f"📋 Required fields: company_id, carrier_id, user_id, file_name, file_hash, file_size")
             return None
+        
+        # ✅ Validate required fields for record creation
+        required_fields = {
+            'carrier_id': upload_metadata.get('carrier_id'),
+            'user_id': upload_metadata.get('user_id'),
+            'file_name': upload_metadata.get('file_name'),
+        }
+        
+        missing_fields = [field for field, value in required_fields.items() if not value]
+        
+        if missing_fields:
+            logger.error(f"❌ Incomplete upload_metadata - missing required fields: {missing_fields}")
+            logger.error(f"📋 Provided metadata: {upload_metadata}")
+            return None
+        
+        # ⚠️ Warn if file_hash or file_size is missing (not critical but important)
+        if not upload_metadata.get('file_hash'):
+            logger.warning(f"⚠️ file_hash is missing from upload_metadata - duplicate detection may not work")
+        if not upload_metadata.get('file_size'):
+            logger.warning(f"⚠️ file_size is missing from upload_metadata")
+        
+        logger.info(f"✅ All required fields present, proceeding with record creation")
         
         # Create new record with provided metadata
         # NOTE: datetime is already imported at the top of the file
@@ -393,7 +417,18 @@ async def save_statement_review(
             last_updated=datetime.utcnow()
         )
         db.add(db_upload)
-        print(f"✅ Created new DB record for upload {upload_id_uuid}")
+        logger.info(f"✅ Created new DB record for upload {upload_id_uuid}")
+    else:
+        # ✅ UPDATE existing record (normal remap path)
+        logger.info(f"✅ Updating existing statement {upload_id_uuid} (REMAP operation)")
+        logger.info(f"📋 Current status: {db_upload.status} → New status: {status}")
+    
+    logger.info(f"=== REMAP DEBUG ===")
+    logger.info(f"💾 Saving statement review: upload_id={upload_id_uuid}, status={status}")
+    logger.info(f"📋 Field config being saved: {len(field_config) if field_config else 0} fields")
+    logger.info(f"📊 Final data tables: {len(final_data) if final_data else 0}")
+    logger.info(f"📅 Selected statement date: {selected_statement_date}")
+    logger.info(f"===================")
     
     print(f"💾 Saving statement review: upload_id={upload_id_uuid}, status={status}")
     print(f"📋 Field config being saved: {field_config}")

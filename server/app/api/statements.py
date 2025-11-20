@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_, and_
 from app.db import crud, schemas
@@ -235,9 +235,11 @@ async def delete_multiple_statements(
 @router.get("/pdf-preview/")
 async def get_pdf_preview_url(gcs_key: str, db: AsyncSession = Depends(get_db)):
     """
-    Simple endpoint to get a signed URL for PDF preview.
+    Generate signed URL for PDF preview with proper CORS headers.
     Returns a time-limited signed URL that can be used directly in an iframe.
     Includes backward compatibility for files uploaded with old path format.
+    
+    ✅ PRODUCTION FIX: Added CORS headers to prevent PDF preview failures in production.
     """
     if not gcs_key:
         logger.error("❌ Missing gcs_key parameter")
@@ -307,11 +309,20 @@ async def get_pdf_preview_url(gcs_key: str, db: AsyncSession = Depends(get_db)):
     
     logger.info(f"✅ Signed URL generated successfully for: {actual_gcs_key}")
     
-    return {
-        "url": signed_url,
-        "gcs_key": actual_gcs_key,
-        "expires_in_hours": 1
-    }
+    # ✅ CRITICAL FIX: Return with proper CORS headers to prevent production failures
+    return JSONResponse(
+        content={
+            "url": signed_url,
+            "gcs_key": actual_gcs_key,
+            "expires_in_hours": 1
+        },
+        headers={
+            "Access-Control-Allow-Origin": "*",  # Or specific domain in production
+            "Access-Control-Allow-Methods": "GET, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization",
+            "Access-Control-Allow-Credentials": "true"
+        }
+    )
 
 
 @router.get("/statements/{statement_id}/formatted-tables")

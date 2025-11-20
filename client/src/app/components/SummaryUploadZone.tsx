@@ -398,9 +398,9 @@ export default function SummaryUploadZone({
       // Start table extraction in parallel (full file)
       const formData = new FormData();
       formData.append('file', file); // Full file for table extraction
-      formData.append('extraction_method', 'smart');  // Use 'smart' to default to Claude AI
+      formData.append('extraction_method', 'smart');  // Use 'smart' to route to GPT-5 Vision (primary) with Claude fallback
       formData.append('upload_id', newUploadId);
-      formData.append('use_enhanced', 'true');  // ⭐ ENABLE enhanced 3-phase extraction for Google Gemini-quality summaries
+      formData.append('use_enhanced', 'true');  // ⭐ ENABLE GPT-5 Vision with enhanced structured outputs
       
       if (selectedStatementDate) {
         formData.append('statement_date', selectedStatementDate);

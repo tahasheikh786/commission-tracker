@@ -49,8 +49,8 @@ python-dateutil>=2.8.0
 openpyxl>=3.1.0,<4.0.0
 xlrd>=2.0.0,<3.0.0
 
-# OpenAI GPT-5 Vision API
-openai>=1.0.0,<2.0.0
+# OpenAI GPT-5 Vision API - Requires 1.55.0+ for Responses API support (Nov 2025)
+openai>=1.55.0,<2.0.0
 
 # Mistral Document AI API (Fallback)
 mistralai>=1.0.0,<2.0.0

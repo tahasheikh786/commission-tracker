@@ -14,6 +14,7 @@ Key Capabilities:
 """
 
 import logging
+import re
 from typing import Dict, Any, List, Optional
 import json
 from .extraction_rules import ExtractionRules
@@ -273,6 +274,12 @@ class SemanticExtractionService:
                     if summary_indices:
                         claude_marked_summary_indices.update(summary_indices)
                         logger.info(f"📋 Claude marked {len(summary_indices)} rows as summaries in table metadata")
+                
+                # ✅ TRUST CLAUDE: Validate and log Claude's summary row classification
+                # We no longer override Claude's intelligent detection with Python patterns
+                summary_count = self._validate_and_fix_summary_markers(tables)
+                if summary_count > 0:
+                    logger.info(f"📋 Claude's classification: {len(claude_marked_summary_indices)} rows marked as summaries")
             
             # If Claude marked summary rows, filter groups using table-based matching
             if claude_marked_summary_indices and tables:
@@ -448,6 +455,132 @@ class SemanticExtractionService:
         if marked_count > 0:
             logger.info(f"🔍 Marked {marked_count} table rows as summary rows based on semantic filtering")
     
+    def _validate_and_fix_summary_markers(
+        self,
+        tables: List[Dict[str, Any]]
+    ) -> int:
+        """
+        ✅ TRUST CLAUDE: Simply validate that summary markers exist and log stats.
+        No more Python pattern matching that overrides Claude's intelligence.
+        
+        Args:
+            tables: List of table dictionaries with rows and summary_rows metadata
+            
+        Returns:
+            Number of summary rows marked (for logging/monitoring)
+        """
+        total_summary_count = 0
+        total_rows = 0
+        
+        for table_idx, table in enumerate(tables):
+            rows = table.get('rows', [])
+            summary_row_indices = set(table.get('summary_rows', []) or table.get('summaryRows', []))
+            
+            if not rows:
+                continue
+            
+            table_row_count = len(rows)
+            table_summary_count = len(summary_row_indices)
+            
+            total_rows += table_row_count
+            total_summary_count += table_summary_count
+            
+            # Calculate ratio for monitoring
+            summary_ratio = table_summary_count / table_row_count if table_row_count > 0 else 0
+            
+            # Log stats for transparency
+            logger.debug(
+                f"Table {table_idx}: {table_summary_count} summary rows "
+                f"out of {table_row_count} total ({summary_ratio:.1%})"
+            )
+            
+            # ⚠️ WARNING: If summary ratio > 20%, something might be wrong
+            if summary_ratio > 0.20:
+                logger.warning(
+                    f"⚠️ Table {table_idx}: High summary ratio ({summary_ratio:.1%}) - "
+                    f"{table_summary_count}/{table_row_count} rows marked as summaries. "
+                    f"Review prompt if this seems incorrect."
+                )
+        
+        # Global monitoring
+        if total_rows > 0:
+            global_ratio = total_summary_count / total_rows
+            logger.info(
+                f"✅ Claude classified {total_summary_count} summary rows "
+                f"out of {total_rows} total ({global_ratio:.1%})"
+            )
+            
+            if global_ratio > 0.20:
+                logger.warning(
+                    f"⚠️ ALERT: Global summary ratio ({global_ratio:.1%}) exceeds 20% threshold. "
+                    f"This may indicate over-marking. Review prompt optimization."
+                )
+        
+        return total_summary_count
+    
+    def _has_valid_group_number(self, group_no: str) -> bool:
+        """
+        Check if group_no matches valid patterns.
+        
+        Valid patterns:
+        - L##### (L followed by 5-6 digits): L224259, L213059
+        - ##### (5-7 digit number): 1653402, 230691
+        - Alphanumeric identifier (4-10 chars)
+        
+        Args:
+            group_no: The Group Number value to validate
+            
+        Returns:
+            True if valid group number pattern, False otherwise
+        """
+        if not group_no or len(group_no.strip()) < 2:
+            return False
+        
+        group_no = group_no.strip()
+        
+        # Pattern 1: L##### (L followed by 5-6 digits)
+        if re.match(r'^L\d{5,6}$', group_no, re.IGNORECASE):
+            return True
+        
+        # Pattern 2: 5-7 digit number
+        if re.match(r'^\d{5,7}$', group_no):
+            return True
+        
+        # Pattern 3: Alphanumeric identifier (4-10 characters with at least one digit)
+        if 4 <= len(group_no) <= 10 and re.search(r'\d', group_no):
+            return True
+        
+        return False
+    
+    def _has_company_name(self, company_name: str) -> bool:
+        """
+        Check if company_name is a real company name (not summary marker).
+        
+        Args:
+            company_name: The Company Name value to validate
+            
+        Returns:
+            True if valid company name, False otherwise
+        """
+        if not company_name or len(company_name.strip()) < 2:
+            return False
+        
+        company_name_lower = company_name.lower()
+        
+        # Reject summary keywords
+        reject_patterns = [
+            "total", "summary", "grand", "subtotal",
+            "writing agent", "agent 2", "producer",
+            "grand total", "total for"
+        ]
+        
+        for pattern in reject_patterns:
+            if pattern in company_name_lower:
+                return False
+        
+        # Valid if it's not empty and doesn't contain summary keywords
+        return True
+    
     def _filter_groups_by_table_summary_metadata(
         self,
         groups: List[Dict[str, Any]],
@@ -457,8 +590,7 @@ class SemanticExtractionService:
         """
         Filter groups based on table summary row metadata from Claude.
         
-        ✅ FIXED: Precise signature-based matching to prevent false positives.
-        TRUSTS CLAUDE'S SUMMARY DETECTION - only excludes exact matches.
+        ✅ Trust Claude's detection completely - no additional Python validation.
         
         Args:
             groups: List of group dictionaries from Claude's extraction
@@ -466,14 +598,14 @@ class SemanticExtractionService:
             summary_row_indices: Set of row indices marked as summary rows by Claude
             
         Returns:
-            Filtered list with groups corresponding to summary rows removed
+            Filtered list with groups corresponding to Claude's summary rows removed
         """
         if not groups or not tables or not summary_row_indices:
             return groups
         
         # ✅ DEBUG: Log BEFORE filtering
         logger.info("="*80)
-        logger.info("🔍 SEMANTIC FILTERING DEBUG")
+        logger.info("🔍 SEMANTIC FILTERING (trusting Claude)")
         logger.info(f"Input: {len(groups)} groups to filter")
         logger.info(f"Tables: {len(tables)} tables")
         logger.info(f"Claude marked summary row indices: {sorted(summary_row_indices)}")
@@ -484,8 +616,8 @@ class SemanticExtractionService:
             group_no = group.get('group_number', '') or group.get('group_no', '')
             logger.info(f"  [{idx:2d}] {group_no:15s} | {group_name}")
         
-        # ✅ Build precise mapping of Claude's marked summary rows
-        summary_row_signatures = set()
+        # ✅ TRUST CLAUDE: Use Claude's summary row signatures directly (no Python validation)
+        validated_summary_signatures = set()
         
         for table in tables:
             rows = table.get('rows', [])
@@ -503,7 +635,7 @@ class SemanticExtractionService:
                     if 'no' not in header_lower:  # Avoid matching "Group No"
                         group_name_idx = idx
             
-            # Extract signatures ONLY from Claude-marked summary rows
+            # Extract and VALIDATE signatures from Claude-marked summary rows
             for row_idx, row in enumerate(rows):
                 if row_idx not in summary_row_indices:
                     continue  # Skip non-summary rows
@@ -524,27 +656,19 @@ class SemanticExtractionService:
                 if group_name_idx is not None and group_name_idx < len(row_data):
                     row_group_name = str(row_data[group_name_idx]).strip()
                 
-                # ✅ TRUST CLAUDE: Only create signature if BOTH identifiers are non-empty
-                # If both are empty, it's a grand total row (no specific group to exclude)
-                if row_group_no and row_group_name:
-                    # Create signature: "GROUP_NO|GROUP_NAME"
-                    signature = f"{row_group_no}|{row_group_name}"
-                    summary_row_signatures.add(signature)
-                    logger.debug(f"📍 Summary signature: {signature}")
-                elif not row_group_no and not row_group_name:
-                    # Grand total row (all identifiers empty)
-                    logger.debug(f"📍 Grand total row {row_idx} (empty identifiers - no group to exclude)")
-                else:
-                    # One identifier empty - log for visibility but don't exclude
-                    logger.debug(f"📍 Partial row {row_idx}: no='{row_group_no}', name='{row_group_name}' (keeping as-is)")
+                # ✅ TRUST CLAUDE: Accept Claude's summary markers without question
+                signature = f"{row_group_no}|{row_group_name}"
+                validated_summary_signatures.add(signature)
+                logger.debug(f"✅ Trusting Claude's summary classification: {signature}")
         
-        logger.info(f"\n🔍 Built {len(summary_row_signatures)} summary row signatures from Claude's marks")
-        if summary_row_signatures:
-            logger.info("📍 Summary signatures:")
-            for sig in sorted(summary_row_signatures):
+        logger.info(f"\n🔍 Using {len(validated_summary_signatures)} summary signatures from Claude (trusted)")
+        
+        if validated_summary_signatures:
+            logger.info("📍 Claude's summary row signatures (will be excluded):")
+            for sig in sorted(validated_summary_signatures):
                 logger.info(f"     {sig}")
         
-        # ✅ Filter groups using PRECISE signature matching ONLY
+        # ✅ Filter groups using Claude's signatures
         filtered_groups = []
         excluded_count = 0
         
@@ -561,12 +685,12 @@ class SemanticExtractionService:
             # ✅ Create signature for this group
             group_signature = f"{group_no}|{group_name}"
             
-            # ✅ PRECISE MATCH: Only exclude if this EXACT signature exists in Claude's summary rows
-            if group_signature in summary_row_signatures:
+            # ✅ Trust Claude: Exclude if signature is in Claude's summary list
+            if group_signature in validated_summary_signatures:
                 excluded_count += 1
-                logger.info(f"🔴 EXCLUDED: Group {group_idx}: {group_signature} (matches Claude's summary row)")
+                logger.info(f"🔴 EXCLUDED: Group {group_idx}: {group_signature} (Claude marked as summary)")
             else:
-                # ✅ VALID GROUP: Include it (Claude didn't mark it as summary)
+                # ✅ VALID GROUP: Include it
                 filtered_groups.append(group)
                 logger.debug(f"✅ INCLUDED: Group {group_idx}: {group_signature}")
         
@@ -578,7 +702,27 @@ class SemanticExtractionService:
             logger.info(f"  [{idx:2d}] {group_no:15s} | {group_name}")
         
         logger.info(f"\n🔴 Excluded: {excluded_count} groups")
-        logger.info(f"✅ Filtering complete: {len(groups)} → {len(filtered_groups)} groups (excluded {excluded_count})")
+        logger.info(f"✅ Filtering: {len(groups)} → {len(filtered_groups)} groups (excluded {excluded_count})")
+        
+        # ✅ NEW: Add detailed validation metrics
+        logger.info(f"\n📊 Summary Row Statistics:")
+        total_rows = sum(len(table.get('rows', [])) for table in tables)
+        logger.info(f"  Total rows extracted: {total_rows}")
+        logger.info(f"  Rows marked as summary: {len(summary_row_indices)}")
+        if total_rows > 0:
+            summary_ratio = len(summary_row_indices) / total_rows * 100
+            logger.info(f"  Summary ratio: {summary_ratio:.1f}%")
+            
+            # ✅ WARNING: If summary ratio > 20%, something might be wrong
+            if summary_ratio > 20:
+                logger.warning(
+                    f"⚠️ HIGH SUMMARY RATIO: {summary_ratio:.1f}% "
+                    f"({len(summary_row_indices)}/{total_rows} rows) - review prompt or detection logic"
+                )
+        
+        logger.info(f"  Groups before filtering: {len(groups)}")
+        logger.info(f"  Groups after filtering: {len(filtered_groups)}")
+        logger.info(f"  Filtering removed: {len(groups) - len(filtered_groups)} rows")
         logger.info("="*80)
         
         return filtered_groups
@@ -686,6 +830,9 @@ class SemanticExtractionService:
         logger.info(f"✅ Summary row validation: {validation['total_summary_rows']}/{validation['total_rows']} ({overall_ratio:.1%}) marked as summaries")
         
         return validation
+    
+    # ✅ REMOVED: _validate_summary_row_signature method
+    # No longer needed - we trust Claude's summary row detection completely
     
     def _filter_summary_rows(self, groups: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """

@@ -1161,34 +1161,24 @@ class ClaudeDocumentAIService:
                     'business_intelligence': {}
                 }
             
-            # 🔴 CRITICAL: Apply post-validation to mark escaped summary rows
-            from .summary_row_filters import post_validate_extraction
-            
-            logger.info("🔍 Applying post-validation to detect summary rows...")
-            validated_data, validation_metadata = post_validate_extraction(parsed_data)
-            
-            if validation_metadata['post_validate_detected_count'] > 0:
-                logger.warning(
-                    f"⚠️  Post-validation detected {validation_metadata['post_validate_detected_count']} summary rows (now marked in metadata)"
-                )
-                logger.debug(f"Detected summary rows: {validation_metadata['post_validate_detected_rows']}")
-            else:
-                logger.info("✅ Post-validation: No additional summary rows detected")
+            # ✅ Trust Claude's summary row detection - no Python post-validation needed
+            # Claude already marks rows with is_summary/summary_confidence in the response
+            # utils.py converts this to summary_rows indices
+            logger.info("✅ Using Claude's summary row detection (no Python validation)")
             
             # Transform format
-            doc_metadata = self._transform_carrier_broker_metadata(validated_data)
-            validated_data['document_metadata'] = doc_metadata
+            doc_metadata = self._transform_carrier_broker_metadata(parsed_data)
+            parsed_data['document_metadata'] = doc_metadata
             
             # Ensure entities are preserved
             result = {
                 'success': True,
-                'tables': validated_data.get('tables', []),
+                'tables': parsed_data.get('tables', []),
                 'document_metadata': doc_metadata,
-                'groups_and_companies': validated_data.get('groups_and_companies', []),
-                'writing_agents': validated_data.get('writing_agents', []),
-                'business_intelligence': validated_data.get('business_intelligence', {}),
-                'token_usage': extraction_result.get('usage', {}),
-                'validation_metadata': validation_metadata  # Include validation info for debugging
+                'groups_and_companies': parsed_data.get('groups_and_companies', []),
+                'writing_agents': parsed_data.get('writing_agents', []),
+                'business_intelligence': parsed_data.get('business_intelligence', {}),
+                'token_usage': extraction_result.get('usage', {})
             }
             
             return result
@@ -1233,31 +1223,22 @@ class ClaudeDocumentAIService:
                     )
                     
                     if parsed_data:
-                        # 🔴 CRITICAL: Apply post-validation to fallback results too
-                        from .summary_row_filters import post_validate_extraction
-                        
-                        logger.info("🔍 Applying post-validation to fallback results...")
-                        validated_data, validation_metadata = post_validate_extraction(parsed_data)
-                        
-                        if validation_metadata['post_validate_detected_count'] > 0:
-                            logger.warning(
-                                f"⚠️  Post-validation (fallback) detected {validation_metadata['post_validate_detected_count']} summary rows"
-                            )
+                        # ✅ Trust Claude's summary row detection - no Python post-validation needed
+                        logger.info("✅ Using Claude's summary row detection for fallback results")
                         
                         # Transform format
-                        doc_metadata = self._transform_carrier_broker_metadata(validated_data)
-                        validated_data['document_metadata'] = doc_metadata
+                        doc_metadata = self._transform_carrier_broker_metadata(parsed_data)
+                        parsed_data['document_metadata'] = doc_metadata
                         
                         # Return with proper format
                         return {
                             'success': True,
-                            'tables': validated_data.get('tables', []),
+                            'tables': parsed_data.get('tables', []),
                             'document_metadata': doc_metadata,
-                            'groups_and_companies': validated_data.get('groups_and_companies', []),
-                            'writing_agents': validated_data.get('writing_agents', []),
-                            'business_intelligence': validated_data.get('business_intelligence', {}),
-                            'token_usage': fallback_result.get('usage', {}),
-                            'validation_metadata': validation_metadata
+                            'groups_and_companies': parsed_data.get('groups_and_companies', []),
+                            'writing_agents': parsed_data.get('writing_agents', []),
+                            'business_intelligence': parsed_data.get('business_intelligence', {}),
+                            'token_usage': fallback_result.get('usage', {})
                         }
                         
                 except Exception as fallback_error:
