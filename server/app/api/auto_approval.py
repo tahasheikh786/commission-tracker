@@ -170,8 +170,11 @@ async def auto_approve_statement(
                 
                 if formats and commission_tables:
                     # Get headers from first table to match against
+                    from app.services.extraction_utils import normalize_table_headers
                     first_table = commission_tables[0]
-                    statement_headers = first_table.get('header') or first_table.get('headers', [])
+                    raw_headers = first_table.get('header') or first_table.get('headers', [])
+                    # ✅ CRITICAL FIX: Normalize headers to handle newlines in legacy data
+                    statement_headers = normalize_table_headers(raw_headers)
                     
                     best_format = None
                     best_score = 0
@@ -375,7 +378,10 @@ async def auto_approve_statement(
             logger.info(f"💰 Auto-approval: Calculating total from {len(commission_tables)} table(s)")
             for table_idx, table in enumerate(commission_tables):
                 # ✅ CURSOR FIX: Support both "headers" (plural) and "header" (singular) keys
-                headers = table.get("headers", []) or table.get("header", [])
+                from app.services.extraction_utils import normalize_table_headers
+                raw_headers = table.get("headers", []) or table.get("header", [])
+                # ✅ CRITICAL FIX: Normalize headers to handle newlines
+                headers = normalize_table_headers(raw_headers)
                 logger.info(f"💰 Auto-approval: Table {table_idx}: Found {len(headers)} headers")
                 
                 if commission_field in headers:
@@ -460,7 +466,10 @@ async def auto_approve_statement(
         if invoice_field:
             logger.info(f"💰 Auto-approval: Calculating invoice total from {len(commission_tables)} table(s)")
             for table_idx, table in enumerate(commission_tables):
-                headers = table.get("headers", []) or table.get("header", [])
+                from app.services.extraction_utils import normalize_table_headers
+                raw_headers = table.get("headers", []) or table.get("header", [])
+                # ✅ CRITICAL FIX: Normalize headers to handle newlines
+                headers = normalize_table_headers(raw_headers)
                 
                 if invoice_field in headers:
                     idx = headers.index(invoice_field)

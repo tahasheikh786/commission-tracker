@@ -160,7 +160,8 @@ class GPT5VisionExtractorWithPDF:
         use_cache: bool = True,
         max_output_tokens: int = 16000,  # ✅ INCREASED: Handle larger documents
         use_mini: bool = False,
-        progress_tracker=None
+        progress_tracker=None,
+        carrier_name: str = None  # ✅ NEW: For carrier-specific prompts
     ) -> Dict[str, Any]:
         """
         Extract tables from PDF using Responses API with direct PDF input.
@@ -230,7 +231,7 @@ class GPT5VisionExtractorWithPDF:
                 "content": [
                     {
                         "type": "input_text",
-                        "text": self._get_pdf_extraction_prompt()
+                        "text": self._get_pdf_extraction_prompt(carrier_name=carrier_name)
                     },
                     {
                         "type": "input_file",  # ✅ NEW: Direct PDF input!
@@ -403,7 +404,8 @@ class GPT5VisionExtractorWithPDF:
         self,
         pdf_path: str,
         max_pages: Optional[int] = None,
-        progress_tracker=None
+        progress_tracker=None,
+        carrier_name: str = None  # ✅ NEW: For carrier-specific prompts
     ) -> Dict[str, Any]:
         """
         Process entire PDF document using direct PDF upload.
@@ -419,6 +421,7 @@ class GPT5VisionExtractorWithPDF:
             pdf_path: Path to PDF file
             max_pages: Ignored (for API compatibility)
             progress_tracker: Optional progress tracking callback
+            carrier_name: Optional carrier name for carrier-specific extraction rules
             
         Returns:
             Dict with complete extraction results
@@ -443,7 +446,8 @@ class GPT5VisionExtractorWithPDF:
                 use_cache=True,
                 max_output_tokens=16000,
                 use_mini=False,
-                progress_tracker=progress_tracker
+                progress_tracker=progress_tracker,
+                carrier_name=carrier_name  # ✅ Pass carrier name for carrier-specific prompts
             )
             
             # Add processing summary
@@ -536,7 +540,7 @@ class GPT5VisionExtractorWithPDF:
         
         return input_cost + output_cost
     
-    def _get_pdf_extraction_prompt(self) -> str:
+    def _get_pdf_extraction_prompt(self, carrier_name: str = None) -> str:
         """
         Specialized prompt for PDF extraction using Responses API.
         
@@ -547,9 +551,12 @@ class GPT5VisionExtractorWithPDF:
         - Structural understanding
         
         So we focus on the extraction logic, not visual understanding.
+        
+        Args:
+            carrier_name: Optional carrier name to apply carrier-specific prompts
         """
         
-        return """You are an elite financial document analyst specializing in insurance commission statements.
+        base_prompt = """You are an elite financial document analyst specializing in insurance commission statements.
 
 The PDF has been provided with both:
 1. Full text extraction from all pages
@@ -586,12 +593,19 @@ Your task: Extract comprehensive data from this commission statement.
    - Census count
    - Calculation method (Premium Equivalent, PEPM, %, Flat)
 
-4. **Tables**
+4. **Tables** (CRITICAL - Summary Row Detection)
    - Extract ALL tables found in the document
    - Preserve headers exactly
    - Include all data rows
-   - Identify summary/total rows by their index
+   - **CRITICAL: Identify and mark summary/total rows**
+     * Summary rows contain: "Total", "Subtotal", "Grand Total", "Sum", "TOTAL", etc.
+     * Summary rows often have bold or different formatting
+     * Summary rows typically have empty cells in some columns (especially identifier columns)
+     * Summary rows are usually at the end of a table section
+     * Add the row index (0-based) to the "summary_rows" array
+     * Example: If row 5 contains "Total" and aggregated amounts, add 5 to summary_rows
    - Maintain hierarchical relationships
+   - **DO NOT include summary rows in the commission calculation - they are for reference only**
 
 5. **Business Intelligence** (Extract financial totals and patterns from the document)
    - total_commission_amount: Total commission paid (look for "Total Commission", "Net Commission", "Total Paid")
@@ -694,8 +708,27 @@ Return ONLY valid JSON (no markdown):
    - `total_invoice`: Total invoice/premium amount (look for "Total Invoice", "Total Premium", "Invoice Total")
    - These are usually in summary rows or a totals section at the bottom of tables
    - Use exact numerical values, including cents (e.g., 10700.40, not 10700)
+10. **SUMMARY ROWS MUST BE IDENTIFIED** - Critical for accurate calculations:
+    - Look for rows containing keywords: "Total", "Subtotal", "Grand Total", "Sum", "TOTAL", "Sub-total"
+    - Summary rows often have empty first columns (no group ID or identifier)
+    - Summary rows typically contain aggregated financial amounts
+    - Add ALL summary row indices to the "summary_rows" array in each table
+    - Example: If table has 20 rows and row 19 is "TOTAL", then "summary_rows": [19]
 
 Analyze the full document and return the complete extraction as JSON."""
+        
+        # Add carrier-specific prompts if available
+        carrier_specific_prompt = ""
+        if carrier_name:
+            from .dynamic_prompts import GPTDynamicPrompts
+            carrier_specific_prompt = GPTDynamicPrompts.get_prompt_by_name(carrier_name)
+        
+        # Combine base prompt with carrier-specific instructions
+        full_prompt = base_prompt
+        if carrier_specific_prompt:
+            full_prompt += "\n\n" + carrier_specific_prompt
+        
+        return full_prompt
     
     async def delete_cached_file(self, pdf_path: str) -> bool:
         """

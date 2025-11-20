@@ -41,20 +41,36 @@ export default function TableViewerModal({
     
     try {
       // Use existing data from the statement instead of making API calls
-      // For formatted tables, use edited_tables if available, otherwise fall back to raw_data
-      const tableData = statement.edited_tables || statement.raw_data || [];
+      // ✅ CRITICAL FIX: Prefer final_data (approved data with summaryRows) over raw_data (initial extraction)
+      const tableData = statement.edited_tables || statement.final_data || statement.raw_data || [];
       
       if (Array.isArray(tableData) && tableData.length > 0) {
-        // CRITICAL FIX: Normalize summaryRows to ensure it's always an array
-        // Backend might return {} for empty summaryRows which breaks validation
-        const normalizedTables = tableData.map(table => ({
-          ...table,
-          summaryRows: Array.isArray(table.summaryRows) 
-            ? table.summaryRows 
-            : (table.summaryRows instanceof Set 
-              ? Array.from(table.summaryRows) 
-              : [])  // Convert {} or any non-array/Set to []
-        }));
+        // ✅ CRITICAL FIX: Transform rows from DICT format to ARRAY format
+        // Backend stores rows as dictionaries but frontend expects arrays
+        const normalizedTables = tableData.map(table => {
+          const headers = table.header || table.headers || [];
+          let rows = table.rows || [];
+          
+          // Check if rows are in dictionary format and convert to arrays
+          if (rows.length > 0 && typeof rows[0] === 'object' && !Array.isArray(rows[0])) {
+            rows = rows.map((rowDict: Record<string, any>) => {
+              // Convert dict to array based on header order
+              return headers.map((header: string) => rowDict[header] || '');
+            });
+          }
+          
+          return {
+            ...table,
+            header: headers,
+            rows: rows,
+            summaryRows: Array.isArray(table.summaryRows) 
+              ? table.summaryRows 
+              : (table.summaryRows instanceof Set 
+                ? Array.from(table.summaryRows) 
+                : [])  // Convert {} or any non-array/Set to []
+          };
+        });
+        
         setTables(normalizedTables);
         setCurrentTableIndex(0);
       } else {

@@ -88,16 +88,18 @@ export function useProgressWebSocket({
     summaryData: null  // ← NEW: Initialize structured summary data
   });
 
+  // Enhanced timeout configuration for large file processing
+  const CONNECTION_TIMEOUT = 120000; // 2 minutes to establish connection
+  const HEARTBEAT_INTERVAL = 15000; // ✅ CHANGED: 15 seconds (match backend) - aggressive keepalive
+  const RECONNECT_DELAY = 5000;       // 5 seconds between reconnects
+  const MAX_RECONNECT_ATTEMPTS = 10;  // More attempts for long operations
+  
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttemptsRef = useRef(0);
-  const maxReconnectAttempts = 5;
-  
-  // Enhanced timeout configuration for large file processing
-  const CONNECTION_TIMEOUT = 60000; // 60 seconds to establish connection
-  const HEARTBEAT_INTERVAL = 30000; // 30 seconds heartbeat
+  const maxReconnectAttempts = MAX_RECONNECT_ATTEMPTS; // Use constant defined above
   
   // Store callbacks in refs to avoid recreating connect/disconnect on every render
   const onExtractionCompleteRef = useRef(onExtractionComplete);
@@ -231,21 +233,26 @@ export function useProgressWebSocket({
           console.error('Failed to send ping:', error);
         }
         
-        // Start heartbeat interval to maintain connection during long-running processes
+        // ✅ IMPROVED: Enhanced heartbeat with error handling
         heartbeatIntervalRef.current = setInterval(() => {
           if (ws.readyState === WebSocket.OPEN) {
             try {
-              ws.send(JSON.stringify({ type: 'heartbeat', timestamp: Date.now() }));
-              console.log('💓 Heartbeat sent to maintain connection');
+              ws.send(JSON.stringify({ 
+                type: 'heartbeat', 
+                timestamp: Date.now(),
+                upload_id: uploadId
+              }));
+              console.log('→ Heartbeat sent');
             } catch (error) {
-              console.error('Failed to send heartbeat:', error);
+              console.error('❌ Heartbeat send failed:', error);
+              // Connection likely dead, clear interval
               if (heartbeatIntervalRef.current) {
                 clearInterval(heartbeatIntervalRef.current);
                 heartbeatIntervalRef.current = null;
               }
             }
           } else {
-            console.warn('⚠️ WebSocket not open, clearing heartbeat interval');
+            console.warn('⚠️ WebSocket not open, state:', ws.readyState);
             if (heartbeatIntervalRef.current) {
               clearInterval(heartbeatIntervalRef.current);
               heartbeatIntervalRef.current = null;
@@ -258,33 +265,38 @@ export function useProgressWebSocket({
         try {
           const data: ProgressMessage = JSON.parse(event.data);
           
-          // Handle server ping/pong
+          // ✅ NEW: Handle server ping - RESPOND IMMEDIATELY
           if (data.type === 'ping') {
-            // Respond to server ping with pong
             try {
-              ws.send(JSON.stringify({ type: 'pong', timestamp: Date.now() }));
-              console.log('🏓 Responded to server ping with pong');
+              ws.send(JSON.stringify({ 
+                type: 'pong', 
+                timestamp: Date.now(),
+                received_at: data.timestamp,
+                upload_id: data.upload_id
+              }));
+              console.log('✓ Pong sent to server');
             } catch (error) {
               console.error('Failed to send pong:', error);
             }
-            return;
+            return;  // Don't process further
           }
           
           if (data.type === 'pong') {
-            // Server responded to our ping
-            console.log('🏓 Received pong from server');
+            console.log('✓ Server acknowledged heartbeat');
             return;
           }
           
           if (data.type === 'connection_established') {
-            console.log('✅ WebSocket connection confirmed by server');
+            console.log('✓ WebSocket connection confirmed');
             return;
           }
           
+          // Process other messages
           console.log('📨 WebSocket message:', data);
           handleProgressMessage(data);
+          
         } catch (error) {
-          console.error('Failed to parse WebSocket message:', error);
+          console.error('Failed to parse message:', error);
         }
       };
 

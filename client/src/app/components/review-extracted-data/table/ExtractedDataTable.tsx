@@ -34,22 +34,18 @@ export default function ExtractedDataTable({
   const rows = Array.isArray(table.rows) ? table.rows : [];
   const totalRows = rows.length;
   
-  // ✅ DEBUG: Log table data structure
-  console.log('🔍 ExtractedDataTable Debug:', {
-    tableKeys: Object.keys(table),
-    headersLength: headers.length,
-    headers,
-    rowsLength: rows.length,
-    rowsIsArray: Array.isArray(rows),
-    firstRowSample: rows[0],
-    firstRowIsArray: Array.isArray(rows[0]),
-    tableObject: table
-  });
+  // ✅ CRITICAL: Ensure summaryRows is properly set
+  const summaryRowsArray = table.summaryRows 
+    ? (Array.isArray(table.summaryRows) ? table.summaryRows : Array.from(table.summaryRows as Set<number>))
+    : [];
 
   // Hooks
   const selection = useTableSelection(totalRows);
   const summaryDetection = useSummaryRowDetection(table, onTableChange);
   const operations = useTableOperations(table, onTableChange);
+  
+  // Count summary rows for info display
+  const summaryRowCount = summaryRowsArray.length;
 
   // Column actions menu state
   const [showColumnActions, setShowColumnActions] = useState<number | null>(null);
@@ -161,6 +157,25 @@ export default function ExtractedDataTable({
 
   return (
     <div className="flex flex-col h-full w-full bg-gray-50 dark:bg-slate-900">
+      {/* User-Friendly Info Banner about Summary Rows */}
+      {summaryRowCount > 0 && (
+        <div className="flex-none px-4 py-2.5 bg-orange-50 dark:bg-orange-900/20 border-b border-orange-200 dark:border-orange-800">
+          <div className="flex items-start gap-2">
+            <div className="flex-shrink-0 mt-0.5">
+              <svg className="w-4 h-4 text-orange-600 dark:text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div className="flex-1">
+              <p className="text-xs text-orange-800 dark:text-orange-300">
+                <span className="font-semibold">{summaryRowCount} Summary {summaryRowCount === 1 ? 'Row' : 'Rows'} Detected:</span>
+                {' '}Rows highlighted in orange are totals/summaries and will <strong>not be counted</strong> in commission calculations.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+      
       {/* Table Controls */}
       <div className="flex items-center justify-between px-6 py-4 border-b-2 border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex-shrink-0">
         <div className="flex items-center gap-2">

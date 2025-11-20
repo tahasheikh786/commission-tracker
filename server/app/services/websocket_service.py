@@ -34,7 +34,7 @@ class ConnectionManager:
         # Configure longer timeouts for large file processing
         self.websocket_timeout = timeout_settings.websocket_connection
         self.keepalive_timeout = timeout_settings.websocket_keepalive
-        self.ping_interval = timeout_settings.websocket_ping_interval
+        self.ping_interval = 15  # ✅ CHANGED: 15 seconds (was 30) - aggressive keepalive for Render
         
         # Track keepalive tasks
         self.keepalive_tasks: Dict[str, asyncio.Task] = {}
@@ -82,11 +82,14 @@ class ConnectionManager:
         }, upload_id, session_id)
     
     async def _keepalive_task(self, websocket: WebSocket, upload_id: str, session_id: str):
-        """Send periodic ping messages to keep connection alive during long-running processes."""
+        """Enhanced keepalive with aggressive ping schedule to prevent Render 1006 errors."""
         keepalive_key = f"{upload_id}:{session_id}"
+        consecutive_failures = 0
+        max_failures = 3
+        
         try:
             while websocket.client_state.name == 'CONNECTED':
-                await asyncio.sleep(self.ping_interval)
+                await asyncio.sleep(self.ping_interval)  # 15 seconds
                 
                 # Check if connection still exists
                 if upload_id not in self.active_connections or session_id not in self.active_connections[upload_id]:
@@ -94,27 +97,54 @@ class ConnectionManager:
                 
                 # Send keepalive ping
                 try:
-                    await self.send_personal_message({
-                        'type': 'ping',
-                        'timestamp': datetime.utcnow().isoformat(),
-                        'keepalive': True
-                    }, upload_id, session_id)
+                    # Send keepalive ping with timestamp
+                    await asyncio.wait_for(
+                        self.send_personal_message(
+                            {
+                                'type': 'ping',
+                                'timestamp': datetime.utcnow().isoformat(),
+                                'keepalive': True,
+                                'upload_id': upload_id,  # ✅ NEW: Include upload_id
+                                'message': 'Connection active'
+                            },
+                            upload_id,
+                            session_id
+                        ),
+                        timeout=5.0
+                    )
+                    
+                    # Reset failure counter
+                    consecutive_failures = 0
                     
                     # Update last heartbeat
                     if session_id in self.connection_metadata:
-                        self.connection_metadata[session_id]['last_heartbeat'] = datetime.utcnow().isoformat()
+                        self.connection_metadata[session_id]['last_heartbeat'] = \
+                            datetime.utcnow().isoformat()
                     
-                    logger.debug(f"Keepalive ping sent: upload_id={upload_id}, session_id={session_id}")
+                    logger.debug(f"💓 Keepalive ping sent: {upload_id}")
+                    
+                except asyncio.TimeoutError:
+                    consecutive_failures += 1
+                    logger.warning(
+                        f"⚠️ Keepalive timeout ({consecutive_failures}/{max_failures}): {upload_id}"
+                    )
+                    
+                    if consecutive_failures >= max_failures:
+                        logger.error(f"🔴 Max failures reached, closing: {upload_id}")
+                        break
+                        
                 except Exception as e:
-                    logger.warning(f"Keepalive ping failed: {e}")
-                    break
+                    consecutive_failures += 1
+                    logger.warning(f"⚠️ Keepalive error ({consecutive_failures}/{max_failures}): {e}")
+                    
+                    if consecutive_failures >= max_failures:
+                        break
                     
         except asyncio.CancelledError:
-            logger.debug(f"Keepalive task cancelled: upload_id={upload_id}, session_id={session_id}")
+            logger.debug(f"🛑 Keepalive cancelled: {upload_id}")
         except Exception as e:
-            logger.error(f"Keepalive task error: {e}")
+            logger.error(f"❌ Keepalive error: {e}")
         finally:
-            # Clean up task reference
             if keepalive_key in self.keepalive_tasks:
                 del self.keepalive_tasks[keepalive_key]
     

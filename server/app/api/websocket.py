@@ -213,3 +213,61 @@ async def get_upload_connections(upload_id: str):
         'connection_count': connection_manager.get_connection_count(upload_id),
         'has_connections': upload_id in connection_manager.active_connections
     }
+
+@router.get("/ws/diagnostics/{upload_id}")
+async def websocket_diagnostics(upload_id: str):
+    """
+    Get WebSocket connection diagnostics for debugging.
+    
+    Returns detailed information about active connections including:
+    - Connection state
+    - Age and last heartbeat
+    - Health status
+    
+    Usage:
+        curl https://your-app.onrender.com/api/ws/diagnostics/upload_1763650491476_nuljfml52
+    """
+    
+    if upload_id not in connection_manager.active_connections:
+        return {
+            "upload_id": upload_id,
+            "status": "no_connections",
+            "connections": 0
+        }
+    
+    connections = connection_manager.active_connections[upload_id]
+    diagnostics = []
+    
+    for session_id, ws in connections.items():
+        metadata = connection_manager.connection_metadata.get(session_id, {})
+        
+        connected_at = datetime.fromisoformat(
+            metadata.get("connected_at", datetime.utcnow().isoformat())
+        )
+        age_seconds = (datetime.utcnow() - connected_at).total_seconds()
+        
+        last_heartbeat = metadata.get("last_heartbeat", "unknown")
+        heartbeat_age = None
+        if last_heartbeat != "unknown":
+            heartbeat_time = datetime.fromisoformat(last_heartbeat)
+            heartbeat_age = (datetime.utcnow() - heartbeat_time).total_seconds()
+        
+        diagnostics.append({
+            "session_id": session_id,
+            "user_id": metadata.get("user_id", "anonymous"),
+            "application_state": ws.application_state.name,
+            "client_state": ws.client_state.name,
+            "connected_at": metadata.get("connected_at"),
+            "age_seconds": round(age_seconds, 2),
+            "last_heartbeat": last_heartbeat,
+            "heartbeat_age_seconds": round(heartbeat_age, 2) if heartbeat_age else None,
+            "is_healthy": heartbeat_age < 60 if heartbeat_age else False
+        })
+    
+    return {
+        "upload_id": upload_id,
+        "status": "active",
+        "connections": len(connections),
+        "details": diagnostics,
+        "timestamp": datetime.utcnow().isoformat()
+    }

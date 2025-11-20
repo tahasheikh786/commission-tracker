@@ -267,25 +267,72 @@ async def extract_tables_smart(
         # Get extraction service
         enhanced_service = await get_enhanced_extraction_service_instance(use_enhanced=use_enhanced)
         
-        # Create extraction task
-        async def extraction_task():
+        # ✅ NEW: Create extraction as background task with aggressive heartbeats
+        async def run_extraction_with_heartbeat():
+            """Run extraction with aggressive WebSocket heartbeats to prevent 1006 errors on Render"""
+            heartbeat_task = None
             try:
-                result = await enhanced_service.extract_tables_with_progress(
-                    file_path=file_path,
-                    company_id=company_id,
-                    upload_id=upload_id_str,
-                    file_type=file_ext,
-                    extraction_method=extraction_method,
-                    upload_id_uuid=str(upload_id_uuid)
-                )
-                logger.info("✅ Extraction completed")
-                return result
-            except Exception as e:
-                logger.error(f"❌ Extraction error: {str(e)}")
-                raise
+                # Start aggressive heartbeat (every 10 seconds) during extraction
+                async def send_heartbeats():
+                    progress_stages = [
+                        (10, "Initializing extraction..."),
+                        (20, "Analyzing document structure..."),
+                        (30, "Processing tables..."),
+                        (50, "AI extraction in progress..."),
+                        (70, "Finalizing results..."),
+                        (85, "Preparing response...")
+                    ]
+                    stage_idx = 0
+                    
+                    while True:
+                        await asyncio.sleep(10)  # Every 10 seconds
+                        
+                        # Cycle through progress stages
+                        percentage, message = progress_stages[stage_idx % len(progress_stages)]
+                        stage_idx += 1
+                        
+                        # Send progress update
+                        await connection_manager.send_step_progress(
+                            upload_id=upload_id_str,
+                            percentage=percentage,
+                            estimated_time="2-3 minutes",
+                            current_stage="ai_extraction",
+                            message=message
+                        )
+                        logger.debug(f"💓 Heartbeat sent: {message} ({percentage}%)")
+                
+                # Start heartbeat task
+                heartbeat_task = asyncio.create_task(send_heartbeats())
+                
+                try:
+                    # Run the actual extraction
+                    result = await enhanced_service.extract_tables_with_progress(
+                        file_path=file_path,
+                        company_id=company_id,
+                        upload_id=upload_id_str,
+                        file_type=file_ext,
+                        extraction_method=extraction_method,
+                        upload_id_uuid=str(upload_id_uuid)
+                    )
+                    
+                    logger.info("✅ Extraction completed successfully")
+                    return result
+                    
+                except asyncio.CancelledError:
+                    logger.info(f"🛑 Extraction cancelled: {upload_id_str}")
+                    raise
+                    
+            finally:
+                # Cancel heartbeat task when extraction completes
+                if heartbeat_task:
+                    heartbeat_task.cancel()
+                    try:
+                        await heartbeat_task
+                    except asyncio.CancelledError:
+                        pass
         
         # Store the task for potential cancellation
-        task = asyncio.create_task(extraction_task())
+        task = asyncio.create_task(run_extraction_with_heartbeat())
         running_extractions[upload_id_str] = task
         
         try:
@@ -1036,11 +1083,24 @@ async def extract_tables_smart(
             except Exception as summary_error:
                 logger.warning(f"Conversational summary initialization failed (non-critical): {summary_error}")
         
+        # ✅ CRITICAL FIX: Transform GPT's summary_rows (snake_case) to summaryRows (camelCase) for frontend
+        transformed_tables = []
+        for table in extraction_result.get('tables', []):
+            transformed_table = dict(table)  # Create a copy
+            # Convert summary_rows to summaryRows if present
+            if 'summary_rows' in transformed_table:
+                transformed_table['summaryRows'] = transformed_table.pop('summary_rows')
+                logger.info(f"🔧 Transformed summary_rows to summaryRows for table: {transformed_table.get('summaryRows', [])}")
+            # Ensure summaryRows exists even if empty
+            if 'summaryRows' not in transformed_table:
+                transformed_table['summaryRows'] = []
+            transformed_tables.append(transformed_table)
+        
         # Prepare client response WITH plan type detection (field mapping happens after editing)
         client_response = {
             "success": True,
             "upload_id": str(upload_id_uuid),
-            "tables": extraction_result.get('tables', []),
+            "tables": transformed_tables,  # ✅ Use transformed tables with summaryRows
             "file_name": file.filename,
             "gcs_url": gcs_url,  # CRITICAL: Include GCS URL for PDF preview
             "gcs_key": gcs_key,  # Include GCS key for reference

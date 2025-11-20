@@ -6,6 +6,8 @@ services:
     scaling:
       minInstances: 1
       maxInstances: 1
+    # ✅ NEW: Graceful shutdown for WebSockets
+    maxShutdownDelaySeconds: 300  # 5 minutes (max allowed by Render)
     buildCommand: |
       pip install --upgrade pip
       pip install -r server/requirements.txt
@@ -59,7 +61,7 @@ services:
       - key: WEBSOCKET_TIMEOUT
         value: "1800"
       - key: WEBSOCKET_PING_INTERVAL
-        value: "30"
+        value: "15"  # ✅ CHANGED: 15 seconds (was 30) - aggressive keepalive for Render
       - key: WEBSOCKET_KEEPALIVE
         value: "300"
       - key: MISTRAL_TIMEOUT

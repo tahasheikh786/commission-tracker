@@ -179,20 +179,47 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
 
   // Load tables and AI mappings
   useEffect(() => {
-    const tableData = statement.edited_tables || statement.raw_data;
+   
+    
+ 
+    
+    // ✅ CRITICAL FIX: Prefer final_data (approved data with summaryRows) over raw_data (initial extraction)
+    // Order: edited_tables (manual edits) → final_data (approved with summaryRows) → raw_data (fallback)
+    const tableData = statement.edited_tables || statement.final_data || statement.raw_data;
+    
     if (Array.isArray(tableData) && tableData.length > 0) {
      
       
-      // CRITICAL FIX: Normalize summaryRows to ensure it's always an array
-      // Backend might return {} for empty summaryRows which breaks validation
-      const normalizedTables = tableData.map(table => ({
-        ...table,
-        summaryRows: Array.isArray(table.summaryRows) 
+      // ✅ CRITICAL FIX: Transform rows from DICT format to ARRAY format
+      // Backend stores rows as dictionaries but frontend expects arrays
+      const normalizedTables = tableData.map((table, tableIdx) => {
+        const headers = table.header || table.headers || [];
+        let rows = table.rows || [];
+        
+        
+        
+        // Check if rows are in dictionary format and convert to arrays
+        if (rows.length > 0 && typeof rows[0] === 'object' && !Array.isArray(rows[0])) {
+          rows = rows.map((rowDict: Record<string, any>) => {
+            // Convert dict to array based on header order
+            return headers.map((header: string) => rowDict[header] || '');
+          });
+        }
+        
+        const summaryRowsNormalized = Array.isArray(table.summaryRows) 
           ? table.summaryRows 
           : (table.summaryRows instanceof Set 
             ? Array.from(table.summaryRows) 
-            : [])  // Convert {} or any non-array/Set to []
-      }));
+            : []);  // Convert {} or any non-array/Set to []
+        
+        
+        return {
+          ...table,
+          header: headers,
+          rows: rows,
+          summaryRows: summaryRowsNormalized
+        };
+      });
       
       setTables(normalizedTables);
       setCurrentTableIndex(0);
@@ -431,9 +458,6 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
 
   // Handle Save & Recalculate
   const handleSaveAndRecalculate = async () => {
-    console.log('=== REMAP DEBUG START ===');
-    console.log('Statement ID:', statement.id);
-    console.log('Statement carrier_id:', statement.carrier_id);
     
     setIsSaving(true);
     setSaveProgress(0);
@@ -456,7 +480,6 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
       }
       
       // ✅ FIX 1: Fetch FULL statement data from backend to get file_hash, file_size, etc.
-      console.log('🔍 Fetching full statement data from backend...');
       setSaveProgress(5);
       
       let fullStatement = null;
@@ -470,19 +493,7 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
           (s: any) => s.id === statement.id
         );
         
-        if (fullStatement) {
-          console.log('✅ Full statement data retrieved:', {
-            id: fullStatement.id,
-            file_hash: fullStatement.file_hash,
-            file_size: fullStatement.file_size,
-            company_id: fullStatement.company_id,
-            carrier_id: fullStatement.carrier_id,
-            user_id: fullStatement.user_id,
-            environment_id: fullStatement.environment_id
-          });
-        } else {
-          console.warn('⚠️ Could not find full statement data, will use partial data');
-        }
+       
       } catch (fetchError) {
         console.warn('⚠️ Failed to fetch full statement data, will continue with partial data:', fetchError);
         // Continue without full data - backend will handle this case
@@ -499,14 +510,12 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
       // STEP 0: Reconstruct from existing statement data if aiMappingResults is not loaded yet
       // This handles the case where user clicks "Save & Recalculate" without switching to field_mapping view
       if (!aiMappingResults?.mappings || Object.keys(aiMapperState.rowStatuses).length === 0) {
-        console.log('⚠️ AI mappings not loaded, attempting to reconstruct from statement data...');
         
         // Try to get field_mapping from statement (preferred)
         let existingMappings = (statement as any).field_mapping;
         
         // FALLBACK: Extract from field_config if field_mapping is not available
         if (!existingMappings && statement.field_config && Array.isArray(statement.field_config)) {
-          console.log('🔄 Reconstructing field mappings from field_config...');
           const reconstructed: Record<string, string> = {};
           statement.field_config.forEach((item: any) => {
             const sourceField = item.field || item.source_field;
@@ -517,14 +526,12 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
           });
           if (Object.keys(reconstructed).length > 0) {
             existingMappings = reconstructed;
-            console.log(`✅ Reconstructed ${Object.keys(reconstructed).length} field mappings from field_config`);
           }
         }
         
         // Use reconstructed mappings as the base
         if (existingMappings && typeof existingMappings === 'object') {
           Object.assign(finalMappings, existingMappings);
-          console.log(`✅ Using ${Object.keys(existingMappings).length} existing field mappings from statement`);
         }
       }
       
@@ -567,7 +574,6 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
         return;
       }
       
-      console.log(`✅ Final mappings ready: ${Object.keys(finalMappings).length} mappings`, finalMappings);
       
       // CRITICAL FIX: Create field_config in the correct format for ALL endpoints
       // Format: {field: source_field, mapping: target_field} - consistent across all APIs
@@ -645,7 +651,6 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
         extractedPlanTypes = detectedPlans.map((p: any) => p.plan_type || p.display_name || '').filter(Boolean);
       }
       
-      console.log('💡 Extracted plan types for saving:', extractedPlanTypes);
 
       const mappingPayload = {
         mapping: finalMappings,
@@ -736,9 +741,6 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
         uploaded_at: statementData.uploaded_at,
         raw_data: finalData
       };
-      
-      console.log('📋 Upload Metadata:', upload_metadata);
-      console.log('==================');
 
       // ✅ NEW: Use edited values for commission total, plan types, and date
       const updatedStatementDate = {
@@ -759,7 +761,7 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
         ? [editedPlanType] 
         : (extractedPlanTypes.length > 0 ? extractedPlanTypes : []);
 
-      await axios.post(
+      const approvalResponse = await axios.post(
         `${process.env.NEXT_PUBLIC_API_URL}/api/review/approve`,
         {
           upload_id: statement.id,
@@ -777,7 +779,26 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
       // Step 5: Complete (100%)
       setSaveProgress(100);
       
-      toast.success('✅ Statement recalculated successfully!');
+      // ✅ CRITICAL FIX: Check actual status returned from backend
+      const actualStatus = approvalResponse.data?.status;
+      const needsReview = approvalResponse.data?.needs_review;
+      
+      // Show appropriate message based on actual status
+      if (needsReview || actualStatus === 'needs_review') {
+        toast(
+          '⚠️ Statement saved but totals don\'t match. Please review.',
+          { 
+            duration: 6000,
+            icon: '⚠️',
+            style: {
+              background: '#FEF3C7',
+              color: '#92400E',
+            }
+          }
+        );
+      } else {
+        toast.success('✅ Statement recalculated successfully!');
+      }
       
       // Wait a moment to show completion
       await new Promise(resolve => setTimeout(resolve, 1000));

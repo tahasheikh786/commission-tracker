@@ -74,15 +74,19 @@ async def get_statements_for_company(
         
         # CRITICAL FIX: Query actual commission data from earned_commissions table for this statement
         from app.db.models import EarnedCommission
-        from sqlalchemy import func
+        from sqlalchemy import func, cast, String, text
         
+        # ✅ CRITICAL FIX: Use proper JSON containment with text casting
+        # Cast JSON array to text first, then use LIKE for compatibility
+        statement_id_str = str(statement.id)
         commission_result = await db.execute(
             select(
                 func.sum(EarnedCommission.commission_earned).label('actual_commission'),
                 func.sum(EarnedCommission.invoice_total).label('actual_invoice')
             )
             .where(
-                EarnedCommission.upload_ids.contains([str(statement.id)])
+                # Cast JSON to text, then use LIKE to search for the UUID
+                cast(EarnedCommission.upload_ids, String).like(f'%{statement_id_str}%')
             )
         )
         commission_sums = commission_result.first()

@@ -132,7 +132,8 @@ class GPT5VisionService:
             extraction_result = await self.vision_extractor.process_document(
                 pdf_path=file_path,
                 max_pages=max_pages,
-                progress_tracker=progress_tracker
+                progress_tracker=progress_tracker,
+                carrier_name=carrier_name  # ✅ Pass carrier name for carrier-specific prompts
             )
             
             # ✅ Check for partial failures

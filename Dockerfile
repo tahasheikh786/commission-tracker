@@ -32,7 +32,7 @@ ENV PYTHONUNBUFFERED=1 \
     # Timeout configuration for large file processing (in seconds)
     # WebSocket timeouts
     WEBSOCKET_TIMEOUT=1800 \
-    WEBSOCKET_PING_INTERVAL=30 \
+    WEBSOCKET_PING_INTERVAL=15 \
     WEBSOCKET_KEEPALIVE=300 \
     # API timeouts
     MISTRAL_TIMEOUT=1800 \

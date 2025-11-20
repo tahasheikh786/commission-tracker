@@ -748,7 +748,7 @@ export default function UnifiedTableEditor({
       };
 
 
-      await axios.post(
+      const approvalResponse = await axios.post(
         `${process.env.NEXT_PUBLIC_API_URL}/api/review/approve/`,
         {
           upload_id: upload_id,
@@ -766,8 +766,26 @@ export default function UnifiedTableEditor({
       setApprovalStep(4);
       setApprovalProgress(100);
       
-      // Show success message
-      toast.success('Statement approved successfully! 🎉');
+      // ✅ CRITICAL FIX: Check actual status returned from backend
+      const actualStatus = approvalResponse.data?.status;
+      const needsReview = approvalResponse.data?.needs_review;
+      
+      // Show appropriate message based on actual status
+      if (needsReview || actualStatus === 'needs_review') {
+        toast(
+          '⚠️ Statement saved but totals don\'t match. Please review.',
+          { 
+            duration: 6000,
+            icon: '⚠️',
+            style: {
+              background: '#FEF3C7',
+              color: '#92400E',
+            }
+          }
+        );
+      } else {
+        toast.success('Statement approved successfully! 🎉');
+      }
       
       // Wait a moment to show completion
       await new Promise(resolve => setTimeout(resolve, 1000));

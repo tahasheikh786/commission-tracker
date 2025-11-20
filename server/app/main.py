@@ -35,6 +35,58 @@ app = FastAPI()
 background_tasks = set()
 shutdown_event = asyncio.Event()
 
+# ✅ NEW: Graceful shutdown handler for SIGTERM/SIGINT
+def shutdown_handler(signal_num):
+    """Handle SIGTERM/SIGINT gracefully for WebSocket connections"""
+    logger.info(f"📢 Received signal {signal_num}, initiating graceful shutdown...")
+    
+    # Import here to avoid circular imports
+    from app.services.websocket_service import connection_manager
+    
+    # Close all WebSocket connections gracefully
+    all_connections = []
+    for upload_id in list(connection_manager.active_connections.keys()):
+        for session_id in list(connection_manager.active_connections[upload_id].keys()):
+            all_connections.append((upload_id, session_id))
+    
+    logger.info(f"📢 Notifying {len(all_connections)} active WebSocket connections...")
+    
+    # Send shutdown notifications synchronously
+    import asyncio
+    loop = asyncio.get_event_loop()
+    
+    for upload_id, session_id in all_connections:
+        try:
+            # Create task to send message but don't wait
+            asyncio.create_task(
+                connection_manager.send_personal_message(
+                    {
+                        "type": "server_shutdown",
+                        "message": "Server shutting down"
+                    },
+                    upload_id,
+                    session_id
+                )
+            )
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to notify client: {e}")
+    
+    # Set shutdown event and exit
+    shutdown_event.set()
+    logger.info("✅ Graceful shutdown complete - exiting")
+    
+    # Force exit the process
+    import sys
+    sys.exit(0)
+
+def setup_signal_handlers():
+    """Setup signal handlers for graceful shutdown"""
+    import signal
+    
+    # Register signal handlers
+    signal.signal(signal.SIGTERM, lambda s, f: shutdown_handler(s))
+    signal.signal(signal.SIGINT, lambda s, f: shutdown_handler(s))
+
 @app.on_event("shutdown")
 async def shutdown_event_handler():
     """FastAPI shutdown event - cleanup on server stop"""
@@ -303,6 +355,10 @@ async def cleanup_sessions_periodically():
 @app.on_event("startup")
 async def startup_event():
     """Run startup tasks with process monitoring for large file processing"""
+    # ✅ NEW: Setup signal handlers for graceful shutdown
+    logger.info("🚀 Application starting up...")
+    setup_signal_handlers()
+    
     # Start background cleanup task and track it
     task = asyncio.create_task(cleanup_sessions_periodically())
     background_tasks.add(task)
@@ -320,7 +376,7 @@ async def startup_event():
     await process_monitor.start_monitoring()
     logger.info("Process monitoring started for large file processing")
     
-    logger.info("Application startup complete with enhanced monitoring")
+    logger.info("Application startup complete with enhanced monitoring and signal handlers")
 
 if __name__ == "__main__":
     import uvicorn

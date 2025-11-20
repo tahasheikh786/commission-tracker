@@ -20,6 +20,41 @@ HEADER_SIMILARITY_THRESHOLD = 0.8
 PATTERN_MATCH_THRESHOLD = 0.6
 
 
+def normalize_table_headers(headers: List[str]) -> List[str]:
+    """
+    Normalize table headers by replacing newlines with spaces and cleaning whitespace.
+    
+    CRITICAL: Headers from PDF extraction often contain newline characters (\\n) 
+    instead of spaces, which breaks field mapping matching. This function ensures
+    consistent header format across the application.
+    
+    Args:
+        headers: List of header strings that may contain newlines
+        
+    Returns:
+        List of normalized headers with newlines replaced by spaces
+        
+    Example:
+        >>> normalize_table_headers(['Commission\\nAmount', 'Invoice\\nTotal'])
+        ['Commission Amount', 'Invoice Total']
+    """
+    if not headers:
+        return headers
+    
+    normalized = []
+    for header in headers:
+        if header:
+            # Replace newlines with spaces and clean up whitespace
+            normalized_header = str(header).replace('\\n', ' ').replace('\\r', ' ').strip()
+            # Collapse multiple spaces into one
+            normalized_header = ' '.join(normalized_header.split())
+            normalized.append(normalized_header)
+        else:
+            normalized.append(header)
+    
+    return normalized
+
+
 def sanitize_table_data_for_pydantic(table_data: Dict[str, Any]) -> Dict[str, Any]:
     """
     Sanitize table data to ensure all cell values are strings for Pydantic validation.

@@ -75,6 +75,10 @@ async def approve_statement(
         if not updated:
             raise HTTPException(status_code=404, detail=f"Upload with ID {payload.upload_id} not found and no metadata provided")
         
+        # ✅ CRITICAL FIX: Check if status was changed to needs_review due to total mismatch
+        actual_status = updated.status
+        needs_review = actual_status == "needs_review"
+        
         # Record user contribution now that the statement is persisted
         try:
             profile_service = UserProfileService(db)
@@ -84,17 +88,23 @@ async def approve_statement(
                 contribution_type="approval",
                 contribution_data={
                     "file_name": payload.upload_metadata.get('file_name') if payload.upload_metadata else None,
-                    "status": "Approved",
+                    "status": actual_status,  # ✅ Use actual status, not hardcoded "Approved"
                     "approved_at": updated.completed_at.isoformat() if updated.completed_at else None
                 }
             )
             await db.commit()  # Commit the contribution
-            logger.info(f"✅ User contribution recorded for approved statement {payload.upload_id}")
+            logger.info(f"✅ User contribution recorded for {'needs_review' if needs_review else 'approved'} statement {payload.upload_id}")
         except Exception as e:
             logger.warning(f"⚠️ Could not record user contribution: {e}")
             # Don't fail the approval if contribution recording fails
-            
-        return {"success": True, "review": schemas.StatementReview.model_validate(updated)}
+        
+        # ✅ CRITICAL FIX: Return actual status and needs_review flag to frontend
+        return {
+            "success": True, 
+            "review": schemas.StatementReview.model_validate(updated),
+            "status": actual_status,  # ✅ NEW: Include actual status
+            "needs_review": needs_review  # ✅ NEW: Flag if totals mismatched
+        }
     except HTTPException:
         raise
     except Exception as e:

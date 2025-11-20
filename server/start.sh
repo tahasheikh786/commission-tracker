@@ -28,4 +28,5 @@ exec uvicorn app.main:app \
   --timeout-graceful-shutdown ${UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN} \
   --limit-concurrency 100 \
   --limit-max-requests 1000 \
-  --log-level info 
+  --log-level info \
+  --loop asyncio 

@@ -322,13 +322,23 @@ async def save_statement_review(
         
         if not upload_metadata:
             logger.error(f"❌ Cannot create record without upload_metadata!")
-            logger.error(f"📋 Required fields: company_id, carrier_id, user_id, file_name, file_hash, file_size")
+            logger.error(f"📋 Required fields: company_id, carrier_id, user_id (or current_user_id), file_name")
             return None
         
-        # ✅ Validate required fields for record creation
+        # CRITICAL FIX: Determine user_id FIRST before validation
+        # Use current_user_id if provided (from logged-in user), otherwise try upload_metadata
+        user_id_to_use = current_user_id
+        if not user_id_to_use and upload_metadata and upload_metadata.get('user_id'):
+            try:
+                user_id_to_use = UUID(upload_metadata.get('user_id'))
+            except (ValueError, TypeError):
+                logger.error(f"❌ Invalid user_id in upload_metadata: {upload_metadata.get('user_id')}")
+                return None
+        
+        # ✅ Validate required fields for record creation (now with user_id_to_use)
         required_fields = {
             'carrier_id': upload_metadata.get('carrier_id'),
-            'user_id': upload_metadata.get('user_id'),
+            'user_id': user_id_to_use,  # Use determined user_id
             'file_name': upload_metadata.get('file_name'),
         }
         
@@ -337,6 +347,7 @@ async def save_statement_review(
         if missing_fields:
             logger.error(f"❌ Incomplete upload_metadata - missing required fields: {missing_fields}")
             logger.error(f"📋 Provided metadata: {upload_metadata}")
+            logger.error(f"📋 current_user_id: {current_user_id}")
             return None
         
         # ⚠️ Warn if file_hash or file_size is missing (not critical but important)
@@ -346,9 +357,7 @@ async def save_statement_review(
             logger.warning(f"⚠️ file_size is missing from upload_metadata")
         
         logger.info(f"✅ All required fields present, proceeding with record creation")
-        
-        # Create new record with provided metadata
-        # NOTE: datetime is already imported at the top of the file
+        logger.info(f"✅ Using user_id: {user_id_to_use} (from {'current_user_id' if current_user_id else 'upload_metadata'})")
         
         # Parse uploaded_at and convert to timezone-naive UTC datetime
         uploaded_at_value = datetime.utcnow()
@@ -360,12 +369,6 @@ async def save_statement_review(
             except (ValueError, AttributeError) as e:
                 logger.warning(f"⚠️ Could not parse uploaded_at '{upload_metadata.get('uploaded_at')}': {e}")
                 uploaded_at_value = datetime.utcnow()
-        
-        # CRITICAL FIX: Use current_user_id and current_environment_id if provided
-        # This ensures the record is associated with the user who approved it
-        user_id_to_use = current_user_id
-        if not user_id_to_use and upload_metadata and upload_metadata.get('user_id'):
-            user_id_to_use = UUID(upload_metadata.get('user_id'))
         
         # CRITICAL: ALWAYS use user's default environment, NEVER accept environment_id from metadata
         # This prevents environment mismatches and ensures all uploads go to the default environment
@@ -618,24 +621,29 @@ async def save_statement_review(
                 rows = table.get('rows', [])
                 summary_rows_set = set(table.get('summaryRows', []))
                 
-                print(f"  📊 Table {table_idx}: {len(headers)} headers, {len(rows)} rows")
-                print(f"  📋 Headers: {headers}")
+                # ✅ CRITICAL FIX: Normalize headers for legacy data compatibility
+                # Headers may have '\n' instead of spaces in older records
+                from app.services.extraction_utils import normalize_table_headers
+                normalized_headers = normalize_table_headers(headers)
+                
+                print(f"  📊 Table {table_idx}: {len(normalized_headers)} headers, {len(rows)} rows")
+                print(f"  📋 Headers: {normalized_headers}")
                 if rows:
                     print(f"  📋 First row sample: {rows[0]}")
                 
-                # Find commission column index
+                # Find commission column index using normalized headers
                 commission_col_idx = -1
-                if commission_source_field in headers:
-                    commission_col_idx = headers.index(commission_source_field)
+                if commission_source_field in normalized_headers:
+                    commission_col_idx = normalized_headers.index(commission_source_field)
                 else:
                     # Try case-insensitive match
-                    for idx, header in enumerate(headers):
+                    for idx, header in enumerate(normalized_headers):
                         if header and header.lower() == commission_source_field.lower():
                             commission_col_idx = idx
                             break
                 
                 if commission_col_idx == -1:
-                    print(f"  ⚠️ Table {table_idx}: Commission column '{commission_source_field}' not found in headers: {headers}")
+                    print(f"  ⚠️ Table {table_idx}: Commission column '{commission_source_field}' not found in headers: {normalized_headers}")
                     continue
                 
                 print(f"  💰 Table {table_idx}: Commission column '{commission_source_field}' at index {commission_col_idx}")

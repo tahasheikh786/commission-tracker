@@ -1474,10 +1474,15 @@ async def bulk_process_commissions(db: AsyncSession, statement_upload: Statement
         if not headers:
             print(f"⚠️  Table {table_index}: No headers found, skipping table")
             continue
+        
+        # ✅ CRITICAL FIX: Normalize headers to remove newlines for field matching
+        # Legacy data may have headers like 'Commission\nAmount' instead of 'Commission Amount'
+        from app.services.extraction_utils import normalize_table_headers
+        normalized_headers = normalize_table_headers(headers)
             
-        # Create field-to-index mapping
+        # Create field-to-index mapping using normalized headers
         field_indices = {}
-        for idx, header in enumerate(headers):
+        for idx, header in enumerate(normalized_headers):
             field_indices[header] = idx
             
         # Check if required fields exist in headers

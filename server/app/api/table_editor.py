@@ -102,6 +102,8 @@ async def save_tables(request: SaveTablesRequest, db: AsyncSession = Depends(get
         logger.info(f"🎯 Table Editor API: Field config received: {request.field_config}")
         
         # Convert tables to the format expected by the database
+        from app.services.extraction_utils import normalize_table_headers
+        
         tables_data = []
         for table in request.tables:
             # Clean metadata to ensure JSON serialization
@@ -113,9 +115,14 @@ async def save_tables(request: SaveTablesRequest, db: AsyncSession = Depends(get
                     else:
                         cleaned_metadata[key] = value
             
+            # ✅ CRITICAL FIX: Normalize headers to remove newlines before saving
+            # Headers from PDF extraction often have '\n' instead of spaces
+            # This causes field mapping mismatches during commission processing
+            normalized_headers = normalize_table_headers(table.header)
+            
             table_data = {
                 "name": table.name or "Unnamed Table",
-                "header": table.header,
+                "header": normalized_headers,  # ✅ Use normalized headers
                 "rows": table.rows,
                 "summaryRows": table.summaryRows if table.summaryRows else [],  # CRITICAL FIX: Include summary rows to exclude them from commission calculations
                 "upload_id": request.upload_id,
