@@ -93,8 +93,9 @@ class GPT5VisionService:
         file_path: str,
         progress_tracker=None,
         use_enhanced: bool = True,
-        max_pages: int = 10,
-        upload_id: Optional[str] = None
+        max_pages: int = 100,
+        upload_id: Optional[str] = None,
+        prompt_options: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         Extract commission data with full enhancement pipeline.
@@ -133,7 +134,8 @@ class GPT5VisionService:
                 pdf_path=file_path,
                 max_pages=max_pages,
                 progress_tracker=progress_tracker,
-                carrier_name=carrier_name  # ✅ Pass carrier name for carrier-specific prompts
+                carrier_name=carrier_name,  # ✅ Pass carrier name for carrier-specific prompts
+                prompt_options=prompt_options or {}
             )
             
             # ✅ Check for partial failures
@@ -498,7 +500,8 @@ async def extract_commission_statement(
     pdf_path: str,
     carrier_name: str = "Unknown",
     progress_tracker=None,
-    max_pages: int = 10
+    max_pages: int = 100,
+    prompt_options: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
     """
     Convenience function for extracting commission statements.
@@ -516,7 +519,8 @@ async def extract_commission_statement(
         carrier_name=carrier_name,
         file_path=pdf_path,
         progress_tracker=progress_tracker,
-        max_pages=max_pages
+        max_pages=max_pages,
+        prompt_options=prompt_options
     )
 
 
@@ -526,7 +530,8 @@ async def extract_commission_data(
     file_path: str,
     progress_tracker=None,
     use_enhanced: bool = True,
-    max_pages: int = 10
+    max_pages: int = 100,
+    prompt_options: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
     """
     Backward compatible extraction function.
@@ -537,7 +542,8 @@ async def extract_commission_data(
         file_path=file_path,
         progress_tracker=progress_tracker,
         use_enhanced=use_enhanced,
-        max_pages=max_pages
+        max_pages=max_pages,
+        prompt_options=prompt_options
     )
 
 

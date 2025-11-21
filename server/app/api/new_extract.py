@@ -1116,6 +1116,10 @@ async def extract_tables_smart(
             "extracted_carrier": extracted_carrier,
             "extracted_date": extracted_date,
             "document_metadata": document_metadata,
+            "plan_types": (
+                ai_plan_type_data.get('detected_plan_types', [])
+                if ai_plan_type_data else []
+            ),
             
             # CRITICAL FIX: Include upload_metadata so frontend has access to environment_id
             "upload_metadata": upload_metadata,
@@ -1187,7 +1191,8 @@ async def extract_tables_smart(
                             estimated_time="Enhanced summary ready",
                             current_stage="summary_complete",
                             conversational_summary=conversational_summary,  # Text summary
-                            summaryContent=json.dumps(structured_data)  # Structured key-value data
+                            summaryContent=json.dumps(structured_data),  # Structured key-value data (legacy key)
+                            summary_data=structured_data or {}
                         )
                 else:
                     logger.warning("Summary generation returned unsuccessful result")
@@ -1224,7 +1229,8 @@ async def extract_tables_smart(
                     estimated_time="Enhanced summary ready",
                     current_stage="summary_complete",
                     conversational_summary=conversational_summary,
-                    summaryContent=structured_data_json
+                    summaryContent=structured_data_json,
+                    summary_data=structured_data or {}
                 )
         
         # ✅ Emit WebSocket: Step 6 - Preparing Results (95% progress) - AFTER summary
@@ -1322,6 +1328,8 @@ async def extract_tables_smart(
             "gcs_key": gcs_key,
             "file_name": gcs_key,  # Use full GCS path as file_name for PDF preview
             "conversational_summary": conversational_summary,  # ← NEW: Include in response
+             "summary_data": structured_data or {},
+            "structured_summary": structured_data or {},
             "extracted_total": extracted_total,  # ✅ Commission total for auto-approval
             "extracted_invoice_total": extracted_invoice_total  # ✅ CRITICAL FIX: Invoice total for dashboard
         })

@@ -154,7 +154,35 @@ export default function DashboardTab({ showAnalytics = false, environmentId }: D
 
 
   // Handle upload result - MANUAL FLOW ONLY (automation is handled by SummaryUploadZone)
-  function handleUploadResult({ tables, upload_id, extraction_id, file_name, file, plan_types, extracted_carrier, extracted_date, gcs_url, gcs_key, document_metadata, ai_intelligence, carrier_id, company_id, format_learning, can_automate, environment_id, user_id, uploaded_at, file_hash, file_size, upload_metadata }: any) {
+  function handleUploadResult({
+    tables,
+    upload_id,
+    extraction_id,
+    file_name,
+    file,
+    plan_types,
+    extracted_carrier,
+    extracted_date,
+    gcs_url,
+    gcs_key,
+    document_metadata,
+    ai_intelligence,
+    carrier_id,
+    company_id,
+    format_learning,
+    can_automate,
+    environment_id,
+    user_id,
+    uploaded_at,
+    file_hash,
+    file_size,
+    upload_metadata,
+    conversational_summary,
+    structured_summary,
+    summary_data,
+    extracted_total,
+    extracted_invoice_total
+  }: any) {
     
     // NOTE: Automation is now handled entirely by SummaryUploadZone
     // This function only handles the manual review flow
@@ -184,7 +212,12 @@ export default function DashboardTab({ showAnalytics = false, environmentId }: D
       uploaded_at,
       file_hash,
       file_size,
-      upload_metadata
+      upload_metadata,
+      conversational_summary,
+      structured_summary,
+      summary_data,
+      extracted_total,
+      extracted_invoice_total
     });
     
     // Handle carrier detection and auto-creation
@@ -228,7 +261,9 @@ export default function DashboardTab({ showAnalytics = false, environmentId }: D
     }
     
     // Set plan types
-    if (plan_types) setPlanTypes(plan_types);
+    if (plan_types) {
+      setPlanTypes(plan_types);
+    }
     
     // Open UnifiedTableEditor for the new 2-step flow
     setShowUnifiedEditor(true);

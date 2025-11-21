@@ -59,6 +59,7 @@ export interface ProgressMessage {
   stage_details?: any;
   conversational_summary?: string;  // ← NEW: Natural language summary
   summary_data?: any;  // ← NEW: Structured summary data
+  summaryContent?: any; // Legacy key from backend (stringified JSON)
 }
 
 interface UseProgressWebSocketOptions {
@@ -106,6 +107,28 @@ export function useProgressWebSocket({
   const onSummarizeCompleteRef = useRef(onSummarizeComplete);
   const onErrorRef = useRef(onError);
   const disconnectRef = useRef<(() => void) | null>(null);
+
+  const coerceSummaryData = useCallback((summaryData?: any, legacySummaryContent?: any) => {
+    if (summaryData && typeof summaryData === 'object') {
+      return summaryData;
+    }
+    if (summaryData) {
+      // Already a primitive, return as-is
+      return summaryData;
+    }
+    if (!legacySummaryContent) {
+      return null;
+    }
+    if (typeof legacySummaryContent === 'string') {
+      try {
+        return JSON.parse(legacySummaryContent);
+      } catch (error) {
+        console.warn('⚠️ Failed to parse legacy summaryContent string:', error);
+        return legacySummaryContent;
+      }
+    }
+    return legacySummaryContent;
+  }, []);
   
   useEffect(() => {
     onExtractionCompleteRef.current = onExtractionComplete;
@@ -390,8 +413,16 @@ export function useProgressWebSocket({
         break;
 
       case 'STEP_PROGRESS':
+        const normalizedSummaryData = coerceSummaryData(
+          data.summary_data,
+          (data as any).summaryContent
+        );
         // Debug logging for all data keys
-        if (data.current_stage === 'summary_complete' || data.conversational_summary || data.summary_data) {
+        if (
+          data.current_stage === 'summary_complete' ||
+          data.conversational_summary ||
+          normalizedSummaryData
+        ) {
           console.log('📊 [STEP_PROGRESS] Full data:', data);
           console.log('🔑 [STEP_PROGRESS] Data keys:', Object.keys(data));
         }
@@ -403,7 +434,7 @@ export function useProgressWebSocket({
           message: data.message || prev.message,
           conversationalSummary: data.conversational_summary ?? prev.conversationalSummary,  // ← NEW: Handle summary
           stageDetails: data.stage_details ?? prev.stageDetails,  // ← NEW: Capture stage details
-          summaryData: data.summary_data ?? prev.summaryData  // ← NEW: Capture structured summary data
+          summaryData: normalizedSummaryData ?? prev.summaryData  // ← NEW: Capture structured summary data
         }));
 
         // ← NEW: Log when conversational summary arrives
@@ -417,8 +448,8 @@ export function useProgressWebSocket({
         }
         
         // ← NEW: Log when structured summary data arrives
-        if (data.summary_data) {
-          console.log('📊 Structured summary data received:', data.summary_data);
+        if (normalizedSummaryData) {
+          console.log('📊 Structured summary data received:', normalizedSummaryData);
         }
 
         // Manejar metadata si existe
@@ -441,6 +472,10 @@ export function useProgressWebSocket({
         break;
 
       case 'EXTRACTION_COMPLETE':
+        const completionSummaryData = coerceSummaryData(
+          data.results?.summary_data,
+          data.results?.summaryContent
+        );
         // Check if this is a cancellation
         if (data.results?.status === 'cancelled') {
           console.log('📛 Extraction cancelled:', data.results.message);
@@ -467,7 +502,8 @@ export function useProgressWebSocket({
             currentStep: 6, // Final step (1-indexed, step 6)
             percentage: 100,
             message: 'Extraction complete!',
-            conversationalSummary: data.results?.conversational_summary ?? prev.conversationalSummary  // ← NEW: Extract summary from results
+            conversationalSummary: data.results?.conversational_summary ?? prev.conversationalSummary,  // ← NEW: Extract summary from results
+            summaryData: completionSummaryData ?? prev.summaryData
           }));
           if (onExtractionCompleteRef.current && data.results) {
             onExtractionCompleteRef.current(data.results);
@@ -513,7 +549,7 @@ export function useProgressWebSocket({
       default:
         console.warn('Unknown message type:', data.type);
     }
-  }, []);
+  }, [coerceSummaryData]);
 
   const reset = useCallback(() => {
     disconnect();

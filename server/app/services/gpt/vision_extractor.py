@@ -25,8 +25,9 @@ import time
 from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime, timedelta
 from pathlib import Path
+from pypdf import PdfReader
 
-from openai import OpenAI
+from openai import AsyncOpenAI
 
 from .retry_handler import retry_with_backoff, RateLimitMonitor
 from .token_optimizer import TokenOptimizer, TokenTracker
@@ -51,16 +52,28 @@ class GPT5VisionExtractorWithPDF:
     def __init__(self, api_key: Optional[str] = None):
         """Initialize GPT-5 PDF extractor with file management."""
         try:
-            self.client = OpenAI(api_key=api_key) if api_key else OpenAI()
+            self.client = AsyncOpenAI(api_key=api_key) if api_key else AsyncOpenAI()
         except Exception as e:
             logger.warning(f"⚠️ OpenAI client initialization failed: {e}")
             self.client = None
         
-        self.model = "gpt-5"
-        self.model_mini = "gpt-5-mini"
+        self.model = os.getenv("GPT5_PRIMARY_MODEL", "gpt-5")
+        self.model_mini = os.getenv("GPT5_MINI_MODEL", "gpt-5-mini")
+        self.max_tokens_default = int(os.getenv("GPT5_MAX_OUTPUT_TOKENS", "16000"))
+        self.mini_threshold_mb = float(os.getenv("GPT5_MINI_THRESHOLD_MB", "2.0"))
+        self.mini_max_output_tokens = int(os.getenv("GPT5_MINI_MAX_TOKENS", "6000"))
+        self.min_output_tokens = int(os.getenv("GPT5_MIN_OUTPUT_TOKENS", "6000"))
+        self.mini_token_floor = int(os.getenv("GPT5_MINI_MIN_TOKENS", "3500"))
+        self.tokens_per_page = int(os.getenv("GPT5_TOKENS_PER_PAGE", "1500"))
+        self.mini_tokens_per_page = int(os.getenv("GPT5_MINI_TOKENS_PER_PAGE", "1200"))
+        self.token_retry_step = int(os.getenv("GPT5_TOKEN_RETRY_STEP", "4000"))
+        self.max_token_retry_attempts = int(os.getenv("GPT5_TOKEN_RETRY_ATTEMPTS", "2"))
+        self.structured_response_format = self._build_structured_output_schema()
+        self._disabled_models = set()
         
         # File ID cache: path -> (file_id, upload_time)
         self.file_cache: Dict[str, Tuple[str, datetime]] = {}
+        self.pdf_page_cache: Dict[str, Dict[str, Any]] = {}
         
         # Cache expiry: 24 hours (OpenAI keeps files for 3 days by default)
         self.cache_ttl_hours = 24
@@ -86,6 +99,381 @@ class GPT5VisionExtractorWithPDF:
     def is_available(self) -> bool:
         """Check if the extractor is available (has valid client)."""
         return self.client is not None
+
+    def _build_structured_output_schema(self) -> Dict[str, Any]:
+        """
+        Structured output schema for commission statement extraction.
+        Keeps responses consistent and JSON-parseable even during long generations.
+        """
+        return {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "CommissionStatement",
+                "schema": {
+                    "type": "object",
+                    "properties": {
+                        "document_type": {"type": "string"},
+                        "carrier": {
+                            "type": "object",
+                            "properties": {
+                                "name": {"type": "string"},
+                                "confidence": {"type": "number"}
+                            },
+                            "required": ["name"],
+                            "additionalProperties": False
+                        },
+                        "broker_agent": {
+                            "type": "object",
+                            "properties": {
+                                "company_name": {"type": "string"},
+                                "confidence": {"type": "number"}
+                            },
+                            "additionalProperties": False
+                        },
+                        "document_metadata": {
+                            "type": "object",
+                            "properties": {
+                                "statement_date": {"type": ["string", "null"]},
+                                "statement_number": {"type": ["string", "null"]},
+                                "payment_type": {"type": ["string", "null"]},
+                                "total_pages": {"type": ["integer", "null"]},
+                                "total_amount": {"type": ["number", "null"]},
+                                "total_amount_label": {"type": ["string", "null"]},
+                                "total_invoice": {"type": ["number", "null"]},
+                                "total_invoice_label": {"type": ["string", "null"]},
+                                "statement_period_start": {"type": ["string", "null"]},
+                                "statement_period_end": {"type": ["string", "null"]}
+                            },
+                            "additionalProperties": True
+                        },
+                        "writing_agents": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "agent_number": {"type": ["string", "null"]},
+                                    "agent_name": {"type": ["string", "null"]},
+                                    "groups_handled": {
+                                        "type": "array",
+                                        "items": {"type": "string"}
+                                    },
+                                    "commission_rate": {"type": ["string", "null"]}
+                                },
+                                "additionalProperties": True
+                            }
+                        },
+                        "groups_and_companies": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "group_number": {"type": ["string", "null"]},
+                                    "group_name": {"type": ["string", "null"]},
+                                    "billing_period": {"type": ["string", "null"]},
+                                    "invoice_total": {"type": ["string", "null"]},
+                                    "commission_paid": {"type": ["string", "null"]},
+                                    "calculation_method": {"type": ["string", "null"]}
+                                },
+                                "additionalProperties": True
+                            }
+                        },
+                        "tables": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "table_id": {"type": "integer"},
+                                    "page_number": {"type": "integer"},
+                                    "headers": {
+                                        "type": "array",
+                                        "items": {"type": "string"}
+                                    },
+                                    "rows": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "array",
+                                            "items": {"type": ["string", "null"]}
+                                        }
+                                    },
+                                    "summary_rows": {
+                                        "type": "array",
+                                        "items": {"type": "integer"}
+                                    },
+                                    "row_annotations": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "object",
+                                            "properties": {
+                                                "row_index": {"type": "integer"},
+                                                "role": {"type": "string"},
+                                                "confidence": {"type": ["number", "null"]},
+                                                "rationale": {"type": ["string", "null"]},
+                                                "supporting_rows": {
+                                                    "type": "array",
+                                                    "items": {"type": "integer"}
+                                                }
+                                            },
+                                            "required": ["row_index", "role"],
+                                            "additionalProperties": True
+                                        }
+                                    },
+                                    "table_blueprint": {
+                                        "type": "object",
+                                        "properties": {
+                                            "grouping_columns": {
+                                                "type": "array",
+                                                "items": {"type": "string"}
+                                            },
+                                            "numeric_columns": {
+                                                "type": "array",
+                                                "items": {"type": "string"}
+                                            },
+                                            "summary_expectations": {
+                                                "type": "array",
+                                                "items": {"type": "string"}
+                                            },
+                                            "notes": {"type": ["string", "null"]}
+                                        },
+                                        "additionalProperties": True
+                                    }
+                                },
+                                "required": ["headers", "rows"],
+                                "additionalProperties": True
+                            }
+                        },
+                        "business_intelligence": {
+                            "type": "object",
+                            "properties": {
+                                "total_commission_amount": {"type": ["string", "null"]},
+                                "number_of_groups": {"type": ["integer", "null"]},
+                                "number_of_agents": {"type": ["integer", "null"]},
+                                "commission_structures": {
+                                    "type": "array",
+                                    "items": {"type": "string"}
+                                },
+                                "top_contributors": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "object",
+                                        "properties": {
+                                            "name": {"type": "string"},
+                                            "amount": {"type": "string"}
+                                        },
+                                        "additionalProperties": False
+                                    }
+                                },
+                                "total_census_count": {"type": ["integer", "null"]},
+                                "billing_period_range": {"type": ["string", "null"]},
+                                "special_payments": {
+                                    "type": "array",
+                                    "items": {"type": "string"}
+                                },
+                                "patterns_detected": {
+                                    "type": "array",
+                                    "items": {"type": "string"}
+                                }
+                            },
+                            "additionalProperties": True
+                        }
+                    },
+                    "required": ["document_type", "tables"],
+                    "additionalProperties": True
+                },
+                "strict": False
+            }
+        }
+
+    def _is_model_disabled(self, model_name: Optional[str]) -> bool:
+        return bool(model_name) and model_name in self._disabled_models
+
+    def _disable_model(self, model_name: str) -> None:
+        if not model_name or model_name in self._disabled_models:
+            return
+        self._disabled_models.add(model_name)
+        logger.warning(
+            "⚠️ Model %s marked as unavailable. It will be skipped for the remainder of the process.",
+            model_name
+        )
+
+    def _get_model_fallback_candidates(self, failed_model: str) -> List[str]:
+        candidates: List[Optional[str]] = []
+        if failed_model == self.model_mini:
+            env_override = os.getenv("GPT5_MINI_FALLBACK_MODEL")
+            candidates.extend([env_override, self.model, "gpt-5"])
+        else:
+            env_override = os.getenv("GPT5_PRIMARY_FALLBACK_MODEL")
+            candidates.extend([env_override, self.model_mini, "gpt-5-mini", "gpt-5"])
+        unique: List[str] = []
+        for candidate in candidates:
+            if candidate and candidate not in unique:
+                unique.append(candidate)
+        return unique
+
+    def _next_fallback_model(self, failed_model: str, tried_models: List[str]) -> Optional[str]:
+        for candidate in self._get_model_fallback_candidates(failed_model):
+            if candidate in tried_models or self._is_model_disabled(candidate):
+                continue
+            return candidate
+        return None
+
+    def _select_available_model(self, preferred_model: str) -> str:
+        if not self._is_model_disabled(preferred_model):
+            return preferred_model
+        fallback = self._next_fallback_model(preferred_model, tried_models=[preferred_model])
+        if fallback:
+            logger.warning(
+                "⚠️ Preferred model %s disabled. Routing to fallback %s.",
+                preferred_model,
+                fallback
+            )
+            return fallback
+        logger.warning(
+            "⚠️ Preferred model %s disabled and no fallback configured. Using default gpt-5.",
+            preferred_model
+        )
+        return "gpt-5"
+
+    def _is_model_not_found_error(self, error: Exception) -> bool:
+        if hasattr(error, "code") and getattr(error, "code") == "model_not_found":
+            return True
+        body = getattr(error, "body", None)
+        if isinstance(body, dict):
+            err = body.get("error", {})
+            if err.get("code") == "model_not_found":
+                return True
+            message = err.get("message", "")
+            if isinstance(message, str) and "does not exist" in message.lower():
+                return True
+        message = str(error).lower()
+        return "model_not_found" in message or "does not exist" in message
+
+    async def _execute_with_model_failover(self, response_kwargs: Dict[str, Any]):
+        tried_models: List[str] = []
+        while True:
+            current_model = response_kwargs.get("model", self.model)
+            tried_models.append(current_model)
+            try:
+                return await self.client.responses.create(**response_kwargs)
+            except Exception as api_error:
+                if self._is_model_not_found_error(api_error):
+                    self._disable_model(current_model)
+                    fallback_model = self._next_fallback_model(current_model, tried_models)
+                    if fallback_model:
+                        logger.warning(
+                            "⚠️ Model %s not available. Retrying with %s.",
+                            current_model,
+                            fallback_model
+                        )
+                        response_kwargs["model"] = fallback_model
+                        continue
+                raise
+
+    def _get_text_json_schema_payload(self) -> Dict[str, Any]:
+        """
+        Build the Responses API `text` payload that enforces our structured JSON schema.
+        Falls back to plain json_object if schema enforcement isn't supported.
+        """
+        schema_payload = self.structured_response_format.get("json_schema", {})
+        name = schema_payload.get("name", "CommissionStatement")
+        strict = schema_payload.get("strict", False)
+        schema = schema_payload.get("schema", {})
+        
+        format_payload = {
+            "type": "json_schema",
+            "name": name,
+            "schema": schema,
+            "strict": strict,
+            # Keep legacy key for backwards compatibility with older SDKs
+            "json_schema": schema_payload
+        }
+        
+        return {"format": format_payload}
+
+    def _get_pdf_page_count(self, pdf_path: str) -> Optional[int]:
+        """
+        Quickly determine the number of pages in the PDF so we can scale token budgets.
+        Caches results per file path to avoid re-reading large documents.
+        """
+        if pdf_path in self.pdf_page_cache:
+            cache_entry = self.pdf_page_cache[pdf_path]
+            age_seconds = (datetime.now() - cache_entry["timestamp"]).total_seconds()
+            if age_seconds < 3600:  # 1 hour cache window
+                return cache_entry["page_count"]
+        
+        try:
+            reader = PdfReader(pdf_path)
+            page_count = len(reader.pages)
+            self.pdf_page_cache[pdf_path] = {
+                "page_count": page_count,
+                "timestamp": datetime.now()
+            }
+            logger.debug(f"📄 PDF page count: {page_count} pages for {pdf_path}")
+            return page_count
+        except Exception as exc:
+            logger.warning(f"⚠️ Could not determine page count for {pdf_path}: {exc}")
+            return None
+
+    def _should_scale_output_tokens(self, current_tokens: int, attempts: int) -> bool:
+        return (
+            attempts < self.max_token_retry_attempts
+            and current_tokens < self.max_tokens_default
+        )
+
+    def _next_token_budget(self, current_tokens: int) -> int:
+        return min(self.max_tokens_default, current_tokens + self.token_retry_step)
+
+    def _plan_for_document(
+        self,
+        pdf_path: str,
+        requested_max_tokens: int,
+        use_mini_override: bool
+    ) -> Dict[str, Any]:
+        """Determine model, token budget, and reasoning effort based on file stats."""
+        file_size_bytes = 0
+        try:
+            file_size_bytes = os.path.getsize(pdf_path)
+        except OSError:
+            pass
+        
+        file_size_mb = file_size_bytes / (1024 * 1024) if file_size_bytes else 0.0
+        page_count = self._get_pdf_page_count(pdf_path) or 1
+        
+        use_mini = use_mini_override or (
+            file_size_mb <= self.mini_threshold_mb and page_count <= 6
+        )
+        if use_mini and self._is_model_disabled(self.model_mini):
+            logger.info("Mini model currently disabled. Defaulting to primary model.")
+            use_mini = False
+        
+        requested_max = requested_max_tokens or self.max_tokens_default
+        tokens_per_page = self.mini_tokens_per_page if use_mini else self.tokens_per_page
+        token_floor = self.mini_token_floor if use_mini else self.min_output_tokens
+        target_tokens = max(token_floor, tokens_per_page * max(1, page_count))
+        
+        if use_mini and target_tokens > self.mini_max_output_tokens:
+            logger.info(
+                "Document estimated at %s tokens (>%s mini cap). Switching to primary model.",
+                target_tokens,
+                self.mini_max_output_tokens
+            )
+            use_mini = False
+            tokens_per_page = self.tokens_per_page
+            token_floor = self.min_output_tokens
+            target_tokens = max(token_floor, tokens_per_page * max(1, page_count))
+        
+        current_cap = self.mini_max_output_tokens if use_mini else self.max_tokens_default
+        max_tokens = min(current_cap, max(requested_max, target_tokens))
+        
+        reasoning_effort = "low" if use_mini else "medium"
+        selected_model = self._select_available_model(self.model_mini if use_mini else self.model)
+        
+        return {
+            "model": selected_model,
+            "max_tokens": max_tokens,
+            "reasoning_effort": reasoning_effort,
+            "file_size_mb": file_size_mb,
+            "page_count": page_count
+        }
     
     def _get_cached_file_id(self, pdf_path: str) -> Optional[str]:
         """
@@ -135,7 +523,7 @@ class GPT5VisionExtractorWithPDF:
         
         try:
             with open(pdf_path, 'rb') as f:
-                file_response = self.client.files.create(
+                file_response = await self.client.files.create(
                     file=f,
                     purpose='user_data'  # ✅ CORRECT: For Responses API input
                 )
@@ -161,7 +549,8 @@ class GPT5VisionExtractorWithPDF:
         max_output_tokens: int = 16000,  # ✅ INCREASED: Handle larger documents
         use_mini: bool = False,
         progress_tracker=None,
-        carrier_name: str = None  # ✅ NEW: For carrier-specific prompts
+        carrier_name: str = None,  # ✅ NEW: For carrier-specific prompts
+        prompt_options: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         Extract tables from PDF using Responses API with direct PDF input.
@@ -216,11 +605,19 @@ class GPT5VisionExtractorWithPDF:
                 message="Extracting data from PDF"
             )
         
-        # Choose model
-        model = self.model_mini if use_mini else self.model
+        # Choose model + token budget dynamically
+        extraction_plan = self._plan_for_document(
+            pdf_path=pdf_path,
+            requested_max_tokens=max_output_tokens,
+            use_mini_override=use_mini
+        )
+        model = extraction_plan["model"]
+        max_tokens = extraction_plan["max_tokens"]
+        reasoning_effort = extraction_plan["reasoning_effort"]
+        page_count = extraction_plan.get("page_count", 1)
         
         # Wait for rate limit if needed
-        estimated_tokens = 2000
+        estimated_tokens = max(2000, max_tokens // 2)
         self.rate_limiter.wait_if_needed(estimated_tokens)
         
         # Step 2: Build Responses API request with input_file
@@ -231,7 +628,10 @@ class GPT5VisionExtractorWithPDF:
                 "content": [
                     {
                         "type": "input_text",
-                        "text": self._get_pdf_extraction_prompt(carrier_name=carrier_name)
+                        "text": self._get_pdf_extraction_prompt(
+                            carrier_name=carrier_name,
+                            prompt_options=prompt_options or {}
+                        )
                     },
                     {
                         "type": "input_file",  # ✅ NEW: Direct PDF input!
@@ -243,19 +643,85 @@ class GPT5VisionExtractorWithPDF:
         
         logger.info(f"📋 Extracting from PDF using Responses API (file_id: {file_id})")
         
+        heartbeat_task = None
+        if progress_tracker:
+            heartbeat_task = progress_tracker.start_heartbeat(
+                stage="extraction",
+                message="Still extracting data with GPT-5…",
+                base_percentage=25,
+                max_percentage=92,
+                interval_seconds=8
+            )
+        
         try:
             # Step 3: Call Responses API
-            response = self.client.responses.create(
-                model=model,
-                input=messages,  # ✅ CORRECT: 'input' for Responses API
-                text={
-                    "format": {"type": "json_object"}
-                },
-                max_output_tokens=max_output_tokens,
-                reasoning={
-                    "effort": "medium"
-                }
-            )
+            response_kwargs = {
+                "model": model,
+                "input": messages,  # ✅ CORRECT: 'input' for Responses API
+                "text": self._get_text_json_schema_payload(),
+                "max_output_tokens": max_tokens,
+                "reasoning": {"effort": reasoning_effort}
+            }
+            
+            response = None
+            output_text = ""
+            current_max_tokens = max_tokens
+            token_retry_attempts = 0
+            
+            while True:
+                response_kwargs["max_output_tokens"] = current_max_tokens
+                try:
+                    response = await self._execute_with_model_failover(response_kwargs)
+                except TypeError as schema_error:
+                    # Some client versions may not yet support json_schema format
+                    if "json_schema" in str(schema_error).lower() or "format" in str(schema_error).lower():
+                        logger.warning(
+                            "⚠️ Structured Outputs not supported in this OpenAI client version. "
+                            "Falling back to json_object format. Error: %s",
+                            schema_error
+                        )
+                        response_kwargs["text"] = {"format": {"type": "json_object"}}
+                        response = await self._execute_with_model_failover(response_kwargs)
+                    else:
+                        raise
+                
+                if not hasattr(response, 'output_text') or not response.output_text:
+                    logger.error("❌ Empty response from Responses API")
+                    raise ValueError("Empty extraction response")
+                
+                output_text = response.output_text.strip()
+                incomplete_response = hasattr(response, 'status') and response.status == 'incomplete'
+                truncated_json = not (output_text.endswith('}') or output_text.endswith(']'))
+                
+                if (incomplete_response or truncated_json) and self._should_scale_output_tokens(current_max_tokens, token_retry_attempts):
+                    token_retry_attempts += 1
+                    new_budget = self._next_token_budget(current_max_tokens)
+                    logger.warning(
+                        "⚠️ Response incomplete/truncated at %s tokens. Retrying with %s tokens "
+                        "(attempt %s/%s).",
+                        current_max_tokens,
+                        new_budget,
+                        token_retry_attempts,
+                        self.max_token_retry_attempts
+                    )
+                    current_max_tokens = new_budget
+                    continue
+                
+                if truncated_json:
+                    logger.error("❌ JSON appears truncated (doesn't end with } or ])")
+                    logger.error(f"Response ends with: ...{output_text[-100:]}")
+                    raise ValueError(
+                        f"JSON response truncated at {len(output_text)} chars. "
+                        f"Increase max_output_tokens (current: {current_max_tokens})"
+                    )
+                
+                if incomplete_response:
+                    logger.warning(
+                        "⚠️ Response incomplete even after scaling to %s tokens. "
+                        "Proceeding with best-effort parse.",
+                        current_max_tokens
+                    )
+                break
             
             # Progress update
             if progress_tracker:
@@ -264,18 +730,6 @@ class GPT5VisionExtractorWithPDF:
                     progress_percentage=80,
                     message="Parsing extraction results"
                 )
-            
-            # Step 4: Parse response
-            if not hasattr(response, 'output_text') or not response.output_text:
-                logger.error("❌ Empty response from Responses API")
-                raise ValueError("Empty extraction response")
-            
-            output_text = response.output_text.strip()
-            
-            # ✅ Check if response was truncated due to max_output_tokens
-            if hasattr(response, 'status') and response.status == 'incomplete':
-                logger.warning(f"⚠️ Response incomplete - may need higher max_output_tokens")
-                logger.warning(f"   Current limit: {max_output_tokens}, consider increasing to 16000+")
             
             # Log response length for debugging
             logger.info(f"📊 Response length: {len(output_text)} characters")
@@ -292,7 +746,7 @@ class GPT5VisionExtractorWithPDF:
                 logger.error(f"Response ends with: ...{output_text[-100:]}")
                 raise ValueError(
                     f"JSON response truncated at {len(output_text)} chars. "
-                    f"Increase max_output_tokens (current: {max_output_tokens})"
+                    f"Increase max_output_tokens (current: {current_max_tokens})"
                 )
             
             # Parse JSON
@@ -399,13 +853,17 @@ class GPT5VisionExtractorWithPDF:
                     del self.file_cache[pdf_path]
             
             raise
+        finally:
+            if progress_tracker:
+                await progress_tracker.stop_heartbeat("extraction")
     
     async def process_document(
         self,
         pdf_path: str,
         max_pages: Optional[int] = None,
         progress_tracker=None,
-        carrier_name: str = None  # ✅ NEW: For carrier-specific prompts
+        carrier_name: str = None,  # ✅ NEW: For carrier-specific prompts
+        prompt_options: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         Process entire PDF document using direct PDF upload.
@@ -447,7 +905,8 @@ class GPT5VisionExtractorWithPDF:
                 max_output_tokens=16000,
                 use_mini=False,
                 progress_tracker=progress_tracker,
-                carrier_name=carrier_name  # ✅ Pass carrier name for carrier-specific prompts
+                carrier_name=carrier_name,  # ✅ Pass carrier name for carrier-specific prompts
+                prompt_options=prompt_options or {}
             )
             
             # Add processing summary
@@ -540,7 +999,11 @@ class GPT5VisionExtractorWithPDF:
         
         return input_cost + output_cost
     
-    def _get_pdf_extraction_prompt(self, carrier_name: str = None) -> str:
+    def _get_pdf_extraction_prompt(
+        self,
+        carrier_name: str = None,
+        prompt_options: Optional[Dict[str, Any]] = None
+    ) -> str:
         """
         Specialized prompt for PDF extraction using Responses API.
         
@@ -555,6 +1018,19 @@ class GPT5VisionExtractorWithPDF:
         Args:
             carrier_name: Optional carrier name to apply carrier-specific prompts
         """
+        
+        prompt_options = prompt_options or {}
+        summary_keywords = sorted({
+            "total",
+            "subtotal",
+            "grand total",
+            "sum",
+            "commission total"
+        }.union({kw.lower() for kw in prompt_options.get("summary_keywords", [])}))
+        expected_rollups = prompt_options.get("expected_rollups", [])
+        row_role_examples = prompt_options.get("row_role_examples", [])
+        domain_notes = prompt_options.get("domain_notes")
+        summary_templates = prompt_options.get("summary_row_templates", [])
         
         base_prompt = """You are an elite financial document analyst specializing in insurance commission statements.
 
@@ -598,7 +1074,7 @@ Your task: Extract comprehensive data from this commission statement.
    - Preserve headers exactly
    - Include all data rows
    - **CRITICAL: Identify and mark summary/total rows**
-     * Summary rows contain: "Total", "Subtotal", "Grand Total", "Sum", "TOTAL", etc.
+     * Summary rows contain carrier-specific and generic cues (examples provided below)
      * Summary rows often have bold or different formatting
      * Summary rows typically have empty cells in some columns (especially identifier columns)
      * Summary rows are usually at the end of a table section
@@ -617,6 +1093,15 @@ Your task: Extract comprehensive data from this commission statement.
    - billing_period_range: Overall period covered (e.g., "July-August 2025")
    - special_payments: List of any bonuses, incentives, adjustments (with amounts)
    - patterns_detected: Notable patterns (e.g., "Multiple agents", "Tiered rates", "New business incentives")
+
+6. **Row Intelligence & Table Blueprint**
+   - For every table provide `row_annotations` describing each row's role (`Detail`, `GroupSummary`, `CarrierSummary`, `Notes`, `HeaderCarryForward`) with a brief rationale and confidence.
+   - Provide `table_blueprint` describing grouping columns, numeric columns, expected rollups, and any structural notes. This helps downstream heuristics validate totals.
+   - Examples of row roles:
+     * Detail rows: contain specific group IDs or writing agent names and should remain un-aggregated.
+     * GroupSummary rows: often blank identifier columns but numeric totals populated; cite which rows they summarize.
+     * CarrierSummary rows: final totals that restate invoice/commission.
+     * Notes rows: textual comments that should never be tagged as summary.
 
 **OUTPUT FORMAT:**
 
@@ -670,7 +1155,17 @@ Return ONLY valid JSON (no markdown):
         ["L213059", "COMPANY NAME", "$141.14"],
         ["", "TOTAL", "$3604.95"]
       ],
-      "summary_rows": [1]
+      "summary_rows": [1],
+      "row_annotations": [
+        {"row_index": 0, "role": "Detail", "confidence": 0.9, "rationale": "Group ID + invoice line"},
+        {"row_index": 1, "role": "GroupSummary", "confidence": 0.95, "rationale": "Contains 'TOTAL' and aggregates prior rows", "supporting_rows": [0]}
+      ],
+      "table_blueprint": {
+        "grouping_columns": ["Group No.", "Group Name"],
+        "numeric_columns": ["Paid Amount"],
+        "summary_expectations": ["Group Total", "Grand Total"],
+        "notes": "Totals follow each block of writing agents."
+      }
     }
   ],
   "business_intelligence": {
@@ -709,7 +1204,7 @@ Return ONLY valid JSON (no markdown):
    - These are usually in summary rows or a totals section at the bottom of tables
    - Use exact numerical values, including cents (e.g., 10700.40, not 10700)
 10. **SUMMARY ROWS MUST BE IDENTIFIED** - Critical for accurate calculations:
-    - Look for rows containing keywords: "Total", "Subtotal", "Grand Total", "Sum", "TOTAL", "Sub-total"
+    - Look for rows containing keywords informed by carrier context (see list below)
     - Summary rows often have empty first columns (no group ID or identifier)
     - Summary rows typically contain aggregated financial amounts
     - Add ALL summary row indices to the "summary_rows" array in each table
@@ -722,10 +1217,44 @@ Analyze the full document and return the complete extraction as JSON."""
         if carrier_name:
             from .dynamic_prompts import GPTDynamicPrompts
             carrier_specific_prompt = GPTDynamicPrompts.get_prompt_by_name(carrier_name)
+            if not prompt_options:
+                prompt_options = GPTDynamicPrompts.get_prompt_options(carrier_name)
+        
+        option_sections: List[str] = []
+        if summary_keywords:
+            option_sections.append(
+                "Carrier-specific summary keywords to prioritize: "
+                + ", ".join(summary_keywords)
+            )
+        if expected_rollups:
+            option_sections.append(
+                "Expected rollup labels: " + ", ".join(expected_rollups)
+            )
+        if summary_templates:
+            option_sections.append(
+                "Summary row templates frequently seen in this carrier: "
+                + "; ".join(summary_templates)
+            )
+        if row_role_examples:
+            formatted_examples = "; ".join(
+                f"{example.get('label')}: {example.get('signature')}"
+                for example in row_role_examples
+                if isinstance(example, dict)
+            )
+            if formatted_examples:
+                option_sections.append(
+                    "Row role signatures to model: " + formatted_examples
+                )
+        if domain_notes:
+            option_sections.append(f"Domain notes: {domain_notes}")
+        
+        if option_sections:
+            base_prompt += "\n\nCarrier-specific context:\n- " + "\n- ".join(option_sections)
         
         # Combine base prompt with carrier-specific instructions
         full_prompt = base_prompt
         if carrier_specific_prompt:
+            logger.info(f"📋 Applied carrier-specific instructions for {carrier_name}")
             full_prompt += "\n\n" + carrier_specific_prompt
         
         return full_prompt
@@ -748,7 +1277,7 @@ Analyze the full document and return the complete extraction as JSON."""
         file_id, _ = self.file_cache[pdf_path]
         
         try:
-            self.client.files.delete(file_id)
+            await self.client.files.delete(file_id)
             del self.file_cache[pdf_path]
             logger.info(f"✅ Deleted file: {file_id}")
             return True

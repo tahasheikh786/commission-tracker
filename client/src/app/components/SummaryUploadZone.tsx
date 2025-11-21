@@ -45,7 +45,12 @@ interface SummaryUploadZoneProps {
     company_id?: string,
     can_automate?: boolean,
     plan_types?: string[],
-    extraction_id?: string
+    extraction_id?: string,
+    conversational_summary?: string | null,
+    structured_summary?: any,
+    summary_data?: any,
+    extracted_total?: number,
+    extracted_invoice_total?: number
   }) => void;
   selectedStatementDate?: any;
   extractionMethod?: string;
@@ -214,7 +219,12 @@ export default function SummaryUploadZone({
         format_learning: results.format_learning,
         plan_types: results.plan_types || [],
         extraction_id: results.extraction_id,
-        can_automate: false  // Force manual due to error
+        can_automate: false,  // Force manual due to error
+        conversational_summary: results.conversational_summary || null,
+        structured_summary: results.structured_summary || results.summary_data || null,
+        summary_data: results.summary_data || null,
+        extracted_total: results.extracted_total,
+        extracted_invoice_total: results.extracted_invoice_total
       });
     } finally {
       setAutomating(false);
@@ -281,7 +291,14 @@ export default function SummaryUploadZone({
           carrier_id: results.carrier_id,
           company_id: results.company_id,
           format_learning: formatLearning,  // Include format learning data
-          can_automate: canAutomate  // Include automation flag
+          can_automate: canAutomate,  // Include automation flag
+          plan_types: results.plan_types || [],
+          extraction_id: results.extraction_id,
+          conversational_summary: results.conversational_summary || null,
+          structured_summary: results.structured_summary || results.summary_data || null,
+          summary_data: results.summary_data || null,
+          extracted_total: results.extracted_total,
+          extracted_invoice_total: results.extracted_invoice_total
         });
       }
     }

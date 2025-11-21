@@ -34,7 +34,7 @@ class ConnectionManager:
         # Configure longer timeouts for large file processing
         self.websocket_timeout = timeout_settings.websocket_connection
         self.keepalive_timeout = timeout_settings.websocket_keepalive
-        self.ping_interval = 15  # ✅ CHANGED: 15 seconds (was 30) - aggressive keepalive for Render
+        self.ping_interval = timeout_settings.websocket_ping_interval  # Keepalive interval driven by config
         
         # Track keepalive tasks
         self.keepalive_tasks: Dict[str, asyncio.Task] = {}
@@ -610,6 +610,8 @@ class ProgressTracker:
         self.stage_start_time = None
         self.last_update = datetime.utcnow()
         self.timeout_threshold = timeout_settings.total_extraction  # 30 minutes
+        self._heartbeat_tasks: Dict[str, asyncio.Task] = {}
+        self._heartbeat_progress: Dict[str, float] = {}
     
     async def start_stage(self, stage: str, message: str = None):
         """Start a new processing stage."""
@@ -668,6 +670,7 @@ class ProgressTracker:
     
     async def complete_stage(self, stage: str, message: str = None):
         """Mark a stage as completed."""
+        await self.stop_heartbeat(stage)
         await self.connection_manager.send_stage_update(
             self.upload_id, 
             stage, 
@@ -679,6 +682,7 @@ class ProgressTracker:
     
     async def send_error(self, error_message: str, error_code: str = None):
         """Send an error notification."""
+        await self.stop_all_heartbeats()
         await self.connection_manager.send_error(
             self.upload_id, 
             error_message, 
@@ -689,6 +693,7 @@ class ProgressTracker:
     
     async def send_completion(self, result_data: Dict[str, Any]):
         """Send completion notification with results."""
+        await self.stop_all_heartbeats()
         processing_time = (datetime.utcnow() - self.start_time).total_seconds()
         result_data['processing_time'] = processing_time
         
@@ -698,6 +703,53 @@ class ProgressTracker:
         )
         
         logger.info(f"Completed processing for upload {self.upload_id} in {processing_time:.2f} seconds")
+
+    def start_heartbeat(
+        self,
+        stage: str,
+        message: str = None,
+        base_percentage: float = 5.0,
+        max_percentage: float = 95.0,
+        interval_seconds: float = 8.0
+    ) -> Optional[asyncio.Task]:
+        """Start periodic heartbeat updates for long-running asynchronous work."""
+        if not stage or stage in self._heartbeat_tasks:
+            return None
+        
+        async def _beat():
+            percentage = base_percentage
+            while True:
+                await asyncio.sleep(interval_seconds)
+                percentage = min(max_percentage, percentage + 2.5)
+                self._heartbeat_progress[stage] = percentage
+                await self.connection_manager.send_stage_update(
+                    self.upload_id,
+                    stage,
+                    percentage,
+                    message or f"{stage.replace('_', ' ').title()} in progress..."
+                )
+        
+        task = asyncio.create_task(_beat())
+        self._heartbeat_tasks[stage] = task
+        self._heartbeat_progress[stage] = base_percentage
+        return task
+
+    async def stop_heartbeat(self, stage: str):
+        """Stop a heartbeat task for a stage."""
+        task = self._heartbeat_tasks.pop(stage, None)
+        self._heartbeat_progress.pop(stage, None)
+        if task:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+
+    async def stop_all_heartbeats(self):
+        """Stop all heartbeat tasks."""
+        tasks = list(self._heartbeat_tasks.keys())
+        for stage in tasks:
+            await self.stop_heartbeat(stage)
 
 def create_progress_tracker(upload_id: str) -> ProgressTracker:
     """Create a new progress tracker for an upload."""

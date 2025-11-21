@@ -1,0 +1,569 @@
+INFO:app.services.enhanced_extraction_service:🚀 CALLING GPT-5 VISION SERVICE FOR EXTRACTION
+INFO:app.services.enhanced_extraction_service:   File: pdfs/2025.02.pdf
+INFO:app.services.enhanced_extraction_service:   Carrier: Unknown
+INFO:app.services.enhanced_extraction_service:   Enhanced Mode: True
+INFO:app.services.enhanced_extraction_service:   Max Pages: 30 (intelligent page selection)
+INFO:app.services.enhanced_extraction_service:================================================================================
+INFO:app.services.gpt.enhanced_service:🚀 Starting enhanced extraction for Unknown | upload_1763672962
+INFO:app.services.gpt.vision_extractor:📄 Processing PDF with direct upload method: pdfs/2025.02.pdf
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763672959788_ipwz9autq: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763672959788_ipwz9autq
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763672959788_ipwz9autq: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763672959788_ipwz9autq
+INFO:app.services.gpt.vision_extractor:📤 Uploading PDF: pdfs/2025.02.pdf
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/files "HTTP/1.1 200 OK"
+INFO:app.services.gpt.vision_extractor:✅ PDF uploaded: file-7yvuZXRNq939QZgNHFbTsR
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763672959788_ipwz9autq: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763672959788_ipwz9autq
+INFO:app.services.gpt.dynamic_prompts:🔍 GPT: Looking up carrier prompt: 'Unknown' → normalized: 'unknown'
+INFO:app.services.gpt.dynamic_prompts:   Comparing with template: 'UnitedHealthcare' → normalized: 'unitedhealthcare'
+INFO:app.services.gpt.dynamic_prompts:   Comparing with template: 'United Healthcare' → normalized: 'unitedhealthcare'
+INFO:app.services.gpt.dynamic_prompts:   Comparing with template: 'UHC' → normalized: 'uhc'
+INFO:app.services.gpt.dynamic_prompts:   Comparing with template: 'United Health Group' → normalized: 'unitedhealthgroup'
+INFO:app.services.gpt.dynamic_prompts:   Comparing with template: 'UnitedHealth' → normalized: 'unitedhealth'
+INFO:app.services.gpt.dynamic_prompts:   Comparing with template: 'Redirect Health' → normalized: 'redirecthealth'
+INFO:app.services.gpt.dynamic_prompts:❌ No carrier-specific prompt found for 'Unknown', using standard prompt only
+INFO:app.services.gpt.dynamic_prompts:   Available carriers: ['UnitedHealthcare', 'United Healthcare', 'UHC', 'United Health Group', 'UnitedHealth', 'Redirect Health']
+INFO:app.services.gpt.vision_extractor:📋 Extracting from PDF using Responses API (file_id: file-7yvuZXRNq939QZgNHFbTsR)
+     [POST]500commission-tracker-1.onrender.com/api/extract-tables-smart/clientIP="86.50.75.139" requestID="d8253df5-a6fd-4a4a" responseTimeMS=127223 responseBytes=227 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
+✅ Credentials file found in /etc/secrets/
+🚀 Starting server with timeout configuration:
+   - Keep-alive timeout: 1800s
+   - Graceful shutdown: 1800s
+   - Workers: 1
+✅ Using Render PostgreSQL database
+✅ Using Render PostgreSQL database
+INFO:app.main:📢 Received signal 15, initiating graceful shutdown...
+INFO:app.main:📢 Notifying 1 active WebSocket connections...
+INFO:app.main:✅ Graceful shutdown complete - exiting
+INFO:app.services.process_monitor:Process monitoring cancelled
+INFO:app.services.process_monitor:Process monitoring loop stopped
+INFO:app.api.new_extract:🛑 Extraction cancelled: upload_1763672959788_ipwz9autq
+INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763672959788_ipwz9autq, session_id=session_1763672959798_h3v6pi7yf
+INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763672959788_ipwz9autq
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/app/app/api/new_extract.py", line 309, in run_extraction_with_heartbeat
+    result = await enhanced_service.extract_tables_with_progress(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/app/services/enhanced_extraction_service.py", line 278, in extract_tables_with_progress
+    return await self._extract_with_claude_progress(  # NOTE: Legacy function name, actually uses GPT-5 Vision!
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/app/services/enhanced_extraction_service.py", line 982, in _extract_with_claude_progress
+    gpt5_result = await self.gpt5_service.extract_commission_data(
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/app/services/gpt/enhanced_service.py", line 132, in extract_commission_data
+    extraction_result = await self.vision_extractor.process_document(
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/app/services/gpt/vision_extractor.py", line 443, in process_document
+    result = await self.circuit_breaker.call(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/app/services/gpt/circuit_breaker.py", line 90, in call
+    result = await func(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/app/services/gpt/vision_extractor.py", line 248, in extract_from_pdf
+    response = self.client.responses.create(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/openai/resources/responses/responses.py", line 828, in create
+    return self._post(
+           ^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/openai/_base_client.py", line 1259, in post
+    return cast(ResponseT, self.request(cast_to, opts, stream=stream, stream_cls=stream_cls))
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/openai/_base_client.py", line 982, in request
+    response = self._client.send(
+               ^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/httpx/_client.py", line 914, in send
+    response = self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/httpx/_client.py", line 942, in _send_handling_auth
+    response = self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/httpx/_client.py", line 979, in _send_handling_redirects
+    response = self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/httpx/_client.py", line 1014, in _send_single_request
+    response = transport.handle_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/httpx/_transports/default.py", line 250, in handle_request
+    resp = self._pool.handle_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/httpcore/_sync/connection_pool.py", line 256, in handle_request
+    raise exc from None
+  File "/usr/local/lib/python3.11/site-packages/httpcore/_sync/connection_pool.py", line 236, in handle_request
+    response = connection.handle_request(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/httpcore/_sync/connection.py", line 103, in handle_request
+    return self._connection.handle_request(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/httpcore/_sync/http11.py", line 136, in handle_request
+    raise exc
+  File "/usr/local/lib/python3.11/site-packages/httpcore/_sync/http11.py", line 106, in handle_request
+    ) = self._receive_response_headers(**kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/httpcore/_sync/http11.py", line 177, in _receive_response_headers
+    event = self._receive_event(timeout=timeout)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/httpcore/_sync/http11.py", line 217, in _receive_event
+    data = self._network_stream.read(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/httpcore/_backends/sync.py", line 128, in read
+    return self._sock.recv(max_bytes)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/ssl.py", line 1295, in recv
+    return self.read(buflen)
+           ^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/ssl.py", line 1168, in read
+    return self._sslobj.read(len)
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/app/main.py", line 87, in <lambda>
+    signal.signal(signal.SIGTERM, lambda s, f: shutdown_handler(s))
+                                               ^^^^^^^^^^^^^^^^^^^
+  File "/app/app/main.py", line 80, in shutdown_handler
+    sys.exit(0)
+SystemExit: 0
+During handling of the above exception, another exception occurred:
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.11/asyncio/tasks.py", line 476, in wait_for
+    await waiter
+asyncio.exceptions.CancelledError
+During handling of the above exception, another exception occurred:
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.11/site-packages/uvicorn/protocols/websockets/websockets_impl.py", line 244, in run_asgi
+    result = await self.app(self.scope, self.asgi_receive, self.asgi_send)  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/uvicorn/middleware/proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/fastapi/applications.py", line 1134, in __call__
+    await super().__call__(scope, receive, send)
+  File "/usr/local/lib/python3.11/site-packages/starlette/applications.py", line 107, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/usr/local/lib/python3.11/site-packages/starlette/middleware/errors.py", line 151, in __call__
+    await self.app(scope, receive, send)
+  File "/usr/local/lib/python3.11/site-packages/starlette/middleware/base.py", line 103, in __call__
+    await self.app(scope, receive, send)
+  File "/usr/local/lib/python3.11/site-packages/starlette/middleware/base.py", line 103, in __call__
+    await self.app(scope, receive, send)
+  File "/usr/local/lib/python3.11/site-packages/starlette/middleware/base.py", line 103, in __call__
+    await self.app(scope, receive, send)
+  File "/usr/local/lib/python3.11/site-packages/starlette/middleware/trustedhost.py", line 51, in __call__
+    await self.app(scope, receive, send)
+  File "/usr/local/lib/python3.11/site-packages/starlette/middleware/cors.py", line 77, in __call__
+    await self.app(scope, receive, send)
+  File "/usr/local/lib/python3.11/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/usr/local/lib/python3.11/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/usr/local/lib/python3.11/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/usr/local/lib/python3.11/site-packages/starlette/routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/usr/local/lib/python3.11/site-packages/starlette/routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "/usr/local/lib/python3.11/site-packages/starlette/routing.py", line 364, in handle
+    await self.app(scope, receive, send)
+  File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 151, in app
+    await wrap_app_handling_exceptions(app, session)(scope, receive, send)
+  File "/usr/local/lib/python3.11/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 148, in app
+    await func(session)
+  File "/usr/local/lib/python3.11/site-packages/fastapi/routing.py", line 463, in app
+    await dependant.call(**solved_result.values)
+  File "/app/app/api/websocket.py", line 121, in websocket_progress_endpoint
+    data = await asyncio.wait_for(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/asyncio/tasks.py", line 479, in wait_for
+    return fut.result()
+           ^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/starlette/websockets.py", line 119, in receive_text
+    message = await self.receive()
+              ^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/starlette/websockets.py", line 47, in receive
+    message = await self._receive()
+              ^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/uvicorn/protocols/websockets/websockets_impl.py", line 378, in asgi_receive
+    data = await self.recv()
+           ^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/websockets/legacy/protocol.py", line 552, in recv
+    await asyncio.wait(
+  File "/usr/local/lib/python3.11/asyncio/tasks.py", line 428, in wait
+    return await _wait(fs, timeout, return_when, loop)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/asyncio/tasks.py", line 535, in _wait
+    await waiter
+asyncio.exceptions.CancelledError
+INFO:app.main:FastAPI shutdown event triggered
+INFO:app.services.process_monitor:Process monitoring stopped
+INFO:app.main:Process monitoring stopped
+INFO:     connection closed
+ERROR:asyncio:Task exception was never retrieved
+future: <Task finished name='Task-551' coro=<WebSocket.close() done, defined at /usr/local/lib/python3.11/site-packages/starlette/websockets.py:180> exception=RuntimeError("Unexpected ASGI message 'websocket.close', after sending 'websocket.close' or response already completed.")>
+Traceback (most recent call last):
+  File "/app/app/api/new_extract.py", line 309, in run_extraction_with_heartbeat
+    result = await enhanced_service.extract_tables_with_progress(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/app/services/enhanced_extraction_service.py", line 278, in extract_tables_with_progress
+    return await self._extract_with_claude_progress(  # NOTE: Legacy function name, actually uses GPT-5 Vision!
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/app/services/enhanced_extraction_service.py", line 982, in _extract_with_claude_progress
+    gpt5_result = await self.gpt5_service.extract_commission_data(
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/app/services/gpt/enhanced_service.py", line 132, in extract_commission_data
+    extraction_result = await self.vision_extractor.process_document(
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/app/services/gpt/vision_extractor.py", line 443, in process_document
+    result = await self.circuit_breaker.call(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/app/services/gpt/circuit_breaker.py", line 90, in call
+    result = await func(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/app/services/gpt/vision_extractor.py", line 248, in extract_from_pdf
+    response = self.client.responses.create(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/openai/resources/responses/responses.py", line 828, in create
+    return self._post(
+           ^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/openai/_base_client.py", line 1259, in post
+    return cast(ResponseT, self.request(cast_to, opts, stream=stream, stream_cls=stream_cls))
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/openai/_base_client.py", line 982, in request
+    response = self._client.send(
+               ^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/httpx/_client.py", line 914, in send
+    response = self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/httpx/_client.py", line 942, in _send_handling_auth
+    response = self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/httpx/_client.py", line 979, in _send_handling_redirects
+    response = self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/httpx/_client.py", line 1014, in _send_single_request
+    response = transport.handle_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/httpx/_transports/default.py", line 250, in handle_request
+    resp = self._pool.handle_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/httpcore/_sync/connection_pool.py", line 256, in handle_request
+    raise exc from None
+  File "/usr/local/lib/python3.11/site-packages/httpcore/_sync/connection_pool.py", line 236, in handle_request
+    response = connection.handle_request(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/httpcore/_sync/connection.py", line 103, in handle_request
+    return self._connection.handle_request(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/httpcore/_sync/http11.py", line 136, in handle_request
+    raise exc
+  File "/usr/local/lib/python3.11/site-packages/httpcore/_sync/http11.py", line 106, in handle_request
+    ) = self._receive_response_headers(**kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/httpcore/_sync/http11.py", line 177, in _receive_response_headers
+    event = self._receive_event(timeout=timeout)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/httpcore/_sync/http11.py", line 217, in _receive_event
+    data = self._network_stream.read(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/httpcore/_backends/sync.py", line 128, in read
+    return self._sock.recv(max_bytes)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/ssl.py", line 1295, in recv
+    return self.read(buflen)
+           ^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/ssl.py", line 1168, in read
+    return self._sslobj.read(len)
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/app/main.py", line 87, in <lambda>
+    signal.signal(signal.SIGTERM, lambda s, f: shutdown_handler(s))
+                                               ^^^^^^^^^^^^^^^^^^^
+  File "/app/app/main.py", line 80, in shutdown_handler
+    sys.exit(0)
+SystemExit: 0
+During handling of the above exception, another exception occurred:
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.11/site-packages/starlette/websockets.py", line 181, in close
+    await self.send({"type": "websocket.close", "code": code, "reason": reason or ""})
+  File "/usr/local/lib/python3.11/site-packages/starlette/websockets.py", line 86, in send
+    await self._send(message)
+  File "/usr/local/lib/python3.11/site-packages/starlette/_exception_handler.py", line 39, in sender
+    await send(message)
+  File "/usr/local/lib/python3.11/site-packages/uvicorn/protocols/websockets/websockets_impl.py", line 360, in asgi_send
+    raise RuntimeError(msg % message_type)
+RuntimeError: Unexpected ASGI message 'websocket.close', after sending 'websocket.close' or response already completed.
+INFO:app.main:Graceful shutdown complete
+ERROR:    Traceback (most recent call last):
+  File "/app/app/api/new_extract.py", line 309, in run_extraction_with_heartbeat
+    result = await enhanced_service.extract_tables_with_progress(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/app/services/enhanced_extraction_service.py", line 278, in extract_tables_with_progress
+    return await self._extract_with_claude_progress(  # NOTE: Legacy function name, actually uses GPT-5 Vision!
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/app/services/enhanced_extraction_service.py", line 982, in _extract_with_claude_progress
+    gpt5_result = await self.gpt5_service.extract_commission_data(
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/app/services/gpt/enhanced_service.py", line 132, in extract_commission_data
+    extraction_result = await self.vision_extractor.process_document(
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/app/services/gpt/vision_extractor.py", line 443, in process_document
+    result = await self.circuit_breaker.call(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/app/services/gpt/circuit_breaker.py", line 90, in call
+    result = await func(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/app/services/gpt/vision_extractor.py", line 248, in extract_from_pdf
+    response = self.client.responses.create(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/openai/resources/responses/responses.py", line 828, in create
+    return self._post(
+           ^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/openai/_base_client.py", line 1259, in post
+    return cast(ResponseT, self.request(cast_to, opts, stream=stream, stream_cls=stream_cls))
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/openai/_base_client.py", line 982, in request
+    response = self._client.send(
+               ^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/httpx/_client.py", line 914, in send
+    response = self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/httpx/_client.py", line 942, in _send_handling_auth
+    response = self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/httpx/_client.py", line 979, in _send_handling_redirects
+    response = self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/httpx/_client.py", line 1014, in _send_single_request
+    response = transport.handle_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/httpx/_transports/default.py", line 250, in handle_request
+    resp = self._pool.handle_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/httpcore/_sync/connection_pool.py", line 256, in handle_request
+    raise exc from None
+  File "/usr/local/lib/python3.11/site-packages/httpcore/_sync/connection_pool.py", line 236, in handle_request
+    response = connection.handle_request(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/httpcore/_sync/connection.py", line 103, in handle_request
+    return self._connection.handle_request(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/httpcore/_sync/http11.py", line 136, in handle_request
+    raise exc
+  File "/usr/local/lib/python3.11/site-packages/httpcore/_sync/http11.py", line 106, in handle_request
+    ) = self._receive_response_headers(**kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/httpcore/_sync/http11.py", line 177, in _receive_response_headers
+    event = self._receive_event(timeout=timeout)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/httpcore/_sync/http11.py", line 217, in _receive_event
+    data = self._network_stream.read(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/httpcore/_backends/sync.py", line 128, in read
+    return self._sock.recv(max_bytes)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/ssl.py", line 1295, in recv
+    return self.read(buflen)
+           ^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/ssl.py", line 1168, in read
+    return self._sslobj.read(len)
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/app/main.py", line 87, in <lambda>
+    signal.signal(signal.SIGTERM, lambda s, f: shutdown_handler(s))
+                                               ^^^^^^^^^^^^^^^^^^^
+  File "/app/app/main.py", line 80, in shutdown_handler
+    sys.exit(0)
+SystemExit: 0
+During handling of the above exception, another exception occurred:
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.11/site-packages/starlette/routing.py", line 701, in lifespan
+    await receive()
+  File "/usr/local/lib/python3.11/site-packages/uvicorn/lifespan/on.py", line 137, in receive
+    return await self.receive_queue.get()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/asyncio/queues.py", line 158, in get
+    await getter
+asyncio.exceptions.CancelledError
+ERROR:sqlalchemy.pool.impl.AsyncAdaptedQueuePool:Exception terminating connection <AdaptedConnection <asyncpg.connection.Connection object at 0x765c169544f0>>
+Traceback (most recent call last):
+  File "/app/app/api/new_extract.py", line 309, in run_extraction_with_heartbeat
+    result = await enhanced_service.extract_tables_with_progress(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/app/services/enhanced_extraction_service.py", line 278, in extract_tables_with_progress
+    return await self._extract_with_claude_progress(  # NOTE: Legacy function name, actually uses GPT-5 Vision!
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/app/services/enhanced_extraction_service.py", line 982, in _extract_with_claude_progress
+    gpt5_result = await self.gpt5_service.extract_commission_data(
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/app/services/gpt/enhanced_service.py", line 132, in extract_commission_data
+    extraction_result = await self.vision_extractor.process_document(
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/app/services/gpt/vision_extractor.py", line 443, in process_document
+    result = await self.circuit_breaker.call(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/app/services/gpt/circuit_breaker.py", line 90, in call
+    result = await func(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/app/services/gpt/vision_extractor.py", line 248, in extract_from_pdf
+    response = self.client.responses.create(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/openai/resources/responses/responses.py", line 828, in create
+    return self._post(
+           ^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/openai/_base_client.py", line 1259, in post
+    return cast(ResponseT, self.request(cast_to, opts, stream=stream, stream_cls=stream_cls))
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/openai/_base_client.py", line 982, in request
+    response = self._client.send(
+               ^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/httpx/_client.py", line 914, in send
+    response = self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/httpx/_client.py", line 942, in _send_handling_auth
+    response = self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/httpx/_client.py", line 979, in _send_handling_redirects
+    response = self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/httpx/_client.py", line 1014, in _send_single_request
+    response = transport.handle_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/httpx/_transports/default.py", line 250, in handle_request
+    resp = self._pool.handle_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/httpcore/_sync/connection_pool.py", line 256, in handle_request
+    raise exc from None
+  File "/usr/local/lib/python3.11/site-packages/httpcore/_sync/connection_pool.py", line 236, in handle_request
+    response = connection.handle_request(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/httpcore/_sync/connection.py", line 103, in handle_request
+    return self._connection.handle_request(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/httpcore/_sync/http11.py", line 136, in handle_request
+    raise exc
+  File "/usr/local/lib/python3.11/site-packages/httpcore/_sync/http11.py", line 106, in handle_request
+    ) = self._receive_response_headers(**kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/httpcore/_sync/http11.py", line 177, in _receive_response_headers
+    event = self._receive_event(timeout=timeout)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/httpcore/_sync/http11.py", line 217, in _receive_event
+    data = self._network_stream.read(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/httpcore/_backends/sync.py", line 128, in read
+    return self._sock.recv(max_bytes)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/ssl.py", line 1295, in recv
+    return self.read(buflen)
+           ^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/ssl.py", line 1168, in read
+    return self._sslobj.read(len)
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/app/main.py", line 87, in <lambda>
+    signal.signal(signal.SIGTERM, lambda s, f: shutdown_handler(s))
+                                               ^^^^^^^^^^^^^^^^^^^
+  File "/app/app/main.py", line 80, in shutdown_handler
+    sys.exit(0)
+SystemExit: 0
+During handling of the above exception, another exception occurred:
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/pool/base.py", line 372, in _close_connection
+    self._dialect.do_terminate(connection)
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 1127, in do_terminate
+    dbapi_connection.terminate()
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/connectors/asyncio.py", line 402, in terminate
+    self.await_(asyncio.shield(self._terminate_graceful_close()))  # type: ignore[attr-defined] # noqa: E501
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+asyncio.exceptions.CancelledError: Cancelled via cancel scope 765c168c8610 by <Task cancelling name='starlette.middleware.base.BaseHTTPMiddleware.__call__.<locals>.call_next.<locals>.coro' coro=<BaseHTTPMiddleware.__call__.<locals>.call_next.<locals>.coro() running at /usr/local/lib/python3.11/site-packages/starlette/middleware/base.py:144> cb=[TaskGroup._spawn.<locals>.task_done() at /usr/local/lib/python3.11/site-packages/anyio/_backends/_asyncio.py:803, gather.<locals>._done_callback() at /usr/local/lib/python3.11/asyncio/tasks.py:764]>
+INFO:app.services.cancellation_manager:Cleared cancellation status for upload upload_1763672959788_ipwz9autq
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.11/site-packages/anyio/streams/memory.py", line 111, in receive
+    return self.receive_nowait()
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/anyio/streams/memory.py", line 106, in receive_nowait
+    raise WouldBlock
+anyio.WouldBlock
+During handling of the above exception, another exception occurred:
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.11/site-packages/uvicorn/protocols/http/h11_impl.py", line 403, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/uvicorn/middleware/proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/fastapi/applications.py", line 1134, in __call__
+    await super().__call__(scope, receive, send)
+  File "/usr/local/lib/python3.11/site-packages/starlette/applications.py", line 107, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/usr/local/lib/python3.11/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/usr/local/lib/python3.11/site-packages/starlette/middleware/base.py", line 192, in __call__
+    async with anyio.create_task_group() as task_group:
+  File "/usr/local/lib/python3.11/site-packages/anyio/_backends/_asyncio.py", line 785, in __aexit__
+    raise exc_val
+  File "/usr/local/lib/python3.11/site-packages/starlette/middleware/base.py", line 193, in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/app/main.py", line 297, in add_process_time_header
+    response = await call_next(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/starlette/middleware/base.py", line 151, in call_next
+    message = await recv_stream.receive()
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/anyio/streams/memory.py", line 119, in receive
+    await receive_event.wait()
+  File "/usr/local/lib/python3.11/asyncio/locks.py", line 213, in wait
+    await fut
+asyncio.exceptions.CancelledError
+INFO:     10.21.174.167:43868 - "POST /api/extract-tables-smart/ HTTP/1.1" 500 Internal Server Error
+INFO:app.services.company_name_service:spaCy not available, using pattern matching only
+INFO:app.services.gpt4o_vision_service:GPT-5 Vision service initialized successfully
+     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763672959788_ipwz9autq?session_id=session_1763672959798_h3v6pi7yfclientIP="86.50.75.139" requestID="" responseTimeMS=137893 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
+/usr/local/lib/python3.11/site-packages/transformers/utils/hub.py:110: FutureWarning: Using `TRANSFORMERS_CACHE` is deprecated and will be removed in v5 of Transformers. Use `HF_HOME` instead.
+  warnings.warn(
+     [GET]500commission-tracker-1.onrender.com/api/ws/progress/upload_1763672959788_ipwz9autq?session_id=session_1763673100096_55zs1hhgtclientIP="86.50.75.139" requestID="" responseTimeMS=3 responseBytes=145 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
+     [GET]500commission-tracker-1.onrender.com/api/ws/progress/upload_1763672959788_ipwz9autq?session_id=session_1763673103097_huagrr5l4clientIP="86.50.75.139" requestID="" responseTimeMS=2 responseBytes=145 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
+INFO:app.services.gpt.retry_handler:🔧 Rate limiter initialized: 45 RPM, 360,000 TPM
+INFO:app.services.gpt.circuit_breaker:🔌 Circuit breaker initialized: threshold=5, timeout=30s
+INFO:app.services.gpt.vision_extractor:✅ GPT-5 PDF Extractor initialized (Responses API mode with direct PDF upload)
+INFO:app.services.gpt.batch_processor:✅ Batch Processor initialized (Direct PDF mode)
+INFO:app.services.gpt.enhanced_service:✅ Initialized with direct PDF upload support (November 2025)
+INFO:app.services.gpt.enhanced_service:✅ Enhanced GPT-5 Vision Service initialized (Direct PDF mode)
+INFO:app.services.ai_field_mapping_service:AI Field Mapping Service initialized successfully
+INFO:app.services.ai_plan_type_detection_service:AI Plan Type Detection Service initialized successfully
+🌐 CORS Configuration - Allowed Origins: ['http://localhost:3000', 'http://127.0.0.1:3000', 'https://commission-tracker-1.onrender.com', 'https://commission-tracker-ochre.vercel.app']
+INFO:     Started server process [1]
+INFO:     Waiting for application startup.
+INFO:app.main:🚀 Application starting up...
+INFO:app.main:✅ Orphan cleanup scheduler started (runs every 3 minutes)
+INFO:app.services.process_monitor:Process monitor initialized: max_time=1800s, heartbeat_timeout=300s
+INFO:app.services.process_monitor:Process monitoring started
+INFO:app.main:Process monitoring started for large file processing
+INFO:app.main:Application startup complete with enhanced monitoring and signal handlers
+INFO:app.services.orphan_cleanup_service:🚀 Starting orphan cleanup scheduler (runs every 3 minutes)
+INFO:app.services.orphan_cleanup_service:🧹 Starting orphan cleanup job...
+INFO:app.services.process_monitor:Starting process monitoring loop
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:app.services.orphan_cleanup_service:✅ Orphan cleanup completed: no orphans found
+INFO:app.main:Cleaned up 491 expired/inactive sessions
+INFO:     10.219.16.158:45916 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.16.158:45926 - "GET /health HTTP/1.1" 200 OK
+     [GET]500commission-tracker-1.onrender.com/api/ws/progress/upload_1763672959788_ipwz9autq?session_id=session_1763673112098_kv0atru17clientIP="86.50.75.139" requestID="" responseTimeMS=1 responseBytes=145 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
+INFO:     10.219.16.158:43962 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.16.158:43964 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.16.158:55054 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.16.158:55066 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.16.158:44146 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.16.158:44152 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.16.158:44158 - "GET /health HTTP/1.1" 200 OK
+WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763672959788_ipwz9autq. This is allowed for progress tracking, but consider implementing token passing for production.
+INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763672959788_ipwz9autq, session_id: session_1763673143135_mz4vp1upn
+INFO:     10.21.21.8:35602 - "WebSocket /api/ws/progress/upload_1763672959788_ipwz9autq?session_id=session_1763673143135_mz4vp1upn" [accepted]
+INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763672959788_ipwz9autq, session_id=session_1763673143135_mz4vp1upn, timeout=1800s
+INFO:     connection open

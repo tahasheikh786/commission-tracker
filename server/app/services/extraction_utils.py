@@ -1,15 +1,8 @@
-import os
-import json
-import base64
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any, Optional, Tuple, Set
 from datetime import datetime
 import pandas as pd
 import numpy as np
-from PIL import Image
-import io
 import logging
-import fitz  # PyMuPDF
-from pdfplumber.pdf import PDF
 import re
 from dateutil import parser as date_parser
 
@@ -18,6 +11,16 @@ logger = logging.getLogger(__name__)
 # Configuration constants for table stitching
 HEADER_SIMILARITY_THRESHOLD = 0.8
 PATTERN_MATCH_THRESHOLD = 0.6
+SUMMARY_KEYWORDS = {"total", "subtotal", "grand total", "net total", "overall total", "sum"}
+DEFAULT_EXPECTED_ROLLUPS = [
+    "total",
+    "grand total",
+    "invoice total",
+    "commission total",
+    "net total",
+    "overall total"
+]
+DEFAULT_SUMMARY_TOLERANCE_BPS = 75  # 0.75% difference allowed
 
 
 def normalize_table_headers(headers: List[str]) -> List[str]:
@@ -361,83 +364,6 @@ def _match_sub_column_pattern(position: int, total_sub_columns: int) -> Optional
     return None
 
 
-def detect_pdf_type(pdf_path: str) -> str:
-    """
-    Detect if PDF is scanned/image-based or digital/text-based.
-    Returns: 'scanned' or 'digital'
-    """
-    try:
-        doc = fitz.open(pdf_path)
-        text_content = ""
-        
-        # Check first few pages for text content
-        for page_num in range(min(3, len(doc))):
-            page = doc.load_page(page_num)
-            text_content += page.get_text()
-        
-        doc.close()
-        
-        # If we have substantial text content, it's likely digital
-        if len(text_content.strip()) > 100:
-            return "digital"
-        else:
-            return "scanned"
-    except Exception as e:
-        print(f"Error detecting PDF type: {e}")
-        return "unknown"
-
-
-def get_pdf_page_count(pdf_path: str) -> int:
-    """
-    Get the number of pages in a PDF document.
-    
-    Args:
-        pdf_path: Path to the PDF file
-        
-    Returns:
-        Number of pages in the PDF
-    """
-    try:
-        doc = fitz.open(pdf_path)
-        page_count = len(doc)
-        doc.close()
-        return page_count
-    except Exception as e:
-        print(f"Error getting PDF page count: {e}")
-        return 0
-
-
-def capture_table_screenshot(pdf_path: str, bbox: Tuple[float, float, float, float], page_num: int = 0) -> str:
-    """
-    Capture a screenshot of a table region for error reporting.
-    Returns base64 encoded image.
-    """
-    try:
-        doc = fitz.open(pdf_path)
-        page = doc.load_page(page_num)
-        
-        # Convert bbox to fitz format (x0, y0, x1, y1)
-        rect = fitz.Rect(bbox)
-        
-        # Get the pixmap of the region
-        pix = page.get_pixmap(matrix=fitz.Matrix(2, 2), clip=rect)
-        
-        # Convert to PIL Image
-        img_data = pix.tobytes("png")
-        img = Image.open(io.BytesIO(img_data))
-        
-        # Convert to base64
-        buffer = io.BytesIO()
-        img.save(buffer, format='PNG')
-        img_str = base64.b64encode(buffer.getvalue()).decode()
-        
-        doc.close()
-        return img_str
-    except Exception as e:
-        print(f"Error capturing screenshot: {e}")
-        return ""
-
-
 def infer_column_types(df: pd.DataFrame) -> Dict[str, str]:
     """
     Infer column types (number, text, date, currency) from DataFrame.
@@ -507,9 +433,368 @@ def normalize_table_data(table_data: List[List[str]], headers: List[str]) -> Dic
     }
     
     return normalized_data
+def enrich_tables_with_summary_intelligence(
+    tables: List[Dict[str, Any]],
+    prompt_options: Optional[Dict[str, Any]] = None
+) -> List[Dict[str, Any]]:
+    """
+    Post-process tables to add profile metadata and smarter summary-row detection.
+    """
+    if not tables:
+        return tables
+    
+    summary_config = _build_summary_config(prompt_options)
+    enriched_tables: List[Dict[str, Any]] = []
+    
+    for table in tables:
+        profile = _build_table_profile(table)
+        detection = _detect_summary_rows_with_context(table, profile, summary_config)
+        final_rows = detection.get("final_summary_rows") or detection.get("model_summary_rows") or []
+        
+        table["summary_detection"] = detection
+        table["summary_rows"] = final_rows
+        table["summaryRows"] = final_rows
+        
+        metadata = table.get("metadata") or {}
+        metadata["table_profile"] = profile
+        table["metadata"] = metadata
+        
+        enriched_tables.append(table)
+    
+    return enriched_tables
 
 
-def stitch_multipage_tables(tables: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _build_summary_config(prompt_options: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    prompt_options = prompt_options or {}
+    
+    keywords = {kw.lower() for kw in SUMMARY_KEYWORDS}
+    for kw in prompt_options.get("summary_keywords", []):
+        if isinstance(kw, str):
+            keywords.add(kw.lower())
+    
+    expected_rollups = list(dict.fromkeys(
+        DEFAULT_EXPECTED_ROLLUPS + [
+            label for label in prompt_options.get("expected_rollups", []) if isinstance(label, str)
+        ]
+    ))
+    
+    tolerance_bps = prompt_options.get("numeric_tolerance_bps", DEFAULT_SUMMARY_TOLERANCE_BPS)
+    try:
+        tolerance_bps = float(tolerance_bps)
+    except (TypeError, ValueError):
+        tolerance_bps = DEFAULT_SUMMARY_TOLERANCE_BPS
+    
+    return {
+        "keywords": keywords,
+        "expected_rollups": [label.lower() for label in expected_rollups],
+        "numeric_tolerance_bps": tolerance_bps,
+        "tolerance_ratio": tolerance_bps / 10000.0,
+        "row_role_examples": prompt_options.get("row_role_examples", [])
+    }
+
+
+def _build_table_profile(table: Dict[str, Any]) -> Dict[str, Any]:
+    headers = table.get("headers") or table.get("header") or []
+    headers = normalize_table_headers(headers)
+    rows = table.get("rows", []) or []
+    total_rows = max(len(rows), 1)
+    
+    column_stats = []
+    numeric_columns: List[int] = []
+    text_columns: List[int] = []
+    
+    for col_idx, header in enumerate(headers):
+        numeric_count = 0
+        non_empty_cells = 0
+        
+        for row in rows:
+            if col_idx >= len(row):
+                continue
+            value = row[col_idx]
+            normalized = _normalize_cell_text(value)
+            if normalized:
+                non_empty_cells += 1
+            if _coerce_numeric(value) is not None:
+                numeric_count += 1
+        
+        numeric_ratio = numeric_count / total_rows
+        if numeric_ratio >= 0.45:
+            numeric_columns.append(col_idx)
+        else:
+            text_columns.append(col_idx)
+        
+        column_stats.append({
+            "index": col_idx,
+            "header": header,
+            "numeric_ratio": numeric_ratio,
+            "non_empty_cells": non_empty_cells
+        })
+    
+    row_profiles: List[Dict[str, Any]] = []
+    row_numeric_values: List[Dict[int, float]] = []
+    
+    for idx, row in enumerate(rows):
+        tokens = _tokenize_row(row)
+        numeric_map: Dict[int, float] = {}
+        numeric_cells = 0
+        non_empty = 0
+        
+        for col_idx, value in enumerate(row):
+            normalized = _normalize_cell_text(value)
+            if normalized:
+                non_empty += 1
+            if col_idx in numeric_columns:
+                numeric_value = _coerce_numeric(value)
+                if numeric_value is not None:
+                    numeric_map[col_idx] = numeric_value
+                    numeric_cells += 1
+        
+        row_numeric_values.append(numeric_map)
+        
+        text_token_count = len(tokens) - numeric_cells
+        row_profiles.append({
+            "index": idx,
+            "tokens": tokens,
+            "text_blob": " ".join(tokens),
+            "text_token_count": max(text_token_count, 0),
+            "numeric_ratio": numeric_cells / max(len(row), 1),
+            "non_empty_cells": non_empty,
+            "blank_identifier_columns": _identifier_columns_blank(row),
+            "numeric_columns_present": list(numeric_map.keys())
+        })
+    
+    return {
+        "headers": headers,
+        "row_count": len(rows),
+        "numeric_columns": numeric_columns,
+        "text_columns": text_columns,
+        "column_stats": column_stats,
+        "row_profiles": row_profiles,
+        "row_numeric_values": row_numeric_values
+    }
+
+
+def _tokenize_row(row: List[Any]) -> List[str]:
+    tokens: List[str] = []
+    for cell in row:
+        normalized = _normalize_cell_text(cell)
+        if not normalized:
+            continue
+        parts = re.split(r"[\\s/,:;-]+", normalized)
+        tokens.extend([part for part in parts if part])
+    return tokens
+
+
+def _normalize_cell_text(value: Any) -> str:
+    if value is None:
+        return ""
+    try:
+        text = str(value)
+    except Exception:
+        return ""
+    text = text.replace("\n", " ").replace("\r", " ").strip().lower()
+    return " ".join(text.split())
+
+
+def _coerce_numeric(value: Any) -> Optional[float]:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    text = text.replace(",", "").replace("$", "").replace("usd", "").strip()
+    if text.endswith("%"):
+        return None
+    negative = False
+    if text.startswith("(") and text.endswith(")"):
+        negative = True
+        text = text[1:-1]
+    text = text.replace("+", "")
+    if text in {"-", "--", "—", "n/a", "na"}:
+        return None
+    try:
+        value = float(text)
+        return -value if negative else value
+    except ValueError:
+        return None
+
+
+def _identifier_columns_blank(row: List[Any]) -> bool:
+    if not row:
+        return True
+    max_cols = min(2, len(row))
+    blank_count = 0
+    for idx in range(max_cols):
+        value = _normalize_cell_text(row[idx])
+        if not value or value in {"-", "--", "—"}:
+            blank_count += 1
+    return blank_count == max_cols
+
+
+def _detect_summary_rows_with_context(
+    table: Dict[str, Any],
+    profile: Dict[str, Any],
+    summary_config: Dict[str, Any]
+) -> Dict[str, Any]:
+    rows = table.get("rows", []) or []
+    if not rows:
+        return {
+            "model_summary_rows": [],
+            "heuristic_summary_rows": [],
+            "final_summary_rows": []
+        }
+    
+    blueprint = table.get("table_blueprint") or {}
+    expected_rollups = list(dict.fromkeys(
+        summary_config["expected_rollups"] + [
+            label.lower()
+            for label in blueprint.get("summary_expectations", [])
+            if isinstance(label, str)
+        ]
+    ))
+    
+    keywords = summary_config["keywords"]
+    tolerance_ratio = summary_config["tolerance_ratio"]
+    numeric_columns = profile.get("numeric_columns", [])
+    
+    row_annotations = table.get("row_annotations") or []
+    annotation_lookup = {
+        ann.get("row_index"): ann
+        for ann in row_annotations
+        if isinstance(ann, dict) and isinstance(ann.get("row_index"), int)
+    }
+    summary_annotation_count = sum(
+        1 for ann in annotation_lookup.values()
+        if isinstance(ann.get("role"), str) and "summary" in ann.get("role", "").lower()
+    )
+    
+    window_sums = {col_idx: 0.0 for col_idx in numeric_columns}
+    detail_window_rows: List[int] = []
+    
+    existing_summaries = set(table.get("summary_rows") or table.get("summaryRows") or [])
+    heuristic_summaries: Set[int] = set()
+    final_summaries = set(existing_summaries)
+    analysis_entries: List[Dict[str, Any]] = []
+    
+    for row_profile, numeric_map in zip(profile["row_profiles"], profile["row_numeric_values"]):
+        idx = row_profile["index"]
+        tokens = row_profile.get("tokens", [])
+        text_blob = row_profile.get("text_blob", "")
+        annotation = annotation_lookup.get(idx, {})
+        annotation_role = str(annotation.get("role", "")).lower()
+        
+        keyword_match = any(kw in text_blob for kw in keywords)
+        expected_rollup_match = any(label in text_blob for label in expected_rollups)
+        annotation_summary_hint = "summary" in annotation_role if annotation_role else False
+        
+        candidate = annotation_summary_hint or keyword_match or expected_rollup_match
+        if not candidate:
+            candidate = (
+                row_profile.get("numeric_ratio", 0) >= 0.7
+                and row_profile.get("text_token_count", 0) <= 2
+                and row_profile.get("blank_identifier_columns", False)
+            )
+        
+        score = 0.0
+        reasons: List[str] = []
+        
+        if annotation_summary_hint:
+            score += 0.45
+            reasons.append(f"Row annotated as {annotation.get('role')}")
+        if keyword_match:
+            score += 0.2
+            reasons.append("Contains summary keyword")
+        if expected_rollup_match:
+            score += 0.15
+            reasons.append("Matches expected rollup label")
+        if row_profile.get("blank_identifier_columns"):
+            score += 0.1
+            reasons.append("Identifier columns blank")
+        if row_profile.get("numeric_ratio", 0) >= 0.8:
+            score += 0.1
+            reasons.append("Row is mostly numeric")
+        
+        matches = []
+        if numeric_map:
+            for col_idx, candidate_value in numeric_map.items():
+                if col_idx not in window_sums:
+                    continue
+                window_total = window_sums[col_idx]
+                if window_total == 0:
+                    continue
+                if _values_within_tolerance(candidate_value, window_total, tolerance_ratio):
+                    matches.append({
+                        "column": profile["headers"][col_idx] if col_idx < len(profile["headers"]) else f"Column {col_idx + 1}",
+                        "detail_total": window_total,
+                        "row_value": candidate_value
+                    })
+        if matches:
+            # Promote numeric matches even when textual cues are absent
+            if not candidate:
+                candidate = True
+                reasons.append("Promoted due to numeric match with running totals")
+            match_confidence = 0.45 + 0.05 * min(len(matches) - 1, 2)
+            score += match_confidence
+            reasons.append("Matches running total of previous detail rows")
+        
+        should_mark_summary = candidate and score >= 0.55
+        if should_mark_summary:
+            heuristic_summaries.add(idx)
+            final_summaries.add(idx)
+            analysis_entries.append({
+                "row_index": idx,
+                "score": round(score, 2),
+                "reasons": reasons,
+                "matched_columns": matches,
+                "annotation_role": annotation.get("role"),
+                "detail_rows_covered": detail_window_rows.copy()
+            })
+            # Reset window after confirming summary
+            window_sums = {col_idx: 0.0 for col_idx in numeric_columns}
+            detail_window_rows = []
+            continue
+        
+        # Not a summary - treat as detail row and continue accumulating
+        if numeric_map:
+            for col_idx, value in numeric_map.items():
+                if col_idx in window_sums and value is not None:
+                    window_sums[col_idx] += value
+        detail_window_rows.append(idx)
+    
+    final_sorted = sorted(final_summaries)
+    
+    return {
+        "model_summary_rows": sorted(existing_summaries),
+        "heuristic_summary_rows": sorted(heuristic_summaries),
+        "final_summary_rows": final_sorted,
+        "analysis": analysis_entries,
+        "tolerance_bps": summary_config["numeric_tolerance_bps"],
+        "keywords_used": sorted(keywords),
+        "expected_rollups": expected_rollups,
+        "row_annotations_used": {
+            "total_annotations": len(annotation_lookup),
+            "summary_annotations": summary_annotation_count
+        },
+        "table_blueprint": blueprint
+    }
+
+
+def _values_within_tolerance(candidate_value: float, target_value: float, tolerance_ratio: float) -> bool:
+    if candidate_value is None or target_value is None:
+        return False
+    if target_value == 0:
+        return False
+    difference = abs(candidate_value - target_value)
+    allowed_delta = max(abs(target_value) * tolerance_ratio, 0.01)
+    return difference <= allowed_delta
+
+
+
+def stitch_multipage_tables(
+    tables: List[Dict[str, Any]],
+    allow_fuzzy_merge: bool = False,
+    fuzzy_similarity_threshold: float = 0.8
+) -> List[Dict[str, Any]]:
     """
     Enhanced multi-strategy table stitching for tables spanning multiple pages.
     
@@ -539,6 +824,13 @@ def stitch_multipage_tables(tables: List[Dict[str, Any]]) -> List[Dict[str, Any]
     
     # Step 2: Group tables by comprehensive similarity
     table_groups = _group_tables_by_similarity(tables, canonical_header)
+    if allow_fuzzy_merge and len(table_groups) > 1:
+        print(f"📎 Fuzzy merge enabled. Attempting to combine similar header groups (threshold={fuzzy_similarity_threshold}).")
+        table_groups = _merge_groups_by_similarity(
+            table_groups,
+            canonical_header,
+            fuzzy_similarity_threshold
+        )
     
     print(f"📎 Grouped {len(tables)} tables into {len(table_groups)} groups")
     
@@ -547,6 +839,7 @@ def stitch_multipage_tables(tables: List[Dict[str, Any]]) -> List[Dict[str, Any]
     for i, group in enumerate(table_groups):
         print(f"📎 Merging group {i+1} with {len(group)} tables")
         merged_table = _merge_table_group(group, canonical_header)
+        merged_table = _ensure_summary_metadata(merged_table)
         
         # **DEBUG: Log merged table structure**
         merged_headers = merged_table.get("headers", [])
@@ -1017,6 +1310,45 @@ def _calculate_structure_similarity(table1: Dict[str, Any], table2: Dict[str, An
     
     return matches / total_checks if total_checks > 0 else 0.0
 
+def _merge_groups_by_similarity(
+    table_groups: List[List[Dict[str, Any]]],
+    canonical_header: List[str],
+    threshold: float
+) -> List[List[Dict[str, Any]]]:
+    """Merge table groups whose headers are highly similar (carrier-specific consolidation)."""
+    if not table_groups:
+        return table_groups
+    
+    merged_groups: List[List[Dict[str, Any]]] = []
+    used = set()
+    
+    for i, base_group in enumerate(table_groups):
+        if i in used:
+            continue
+        
+        combined_group = list(base_group)
+        base_table = base_group[0]
+        
+        for j in range(i + 1, len(table_groups)):
+            if j in used:
+                continue
+            
+            candidate_group = table_groups[j]
+            candidate_table = candidate_group[0]
+            similarity = _calculate_comprehensive_similarity(base_table, candidate_table, canonical_header)
+            
+            if similarity >= threshold:
+                print(
+                    f"📎 Fuzzy merge: combining group {i+1} with {j+1} (similarity={similarity:.3f})"
+                )
+                combined_group.extend(candidate_group)
+                used.add(j)
+        
+        merged_groups.append(combined_group)
+    
+    return merged_groups
+
+
 def _merge_table_group(group: List[Dict[str, Any]], canonical_header: List[str]) -> Dict[str, Any]:
     """Merge a group of similar tables into a single table."""
     if not group:
@@ -1078,65 +1410,11 @@ def _merge_table_group(group: List[Dict[str, Any]], canonical_header: List[str])
     logger.info(f"✅ Merged table created: {len(all_rows)} rows (enhancements preserved from individual tables)")
     return merged_table
 
-def log_pipeline_performance(tables: List[Dict[str, Any]], original_tables: List[Dict[str, Any]], filename: str = "unknown"):
-    """
-    Log comprehensive pipeline performance statistics.
-    
-    Args:
-        tables: Final processed tables
-        original_tables: Original extracted tables before processing
-        filename: Original PDF filename
-    """
-    print(f"\n📊 PIPELINE PERFORMANCE SUMMARY for {filename}")
-    print(f"=" * 60)
-    
-    # Original extraction stats
-    total_original_tables = len(original_tables)
-    total_original_rows = sum(len(table.get("rows", [])) for table in original_tables)
-    total_original_headers = sum(len(table.get("headers", [])) for table in original_tables)
-    
-    print(f"📋 Original Extraction:")
-    print(f"   - Tables extracted: {total_original_tables}")
-    print(f"   - Total rows: {total_original_rows}")
-    print(f"   - Total headers: {total_original_headers}")
-    
-    # Final processing stats
-    total_final_tables = len(tables)
-    total_final_rows = sum(len(table.get("rows", [])) for table in tables)
-    total_final_headers = sum(len(table.get("headers", [])) for table in tables)
-    
-    print(f"📋 Final Processing:")
-    print(f"   - Tables after processing: {total_final_tables}")
-    print(f"   - Total rows: {total_final_rows}")
-    print(f"   - Total headers: {total_final_headers}")
-    
-    # Efficiency metrics
-    row_preservation = (total_final_rows / total_original_rows * 100) if total_original_rows > 0 else 0
-    table_reduction = ((total_original_tables - total_final_tables) / total_original_tables * 100) if total_original_tables > 0 else 0
-    
-    print(f"📋 Efficiency Metrics:")
-    print(f"   - Row preservation: {row_preservation:.1f}%")
-    print(f"   - Table reduction: {table_reduction:.1f}%")
-    print(f"   - Average rows per table: {total_final_rows / total_final_tables:.1f}" if total_final_tables > 0 else "N/A")
-    
-    # Table details
-    print(f"📋 Table Details:")
-    for i, table in enumerate(tables):
-        headers = table.get("headers", [])
-        rows = table.get("rows", [])
-        metadata = table.get("metadata", {})
-        
-        print(f"   Table {i + 1}:")
-        print(f"     - Headers: {len(headers)} columns")
-        print(f"     - Rows: {len(rows)}")
-        print(f"     - Extraction method: {metadata.get('extraction_method', 'unknown')}")
-        
-        # Show stitching info if available
-        if "total_tables_merged" in metadata:
-            print(f"     - Tables merged: {metadata['total_tables_merged']}")
-            print(f"     - Mapping efficiency: {metadata.get('header_alignment_stats', {}).get('mapping_efficiency', 0) * 100:.1f}%")
-    
-    print(f"=" * 60)
+
+def _ensure_summary_metadata(table: Dict[str, Any]) -> Dict[str, Any]:
+    """Ensure summary_rows metadata is populated using heuristic detection."""
+    enriched = enrich_tables_with_summary_intelligence([table])
+    return enriched[0] if enriched else table
 
 def _headers_exact_match(headers1: List[str], headers2: List[str]) -> bool:
     """Check if headers match exactly (case-insensitive)."""
@@ -1527,351 +1805,3 @@ def _looks_like_name(value: str) -> bool:
     # Simple heuristic: contains letters and spaces, no numbers
     return bool(re.match(r'^[A-Za-z\s]+$', value))
 
-
-def convert_to_csv(table: Dict[str, Any]) -> str:
-    """
-    Convert table data to CSV format.
-    """
-    try:
-        df = pd.DataFrame(table.get("rows", []), columns=table.get("headers", []))
-        csv_buffer = io.StringIO()
-        df.to_csv(csv_buffer, index=False)
-        return csv_buffer.getvalue()
-    except Exception as e:
-        print(f"Error converting to CSV: {e}")
-        return ""
-
-
-def convert_to_excel(tables: List[Dict[str, Any]]) -> bytes:
-    """
-    Convert multiple tables to Excel format.
-    """
-    try:
-        with pd.ExcelWriter(io.BytesIO(), engine='openpyxl') as writer:
-            for i, table in enumerate(tables):
-                df = pd.DataFrame(table.get("rows", []), columns=table.get("headers", []))
-                sheet_name = f"Table_{i+1}"
-                df.to_excel(writer, sheet_name=sheet_name, index=False)
-        
-        return writer.buffer.getvalue()
-    except Exception as e:
-        print(f"Error converting to Excel: {e}")
-        return b""
-
-
-def transform_pipeline_response_to_client_format(pipeline_response: Dict[str, Any], filename: str = "uploaded_file.pdf") -> Dict[str, Any]:
-    """
-    Transform pipeline response to the format expected by the client.
-    Enhanced to handle Docling output and ensure consistent structure.
-    
-    Args:
-        pipeline_response: Response from the pipeline or Docling extractor
-        filename: Original filename
-    
-    Returns:
-        Client-expected format response
-    """
-    import uuid
-    from datetime import datetime
-    
-    # Handle different response formats
-    if pipeline_response.get("status") == "error":
-        return {
-            "status": "error",
-            "error": pipeline_response.get("error", "Unknown error"),
-            "timestamp": datetime.now().isoformat()
-        }
-    
-    # Check if this is a Docling-specific response
-    if "docling" in pipeline_response.get("metadata", {}).get("extractors_used", []):
-        tables = pipeline_response.get("tables", [])
-        if not tables:
-            return {
-                "status": "success",
-                "job_id": str(uuid.uuid4()),
-                "file_name": filename,
-                "extraction_metrics": {
-                    "total_text_elements": 0,
-                    "extraction_time": pipeline_response.get("extraction_time_seconds", 0.0),
-                    "table_confidence": 0.0,
-                    "model_used": "docling"
-                },
-                "document_info": {},
-                "table_headers": [],
-                "table_data": [],
-                            "quality_summary": {
-                "total_tables": 0,
-                "valid_tables": 0,
-                "average_quality_score": 0.0,
-                "overall_confidence": "LOW",
-                "issues_found": ["No tables found"],
-                "recommendations": ["Check PDF quality and extraction parameters"]
-            },
-            "quality_metrics": {
-                "table_confidence": 0.0,
-                "text_elements_extracted": 0,
-                "table_rows_extracted": 0,
-                "extraction_completeness": "none",
-                "data_quality": "none"
-            },
-                "timestamp": datetime.now().isoformat()
-            }
-        
-        # Combine all tables into one response with smart header handling
-        all_headers = []
-        all_table_data = []
-        total_rows = 0
-        total_cells = 0
-        all_valid = True
-        
-        # First pass: find the most comprehensive header set
-        for table in tables:
-            headers = table.get("headers", [])
-            if len(headers) > len(all_headers):
-                all_headers = headers
-        
-        # If no headers found, try to infer from the largest table
-        if not all_headers:
-            largest_table = max(tables, key=lambda t: len(t.get("rows", [])))
-            if largest_table.get("rows"):
-                max_cols = max(len(row) for row in largest_table["rows"])
-                all_headers = [f"Column_{i+1}" for i in range(max_cols)]
-        
-        # Second pass: process all tables with the unified header set
-        for table_idx, table in enumerate(tables):
-            headers = table.get("headers", [])
-            rows = table.get("rows", [])
-            
-            # Convert rows to the expected format
-            for row_idx, row in enumerate(rows):
-                row_dict = {}
-                
-                # Handle cases where row has different number of columns than headers
-                for i, header in enumerate(all_headers):
-                    if i < len(headers):
-                        # Use the table's own header if available
-                        header_key = headers[i].lower().replace(" ", "_").replace("-", "_")
-                    else:
-                        # Use the unified header
-                        header_key = header.lower().replace(" ", "_").replace("-", "_")
-                    
-                    # Get the value, handling different row lengths
-                    if i < len(row):
-                        value = str(row[i])
-                    else:
-                        value = ""
-                    
-                    row_dict[header_key] = value
-                
-                all_table_data.append(row_dict)
-            
-            total_rows += len(rows)
-            total_cells += sum(len(row) for row in rows) if rows else 0
-            
-            # Check validation
-            validation = table.get("validation", {})
-            if not validation.get("is_valid", False):
-                all_valid = False
-        
-        # Calculate confidence based on validation
-        confidence = 1.0 if all_valid else 0.5
-        
-        # Convert table_data back to the format expected by frontend
-        # table_data is currently an array of objects, need to convert to array of arrays
-        table_rows = []
-        for row_dict in all_table_data:
-            row_array = []
-            for header in all_headers:
-                header_key = header.lower().replace(" ", "_").replace("-", "_")
-                row_array.append(row_dict.get(header_key, ""))
-            table_rows.append(row_array)
-        
-        # Create tables array in the format expected by frontend
-        frontend_tables = [{
-            "header": all_headers,
-            "rows": table_rows,
-            "extractor": "docling",  # Add extractor information
-            "metadata": {
-                "extraction_method": "docling"
-            }
-        }]
-        
-        return {
-            "status": "success",
-            "job_id": str(uuid.uuid4()),
-            "file_name": filename,
-            "extraction_metrics": {
-                "total_text_elements": total_cells,
-                "extraction_time": pipeline_response.get("extraction_time_seconds", 0.0),
-                "table_confidence": confidence,
-                "model_used": "docling"
-            },
-            "document_info": {
-                "pdf_type": "unknown",
-                "total_tables": len(tables)
-            },
-            "tables": frontend_tables,  # Frontend expects this format
-            "table_headers": all_headers,  # Keep for backward compatibility
-            "table_data": all_table_data,  # Keep for backward compatibility
-            "quality_summary": {
-                "total_tables": len(tables),
-                "valid_tables": len(tables),  # All tables are considered valid
-                "average_quality_score": 100.0,  # High score since no quality assessment
-                "overall_confidence": "HIGH",
-                "issues_found": [],
-                "recommendations": ["Extraction completed successfully"]
-            },
-            "quality_metrics": {
-                "table_confidence": confidence,
-                "text_elements_extracted": total_cells,
-                "table_rows_extracted": total_rows,
-                "extraction_completeness": "complete" if total_rows > 0 else "none",
-                "data_quality": "good" if all_valid else "poor"
-            },
-            "timestamp": datetime.now().isoformat()
-        }
-    
-    # Handle standard pipeline response
-    if not pipeline_response.get("success", False):
-        return {
-            "status": "error",
-            "error": pipeline_response.get("error", "Unknown error"),
-            "timestamp": datetime.now().isoformat()
-        }
-    
-    # Get the first table (or create empty if none)
-    tables = pipeline_response.get("tables", [])
-    if not tables:
-        return {
-            "status": "success",
-            "job_id": str(uuid.uuid4()),
-            "file_name": filename,
-            "extraction_metrics": {
-                "total_text_elements": 0,
-                "extraction_time": 0.0,
-                "table_confidence": 0.0,
-                "model_used": "none"
-            },
-            "document_info": {},
-            "tables": [],  # Frontend expects this format
-            "table_headers": [],
-            "table_data": [],
-            "quality_metrics": {
-                "table_confidence": 0.0,
-                "text_elements_extracted": 0,
-                "table_rows_extracted": 0,
-                "extraction_completeness": "none",
-                "data_quality": "none"
-            },
-            "timestamp": datetime.now().isoformat()
-        }
-    
-    # Combine all tables into one response with smart header handling
-    all_headers = []
-    all_table_data = []
-    total_rows = 0
-    total_cells = 0
-    all_valid = True
-    
-    # First pass: find the most comprehensive header set
-    for table in tables:
-        headers = table.get("headers", [])
-        if len(headers) > len(all_headers):
-            all_headers = headers
-    
-    # If no headers found, try to infer from the largest table
-    if not all_headers:
-        largest_table = max(tables, key=lambda t: len(t.get("rows", [])))
-        if largest_table.get("rows"):
-            max_cols = max(len(row) for row in largest_table["rows"])
-            all_headers = [f"Column_{i+1}" for i in range(max_cols)]
-    
-    # Second pass: process all tables with the unified header set
-    for table_idx, table in enumerate(tables):
-        headers = table.get("headers", [])
-        rows = table.get("rows", [])
-        
-        # Convert rows to the expected format
-        for row_idx, row in enumerate(rows):
-            row_dict = {}
-            
-            # Handle cases where row has different number of columns than headers
-            for i, header in enumerate(all_headers):
-                if i < len(headers):
-                    # Use the table's own header if available
-                    header_key = headers[i].lower().replace(" ", "_").replace("-", "_")
-                else:
-                    # Use the unified header
-                    header_key = header.lower().replace(" ", "_").replace("-", "_")
-                
-                # Get the value, handling different row lengths
-                if i < len(row):
-                    value = str(row[i])
-                else:
-                    value = ""
-                
-                row_dict[header_key] = value
-            
-            all_table_data.append(row_dict)
-        
-        total_rows += len(rows)
-        total_cells += sum(len(row) for row in rows) if rows else 0
-        
-        # Check validation
-        validation = table.get("validation", {})
-        if not validation.get("is_valid", False):
-            all_valid = False
-    
-    # Get extraction method used
-    extraction_methods = pipeline_response.get("metadata", {}).get("extraction_methods_used", ["unknown"])
-    model_used = extraction_methods[0] if extraction_methods else "unknown"
-    
-    # Calculate confidence based on validation
-    confidence = 1.0 if all_valid else 0.5
-    
-    # Convert table_data back to the format expected by frontend
-    # table_data is currently an array of objects, need to convert to array of arrays
-    table_rows = []
-    for row_dict in all_table_data:
-        row_array = []
-        for header in all_headers:
-            header_key = header.lower().replace(" ", "_").replace("-", "_")
-            row_array.append(row_dict.get(header_key, ""))
-        table_rows.append(row_array)
-    
-    # Create tables array in the format expected by frontend
-    frontend_tables = [{
-        "header": all_headers,
-        "rows": table_rows,
-        "extractor": model_used,  # Add extractor information
-        "metadata": {
-            "extraction_method": model_used
-        }
-    }]
-    
-    return {
-        "status": "success",
-        "job_id": str(uuid.uuid4()),
-        "file_name": filename,
-        "extraction_metrics": {
-            "total_text_elements": total_cells,
-            "extraction_time": pipeline_response.get("extraction_time_seconds", 1.0),
-            "table_confidence": confidence,
-            "model_used": model_used
-        },
-        "document_info": {
-            "pdf_type": pipeline_response.get("pdf_type", "unknown"),
-            "total_tables": len(tables)
-        },
-        "tables": frontend_tables,  # Frontend expects this format
-        "table_headers": all_headers,
-        "table_data": all_table_data,
-        "quality_metrics": {
-            "table_confidence": confidence,
-            "text_elements_extracted": total_cells,
-            "table_rows_extracted": total_rows,
-            "extraction_completeness": "complete" if total_rows > 0 else "none",
-            "data_quality": "good" if all_valid else "poor"
-        },
-        "timestamp": datetime.now().isoformat()
-    } 

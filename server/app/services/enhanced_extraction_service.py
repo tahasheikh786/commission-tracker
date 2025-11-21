@@ -14,6 +14,7 @@ from pathlib import Path
 from datetime import datetime
 import uuid
 from fastapi import HTTPException
+from pypdf import PdfReader
 
 # CRITICAL: Load environment variables FIRST, before importing any services
 from dotenv import load_dotenv
@@ -23,6 +24,7 @@ from app.services.websocket_service import create_progress_tracker
 from app.services.new_extraction_service import NewExtractionService
 from app.services.gpt4o_vision_service import GPT4oVisionService  # OLD service - keep for backward compat
 from app.services.gpt import gpt5_vision_service  # ⭐ NEW: Production-ready GPT-5 Vision
+from app.services.gpt.dynamic_prompts import GPTDynamicPrompts
 from app.services.extractor_google_docai import GoogleDocAIExtractor
 from app.services.mistral.service import MistralDocumentAIService
 from app.services.claude.service import ClaudeDocumentAIService  # Keep as fallback
@@ -936,20 +938,19 @@ class EnhancedExtractionService:
             
             await progress_tracker.complete_stage("document_processing", "GPT-5 Vision ready")
 
-            # Get carrier name for context (from database)
-            carrier_name_for_prompt = None
-            
-            if company_id:
-                try:
-                    from app.db import crud, get_db
-                    async for db in get_db():
-                        company = await crud.get_company_by_id(db=db, company_id=company_id)
-                        if company:
-                            carrier_name_for_prompt = company.name
-                            logger.info(f"✓ Using carrier name from database: {carrier_name_for_prompt}")
-                        break
-                except Exception as e:
-                    logger.warning(f"⚠️ Could not retrieve carrier name from company_id: {e}")
+            carrier_name_for_prompt = await self._resolve_carrier_name(company_id, file_path)
+            prompt_options = (
+                GPTDynamicPrompts.get_prompt_options(carrier_name_for_prompt)
+                if carrier_name_for_prompt else {}
+            )
+            allow_fuzzy_merge = prompt_options.get("merge_similar_tables", False)
+            if carrier_name_for_prompt:
+                logger.info(
+                    f"✓ Using carrier context for GPT prompts: {carrier_name_for_prompt} "
+                    f"(options: {prompt_options or 'none'})"
+                )
+            else:
+                logger.info("ℹ️ No carrier context available. Falling back to standard GPT prompt.")
             
             # Emit WebSocket: Step 2 - Extraction started (25% progress)
             logger.info("📡 Emitting extraction step...")
@@ -976,7 +977,7 @@ class EnhancedExtractionService:
             logger.info(f"   File: {file_path}")
             logger.info(f"   Carrier: {carrier_name_for_prompt or 'Unknown'}")
             logger.info(f"   Enhanced Mode: {self.use_enhanced}")
-            logger.info(f"   Max Pages: 30 (intelligent page selection)")
+            logger.info(f"   Max Pages: 100 (intelligent page selection)")
             logger.info("="*80)
             
             gpt5_result = await self.gpt5_service.extract_commission_data(
@@ -984,7 +985,8 @@ class EnhancedExtractionService:
                 file_path=file_path,
                 progress_tracker=progress_tracker,
                 use_enhanced=self.use_enhanced,  # ⭐ Enable enhanced 3-phase pipeline
-                max_pages=30  # Intelligent page selection for large documents
+                max_pages=100,  # Allow large documents (1-100 pages) to be processed end-to-end
+                prompt_options=prompt_options
             )
             
             logger.info("="*80)
@@ -1099,9 +1101,16 @@ class EnhancedExtractionService:
             
             # Apply table merging if needed (for consistency with other extractors)
             if result.get('success') and result.get('tables'):
-                from app.services.extraction_utils import stitch_multipage_tables, normalize_multi_line_headers
+                from app.services.extraction_utils import (
+                    stitch_multipage_tables,
+                    normalize_multi_line_headers,
+                    enrich_tables_with_summary_intelligence
+                )
                 original_tables = result.get('tables', [])
-                merged_tables = stitch_multipage_tables(original_tables)
+                merged_tables = stitch_multipage_tables(
+                    original_tables,
+                    allow_fuzzy_merge=allow_fuzzy_merge
+                )
                 
                 # Headers are already normalized by GPT-5 service, but ensure consistency
                 for table in merged_tables:
@@ -1112,6 +1121,29 @@ class EnhancedExtractionService:
                         table['headers'] = normalized_headers
                         table['header'] = normalized_headers
                         logger.info(f"GPT-5: Verified normalized headers")
+                
+                merged_tables = enrich_tables_with_summary_intelligence(
+                    merged_tables,
+                    prompt_options=prompt_options
+                )
+                for idx, table in enumerate(merged_tables):
+                    detection = table.get("summary_detection", {})
+                    logger.info(
+                        "📊 Table %s summary rows → model:%s heuristic:%s final:%s",
+                        idx + 1,
+                        len(detection.get("model_summary_rows", []) or []),
+                        len(detection.get("heuristic_summary_rows", []) or []),
+                        len(detection.get("final_summary_rows", []) or [])
+                    )
+                    analysis = detection.get("analysis", [])
+                    if analysis:
+                        sample_reason = analysis[0]
+                        logger.info(
+                            "   ↳ Example reasoning row %s: score=%s reasons=%s",
+                            sample_reason.get("row_index"),
+                            sample_reason.get("score"),
+                            sample_reason.get("reasons")
+                        )
                 
                 result['tables'] = merged_tables
                 logger.info(f"⭐ GPT-5: Processed {len(original_tables)} tables into {len(merged_tables)} tables")
@@ -1255,6 +1287,7 @@ class EnhancedExtractionService:
                 'business_intelligence': result.get('business_intelligence', {}),
                 'gpt_metadata': gpt_metadata,  # Includes GPT-5 metadata and summary
                 'conversational_summary': conversational_summary,  # Enhanced summary
+                'summary_data': result.get('structured_data', {}),
                 'tokens_used': result.get('total_tokens_used', 0),  # ⭐ NEW: Token tracking
                 'estimated_cost': result.get('estimated_cost_usd', 0),  # ⭐ NEW: Cost tracking
                 'processing_time_seconds': result.get('processing_time_seconds', 0),
@@ -1326,6 +1359,69 @@ class EnhancedExtractionService:
                 logger.debug("✅ Extraction cleanup completed")
             except Exception as cleanup_error:
                 logger.warning(f"⚠️ Cleanup error (non-critical): {cleanup_error}")
+
+    async def _resolve_carrier_name(self, company_id: Optional[str], file_path: str) -> Optional[str]:
+        """
+        Determine the most likely carrier name using multiple strategies so carrier-specific prompts fire.
+        """
+        carrier_name = await self._fetch_carrier_from_db(company_id)
+        fallback_carrier = carrier_name
+        supported_carrier = GPTDynamicPrompts.resolve_supported_carrier(carrier_name)
+        if supported_carrier:
+            logger.info(f"✓ Carrier resolved from database: {supported_carrier}")
+            return supported_carrier
+        if carrier_name:
+            logger.info(f"ℹ️ Carrier from database '{carrier_name}' has no specific prompt. Continuing detection.")
+        
+        carrier_name = self._detect_carrier_from_filename(file_path)
+        if carrier_name:
+            logger.info(f"✓ Carrier inferred from filename: {carrier_name}")
+            return carrier_name
+        
+        carrier_name = await self._detect_carrier_from_pdf(file_path)
+        if carrier_name:
+            logger.info(f"✓ Carrier detected from PDF text: {carrier_name}")
+            return carrier_name
+        
+        return fallback_carrier
+
+    async def _fetch_carrier_from_db(self, company_id: Optional[str]) -> Optional[str]:
+        if not company_id:
+            return None
+        try:
+            from app.db import crud, get_db
+            async for db in get_db():
+                company = await crud.get_company_by_id(db=db, company_id=company_id)
+                if company and getattr(company, "name", None):
+                    return company.name
+                break
+        except Exception as exc:
+            logger.warning(f"⚠️ Could not retrieve carrier name from company_id {company_id}: {exc}")
+        return None
+
+    def _detect_carrier_from_filename(self, file_path: str) -> Optional[str]:
+        filename = Path(file_path).name
+        return GPTDynamicPrompts.detect_carrier_in_text(filename, logger=logger)
+
+    async def _detect_carrier_from_pdf(self, file_path: str) -> Optional[str]:
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, self._scan_pdf_for_carrier, file_path)
+
+    def _scan_pdf_for_carrier(self, file_path: str) -> Optional[str]:
+        try:
+            reader = PdfReader(file_path)
+            snippets: List[str] = []
+            for page in reader.pages[:3]:
+                page_text = page.extract_text() or ""
+                if page_text:
+                    snippets.append(page_text[:4000])
+            if not snippets:
+                return None
+            combined_text = " ".join(snippets)
+            return GPTDynamicPrompts.detect_carrier_in_text(combined_text, logger=logger)
+        except Exception as exc:
+            logger.debug(f"Carrier detection via PDF scan failed: {exc}")
+            return None
 
     # Helper methods (consolidated from duplicates)
     def _detect_file_type(self, file_path: str) -> str:
