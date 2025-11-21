@@ -133,23 +133,46 @@ export default function SummaryUploadZone({
         setAutomationProgress(prev => Math.min(prev + 20, 90));
       }, 500);
       
-      // CRITICAL: Pass ALL extraction data since DB record doesn't exist yet
-      const response = await axios.post(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/auto-approve/process`,
-        {
-          upload_id: params.uploadId,
-          carrier_id: params.carrierId,
-          learned_format: params.learnedFormat,
-          extracted_total: params.extractedTotal,
-          statement_date: params.statementDate,
-          // CRITICAL: Include all data from extraction
-          upload_metadata: params.fullResults?.upload_metadata || {},
-          raw_data: params.fullResults?.tables || [],
-          document_metadata: params.fullResults?.document_metadata || {},
-          format_learning: params.fullResults?.format_learning || {}
-        },
-        { withCredentials: true }
-      );
+      const apiBase = `${process.env.NEXT_PUBLIC_API_URL}/api/auto-approve`;
+      const litePayload = {
+        upload_id: params.uploadId,
+        carrier_id: params.carrierId,
+        learned_format: params.learnedFormat,
+        extracted_total: params.extractedTotal,
+        statement_date: params.statementDate
+      };
+      const fullPayload = {
+        upload_id: params.uploadId,
+        carrier_id: params.carrierId,
+        learned_format: params.learnedFormat,
+        extracted_total: params.extractedTotal,
+        statement_date: params.statementDate,
+        upload_metadata: params.fullResults?.upload_metadata || {},
+        raw_data: params.fullResults?.tables || [],
+        document_metadata: params.fullResults?.document_metadata || {},
+        format_learning: params.fullResults?.format_learning || {}
+      };
+
+      let response;
+      try {
+        response = await axios.post(
+          `${apiBase}/process-lite`,
+          litePayload,
+          { withCredentials: true }
+        );
+      } catch (liteError: any) {
+        const status = liteError?.response?.status;
+        const shouldFallback = status === 404 || status === 422;
+        if (!shouldFallback) {
+          throw liteError;
+        }
+        console.warn("Auto-approval lite fallback triggered:", status);
+        response = await axios.post(
+          `${apiBase}/process`,
+          fullPayload,
+          { withCredentials: true }
+        );
+      }
       
       clearInterval(progressInterval);
       setAutomationProgress(100);

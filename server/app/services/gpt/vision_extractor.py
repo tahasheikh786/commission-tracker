@@ -1530,6 +1530,8 @@ Return ONLY valid JSON (no markdown):
     - Look for rows containing keywords informed by carrier context (see list below)
     - Summary rows often have empty first columns (no group ID or identifier)
     - Summary rows typically contain aggregated financial amounts
+    - Sparse rows (only 1-3 populated cells when the table normally has 6-10 values per row) are strong summary indicators. Detail rows should populate most columns.
+    - If a row leaves identifier columns blank but restates totals across numeric columns, treat it as a summary row.
     - Add ALL summary row indices to the "summary_rows" array in each table
     - Example: If table has 20 rows and row 19 is "TOTAL", then "summary_rows": [19]
 

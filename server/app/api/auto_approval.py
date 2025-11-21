@@ -9,6 +9,7 @@ from uuid import UUID
 import logging
 from datetime import datetime
 from app.services.websocket_service import connection_manager
+from app.services.upload_cache import upload_cache
 
 router = APIRouter(prefix="/api/auto-approve", tags=["auto-approval"])
 logger = logging.getLogger(__name__)
@@ -25,11 +26,18 @@ class AutoApprovalRequest(BaseModel):
     document_metadata: Dict[str, Any] = {}  # Carrier, date, etc.
     format_learning: Dict[str, Any] = {}  # Format learning data
 
-@router.post("/process")
-async def auto_approve_statement(
+
+class AutoApprovalLiteRequest(BaseModel):
+    upload_id: str
+    carrier_id: str
+    learned_format: Dict[str, Any]
+    statement_date: str
+    extracted_total: float | None = None
+
+async def _run_auto_approval(
     request: AutoApprovalRequest,
-    current_user: User = Depends(get_current_user_hybrid),
-    db: AsyncSession = Depends(get_db)
+    current_user: User,
+    db: AsyncSession
 ):
     """
     Automatically approve a statement based on learned format.
@@ -41,24 +49,24 @@ async def auto_approve_statement(
     5. Save to database
     6. Update format learning usage count
     """
+    logger.info(f"Auto-approval started for upload {request.upload_id}")
+    
+    # Import services
+    from app.services.format_learning_service import FormatLearningService
+    from app.db import crud, schemas
+    from app.db.crud.carrier_format_learning import update_carrier_format_learning
+    from app.utils.db_retry import with_db_retry
+    from datetime import datetime
+    
+    # Emit progress update
+    await connection_manager.send_stage_update(
+        request.upload_id, 
+        'auto_approval_started', 
+        10, 
+        f"🤖 Starting automated approval for carrier: {request.learned_format.get('carrier_name', 'Unknown')}"
+    )
+    
     try:
-        logger.info(f"Auto-approval started for upload {request.upload_id}")
-        
-        # Import services
-        from app.services.format_learning_service import FormatLearningService
-        from app.db import crud, schemas
-        from app.db.crud.carrier_format_learning import update_carrier_format_learning
-        from app.utils.db_retry import with_db_retry
-        from datetime import datetime
-        
-        # Emit progress update
-        await connection_manager.send_stage_update(
-            request.upload_id, 
-            'auto_approval_started', 
-            10, 
-            f"🤖 Starting automated approval for carrier: {request.learned_format.get('carrier_name', 'Unknown')}"
-        )
-        
         # CRITICAL CHANGE: No DB record exists yet!
         # Get tables from request data instead of DB
         tables = request.raw_data or []
@@ -677,6 +685,7 @@ async def auto_approve_statement(
         table_editor_settings = request.learned_format.get("table_editor_settings", {})
         carrier_name = table_editor_settings.get("carrier_name") or table_editor_settings.get("corrected_carrier_name")
         
+        upload_cache.delete(request.upload_id)
         return {
             "success": True,
             "message": "Statement automatically approved",
@@ -691,16 +700,63 @@ async def auto_approve_statement(
             "calculated_total": round(calculated_total, 2) if calculated_total else 0,  # From table rows
             "extracted_total": round(calculated_total, 2) if calculated_total else 0  # For backward compatibility
         }
-        
+    except Exception:
+        raise
+
+
+async def _execute_auto_approval(
+    request: AutoApprovalRequest,
+    current_user: User,
+    db: AsyncSession
+):
+    try:
+        return await _run_auto_approval(request, current_user, db)
     except Exception as e:
         logger.error(f"Auto-approval failed: {str(e)}")
         import traceback
         logger.error(traceback.format_exc())
         
-        # Emit error message
         await connection_manager.send_error(
             request.upload_id,
             f"Auto-approval failed: {str(e)}"
         )
         
         raise HTTPException(status_code=500, detail=f"Auto-approval failed: {str(e)}")
+
+
+@router.post("/process")
+async def auto_approve_statement(
+    request: AutoApprovalRequest,
+    current_user: User = Depends(get_current_user_hybrid),
+    db: AsyncSession = Depends(get_db)
+):
+    return await _execute_auto_approval(request, current_user, db)
+
+
+@router.post("/process-lite")
+async def auto_approve_statement_lite(
+    request: AutoApprovalLiteRequest,
+    current_user: User = Depends(get_current_user_hybrid),
+    db: AsyncSession = Depends(get_db)
+):
+    snapshot = upload_cache.get(request.upload_id)
+    if not snapshot:
+        raise HTTPException(status_code=404, detail="Cached upload data not found for upload_id")
+    
+    raw_data = snapshot.get("raw_tables") or snapshot.get("raw_data") or []
+    if not raw_data:
+        raise HTTPException(status_code=422, detail="Cached upload is missing table data")
+    
+    merged_request = AutoApprovalRequest(
+        upload_id=request.upload_id,
+        carrier_id=request.carrier_id,
+        learned_format=request.learned_format,
+        extracted_total=request.extracted_total or snapshot.get("extracted_total") or 0,
+        statement_date=request.statement_date,
+        upload_metadata=snapshot.get("upload_metadata", {}),
+        raw_data=raw_data,
+        document_metadata=snapshot.get("document_metadata", {}),
+        format_learning=snapshot.get("format_learning", {})
+    )
+    
+    return await _execute_auto_approval(merged_request, current_user, db)

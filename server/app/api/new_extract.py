@@ -24,8 +24,11 @@ from typing import Optional, Dict, Any
 from fastapi.responses import JSONResponse
 import re
 import hashlib
+import copy
 from app.services.cancellation_manager import cancellation_manager
 from app.constants.statuses import VALID_PERSISTENT_STATUSES
+from app.services.summary_row_refiner import refine_summary_rows
+from app.services.upload_cache import upload_cache
 
 router = APIRouter(prefix="/api", tags=["new-extract"])
 logger = logging.getLogger(__name__)
@@ -77,6 +80,42 @@ SUMMARY_TOTAL_KEYWORDS = [
     ("total amount", 3.0),
     ("total due", 3.0)
 ]
+
+
+def _sync_structured_summary(
+    structured_data: Optional[Dict[str, Any]],
+    document_metadata: Dict[str, Any],
+    extracted_invoice_total: float = None
+) -> Optional[Dict[str, Any]]:
+    """Ensure structured summary mirrors authoritative metadata values."""
+    if not structured_data or not isinstance(structured_data, dict):
+        return structured_data
+
+    total_amount = document_metadata.get("total_amount")
+    if total_amount is not None:
+        try:
+            numeric_total = float(total_amount)
+            structured_data["total_amount"] = f"{numeric_total:.2f}"
+            structured_data["total_amount_formatted"] = f"${numeric_total:,.2f}"
+        except (TypeError, ValueError):
+            pass
+
+    if extracted_invoice_total is not None:
+        try:
+            structured_data["invoice_total"] = f"{float(extracted_invoice_total):.2f}"
+        except (TypeError, ValueError):
+            pass
+
+    if document_metadata.get("statement_date"):
+        structured_data["statement_date"] = document_metadata["statement_date"]
+
+    if document_metadata.get("carrier_name"):
+        structured_data["carrier_name"] = document_metadata["carrier_name"]
+
+    if document_metadata.get("company_count"):
+        structured_data.setdefault("company_count", document_metadata.get("company_count"))
+
+    return structured_data
 
 COMMISSION_COLUMN_KEYWORDS = [
     "paid amount",
@@ -467,6 +506,19 @@ async def extract_tables_smart(
             running_extractions.pop(upload_id_str, None)
             await cancellation_manager.clear_cancelled(upload_id_str)
         
+        # Normalize/refine summary rows before any downstream usage
+        raw_tables = extraction_result.get('tables', []) or []
+        refined_tables = []
+        for idx, table in enumerate(raw_tables):
+            refined_table = refine_summary_rows(copy.deepcopy(table))
+            refined_tables.append(refined_table)
+            if table.get("summaryRows") != refined_table.get("summaryRows"):
+                logger.info(
+                    f"🔍 Summary row refinement adjusted table {idx}: "
+                    f"{table.get('summaryRows')} → {refined_table.get('summaryRows')}"
+                )
+        extraction_result['tables'] = refined_tables
+
         # CRITICAL CHANGE: DO NOT update DB record - it doesn't exist yet!
         # Extraction data will be passed to frontend and then to approval endpoint
         # Update upload_metadata with extraction results for logging/tracking
@@ -476,9 +528,9 @@ async def extract_tables_smart(
         upload_metadata.update({
             'extraction_completed': True,
             'completion_time': datetime.utcnow().isoformat(),
-            'tables_count': len(extraction_result.get('tables', [])),
+            'tables_count': len(refined_tables),
             'extraction_method_used': extraction_method,
-            'raw_data': extraction_result.get('tables', []),
+            'raw_data': copy.deepcopy(refined_tables),
             'field_mapping': field_mapping
         })
         logger.info(f"✅ Extraction completed (data NOT saved to DB, will be saved on approval)")
@@ -1469,6 +1521,8 @@ async def extract_tables_smart(
             except Exception as e:
                 logger.warning(f"Failed to extract invoice total from tables: {e}")
         
+        structured_data = _sync_structured_summary(structured_data, document_metadata, extracted_invoice_total)
+
         client_response.update({
             "success": True,
             "extraction_id": str(upload_id_uuid),
@@ -1482,6 +1536,24 @@ async def extract_tables_smart(
             "extracted_total": extracted_total,  # ✅ Commission total for auto-approval
             "extracted_invoice_total": extracted_invoice_total  # ✅ CRITICAL FIX: Invoice total for dashboard
         })
+
+        try:
+            cache_payload = {
+                "raw_tables": copy.deepcopy(refined_tables),
+                "document_metadata": copy.deepcopy(document_metadata) if document_metadata else {},
+                "format_learning": copy.deepcopy(format_learning_data) if format_learning_data else {},
+                "upload_metadata": copy.deepcopy(upload_metadata),
+                "structured_data": copy.deepcopy(structured_data) if structured_data else {},
+                "carrier_id": str(carrier.id) if carrier else carrier_id_for_response,
+                "extracted_total": extracted_total,
+                "extracted_invoice_total": extracted_invoice_total,
+                "statement_date": document_metadata.get('statement_date') if document_metadata else None,
+                "field_mapping": field_mapping,
+                "plan_types": ai_plan_type_data.get('detected_plan_types', []) if ai_plan_type_data else [],
+            }
+            upload_cache.set(str(upload_id_uuid), cache_payload)
+        except Exception as cache_error:
+            logger.warning(f"⚠️ Unable to cache extraction snapshot for auto-approval: {cache_error}")
         
         # Emit WebSocket: EXTRACTION_COMPLETE with full results
         if upload_id:

@@ -1,556 +1,157 @@
-; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763694826535_i1y2zr9u7, session_id: session_1763694826545_mm6at5ze1
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763694826535_i1y2zr9u7
-INFO:     10.20.174.248:55956 - "OPTIONS /api/extract-tables-smart/ HTTP/1.1" 200 OK
-INFO:app.api.new_extract:📁 File: 08.06.2025 Allied Innovative Payment 2.pdf, Size: 227321 bytes, Hash: 98272fc00893adae..., User: f6cf1764-5bfc-4352-abd9-81b72b7cf191
-INFO:app.api.new_extract:🔍 Checking for duplicates BEFORE proceeding with upload...
-INFO:app.api.new_extract:✅ No duplicate found - proceeding with upload for file: 08.06.2025 Allied Innovative Payment 2.pdf
-INFO:app.api.new_extract:🚀 Starting extraction: 08.06.2025 Allied Innovative Payment 2.pdf (ID: upload_1763694826535_i1y2zr9u7)
-INFO:app.services.gcs_utils:✅ File uploaded to GCS: statements/5df69759-e876-44dc-b6ea-411c751e6287/08.06.2025 Allied Innovative Payment 2.pdf
-INFO:app.api.new_extract:✅ Uploaded to GCS: statements/5df69759-e876-44dc-b6ea-411c751e6287/08.06.2025 Allied Innovative Payment 2.pdf
-INFO:app.services.gcs_utils:🔐 Generating signed URL for: statements/5df69759-e876-44dc-b6ea-411c751e6287/08.06.2025 Allied Innovative Payment 2.pdf
-INFO:app.services.gcs_utils:📝 Generating signed URL with:
-INFO:app.services.gcs_utils:   - Content-Type: application/pdf
-INFO:app.services.gcs_utils:   - Content-Disposition: inline
-INFO:app.services.gcs_utils:   - Expiration: 1 hour(s)
-INFO:app.services.gcs_utils:✅ Generated signed URL for GCS file with inline headers: statements/5df69759-e876-44dc-b6ea-411c751e6287/08.06.2025 Allied Innovative Payment 2.pdf
-INFO:app.services.gcs_utils:   URL expires at: 2025-11-21 04:13:48.613586
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_STARTED
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Step started: Uploading Document (Step 1) for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.db.crud.environment:✅ Found existing default environment 9f4a7a57-5715-4b1e-98a9-b9901726a485 for user f6cf1764-5bfc-4352-abd9-81b72b7cf191 in company d883a865-a54f-41d6-968e-f94c3cb3f589
-INFO:app.api.new_extract:✅ Using user's default environment 9f4a7a57-5715-4b1e-98a9-b9901726a485 for upload consistency
-INFO:app.api.new_extract:📝 Upload metadata prepared (NOT saved to DB): 5df69759-e876-44dc-b6ea-411c751e6287
-INFO:app.services.audit_logging_service:Audit: data_view by user f6cf1764-5bfc-4352-abd9-81b72b7cf191 on extraction_process (ID: 5df69759-e876-44dc-b6ea-411c751e6287)
-INFO:app.services.conversational_summary_service:✅ ConversationalSummaryService initialized with GPT-4o
-INFO:app.services.enhanced_extraction_service:================================================================================
-INFO:app.services.enhanced_extraction_service:✅ Enhanced Extraction Service initialized (OPTIMIZED)
-INFO:app.services.enhanced_extraction_service:⭐ PRIMARY: GPT-5 Vision - AVAILABLE ✓
-INFO:app.services.enhanced_extraction_service:   Features: Structured outputs, 60-80% token savings, 99.9% reliability
-INFO:app.services.enhanced_extraction_service:📋 FALLBACK services: Lazy-loaded on demand (Claude, Mistral, DocAI, Excel)
-INFO:app.services.enhanced_extraction_service:⏱️  Timeout management: {'metadata_extraction': 300, 'document_processing': 600, 'table_extraction': 1200, 'post_processing': 300, 'total_process': 1800}
-INFO:app.services.enhanced_extraction_service:🚀 Enhanced 3-phase pipeline: ENABLED
-INFO:app.services.enhanced_extraction_service:================================================================================
-INFO:app.services.enhanced_extraction_service:✅ Using GPT-5 Vision as primary extraction service
-INFO:app.services.enhanced_extraction_service:✅ GPT5_VISION service validated successfully
-INFO:app.services.enhanced_extraction_service:================================================================================
-INFO:app.services.enhanced_extraction_service:⭐⭐⭐ ROUTING TO GPT-5 VISION EXTRACTION ⭐⭐⭐
-INFO:app.services.enhanced_extraction_service:   Extraction Method: smart
-INFO:app.services.enhanced_extraction_service:   Features: Structured outputs, token optimization, intelligent page selection
-INFO:app.services.enhanced_extraction_service:   File: pdfs/08.06.2025 Allied Innovative Payment 2.pdf
-INFO:app.services.enhanced_extraction_service:   NOTE: Function name '_extract_with_claude_progress' is legacy - it USES GPT-5
-INFO:app.services.enhanced_extraction_service:================================================================================
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Started stage document_processing for upload upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Completed stage document_processing for upload upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:44610 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.enhanced_extraction_service:ℹ️ Carrier from database 'Pinecrestconsulting' has no specific prompt. Continuing detection.
-INFO:app.services.enhanced_extraction_service:No carrier match detected inside provided text snippet.
-INFO:app.services.enhanced_extraction_service:No carrier match detected inside provided text snippet.
-INFO:app.services.enhanced_extraction_service:✓ Using carrier context for GPT prompts: Pinecrestconsulting (options: none)
-INFO:app.services.enhanced_extraction_service:📡 Emitting extraction step...
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_STARTED
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Step started: Analyzing Document (Step 2) for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.enhanced_extraction_service:📡 Emitting table_extraction step...
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_STARTED
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Step started: Reading Commission Data (Step 3) for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Started stage table_detection for upload upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.enhanced_extraction_service:⭐ Starting GPT-5 Vision extraction for pdfs/08.06.2025 Allied Innovative Payment 2.pdf (enhanced=True)
-INFO:app.services.enhanced_extraction_service:   Using structured outputs for 99.9% reliability
-INFO:app.services.enhanced_extraction_service:   Token optimization: 60-80% savings via intelligent page selection
-INFO:app.services.enhanced_extraction_service:================================================================================
-INFO:app.services.enhanced_extraction_service:🚀 CALLING GPT-5 VISION SERVICE FOR EXTRACTION
-INFO:app.services.enhanced_extraction_service:   File: pdfs/08.06.2025 Allied Innovative Payment 2.pdf
-INFO:app.services.enhanced_extraction_service:   Carrier: Pinecrestconsulting
-INFO:app.services.enhanced_extraction_service:   Enhanced Mode: True
-INFO:app.services.enhanced_extraction_service:   Max Pages: 100 (intelligent page selection)
-INFO:app.services.enhanced_extraction_service:================================================================================
-INFO:app.services.gpt.enhanced_service:🚀 Starting enhanced extraction for Pinecrestconsulting | upload_1763694829
-INFO:app.services.gpt.vision_extractor:📄 Processing PDF with direct upload method: pdfs/08.06.2025 Allied Innovative Payment 2.pdf
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.gpt.vision_extractor:📤 Uploading PDF: pdfs/08.06.2025 Allied Innovative Payment 2.pdf
-INFO:httpx:HTTP Request: POST https://api.openai.com/v1/files "HTTP/1.1 200 OK"
-INFO:app.services.gpt.vision_extractor:✅ PDF uploaded: file-9xRZAGnAh5DzLDWgJU1SiW
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.gpt.dynamic_prompts:🔍 GPT: Looking up carrier prompt: 'Pinecrestconsulting' → normalized: 'pinecrestconsulting'
-INFO:app.services.gpt.dynamic_prompts:❌ No carrier-specific prompt found for 'Pinecrestconsulting', using standard prompt only
-INFO:app.services.gpt.dynamic_prompts:   Available carriers: ['UnitedHealthcare', 'United Healthcare', 'UHC', 'United Health Group', 'UnitedHealth', 'Redirect Health']
-INFO:app.services.gpt.vision_extractor:📋 Extracting from PDF using Responses API (file_id: file-9xRZAGnAh5DzLDWgJU1SiW)
-INFO:     10.219.16.91:39890 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:39892 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:39904 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.orphan_cleanup_service:🧹 Starting orphan cleanup job...
-INFO:     10.219.16.91:50852 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.orphan_cleanup_service:✅ Orphan cleanup completed: no orphans found
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:50864 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:46160 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:46174 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:41444 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:41456 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:41466 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:52962 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:52978 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:47920 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:47928 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:50338 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:50336 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:50356 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:59920 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:59934 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:33298 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:33310 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:51022 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:51036 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:51040 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:38084 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:38088 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:39430 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:39442 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:33730 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:33728 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:33742 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:49462 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:49466 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:46634 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:46638 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:43962 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:43960 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:43986 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:55688 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:55692 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:35498 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:35500 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:53418 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:53420 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:53434 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:44298 - "GET /health HTTP/1.1" 200 OK
+
+INFO:app.api.new_extract:📊 Single table detected, using it for field mapping
+INFO:app.api.new_extract:🎯 Using table 0 for field mapping with 10 headers
+🎯 FormatLearningService: Finding matching format for company 5c9324ac-1794-4563-8e0e-8cd5c5317181
+🎯 FormatLearningService: Headers: ['Group No.', 'Group Name', 'Billing Period', 'Adj. Period', 'Invoice Total', 'Stoploss Total', 'Agent Rate', 'Calculation Method', 'Census Ct.', 'Paid Amount']
+🎯 FormatLearningService: Table structure: {'row_count': 57, 'column_count': 10, 'has_financial_data': True}
+🎯 FormatLearningService: Headers type: <class 'list'>
+🎯 FormatLearningService: Headers length: 10
+🎯 CRUD: Finding best matching format for company 5c9324ac-1794-4563-8e0e-8cd5c5317181
+🎯 CRUD: Input headers: ['Group No.', 'Group Name', 'Billing Period', 'Adj. Period', 'Invoice Total', 'Stoploss Total', 'Agent Rate', 'Calculation Method', 'Census Ct.', 'Paid Amount']
+🎯 CRUD: Input table structure: {'row_count': 57, 'column_count': 10, 'has_financial_data': True}
+🎯 CRUD: Found 1 saved formats for company
+🎯 CRUD: Comparing with saved format:
+🎯 CRUD:   Saved headers: ['Group No.', 'Group Name', 'Billing Period', 'Adj. Period', 'Invoice Total', 'Stoploss Total', 'Agent %', 'Calculation Method', 'Census Ct.', 'Paid Amount']
+🎯 CRUD:   Header similarity: 0.7200000000000001
+🎯 CRUD:   Structure similarity: 1.0
+🎯 CRUD:   Total score: 0.776
+🎯 CRUD:   -> New best match with score 0.776
+🎯 FormatLearningService: Best match score: 0.776
+🎯 FormatLearningService: Found matching format with signature: 434609905947a9e8728df0b79ba381ce
+🎯 FormatLearningService: Learned field mapping: {'Agent %': 'Commission Rate', 'Group No.': 'Policy Number', 'Census Ct.': 'Total Subscribers', 'Group Name': 'Client Name', 'Adj. Period': 'Adjustment Period Start', 'Paid Amount': 'Commission Earned', 'Invoice Total': 'Invoice Total', 'Billing Period': 'Coverage Period Start', 'Stoploss Total': 'Stoploss Total', 'Calculation Method': 'Plan Type'}
+🎯 FormatLearningService: Learned table editor settings: {'carrier_name': 'ALLIED', 'corrected_carrier_name': 'ALLIED', 'statement_date': '2025-01-08', 'corrected_statement_date': '2025-01-08', 'statement_total_amount': 9336.9, 'total_amount_field_name': 'Invoice Total'}
+INFO:app.api.new_extract:🎯 Format Learning: Found matching format with score 0.776
+INFO:app.api.new_extract:🎯 Format Learning: Applying corrected carrier name from learned format: ALLIED
+INFO:app.api.new_extract:🎯 Format Learning: Skipping statement date auto-apply (dates are document-specific)
+INFO:app.api.new_extract:✅ Total extracted from document_metadata: $386.61
+WARNING:app.api.new_extract:⚠️ Replacing total_amount 386.61 (method=document_metadata) with summary_row_scan=3604.95
+INFO:app.api.new_extract:🎯 Format Learning: Total validation result: {'matches': False, 'extracted_amount': 3604.95, 'learned_amount': 9336.9, 'difference': 5731.95, 'difference_percent': 61.39, 'status': 'mismatch', 'tolerance_percent': 5.0}
+INFO:app.api.new_extract:📊 Added total to document_metadata: $3604.95 (method: summary_row_scan)
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763738587282_nqe0mpn5u: STEP_STARTED
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763738587282_nqe0mpn5u
+INFO:app.services.websocket_service:Step started: Understanding Structure (Step 4) for upload_id upload_1763738587282_nqe0mpn5u
+INFO:app.services.ai_plan_type_detection_service:AI Plan Type Detection Service initialized successfully
+INFO:app.api.new_extract:🔍 AI Plan Type Detection: Detecting plan types during extraction
+INFO:app.services.ai_plan_type_detection_service:🔍 AI Plan Detection: Analyzing document for insurance plan types
+INFO:httpx:HTTP Request: POST https://api.mistral.ai/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.services.ai_plan_type_detection_service:✅ AI successfully detected plan types
+INFO:app.services.ai_plan_type_detection_service:✅ AI Plan Detection: Found 1 plan types with 0.90 confidence
+INFO:app.api.new_extract:✅ AI Plan Detection: 1 plan types with 0.90 confidence
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763738587282_nqe0mpn5u: STEP_STARTED
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763738587282_nqe0mpn5u
+INFO:app.services.websocket_service:Step started: AI Field Mapping (Step 5) for upload_id upload_1763738587282_nqe0mpn5u
+INFO:app.api.new_extract:🧠 AI Field Mapping: Starting field mapping during extraction
+INFO:app.api.new_extract:📋 Normalizing headers for AI mapping:
+INFO:app.api.ai_intelligent_mapping:🚀 Enhanced AI Analysis Request: User muhammad@pinecrestconsulting.com
+INFO:app.services.ai_field_mapping_service:🤖 AI Mapping: Analyzing 10 headers with AI intelligence
+INFO:app.services.ai_field_mapping_service:🔍 AI Mapping: carrier_id provided: True (value: 5c9324ac-1794-4563-8e0e-8cd5c5317181)
+INFO:     10.219.18.238:50110 - "GET /health HTTP/1.1" 200 OK
+INFO:app.services.ai_field_mapping_service:🎯 Carrier ID is valid, attempting to retrieve learned mapping for carrier 5c9324ac-1794-4563-8e0e-8cd5c5317181
+INFO:app.services.ai_field_mapping_service:🔍 Generated format signature for lookup: 6f736ac611e1789c131a993b10321314
+INFO:app.services.ai_field_mapping_service:🔍 Looking up learned format for carrier 5c9324ac-1794-4563-8e0e-8cd5c5317181 with 10 headers
+INFO:app.services.ai_field_mapping_service:❌ No exact match found, trying fuzzy matching...
+INFO:app.services.ai_field_mapping_service:🔍 Found 1 saved formats for fuzzy matching
+INFO:app.services.ai_field_mapping_service:🔍 Format signature 434609905947a9e8728df0b79ba381ce: similarity = 0.72
+INFO:app.services.ai_field_mapping_service:✅ New best match with similarity 0.72
+INFO:app.services.ai_field_mapping_service:✅ Found similar format with 0.72 similarity score
+INFO:app.services.ai_field_mapping_service:🎯 Found learned mapping for carrier with 0.72 confidence
+INFO:httpx:HTTP Request: POST https://api.mistral.ai/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.services.ai_field_mapping_service:✅ AI successfully generated field mappings
+INFO:app.services.ai_field_mapping_service:✅ AI Mapping: Generated 10 mappings with 0.89 confidence
+INFO:app.services.ai_plan_type_detection_service:🔍 AI Plan Detection: Analyzing document for insurance plan types
+INFO:     10.219.18.238:53646 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.238:53648 - "GET /health HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: POST https://api.mistral.ai/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.services.ai_plan_type_detection_service:✅ AI successfully detected plan types
+INFO:app.services.ai_plan_type_detection_service:✅ AI Plan Detection: Found 1 plan types with 0.85 confidence
+INFO:app.api.ai_intelligent_mapping:✅ Enhanced AI Analysis Complete: Overall confidence 0.87
+INFO:app.api.new_extract:✅ AI Field Mapping: 10 mappings with sample data, confidence 0.89
+INFO:app.api.new_extract:✅ Conversational summary supplied by extraction pipeline
+INFO:app.api.new_extract:   Summary preview: This is a commission payment summary from Allied for INNOVATIVE BPS LLC, dated August 6, 2025. The document outlines $107,995.80 in total commissions across 57 groups, with PRIDE DELIVERY SERVIC leadi
+INFO:app.api.new_extract:   Structured data keys: ['statement_date', 'total_amount', 'company_count', 'broker_id_confidence', 'census_count', 'billing_periods', 'carrier_name', 'broker_company', 'broker_id', 'payment_type', 'top_contributors', 'commission_structure']
+INFO:app.api.new_extract:🔧 Transformed summary_rows to summaryRows for table: [2, 5, 11, 12, 13, 14, 22, 24, 43, 51, 55, 56]
+INFO:app.services.audit_logging_service:Audit: file_upload by user f6cf1764-5bfc-4352-abd9-81b72b7cf191 on statement_upload (ID: e4f76ff4-6270-41f9-b80c-8798e523653d)
+INFO:app.api.new_extract:📤 Sending pre-generated enhanced summary via WebSocket...
+INFO:app.api.new_extract:📊 Sending structured data: {"statement_date": "2025-08-06", "total_amount": "107995.80", "company_count": 57, "broker_id_confidence": 0.7, "census_count": null, "billing_periods": "July-August 2025", "carrier_name": "ALLIED", "...
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763738587282_nqe0mpn5u: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763738587282_nqe0mpn5u
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763738587282_nqe0mpn5u: STEP_STARTED
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763738587282_nqe0mpn5u
+INFO:app.services.websocket_service:Step started: Preparing Results (Step 6) for upload_id upload_1763738587282_nqe0mpn5u
+INFO:app.api.new_extract:📊 Calculating invoice total from 1 tables
+INFO:app.api.new_extract:📊 Table 0: Found invoice column at index 4: 'Invoice Total'
+INFO:app.api.new_extract:✅ Table 0: Extracted from summary row: $443.10
+INFO:app.api.new_extract:✅ TOTAL invoice amount from all tables: $443.10
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763738587282_nqe0mpn5u: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763738587282_nqe0mpn5u
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763738587282_nqe0mpn5u: EXTRACTION_COMPLETE
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763738587282_nqe0mpn5u
+INFO:app.services.websocket_service:Extraction complete for upload_id upload_1763738587282_nqe0mpn5u
+INFO:app.api.new_extract:✅ Extraction complete! Sent results via WebSocket for upload_id: upload_1763738587282_nqe0mpn5u
+INFO:     10.219.18.238:53654 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.20.174.248:41710 - "POST /api/extract-tables-smart/ HTTP/1.1" 200 OK
+INFO:     10.20.174.248:41710 - "OPTIONS /api/auto-approve/process HTTP/1.1" 200 OK
+     [POST]200commission-tracker-1.onrender.com/api/extract-tables-smart/clientIP="86.50.75.139" requestID="c70b3f42-a4dc-493c" responseTimeMS=272547 responseBytes=9764 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
+     [OPTIONS]200commission-tracker-1.onrender.com/api/auto-approve/processclientIP="86.50.75.139" requestID="fe5ba1bc-cca5-417a" responseTimeMS=4 responseBytes=920 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
+INFO:     10.219.18.238:53666 - "GET /health HTTP/1.1" 200 OK
+INFO:     connection closed
+INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763738587282_nqe0mpn5u, session_id=session_1763738587287_ukl3de7cg
+INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763738587282_nqe0mpn5u, session_id=session_1763738587287_ukl3de7cg
+INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763738587282_nqe0mpn5u
+     [POST]502commission-tracker-1.onrender.com/api/auto-approve/processclientIP="86.50.75.139" requestID="f77e6802-41e8-4b2f" responseTimeMS=19 responseBytes=223158 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
+INFO:app.api.pdf_proxy:🔄 Proxying PDF from: https://storage.googleapis.com/pdf_extraction_files_saver/statements/5c9324ac-1794-4563-8e0e-8cd5c53...
+     [GET]502commission-tracker-1.onrender.com/api/pending/progress/e4f76ff4-6270-41f9-b80c-8798e523653d/table_editorclientIP="86.50.75.139" requestID="84c6a3dc-cf5c-4d3f" responseTimeMS=16 responseBytes=223158 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
+INFO:httpx:HTTP Request: GET https://storage.googleapis.com/pdf_extraction_files_saver/statements/5c9324ac-1794-4563-8e0e-8cd5c5317181/08.06.2025%20Allied%20Innovative%20Payment%202.pdf?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=docsai-table-extractor%40pdf-tables-extractor-465009.iam.gserviceaccount.com%2F20251121%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20251121T152700Z&X-Goog-Expires=3599&X-Goog-SignedHeaders=host&response-content-disposition=inline&response-content-type=application%2Fpdf&X-Goog-Signature=91c41e530767032b0c7eb2b279666cb2d0afbef386fe2d03946221ec87944787c1397cc36dc87f62f132d7b246f957f0e99a073609c614ee6b7bfaabb32cf95833ed1a7c0cc5e2b74edf5fbb9873a374c3ec84153d62b3b8fc08b5ff341ecf194c7dea50cf67273efb7828042530e542443f9bc15368a6bb9af7bb2a77c04fa346a26e723e008a54351920efae1837c47d8a3f88ac9f7934d1f806991890859437fb83e558e8e3a5a9e44a5b99bf49fe02e7608152da53f8be6f2812b070f2b8190891321cebe33966002ce0ac7d15e0eb49698565f349af8bd417dedbe7d5487312aaca1746a0ea5fc53b0b6847194d0bbd11bb73d0cfbdab57d461d356614b "HTTP/1.1 200 OK"
+INFO:     10.20.148.164:59946 - "GET /api/pdf-proxy?url=https%3A%2F%2Fstorage.googleapis.com%2Fpdf_extraction_files_saver%2Fstatements%2F5c9324ac-1794-4563-8e0e-8cd5c5317181%2F08.06.2025%2520Allied%2520Innovative%2520Payment%25202.pdf%3FX-Goog-Algorithm%3DGOOG4-RSA-SHA256%26X-Goog-Credential%3Ddocsai-table-extractor%2540pdf-tables-extractor-465009.iam.gserviceaccount.com%252F20251121%252Fauto%252Fstorage%252Fgoog4_request%26X-Goog-Date%3D20251121T152700Z%26X-Goog-Expires%3D3599%26X-Goog-SignedHeaders%3Dhost%26response-content-disposition%3Dinline%26response-content-type%3Dapplication%252Fpdf%26X-Goog-Signature%3D91c41e530767032b0c7eb2b279666cb2d0afbef386fe2d03946221ec87944787c1397cc36dc87f62f132d7b246f957f0e99a073609c614ee6b7bfaabb32cf95833ed1a7c0cc5e2b74edf5fbb9873a374c3ec84153d62b3b8fc08b5ff341ecf194c7dea50cf67273efb7828042530e542443f9bc15368a6bb9af7bb2a77c04fa346a26e723e008a54351920efae1837c47d8a3f88ac9f7934d1f806991890859437fb83e558e8e3a5a9e44a5b99bf49fe02e7608152da53f8be6f2812b070f2b8190891321cebe33966002ce0ac7d15e0eb49698565f349af8bd417dedbe7d5487312aaca1746a0ea5fc53b0b6847194d0bbd11bb73d0cfbdab57d461d356614b HTTP/1.1" 200 OK
+     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763738587282_nqe0mpn5u?session_id=session_1763738587287_ukl3de7cgclientIP="86.50.75.139" requestID="" responseTimeMS=274839 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
+     [GET]200commission-tracker-1.onrender.com/api/pdf-proxy?url=https%3A%2F%2Fstorage.googleapis.com%2Fpdf_extraction_files_saver%2Fstatements%2F5c9324ac-1794-4563-8e0e-8cd5c5317181%2F08.06.2025%2520Allied%2520Innovative%2520Payment%25202.pdf%3FX-Goog-Algorithm%3DGOOG4-RSA-SHA256%26X-Goog-Credential%3Ddocsai-table-extractor%2540pdf-tables-extractor-465009.iam.gserviceaccount.com%252F20251121%252Fauto%252Fstorage%252Fgoog4_request%26X-Goog-Date%3D20251121T152700Z%26X-Goog-Expires%3D3599%26X-Goog-SignedHeaders%3Dhost%26response-content-disposition%3Dinline%26response-content-type%3Dapplication%252Fpdf%26X-Goog-Signature%3D91c41e530767032b0c7eb2b279666cb2d0afbef386fe2d03946221ec87944787c1397cc36dc87f62f132d7b246f957f0e99a073609c614ee6b7bfaabb32cf95833ed1a7c0cc5e2b74edf5fbb9873a374c3ec84153d62b3b8fc08b5ff341ecf194c7dea50cf67273efb7828042530e542443f9bc15368a6bb9af7bb2a77c04fa346a26e723e008a54351920efae1837c47d8a3f88ac9f7934d1f806991890859437fb83e558e8e3a5a9e44a5b99bf49fe02e7608152da53f8be6f2812b070f2b8190891321cebe33966002ce0ac7d15e0eb49698565f349af8bd417dedbe7d5487312aaca1746a0ea5fc53b0b6847194d0bbd11bb73d0cfbdab57d461d356614bclientIP="86.50.75.139" requestID="80ce430d-03a5-4101" responseTimeMS=173 responseBytes=228347 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
 INFO:app.services.orphan_cleanup_service:🧹 Starting orphan cleanup job...
 INFO:app.services.orphan_cleanup_service:✅ Orphan cleanup completed: no orphans found
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:44310 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:49266 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:49280 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:54680 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:54682 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:54700 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:47984 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:48000 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:38446 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:38458 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:52606 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:52608 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:52618 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:40860 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:40866 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:45236 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:45246 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:48294 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:48296 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:48314 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:37522 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:37528 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:54488 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:54498 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:48714 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:48718 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:48720 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:40164 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:40172 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:39522 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:39528 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:59946 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:59940 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:59950 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:33024 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:33040 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:40176 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:49280 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:54680 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:54682 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:54700 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:47984 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:48000 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:38446 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:38458 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:52606 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:52608 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:52618 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:40860 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:40866 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:45236 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:45246 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:48294 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:48296 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:48314 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:37522 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:37528 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:54488 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:54498 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:48714 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:48718 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:48720 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:40164 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:40172 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:39522 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:39528 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:59946 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:59940 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:59950 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:33024 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:33040 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:40176 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:40188 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:37752 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:37754 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:37768 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:55830 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.238:40596 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.238:40598 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.238:38388 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.238:38390 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.238:38406 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.238:57670 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.238:57674 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.238:42040 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.238:42046 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.238:58264 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.238:58262 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.238:58284 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.238:46048 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.238:46052 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.238:46052 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.238:41670 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.238:41682 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.238:51256 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.238:51254 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.238:51280 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.238:40180 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.238:40192 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.238:52236 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.238:52240 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.238:43770 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.238:43772 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.238:43780 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.238:57620 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.238:57632 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.238:56872 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.238:56888 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.238:53448 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.238:53450 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.238:53478 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.238:59436 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.238:59442 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.238:49922 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.238:49924 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.238:54634 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.238:54642 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.238:54644 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.238:57780 - "GET /health HTTP/1.1" 200 OK
+INFO:app.main:Cleaned up 500 expired/inactive sessions
+INFO:     10.219.18.238:57792 - "GET /health HTTP/1.1" 200 OK
 INFO:app.services.orphan_cleanup_service:🧹 Starting orphan cleanup job...
 INFO:app.services.orphan_cleanup_service:✅ Orphan cleanup completed: no orphans found
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:55834 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:43712 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:43724 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:48688 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:48686 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:48708 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:51246 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:51260 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:58820 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:58824 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:45062 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:45064 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:45078 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:50444 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:50448 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:47386 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:47394 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:60712 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:60714 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:60724 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:41880 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:41896 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:54006 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:54012 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:60676 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:60678 - "GET /health HTTP/1.1" 200 OK
-     [POST]499commission-tracker-1.onrender.com/api/extract-tables-smart/clientIP="86.50.75.139" requestID="d8c02b28-d3d8-415e" responseTimeMS=487637 responseBytes=29 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:60696 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:40776 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:40786 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:36878 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:36888 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:46444 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.16.91:46450 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
-INFO:     10.219.16.91:46464 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763694826535_i1y2zr9u7: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763694826535_i1y2zr9u7
+INFO:     10.219.18.238:47626 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.238:47634 - "GET /health HTTP/1.1" 200 OK
