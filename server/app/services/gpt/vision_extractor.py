@@ -22,10 +22,11 @@ import logging
 import asyncio
 import os
 import time
+import tempfile
 from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime, timedelta
 from pathlib import Path
-from pypdf import PdfReader
+from pypdf import PdfReader, PdfWriter
 
 from openai import AsyncOpenAI
 
@@ -68,6 +69,7 @@ class GPT5VisionExtractorWithPDF:
         self.mini_tokens_per_page = int(os.getenv("GPT5_MINI_TOKENS_PER_PAGE", "1200"))
         self.token_retry_step = int(os.getenv("GPT5_TOKEN_RETRY_STEP", "4000"))
         self.max_token_retry_attempts = int(os.getenv("GPT5_TOKEN_RETRY_ATTEMPTS", "2"))
+        self.single_call_page_limit = int(os.getenv("GPT5_SINGLE_CALL_PAGE_LIMIT", "6"))
         self.structured_response_format = self._build_structured_output_schema()
         self._disabled_models = set()
         
@@ -426,7 +428,8 @@ class GPT5VisionExtractorWithPDF:
         self,
         pdf_path: str,
         requested_max_tokens: int,
-        use_mini_override: bool
+        use_mini_override: bool,
+        page_count_override: Optional[int] = None
     ) -> Dict[str, Any]:
         """Determine model, token budget, and reasoning effort based on file stats."""
         file_size_bytes = 0
@@ -436,7 +439,7 @@ class GPT5VisionExtractorWithPDF:
             pass
         
         file_size_mb = file_size_bytes / (1024 * 1024) if file_size_bytes else 0.0
-        page_count = self._get_pdf_page_count(pdf_path) or 1
+        page_count = page_count_override or self._get_pdf_page_count(pdf_path) or 1
         
         use_mini = use_mini_override or (
             file_size_mb <= self.mini_threshold_mb and page_count <= 6
@@ -474,6 +477,263 @@ class GPT5VisionExtractorWithPDF:
             "file_size_mb": file_size_mb,
             "page_count": page_count
         }
+    
+    def _is_truncation_error(self, error: Exception) -> bool:
+        message = str(error).lower()
+        return "truncated" in message or "max_output_tokens" in message
+    
+    def _calculate_chunk_size(self, page_count: int) -> int:
+        """
+        Determine a conservative chunk size to keep GPT outputs within token limits.
+        """
+        if page_count <= 2:
+            return 1
+        if page_count <= 6:
+            return 2
+        if page_count <= 18:
+            return 3
+        if page_count <= 40:
+            return 4
+        return 5
+    
+    async def _extract_pdf_in_chunks(
+        self,
+        pdf_path: str,
+        page_count: int,
+        max_output_tokens: int,
+        use_mini: bool,
+        progress_tracker,
+        carrier_name: Optional[str],
+        prompt_options: Optional[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """Chunk PDF into smaller segments and merge GPT outputs."""
+        try:
+            reader = PdfReader(pdf_path)
+        except Exception as exc:
+            raise ValueError(f"Unable to open PDF for chunking: {exc}")
+        
+        chunk_size = self._calculate_chunk_size(page_count)
+        chunk_ranges = [
+            (start, min(page_count, start + chunk_size))
+            for start in range(0, page_count, chunk_size)
+        ]
+        
+        chunk_results: List[Dict[str, Any]] = []
+        for idx, (start_page, end_page) in enumerate(chunk_ranges):
+            if progress_tracker:
+                completion = 25 + int(((idx) / max(1, len(chunk_ranges))) * 50)
+                await progress_tracker.update_progress(
+                    stage="extraction",
+                    progress_percentage=min(90, completion),
+                    message=f"Chunk {idx + 1}/{len(chunk_ranges)} | Pages {start_page + 1}-{end_page}"
+                )
+            
+            chunk_result_list = await self._extract_pdf_range(
+                reader=reader,
+                pdf_path=pdf_path,
+                start_page=start_page,
+                end_page=end_page,
+                max_output_tokens=max_output_tokens,
+                use_mini=use_mini,
+                carrier_name=carrier_name,
+                prompt_options=prompt_options
+            )
+            chunk_results.extend(chunk_result_list)
+        
+        if not chunk_results:
+            raise ValueError("Chunked extraction produced no results")
+        
+        aggregated = self._merge_chunk_results(
+            chunk_results,
+            chunk_size=chunk_size,
+            original_page_count=page_count
+        )
+        
+        if progress_tracker:
+            await progress_tracker.update_progress(
+                stage="extraction",
+                progress_percentage=92,
+                message="Chunked extraction complete"
+            )
+        
+        return aggregated
+    
+    async def _extract_pdf_range(
+        self,
+        reader: PdfReader,
+        pdf_path: str,
+        start_page: int,
+        end_page: int,
+        max_output_tokens: int,
+        use_mini: bool,
+        carrier_name: Optional[str],
+        prompt_options: Optional[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Extract a specific page range, recursively splitting if still too large."""
+        temp_path = self._write_pdf_subset(reader, start_page, end_page)
+        page_count = end_page - start_page
+        try:
+            result = await self._extract_from_pdf_single_call(
+                pdf_path=temp_path,
+                use_cache=False,
+                max_output_tokens=max_output_tokens,
+                use_mini=use_mini,
+                progress_tracker=None,
+                carrier_name=carrier_name,
+                prompt_options=prompt_options,
+                page_count_override=page_count
+            )
+            result['chunk_metadata'] = {
+                'start_page': start_page + 1,
+                'end_page': end_page,
+                'source_pdf': pdf_path
+            }
+            return [result]
+        except ValueError as err:
+            if self._is_truncation_error(err) and page_count > 1:
+                mid = start_page + max(1, page_count // 2)
+                logger.warning(
+                    "Chunk %s-%s still too large (%s pages). Splitting further.",
+                    start_page + 1,
+                    end_page,
+                    page_count
+                )
+                results: List[Dict[str, Any]] = []
+                results.extend(
+                    await self._extract_pdf_range(
+                        reader,
+                        pdf_path,
+                        start_page,
+                        mid,
+                        max_output_tokens,
+                        use_mini,
+                        carrier_name,
+                        prompt_options
+                    )
+                )
+                results.extend(
+                    await self._extract_pdf_range(
+                        reader,
+                        pdf_path,
+                        mid,
+                        end_page,
+                        max_output_tokens,
+                        use_mini,
+                        carrier_name,
+                        prompt_options
+                    )
+                )
+                return results
+            raise
+        finally:
+            try:
+                os.remove(temp_path)
+            except OSError:
+                pass
+    
+    def _write_pdf_subset(self, reader: PdfReader, start_page: int, end_page: int) -> str:
+        """Write a subset of PDF pages to a temporary file."""
+        writer = PdfWriter()
+        for page_idx in range(start_page, end_page):
+            writer.add_page(reader.pages[page_idx])
+        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+        writer.write(temp_file)
+        temp_path = temp_file.name
+        temp_file.close()
+        return temp_path
+    
+    def _merge_chunk_results(
+        self,
+        chunk_results: List[Dict[str, Any]],
+        chunk_size: int,
+        original_page_count: int
+    ) -> Dict[str, Any]:
+        aggregated: Dict[str, Any] = {
+            'success': any(chunk.get('success') for chunk in chunk_results),
+            'tables': [],
+            'document_metadata': {},
+            'groups_and_companies': [],
+            'writing_agents': [],
+            'business_intelligence': {},
+            'total_tokens_used': 0,
+            'tokens_used': {'input': 0, 'output': 0, 'total': 0},
+            'estimated_cost_usd': 0.0,
+            'processing_time_seconds': 0.0,
+            'extraction_method': 'gpt5_vision_chunked',
+            'summary': None,
+            'structured_data': {},
+            'chunking': {
+                'enabled': True,
+                'configured_chunk_size': chunk_size,
+                'chunk_count': len(chunk_results),
+                'original_pages': original_page_count
+            },
+            'chunk_details': []
+        }
+        
+        metas: List[Dict[str, Any]] = []
+        for chunk in chunk_results:
+            if not chunk.get('tables'):
+                continue
+            aggregated['tables'].extend(chunk.get('tables', []))
+            aggregated['groups_and_companies'].extend(chunk.get('groups_and_companies', []))
+            aggregated['writing_agents'].extend(chunk.get('writing_agents', []))
+            metas.append(chunk.get('document_metadata', {}))
+            
+            aggregated['business_intelligence'] = self._merge_business_intelligence(
+                aggregated['business_intelligence'],
+                chunk.get('business_intelligence', {})
+            )
+            
+            tokens = chunk.get('tokens_used', {})
+            aggregated['tokens_used']['input'] += tokens.get('input', 0)
+            aggregated['tokens_used']['output'] += tokens.get('output', 0)
+            aggregated['tokens_used']['total'] += tokens.get('total', 0)
+            aggregated['total_tokens_used'] += chunk.get('total_tokens_used', tokens.get('total', 0))
+            aggregated['estimated_cost_usd'] += chunk.get('estimated_cost_usd', 0.0)
+            aggregated['processing_time_seconds'] += chunk.get('processing_time_seconds', 0.0)
+            
+            aggregated['chunk_details'].append({
+                'start_page': chunk.get('chunk_metadata', {}).get('start_page'),
+                'end_page': chunk.get('chunk_metadata', {}).get('end_page'),
+                'tables': len(chunk.get('tables', [])),
+                'tokens': chunk.get('total_tokens_used', tokens.get('total', 0)),
+                'success': chunk.get('success', False)
+            })
+        
+        metadata_merged: Dict[str, Any] = {}
+        for meta in metas:
+            metadata_merged = self._merge_metadata(metadata_merged, meta)
+        aggregated['document_metadata'] = metadata_merged
+        aggregated['model_used'] = chunk_results[0].get('model_used')
+        
+        return aggregated
+    
+    def _merge_metadata(self, base: Dict[str, Any], update: Dict[str, Any]) -> Dict[str, Any]:
+        if not base:
+            return dict(update or {})
+        merged = dict(base)
+        for key, value in (update or {}).items():
+            if key not in merged or merged[key] in (None, '', []):
+                merged[key] = value
+        return merged
+    
+    def _merge_business_intelligence(self, base: Dict[str, Any], update: Dict[str, Any]) -> Dict[str, Any]:
+        if not base:
+            return dict(update or {})
+        merged = dict(base)
+        for key, value in (update or {}).items():
+            if value is None:
+                continue
+            if isinstance(value, list):
+                existing = merged.get(key) or []
+                merged[key] = existing + value
+            elif isinstance(value, (int, float)) and isinstance(merged.get(key), (int, float)):
+                merged[key] = merged.get(key, 0) + value
+            else:
+                if not merged.get(key):
+                    merged[key] = value
+        return merged
     
     def _get_cached_file_id(self, pdf_path: str) -> Optional[str]:
         """
@@ -542,7 +802,7 @@ class GPT5VisionExtractorWithPDF:
             raise ValueError(f"Failed to upload PDF: {e}")
     
     @retry_with_backoff(max_retries=3, base_delay=2.0)
-    async def extract_from_pdf(
+    async def _extract_from_pdf_single_call(
         self,
         pdf_path: str,
         use_cache: bool = True,
@@ -550,7 +810,8 @@ class GPT5VisionExtractorWithPDF:
         use_mini: bool = False,
         progress_tracker=None,
         carrier_name: str = None,  # ✅ NEW: For carrier-specific prompts
-        prompt_options: Optional[Dict[str, Any]] = None
+        prompt_options: Optional[Dict[str, Any]] = None,
+        page_count_override: Optional[int] = None
     ) -> Dict[str, Any]:
         """
         Extract tables from PDF using Responses API with direct PDF input.
@@ -609,12 +870,13 @@ class GPT5VisionExtractorWithPDF:
         extraction_plan = self._plan_for_document(
             pdf_path=pdf_path,
             requested_max_tokens=max_output_tokens,
-            use_mini_override=use_mini
+            use_mini_override=use_mini,
+            page_count_override=page_count_override
         )
         model = extraction_plan["model"]
         max_tokens = extraction_plan["max_tokens"]
         reasoning_effort = extraction_plan["reasoning_effort"]
-        page_count = extraction_plan.get("page_count", 1)
+        page_count = extraction_plan.get("page_count", page_count_override or 1)
         
         # Wait for rate limit if needed
         estimated_tokens = max(2000, max_tokens // 2)
@@ -857,6 +1119,67 @@ class GPT5VisionExtractorWithPDF:
             if progress_tracker:
                 await progress_tracker.stop_heartbeat("extraction")
     
+    async def extract_from_pdf(
+        self,
+        pdf_path: str,
+        use_cache: bool = True,
+        max_output_tokens: int = 16000,
+        use_mini: bool = False,
+        progress_tracker=None,
+        carrier_name: str = None,
+        prompt_options: Optional[Dict[str, Any]] = None,
+        allow_chunking: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Orchestrate GPT-5 extraction with automatic chunking fallback for large documents.
+        """
+        page_count = self._get_pdf_page_count(pdf_path) or 1
+        
+        if allow_chunking and page_count > self.single_call_page_limit:
+            logger.info(
+                "📏 Document has %s pages (> %s single-call limit). Using chunked extraction.",
+                page_count,
+                self.single_call_page_limit
+            )
+            return await self._extract_pdf_in_chunks(
+                pdf_path=pdf_path,
+                page_count=page_count,
+                max_output_tokens=max_output_tokens,
+                use_mini=use_mini,
+                progress_tracker=progress_tracker,
+                carrier_name=carrier_name,
+                prompt_options=prompt_options
+            )
+        
+        try:
+            return await self._extract_from_pdf_single_call(
+                pdf_path=pdf_path,
+                use_cache=use_cache,
+                max_output_tokens=max_output_tokens,
+                use_mini=use_mini,
+                progress_tracker=progress_tracker,
+                carrier_name=carrier_name,
+                prompt_options=prompt_options,
+                page_count_override=page_count
+            )
+        except ValueError as err:
+            if allow_chunking and page_count > 1 and self._is_truncation_error(err):
+                logger.warning(
+                    "⚠️ GPT-5 response truncated for %s (pages=%s). Falling back to chunked extraction.",
+                    pdf_path,
+                    page_count
+                )
+                return await self._extract_pdf_in_chunks(
+                    pdf_path=pdf_path,
+                    page_count=page_count,
+                    max_output_tokens=max_output_tokens,
+                    use_mini=use_mini,
+                    progress_tracker=progress_tracker,
+                    carrier_name=carrier_name,
+                    prompt_options=prompt_options
+                )
+            raise
+
     async def process_document(
         self,
         pdf_path: str,

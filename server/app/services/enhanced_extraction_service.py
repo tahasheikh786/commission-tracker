@@ -1159,140 +1159,36 @@ class EnhancedExtractionService:
             # Check for cancellation before summary generation
             await cancellation_manager.check_cancellation(progress_tracker.upload_id)
             
-            # Stage 3: Generate Enhanced Conversational Summary (if enhanced mode enabled)
-            conversational_summary = None
+            # Normalize structure + attach conversational summary if needed
+            result = self._standardize_result(result, 'gpt5_vision')
+            result = await self._ensure_conversational_summary(
+                result=result,
+                progress_tracker=progress_tracker,
+                upload_id_uuid=upload_id_uuid,
+                file_identifier=file_path,
+                source_label='gpt5_vision_enhanced'
+            )
             
-            logger.info("=" * 80)
-            logger.info("🎯 STAGE 3: CONVERSATIONAL SUMMARY GENERATION")
-            logger.info("=" * 80)
-            logger.info(f"   - Enhanced mode enabled: {self.use_enhanced}")
-            logger.info(f"   - Result has 'summary': {result.get('summary') is not None}")
-            logger.info(f"   - Summary service available: {self.summary_service.is_available()}")
-            
-            if self.use_enhanced and result.get('success') and result.get('summary'):
-                # Enhanced pipeline already generated summary in GPT-5 service
-                conversational_summary = result.get('summary')
-                logger.info(f"✅ Using enhanced summary from GPT-5 pipeline")
-                logger.info(f"   Summary length: {len(conversational_summary)} characters")
-                logger.info(f"   Summary preview: {conversational_summary[:200]}...")
-                
-                # ✅ FIX: Send GPT-5-generated summary AND structured data immediately via WebSocket
-                if upload_id_uuid and progress_tracker:
-                    logger.info("📤 Sending GPT-5-generated summary AND structured data to frontend via WebSocket NOW")
-                    
-                    # Get structured data from summary result
-                    structured_summary_data = result.get('structured_data', {})
-                    
-                    await progress_tracker.connection_manager.send_step_progress(
-                        progress_tracker.upload_id,
-                        percentage=70,  # Right after table extraction
-                        estimated_time='Enhanced summary ready',
-                        current_stage='summary_complete',
-                        conversational_summary=conversational_summary,
-                        summary_data=structured_summary_data  # ← ADD THIS - sends structured JSON
-                    )
-                    logger.info(f"✅ Sent structured summary data to frontend: {structured_summary_data}")
-                    logger.info("✅ GPT-5-generated summary sent to frontend successfully")
-            elif self.use_enhanced and self.summary_service.is_available():
-                # Generate enhanced summary if GPT-5 didn't provide one
-                try:
-                    logger.info("🗣️ Generating enhanced conversational summary...")
-                    await progress_tracker.start_stage("summary_generation", "Generating intelligent summary")
-                    
-                    summary_result = await self.summary_service.generate_conversational_summary(
-                        extraction_data=result,
-                        document_context={
-                            'file_name': file_path,
-                            'extraction_method': 'gpt5_vision_enhanced'
-                        },
-                        use_enhanced=True  # ⭐ Use enhanced prompts
-                    )
-                    
-                    if summary_result.get('success'):
-                        conversational_summary = summary_result.get('summary')
-                        logger.info(f"✅ Enhanced summary generated: {conversational_summary[:100]}...")
-                        
-                        # Get structured data from summary result - STORE IT for later use
-                        structured_summary_data = summary_result.get('structured_data', {})
-                        logger.info(f"✅ Structured summary data extracted: {list(structured_summary_data.keys())}")
-                        
-                        # ✅ FIX: Send enhanced summary AND structured data immediately via WebSocket
-                        if upload_id_uuid and progress_tracker:
-                            logger.info("📤 Sending enhanced summary AND structured data to frontend via WebSocket NOW")
-                            await progress_tracker.connection_manager.send_step_progress(
-                                progress_tracker.upload_id,
-                                percentage=70,  # Right after table extraction
-                                estimated_time='Enhanced summary ready',
-                                current_stage='summary_complete',
-                                conversational_summary=conversational_summary,
-                                summary_data=structured_summary_data  # ← ADD THIS - sends structured JSON
-                            )
-                            logger.info(f"✅ Sent structured summary data to frontend: {structured_summary_data}")
-                            logger.info("✅ Enhanced summary sent to frontend successfully")
-                    
-                    await progress_tracker.complete_stage("summary_generation", "Summary complete")
-                    
-                except Exception as summary_error:
-                    logger.error(f"Enhanced summary generation failed: {summary_error}")
-                    conversational_summary = None
-            
-            # Use enhanced summary if available, otherwise fall back to GPT metadata
-            if conversational_summary:
-                logger.info("=" * 80)
-                logger.info("📝 FINAL SUMMARY SELECTION: ENHANCED CONVERSATIONAL")
-                logger.info("=" * 80)
-                logger.info(f"   Summary length: {len(conversational_summary)} characters")
-                logger.info(f"   Full summary:\n{conversational_summary}")
-                logger.info("=" * 80)
-                gpt_metadata['summary'] = conversational_summary
+            if result.get('summary'):
+                gpt_metadata['summary'] = result.get('summary')
                 gpt_metadata['summary_type'] = 'enhanced_conversational'
-                
-                # ✅ CRITICAL FIX: Store structured_data in result for retrieval in new_extract.py
-                if 'structured_summary_data' in locals() and structured_summary_data:
-                    result['structured_data'] = structured_summary_data
-                    logger.info(f"✅ Added structured_data to result: {list(structured_summary_data.keys())}")
-                else:
-                    result['structured_data'] = {}
-                    logger.warning("⚠️ No structured_summary_data available")
             else:
-                logger.warning("=" * 80)
-                logger.warning("⚠️ FINAL SUMMARY SELECTION: STANDARD GPT METADATA")
-                logger.warning("=" * 80)
-                logger.warning("   No enhanced summary available - using fallback")
-                logger.warning(f"   GPT metadata summary: {gpt_metadata.get('summary', 'N/A')[:200]}...")
-                logger.warning("=" * 80)
+                logger.warning("⚠️ No enhanced summary available - using GPT metadata fallback")
                 gpt_metadata['summary_type'] = 'standard_gpt'
-                result['structured_data'] = {}  # Empty dict for fallback
             
             # Stage 4: Validation
             await progress_tracker.start_stage("validation", "Validating GPT-5 Vision results")
             await progress_tracker.update_progress("validation", 100, "Validation completed")
             
-            # ✅ CRITICAL FIX: Send completion with ALL fields matching Claude's format
-            await progress_tracker.send_completion({
-                'upload_id': upload_id_uuid,
-                'extraction_id': upload_id_uuid,
-                'tables': result.get('tables', []),
-                'extraction_method': 'gpt5_vision',  # ⭐ Updated to GPT-5
-                'file_type': 'pdf',
-                'quality_summary': result.get('quality_summary', {}),
-                'metadata': result.get('metadata', {}),
-                'document_metadata': result.get('document_metadata', {}),
-                'extracted_carrier': result.get('extracted_carrier'),
-                'extracted_date': result.get('extracted_date'),
-                'extraction_quality': result.get('extraction_quality', {}),
-                # ✅ CRITICAL: Include groups_and_companies and writing_agents
-                'groups_and_companies': result.get('groups_and_companies', []),
-                'writing_agents': result.get('writing_agents', []),
-                'business_intelligence': result.get('business_intelligence', {}),
-                'gpt_metadata': gpt_metadata,  # Includes GPT-5 metadata and summary
-                'conversational_summary': conversational_summary,  # Enhanced summary
-                'summary_data': result.get('structured_data', {}),
-                'tokens_used': result.get('total_tokens_used', 0),  # ⭐ NEW: Token tracking
-                'estimated_cost': result.get('estimated_cost_usd', 0),  # ⭐ NEW: Cost tracking
-                'processing_time_seconds': result.get('processing_time_seconds', 0),
-                'structured_data': result.get('structured_data', {})  # ✅ Include structured data
-            })
+            await self._send_completion_payload(
+                progress_tracker=progress_tracker,
+                upload_id_uuid=upload_id_uuid,
+                result=result,
+                extra_fields={
+                    'gpt_metadata': gpt_metadata,
+                    'summary_data': result.get('structured_data', {})
+                }
+            )
             
             return result
         
@@ -1331,6 +1227,21 @@ class EnhancedExtractionService:
                 fallback_result['extraction_method'] = 'claude_fallback'
                 fallback_result['primary_service_failed'] = 'gpt5_vision'
                 
+                fallback_result = self._standardize_result(fallback_result, 'claude_fallback')
+                fallback_result = await self._ensure_conversational_summary(
+                    result=fallback_result,
+                    progress_tracker=progress_tracker,
+                    upload_id_uuid=upload_id_uuid,
+                    file_identifier=file_path,
+                    source_label='claude_fallback'
+                )
+                
+                await self._send_completion_payload(
+                    progress_tracker=progress_tracker,
+                    upload_id_uuid=upload_id_uuid,
+                    result=fallback_result
+                )
+                
                 return fallback_result
                 
             except Exception as claude_error:
@@ -1359,6 +1270,163 @@ class EnhancedExtractionService:
                 logger.debug("✅ Extraction cleanup completed")
             except Exception as cleanup_error:
                 logger.warning(f"⚠️ Cleanup error (non-critical): {cleanup_error}")
+
+    def _standardize_result(self, result: Optional[Dict[str, Any]], default_method: str) -> Dict[str, Any]:
+        """
+        Ensure extraction results expose a consistent schema regardless of GPT or Claude pipeline.
+        """
+        if result is None:
+            result = {}
+        result.setdefault('success', True)
+        result.setdefault('tables', [])
+        result.setdefault('document_metadata', {})
+        result.setdefault('metadata', {})
+        result.setdefault('business_intelligence', {})
+        result.setdefault('groups_and_companies', [])
+        result.setdefault('writing_agents', [])
+        result.setdefault('structured_data', {})
+        result.setdefault('summary', None)
+        result.setdefault('file_type', 'pdf')
+        result.setdefault('extraction_method', default_method)
+        result.setdefault('quality_summary', {})
+        result.setdefault('extraction_quality', {})
+        result.setdefault('total_tokens_used', 0)
+        result.setdefault('estimated_cost_usd', 0.0)
+        result.setdefault('processing_time_seconds', 0.0)
+        if 'extraction_pipeline' not in result:
+            result['extraction_pipeline'] = '3-phase-enhanced' if self.use_enhanced else 'standard'
+        return result
+
+    async def _ensure_conversational_summary(
+        self,
+        result: Dict[str, Any],
+        progress_tracker,
+        upload_id_uuid: Optional[str],
+        file_identifier: str,
+        source_label: str
+    ) -> Dict[str, Any]:
+        """
+        Guarantee summary + structured data exist (and are broadcast) for whichever pipeline ran.
+        """
+        if not result.get('success'):
+            return result
+        if not self.use_enhanced:
+            result.setdefault('structured_data', {})
+            return result
+        
+        summary_text = result.get('summary')
+        structured_data = result.get('structured_data') or {}
+        
+        if summary_text:
+            result['structured_data'] = structured_data
+            await self._emit_summary_ws(progress_tracker, summary_text, structured_data)
+            return result
+        
+        if not self.summary_service or not self.summary_service.is_available():
+            logger.debug("Summary service unavailable—skipping enhanced summary generation")
+            result['structured_data'] = structured_data
+            return result
+        
+        stage_tracker = progress_tracker if progress_tracker else None
+        if stage_tracker:
+            try:
+                await stage_tracker.start_stage("summary_generation", "Generating intelligent summary")
+            except Exception:
+                pass
+        
+        try:
+            summary_result = await self.summary_service.generate_conversational_summary(
+                extraction_data=result,
+                document_context={
+                    'file_name': os.path.basename(file_identifier),
+                    'extraction_method': source_label
+                },
+                use_enhanced=True
+            )
+            
+            if summary_result.get('success'):
+                summary_text = summary_result.get('summary')
+                structured_data = summary_result.get('structured_data', {}) or {}
+                result['summary'] = summary_text
+                result['structured_data'] = structured_data
+                await self._emit_summary_ws(progress_tracker, summary_text, structured_data)
+            else:
+                result.setdefault('structured_data', {})
+        except Exception as summary_error:
+            logger.warning(f"Enhanced summary generation failed: {summary_error}")
+            result.setdefault('structured_data', {})
+        finally:
+            if stage_tracker:
+                try:
+                    await stage_tracker.complete_stage("summary_generation", "Summary complete")
+                except Exception:
+                    pass
+        
+        return result
+
+    async def _emit_summary_ws(
+        self,
+        progress_tracker,
+        summary_text: Optional[str],
+        structured_data: Dict[str, Any]
+    ):
+        """Emit conversational summary + structured payload over WebSocket."""
+        if not summary_text or not progress_tracker:
+            return
+        connection_manager = getattr(progress_tracker, "connection_manager", None)
+        if not connection_manager:
+            return
+        try:
+            await connection_manager.send_step_progress(
+                progress_tracker.upload_id,
+                percentage=85,
+                estimated_time='Enhanced summary ready',
+                current_stage='summary_complete',
+                conversational_summary=summary_text,
+                summaryContent=json.dumps(structured_data or {}),
+                summary_data=structured_data or {}
+            )
+        except Exception as emit_error:
+            logger.debug(f"Summary WebSocket emission skipped: {emit_error}")
+
+    async def _send_completion_payload(
+        self,
+        progress_tracker,
+        upload_id_uuid: Optional[str],
+        result: Dict[str, Any],
+        extra_fields: Optional[Dict[str, Any]] = None
+    ):
+        """Send standardized completion payload to the frontend."""
+        if not progress_tracker:
+            return
+        
+        payload = {
+            'upload_id': upload_id_uuid,
+            'extraction_id': upload_id_uuid,
+            'tables': result.get('tables', []),
+            'extraction_method': result.get('extraction_method'),
+            'file_type': result.get('file_type', 'pdf'),
+            'quality_summary': result.get('quality_summary', {}),
+            'metadata': result.get('metadata', {}),
+            'document_metadata': result.get('document_metadata', {}),
+            'extracted_carrier': result.get('extracted_carrier'),
+            'extracted_date': result.get('extracted_date'),
+            'extraction_quality': result.get('extraction_quality', {}),
+            'groups_and_companies': result.get('groups_and_companies', []),
+            'writing_agents': result.get('writing_agents', []),
+            'business_intelligence': result.get('business_intelligence', {}),
+            'tokens_used': result.get('total_tokens_used', 0),
+            'estimated_cost': result.get('estimated_cost_usd', 0),
+            'processing_time_seconds': result.get('processing_time_seconds', 0),
+            'conversational_summary': result.get('summary'),
+            'structured_data': result.get('structured_data', {}),
+            'summary_data': result.get('structured_data', {})
+        }
+        
+        if extra_fields:
+            payload.update(extra_fields)
+        
+        await progress_tracker.send_completion(payload)
 
     async def _resolve_carrier_name(self, company_id: Optional[str], file_path: str) -> Optional[str]:
         """

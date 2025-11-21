@@ -59,6 +59,124 @@ async def get_enhanced_extraction_service_instance(use_enhanced: bool = None):
 # Store running extraction tasks for cancellation
 running_extractions: Dict[str, asyncio.Task] = {}
 
+SUMMARY_TOTAL_KEYWORDS = [
+    ("total for vendor", 6.0),
+    ("total for carrier", 5.0),
+    ("total for company", 4.5),
+    ("total for broker", 4.5),
+    ("total for group", 4.0),
+    ("total for statement", 4.5),
+    ("total for report", 4.0),
+    ("commission total", 4.0),
+    ("total commission payment", 4.0),
+    ("net commission", 3.5),
+    ("net payment", 3.5),
+    ("grand total", 3.5),
+    ("statement total", 3.5),
+    ("total payment", 3.0),
+    ("total amount", 3.0),
+    ("total due", 3.0)
+]
+
+COMMISSION_COLUMN_KEYWORDS = [
+    "paid amount",
+    "paid amt",
+    "commission",
+    "net commission",
+    "commission amount",
+    "commission paid",
+    "net payment",
+    "payment amount",
+    "total commission",
+    "total payment"
+]
+
+
+def _extract_commission_total_from_table(
+    table: Dict[str, Any],
+    parse_currency_value
+) -> Optional[float]:
+    """
+    Identify the best commission total candidate from summary rows.
+    Prioritizes rows that contain 'Total for Vendor/Group', 'Commission Total', etc.
+    """
+    if not table or not parse_currency_value:
+        return None
+    
+    headers = table.get('header') or table.get('headers') or []
+    rows = table.get('rows') or []
+    if not headers or not rows:
+        return None
+    
+    header_tokens = [str(header).lower() for header in headers]
+    candidate_columns = [
+        idx for idx, header in enumerate(header_tokens)
+        if any(keyword in header for keyword in COMMISSION_COLUMN_KEYWORDS)
+    ]
+    if not candidate_columns:
+        candidate_columns = [len(headers) - 1] if headers else []
+    
+    summary_rows = set(table.get('summaryRows', []) or table.get('summary_rows', []))
+    best_value = None
+    best_score = -1.0
+    total_rows = len(rows)
+    
+    for idx, row in enumerate(rows):
+        if not row:
+            continue
+        row_text = ' '.join(str(cell).lower() for cell in row if cell)
+        if not row_text:
+            continue
+        
+        phrase_score = 0.0
+        for keyword, weight in SUMMARY_TOTAL_KEYWORDS:
+            if keyword in row_text:
+                phrase_score = max(phrase_score, weight)
+        if "total" in row_text:
+            phrase_score = max(phrase_score, 1.0)
+        if idx in summary_rows:
+            phrase_score += 3.5
+        if idx >= total_rows - 3:
+            phrase_score += 1.5
+        
+        if phrase_score <= 0:
+            continue
+        
+        for col_idx in candidate_columns:
+            if col_idx >= len(row):
+                continue
+            value = parse_currency_value(str(row[col_idx]))
+            if value is None:
+                continue
+            if phrase_score > best_score:
+                best_score = phrase_score
+                best_value = value
+    
+    return best_value
+
+
+def _should_replace_total(existing_amount: Optional[float], existing_method: Optional[str], candidate_amount: float) -> bool:
+    """
+    Determine if a newly detected total should override the current one.
+    Prefers summary-row totals over metadata when there is a large discrepancy.
+    """
+    if candidate_amount is None:
+        return False
+    if existing_amount is None:
+        return True
+    
+    difference = abs(candidate_amount - existing_amount)
+    tolerance = max(5.0, abs(existing_amount) * 0.05)
+    
+    if difference <= tolerance:
+        return False
+    
+    if existing_method in {None, 'document_metadata', 'gpt_summary_regex'}:
+        return True
+    
+    # Prefer candidate if it is significantly larger and existing method was heuristic
+    return candidate_amount > existing_amount
+
 @router.post("/extract-tables-smart/")
 async def extract_tables_smart(
     file: UploadFile = File(...),
@@ -728,11 +846,39 @@ async def extract_tables_smart(
                             except Exception as e:
                                 logger.warning(f"Failed to extract current total amount: {e}")
                         
+                        # STRATEGY 3B: Inspect summary rows for vendor/carrier totals
+                        if current_total_amount is None and selected_table:
+                            summary_row_total = _extract_commission_total_from_table(
+                                selected_table,
+                                format_learning_service.parse_currency_value
+                            )
+                            if summary_row_total is not None:
+                                current_total_amount = summary_row_total
+                                total_extraction_method = 'summary_row_scan'
+                                logger.info(f"✅ Total extracted from summary rows: ${current_total_amount:.2f}")
+                        elif current_total_amount is not None and selected_table:
+                            summary_row_total = _extract_commission_total_from_table(
+                                selected_table,
+                                format_learning_service.parse_currency_value
+                            )
+                            if summary_row_total is not None and _should_replace_total(
+                                current_total_amount,
+                                total_extraction_method,
+                                summary_row_total
+                            ):
+                                logger.warning(
+                                    f"⚠️ Replacing total_amount {current_total_amount:.2f} "
+                                    f"(method={total_extraction_method}) with summary_row_scan={summary_row_total:.2f}"
+                                )
+                                current_total_amount = summary_row_total
+                                total_extraction_method = 'summary_row_scan'
+                        
                         # STRATEGY 4: Calculate from paid_amount column if still not found
                         if current_total_amount is None and selected_table:
                             try:
                                 headers = selected_table.get('header', [])
                                 rows = selected_table.get('rows', [])
+                                summary_indices = set(selected_table.get('summaryRows', []) or selected_table.get('summary_rows', []))
                                 
                                 # Find "Paid Amount" or similar column
                                 amount_col_idx = None
@@ -744,7 +890,9 @@ async def extract_tables_smart(
                                 
                                 if amount_col_idx is not None:
                                     calculated_total = 0.0
-                                    for row in rows:
+                                    for row_idx, row in enumerate(rows):
+                                        if row_idx in summary_indices:
+                                            continue
                                         if amount_col_idx < len(row):
                                             amount = format_learning_service.parse_currency_value(str(row[amount_col_idx]))
                                             if amount:
@@ -806,6 +954,7 @@ async def extract_tables_smart(
                                 try:
                                     headers = selected_table.get('header', [])
                                     rows = selected_table.get('rows', [])
+                                    summary_indices = set(selected_table.get('summaryRows', []) or selected_table.get('summary_rows', []))
                                     
                                     # Look for amount column
                                     amount_col_idx = None
@@ -831,7 +980,9 @@ async def extract_tables_smart(
                                         # If still not found, calculate from all rows
                                         if fallback_total is None:
                                             calculated = 0.0
-                                            for row in rows:
+                                            for row_idx, row in enumerate(rows):
+                                                if row_idx in summary_indices:
+                                                    continue
                                                 if amount_col_idx < len(row):
                                                     amount = format_learning_service.parse_currency_value(str(row[amount_col_idx]))
                                                     if amount:
@@ -1013,17 +1164,15 @@ async def extract_tables_smart(
         
         # ===== CONVERSATIONAL SUMMARY GENERATION =====
         # Generate natural language summary in parallel (non-blocking)
-        conversational_summary = None
-        structured_data = None  # ← Store structured data from summary
+        structured_data = extraction_result.get('structured_data') or {}
+        conversational_summary = extraction_result.get('summary')
         summary_generation_task = None
         
-        # Check if enhanced summary was already generated by Claude pipeline
-        if extraction_result.get('summary') and extraction_result.get('extraction_pipeline') == '3-phase-enhanced':
-            logger.info("✅ Enhanced summary already generated by Claude pipeline - using it")
-            conversational_summary = extraction_result.get('summary')
-            structured_data = extraction_result.get('structured_data', {})  # ← Extract structured data too
-            logger.info(f"   Enhanced summary: {conversational_summary}")
-            logger.info(f"   Structured data: {structured_data}")
+        # Use any pre-generated summary from upstream pipeline; otherwise fall back to on-demand generation
+        if conversational_summary:
+            logger.info("✅ Conversational summary supplied by extraction pipeline")
+            logger.info(f"   Summary preview: {conversational_summary[:200]}")
+            logger.info(f"   Structured data keys: {list(structured_data.keys()) if structured_data else []}")
         else:
             # Generate conversational summary if not already done
             try:

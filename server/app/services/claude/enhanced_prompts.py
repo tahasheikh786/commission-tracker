@@ -10,6 +10,10 @@ This module implements research-backed prompt engineering techniques:
 Based on the Cursor AI Implementation Guide for matching Google Gemini quality.
 """
 
+import html
+from typing import Any, Dict, Optional
+
+
 class EnhancedClaudePrompts:
     """Enhanced prompts for intelligent document understanding"""
     
@@ -88,6 +92,49 @@ Return your response in this exact JSON format:
 }
 
 If you cannot find the information with high confidence, use null for the value and a lower confidence score."""
+
+    @staticmethod
+    def build_metadata_context(metadata: Optional[Dict[str, Any]]) -> str:
+        """
+        Build a lightweight XML context block capturing known metadata so Claude can
+        anchor its extraction to carrier/broker hints identified during Stage 0.
+        """
+        if not metadata:
+            return ""
+        
+        def _escape(value: Any) -> str:
+            return html.escape(str(value)) if value is not None else ""
+        
+        lines = ["<known_metadata>"]
+        
+        if metadata.get('carrier_name'):
+            lines.append(
+                f'  <carrier confidence="{metadata.get("carrier_confidence", 0.0):.2f}">'
+                f"{_escape(metadata.get('carrier_name'))}</carrier>"
+            )
+        if metadata.get('statement_date'):
+            lines.append(
+                f'  <statement_date confidence="{metadata.get("date_confidence", 0.0):.2f}">'
+                f"{_escape(metadata.get('statement_date'))}</statement_date>"
+            )
+        if metadata.get('broker_company'):
+            lines.append(
+                f'  <broker confidence="{metadata.get("broker_confidence", 0.0):.2f}">'
+                f"{_escape(metadata.get('broker_company'))}</broker>"
+            )
+        if metadata.get('document_type'):
+            lines.append(f"  <document_type>{_escape(metadata.get('document_type'))}</document_type>")
+        if metadata.get('total_pages'):
+            lines.append(f"  <detected_pages>{metadata.get('total_pages')}</detected_pages>")
+        if metadata.get('evidence'):
+            lines.append(f"  <metadata_evidence>{_escape(metadata.get('evidence'))}</metadata_evidence>")
+        
+        lines.append(
+            f'  <source model="{_escape(metadata.get("model", "claude-haiku"))}">'
+            f"{_escape(metadata.get('source', 'claude_metadata_prefetch'))}</source>"
+        )
+        lines.append("</known_metadata>")
+        return "\n".join(lines)
 
     @staticmethod
     def get_table_extraction_prompt() -> str:

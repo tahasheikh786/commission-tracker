@@ -22,6 +22,54 @@ DEFAULT_EXPECTED_ROLLUPS = [
 ]
 DEFAULT_SUMMARY_TOLERANCE_BPS = 75  # 0.75% difference allowed
 
+SUMMARY_PHRASE_HINTS = [
+    {
+        "pattern": r"\btotal\s+for\s+vendor\b",
+        "weight": 0.45,
+        "reason": "Matches 'Total for Vendor' pattern"
+    },
+    {
+        "pattern": r"\btotal\s+for\s+group\b",
+        "weight": 0.4,
+        "reason": "Matches 'Total for Group' pattern"
+    },
+    {
+        "pattern": r"\btotal\s+for\s+(carrier|company|broker)\b",
+        "weight": 0.4,
+        "reason": "Matches carrier/company total pattern"
+    },
+    {
+        "pattern": r"\btotal\s+for\b",
+        "weight": 0.35,
+        "reason": "Contains 'Total for ...' phrase"
+    },
+    {
+        "pattern": r"\bcommission\s+total\b",
+        "weight": 0.35,
+        "reason": "Contains 'Commission Total'"
+    },
+    {
+        "pattern": r"\bnet\s+(payment|commission)\b",
+        "weight": 0.32,
+        "reason": "Contains 'Net Payment/Commission'"
+    },
+    {
+        "pattern": r"\bgrand\s+total\b",
+        "weight": 0.35,
+        "reason": "Contains 'Grand Total'"
+    },
+    {
+        "pattern": r"\bstatement\s+total\b",
+        "weight": 0.35,
+        "reason": "Contains 'Statement Total'"
+    },
+    {
+        "pattern": r"\btotal\s+commission\s+payment\b",
+        "weight": 0.35,
+        "reason": "Contains 'Total Commission Payment'"
+    }
+]
+
 
 def normalize_table_headers(headers: List[str]) -> List[str]:
     """
@@ -484,12 +532,22 @@ def _build_summary_config(prompt_options: Optional[Dict[str, Any]]) -> Dict[str,
     except (TypeError, ValueError):
         tolerance_bps = DEFAULT_SUMMARY_TOLERANCE_BPS
     
+    phrase_patterns = [
+        {
+            "regex": re.compile(hint["pattern"], re.IGNORECASE),
+            "weight": hint["weight"],
+            "reason": hint["reason"]
+        }
+        for hint in SUMMARY_PHRASE_HINTS
+    ]
+    
     return {
         "keywords": keywords,
         "expected_rollups": [label.lower() for label in expected_rollups],
         "numeric_tolerance_bps": tolerance_bps,
         "tolerance_ratio": tolerance_bps / 10000.0,
-        "row_role_examples": prompt_options.get("row_role_examples", [])
+        "row_role_examples": prompt_options.get("row_role_examples", []),
+        "phrase_patterns": phrase_patterns
     }
 
 
@@ -656,6 +714,7 @@ def _detect_summary_rows_with_context(
     keywords = summary_config["keywords"]
     tolerance_ratio = summary_config["tolerance_ratio"]
     numeric_columns = profile.get("numeric_columns", [])
+    phrase_patterns = summary_config.get("phrase_patterns", [])
     
     row_annotations = table.get("row_annotations") or []
     annotation_lookup = {
@@ -686,8 +745,24 @@ def _detect_summary_rows_with_context(
         keyword_match = any(kw in text_blob for kw in keywords)
         expected_rollup_match = any(label in text_blob for label in expected_rollups)
         annotation_summary_hint = "summary" in annotation_role if annotation_role else False
+        phrase_bonus = 0.0
+        phrase_reasons: List[str] = []
+        for phrase in phrase_patterns:
+            regex = phrase.get("regex")
+            if not regex:
+                continue
+            if regex.search(text_blob):
+                phrase_bonus = max(phrase_bonus, phrase.get("weight", 0.0))
+                reason = phrase.get("reason")
+                if reason:
+                    phrase_reasons.append(reason)
         
-        candidate = annotation_summary_hint or keyword_match or expected_rollup_match
+        candidate = (
+            annotation_summary_hint
+            or keyword_match
+            or expected_rollup_match
+            or phrase_bonus > 0
+        )
         if not candidate:
             candidate = (
                 row_profile.get("numeric_ratio", 0) >= 0.7
@@ -707,6 +782,9 @@ def _detect_summary_rows_with_context(
         if expected_rollup_match:
             score += 0.15
             reasons.append("Matches expected rollup label")
+        if phrase_bonus > 0:
+            score += phrase_bonus
+            reasons.extend(phrase_reasons)
         if row_profile.get("blank_identifier_columns"):
             score += 0.1
             reasons.append("Identifier columns blank")

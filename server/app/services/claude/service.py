@@ -78,15 +78,20 @@ class ClaudeDocumentAIService:
         """
         self.config = config or {}
         
-        # Model configuration
+        # Model configuration (multi-tier for speed vs accuracy)
+        self.metadata_model = os.getenv(
+            'CLAUDE_MODEL_METADATA',
+            'claude-haiku-4-5-20251008'  # Fast, low-cost metadata pass
+        )
         self.primary_model = os.getenv(
             'CLAUDE_MODEL_PRIMARY',
-            'claude-sonnet-4-5-20250929'  # CRITICAL FIX: Fixed typo (was missing hyphen between 4 and 5)
+            'claude-sonnet-4-5-20251008'  # Balanced accuracy + cost
         )
         self.fallback_model = os.getenv(
             'CLAUDE_MODEL_FALLBACK',
             'claude-opus-4-1-20250805'  # Claude Opus 4.1 (August 2025) for complex fallback cases
         )
+        self.prefetch_metadata = os.getenv('CLAUDE_PREFETCH_METADATA', 'true').lower() == 'true'
         
         # File limits
         self.max_file_size_mb = int(os.getenv('CLAUDE_MAX_FILE_SIZE', '32'))
@@ -135,8 +140,10 @@ class ClaudeDocumentAIService:
         }
         
         logger.info(f"✅ Claude Document AI Service initialized")
+        logger.info(f"📋 Metadata model: {self.metadata_model}")
         logger.info(f"📋 Primary model: {self.primary_model}")
         logger.info(f"📋 Fallback model: {self.fallback_model}")
+        logger.info(f"🔍 Metadata prefetch: {'ENABLED' if self.prefetch_metadata else 'DISABLED'}")
         logger.info(f"📏 Limits: {self.max_file_size_mb}MB, {self.max_pages} pages")
         logger.info(f"🛡️  Rate limiting: ENABLED (45 RPM, 36K ITPM, 7.2K OTPM) - CRITICAL FIX for 429 errors")
         logger.info(f"💾 Prompt caching: SUPPORTED")
@@ -263,7 +270,8 @@ class ClaudeDocumentAIService:
     
     async def extract_metadata_only(
         self,
-        file_path: str
+        file_path: str,
+        pdf_info: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         Extract only document metadata (carrier, date, broker) from PDF.
@@ -274,6 +282,7 @@ class ClaudeDocumentAIService:
         
         Args:
             file_path: Path to PDF file
+            pdf_info: Optional precomputed PDF metadata to avoid re-validation
             
         Returns:
             Dictionary with metadata extraction results
@@ -282,14 +291,14 @@ class ClaudeDocumentAIService:
             logger.info(f"🔍 Extracting metadata with Claude from: {file_path}")
             
             # Validate file
-            validation = self._validate_file(file_path)
-            if not validation['valid']:
-                return {
-                    'success': False,
-                    'error': validation['error']
-                }
-            
-            pdf_info = validation['pdf_info']
+            if pdf_info is None:
+                validation = self._validate_file(file_path)
+                if not validation['valid']:
+                    return {
+                        'success': False,
+                        'error': validation['error']
+                    }
+                pdf_info = validation['pdf_info']
             page_count = pdf_info.get('page_count', 0)
             
             # ✅ CRITICAL OPTIMIZATION: Extract only first 3 pages for metadata
@@ -303,11 +312,10 @@ class ClaudeDocumentAIService:
                     logger.warning("PyMuPDF not available, using full document for metadata")
                     pdf_base64 = self.pdf_processor.encode_pdf_to_base64(file_path)
                     metadata_pages = page_count
-                    # Skip chunking logic
                     extraction_result = await self._call_claude_api(
                         pdf_base64,
                         self.enhanced_prompts.get_metadata_extraction_prompt(),
-                        model=self.primary_model,
+                        model=self.metadata_model or self.primary_model,
                         pdf_pages=metadata_pages,
                         use_cache=False
                     )
@@ -329,7 +337,8 @@ class ClaudeDocumentAIService:
                         'document_type': parsed_data.get('document_type', 'commission_statement'),
                         'total_pages': pdf_info.get('page_count', 0),
                         'extraction_method': 'claude_metadata',
-                        'evidence': parsed_data.get('evidence', 'Metadata extracted from document')
+                        'evidence': parsed_data.get('evidence', 'Metadata extracted from document'),
+                        'model_used': self.metadata_model or self.primary_model
                     }
                 
                 doc = fitz.open(file_path)
@@ -357,7 +366,7 @@ class ClaudeDocumentAIService:
             extraction_result = await self._call_claude_api(
                 pdf_base64,
                 metadata_prompt,
-                model=self.primary_model,
+                model=self.metadata_model or self.primary_model,
                 pdf_pages=metadata_pages,  # ✅ Use reduced page count
                 use_cache=False  # Metadata extraction is lightweight
             )
@@ -389,7 +398,8 @@ class ClaudeDocumentAIService:
                 'document_type': parsed_data.get('document_type', 'commission_statement'),
                 'total_pages': pdf_info.get('page_count', 0),
                 'extraction_method': 'claude_metadata',
-                'evidence': parsed_data.get('evidence', 'Metadata extracted from document')
+                'evidence': parsed_data.get('evidence', 'Metadata extracted from document'),
+                'model_used': self.metadata_model or self.primary_model
             }
             
         except Exception as e:
@@ -453,12 +463,38 @@ class ClaudeDocumentAIService:
             # Instead of hardcoded page threshold (>8), estimate tokens first
             # This prevents 36K token limit errors on 7-page files with dense content
             
-            # Get prompts for extraction (same as UHC and all other carriers)
-            dynamic_prompt = self.dynamic_prompts.get_prompt_by_name(carrier_name)
-            critical_carrier_instructions = self.enhanced_prompts.get_table_extraction_prompt()
-            base_extraction_prompt = self.enhanced_prompts.get_document_intelligence_extraction_prompt()
-            full_prompt = base_extraction_prompt + "\n\n" + critical_carrier_instructions + dynamic_prompt
-            system_prompt = self.enhanced_prompts.get_base_extraction_instructions()
+            # Optional Stage 0: fast metadata prefetch (Haiku) for better prompts
+            metadata_hint = None
+            if self.prefetch_metadata:
+                try:
+                    if progress_tracker:
+                        await progress_tracker.update_progress(
+                            "document_processing",
+                            18,
+                            "Prefetching metadata with Claude Haiku"
+                        )
+                    metadata_prefetch = await self.extract_metadata_only(file_path, pdf_info=pdf_info)
+                    if metadata_prefetch.get('success'):
+                        metadata_hint = self._prepare_metadata_hint(metadata_prefetch)
+                        logger.info(
+                            "✅ Prefetched metadata via %s | carrier=%s | statement_date=%s",
+                            metadata_prefetch.get('model_used', self.metadata_model),
+                            metadata_prefetch.get('carrier_name'),
+                            metadata_prefetch.get('statement_date')
+                        )
+                    else:
+                        logger.warning(
+                            "⚠️ Metadata prefetch skipped: %s",
+                            metadata_prefetch.get('error', 'Unknown error')
+                        )
+                except Exception as metadata_error:
+                    logger.warning(f"⚠️ Metadata prefetch failed: {metadata_error}")
+                    metadata_hint = None
+            else:
+                metadata_hint = None
+
+            # Compose prompts with optional metadata context and carrier-specific instructions
+            full_prompt, system_prompt = self._compose_prompts(carrier_name, metadata_hint)
             
             # ✅ NEW: Check if we should force chunking BEFORE extraction
             should_force_chunk = await self._validate_and_chunk_if_needed(
@@ -510,7 +546,8 @@ class ClaudeDocumentAIService:
                             carrier_name=carrier_name,
                             file_path=file_path,
                             pdf_info=pdf_info,
-                            progress_tracker=progress_tracker
+                            progress_tracker=progress_tracker,
+                            metadata_hint=metadata_hint
                         )
                         
                         if fallback_result.get('success') and fallback_result.get('tables'):
@@ -566,6 +603,9 @@ class ClaudeDocumentAIService:
                     writing_agents=writing_agents,
                     business_intelligence=business_intelligence
                 )
+
+                # Merge prefetched metadata for completeness/correctness
+                self._merge_prefetched_metadata(result, metadata_hint)
             else:
                 # Extraction failed, return error
                 raise ValueError(result.get('error', 'Extraction failed'))
@@ -668,6 +708,97 @@ class ClaudeDocumentAIService:
         
         except Exception as e:
             return {'valid': False, 'error': f'Validation error: {str(e)}'}
+    
+    def _compose_prompts(
+        self,
+        carrier_name: Optional[str],
+        metadata_hint: Optional[Dict[str, Any]] = None
+    ) -> Tuple[str, str]:
+        """
+        Build user/system prompts with dynamic carrier rules and optional metadata context.
+        """
+        dynamic_prompt = self.dynamic_prompts.get_prompt_by_name(carrier_name)
+        if dynamic_prompt:
+            logger.info(f"🎯 Carrier-specific prompt matched for: {carrier_name}")
+        base_extraction_prompt = self.enhanced_prompts.get_document_intelligence_extraction_prompt()
+        critical_carrier_instructions = self.enhanced_prompts.get_table_extraction_prompt()
+        metadata_context = self.enhanced_prompts.build_metadata_context(metadata_hint)
+        
+        prompt_parts = [
+            metadata_context,
+            base_extraction_prompt,
+            critical_carrier_instructions,
+            dynamic_prompt
+        ]
+        full_prompt = "\n\n".join([part for part in prompt_parts if part])
+        system_prompt = self.enhanced_prompts.get_base_extraction_instructions()
+        return full_prompt, system_prompt
+    
+    def _prepare_metadata_hint(self, metadata_result: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        Normalize metadata prefetch payload for prompt conditioning and downstream merging.
+        """
+        if not metadata_result or not metadata_result.get('success'):
+            return None
+        
+        hint = {
+            'carrier_name': metadata_result.get('carrier_name'),
+            'carrier_confidence': metadata_result.get('carrier_confidence'),
+            'statement_date': metadata_result.get('statement_date'),
+            'date_confidence': metadata_result.get('date_confidence'),
+            'broker_company': metadata_result.get('broker_company'),
+            'broker_confidence': metadata_result.get('broker_confidence'),
+            'document_type': metadata_result.get('document_type'),
+            'total_pages': metadata_result.get('total_pages'),
+            'evidence': metadata_result.get('evidence'),
+            'model': metadata_result.get('model_used') or self.metadata_model,
+            'source': metadata_result.get('extraction_method', 'claude_metadata')
+        }
+        
+        # Remove entirely empty hints
+        if not any(value for key, value in hint.items() if key not in ['model', 'source']):
+            return None
+        
+        return hint
+    
+    def _merge_prefetched_metadata(
+        self,
+        result: Optional[Dict[str, Any]],
+        metadata_hint: Optional[Dict[str, Any]]
+    ) -> None:
+        """
+        Merge metadata prefetch results into final payload without overwriting high-confidence data.
+        """
+        if not result or not metadata_hint:
+            return
+        
+        doc_metadata = result.setdefault('document_metadata', {})
+        field_pairs = [
+            ('carrier_name', 'carrier_confidence'),
+            ('statement_date', 'date_confidence'),
+            ('broker_company', 'broker_confidence')
+        ]
+        
+        for field, confidence_field in field_pairs:
+            new_value = metadata_hint.get(field)
+            if not new_value:
+                continue
+            new_confidence = metadata_hint.get(confidence_field, 0.0) or 0.0
+            current_value = doc_metadata.get(field)
+            current_confidence = doc_metadata.get(confidence_field, 0.0) or 0.0
+            
+            if (not current_value) or (new_confidence and new_confidence > current_confidence):
+                doc_metadata[field] = new_value
+                if new_confidence:
+                    doc_metadata[confidence_field] = new_confidence
+        
+        if metadata_hint.get('document_type') and not doc_metadata.get('document_type'):
+            doc_metadata['document_type'] = metadata_hint['document_type']
+        if metadata_hint.get('evidence'):
+            doc_metadata['metadata_evidence'] = metadata_hint['evidence']
+        
+        metadata_section = result.setdefault('metadata', {})
+        metadata_section['prefetched_metadata'] = metadata_hint.copy()
     
     def _transform_carrier_broker_metadata(self, parsed_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -1865,7 +1996,8 @@ class ClaudeDocumentAIService:
         carrier_name,
         file_path: str,
         pdf_info: Dict[str, Any],
-        progress_tracker = None
+        progress_tracker = None,
+        metadata_hint: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         Attempt extraction with fallback model.
@@ -1881,16 +2013,8 @@ class ClaudeDocumentAIService:
                 "Retrying with alternative Claude model"
             )
         
-        # Get prompts for extraction (same as UHC and all other carriers)
-        dynamic_prompt = self.dynamic_prompts.get_prompt_by_name(carrier_name)
-        if dynamic_prompt:
-            logger.info(f"🎯 Fallback: Using carrier-specific dynamic prompt for: {carrier_name}")
-        
-        # ✅ CRITICAL FIX: Use enhanced prompts + critical carrier instructions for fallback too
-        critical_carrier_instructions = self.enhanced_prompts.get_table_extraction_prompt()
-        base_extraction_prompt = self.enhanced_prompts.get_document_intelligence_extraction_prompt()
-        full_prompt = base_extraction_prompt + "\n\n" + critical_carrier_instructions + dynamic_prompt
-        system_prompt = self.enhanced_prompts.get_base_extraction_instructions()
+        # Compose prompts (reuse metadata context + carrier-specific templates)
+        full_prompt, system_prompt = self._compose_prompts(carrier_name, metadata_hint)
         
         # ✅ NEW: Check if fallback model also needs chunking (same token limits apply!)
         page_count = pdf_info.get('page_count', 0)
@@ -1970,7 +2094,7 @@ class ClaudeDocumentAIService:
             doc_metadata
         )
         
-        return self._format_response(
+        fallback_response = self._format_response(
             tables=tables,
             doc_metadata=doc_metadata,
             pdf_info=pdf_info,
@@ -1980,6 +2104,8 @@ class ClaudeDocumentAIService:
             writing_agents=writing_agents,
             business_intelligence=business_intelligence
         )
+        self._merge_prefetched_metadata(fallback_response, metadata_hint)
+        return fallback_response
     
     async def _call_claude_api(
         self,
