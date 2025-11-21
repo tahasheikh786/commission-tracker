@@ -207,6 +207,35 @@ class GCSService:
             logger.error(f"Unexpected error downloading from GCS: {e}")
             return None
     
+    def download_file_bytes(self, gcs_key: str) -> Optional[bytes]:
+        """
+        Download a file from GCS and return its bytes (without writing to disk).
+        Useful for proxying files directly through the API.
+        """
+        if not self.is_available():
+            logger.error("GCS not available or not properly configured")
+            return None
+        
+        try:
+            blob = self.bucket.blob(gcs_key)
+            
+            if not blob.exists():
+                logger.error(f"File not found in GCS: {gcs_key}")
+                return None
+            
+            logger.info(f"📥 Downloading bytes from GCS: {gcs_key}")
+            return blob.download_as_bytes()
+        
+        except NotFound:
+            logger.error(f"File not found in GCS: {gcs_key}")
+            return None
+        except GoogleCloudError as e:
+            logger.error(f"GCS download bytes error: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error downloading bytes from GCS: {e}")
+            return None
+    
     def get_file_url(self, gcs_key: str) -> str:
         """
         Get the public URL for a file in GCS.

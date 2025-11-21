@@ -1,6 +1,22 @@
 import type { NextConfig } from "next";
 
+const isProd = process.env.NODE_ENV === 'production' || process.env.VERCEL === '1';
+const sanitizedEnvUrl = (() => {
+  const raw = process.env.NEXT_PUBLIC_API_URL;
+  if (!raw) return null;
+  if (isProd && raw.startsWith('http://')) {
+    return raw.replace('http://', 'https://');
+  }
+  return raw;
+})();
+
+const defaultApiUrl = sanitizedEnvUrl
+  || (isProd ? 'https://commission-tracker-1.onrender.com' : 'http://localhost:8000');
+
 const nextConfig: NextConfig = {
+  env: {
+    NEXT_PUBLIC_API_URL: defaultApiUrl,
+  },
   // Externalize PDF.js for server-side rendering (Next.js 15+)
   serverExternalPackages: ['pdfjs-dist'],
   

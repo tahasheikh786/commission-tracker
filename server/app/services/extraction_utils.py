@@ -67,6 +67,21 @@ SUMMARY_PHRASE_HINTS = [
         "pattern": r"\btotal\s+commission\s+payment\b",
         "weight": 0.35,
         "reason": "Contains 'Total Commission Payment'"
+    },
+    {
+        "pattern": r"\bwriting\s+agent\s+number\b",
+        "weight": 0.38,
+        "reason": "Matches writing agent number row"
+    },
+    {
+        "pattern": r"\bwriting\s+agent\s+name\b",
+        "weight": 0.38,
+        "reason": "Matches writing agent name row"
+    },
+    {
+        "pattern": r"\bwriting\s+agent\b",
+        "weight": 0.3,
+        "reason": "Matches writing agent metadata row"
     }
 ]
 
@@ -757,11 +772,14 @@ def _detect_summary_rows_with_context(
                 if reason:
                     phrase_reasons.append(reason)
         
+        writing_agent_metadata = "writing" in tokens and "agent" in tokens
+        
         candidate = (
             annotation_summary_hint
             or keyword_match
             or expected_rollup_match
             or phrase_bonus > 0
+            or writing_agent_metadata
         )
         if not candidate:
             candidate = (
@@ -785,6 +803,9 @@ def _detect_summary_rows_with_context(
         if phrase_bonus > 0:
             score += phrase_bonus
             reasons.extend(phrase_reasons)
+        if writing_agent_metadata:
+            score += 0.25
+            reasons.append("Writing agent metadata row")
         if row_profile.get("blank_identifier_columns"):
             score += 0.1
             reasons.append("Identifier columns blank")
