@@ -100,6 +100,7 @@ export function useProgressWebSocket({
   const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttemptsRef = useRef(0);
+  const shouldReconnectRef = useRef(true);
   const maxReconnectAttempts = MAX_RECONNECT_ATTEMPTS; // Use constant defined above
   
   // Store callbacks in refs to avoid recreating connect/disconnect on every render
@@ -154,6 +155,7 @@ export function useProgressWebSocket({
     }
 
     if (wsRef.current) {
+      shouldReconnectRef.current = false;
       wsRef.current.close(1000, 'Client disconnect');
       wsRef.current = null;
     }
@@ -216,6 +218,7 @@ export function useProgressWebSocket({
 
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
+      shouldReconnectRef.current = true;
       
       // Set connection timeout - close if not connected within timeout period
       connectionTimeoutRef.current = setTimeout(() => {
@@ -344,7 +347,7 @@ export function useProgressWebSocket({
         }
         
         // Implement exponential backoff retry
-        if (reconnectAttemptsRef.current < maxReconnectAttempts) {
+        if (shouldReconnectRef.current && reconnectAttemptsRef.current < maxReconnectAttempts) {
           const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 30000);
           console.log(`🔄 Scheduling reconnect in ${delay}ms (attempt ${reconnectAttemptsRef.current + 1}/${maxReconnectAttempts})`);
           reconnectTimeoutRef.current = setTimeout(() => {
@@ -377,7 +380,7 @@ export function useProgressWebSocket({
         }));
 
         // Attempt to reconnect if not a normal closure with exponential backoff
-        if (event.code !== 1000 && event.code !== 1008 && reconnectAttemptsRef.current < maxReconnectAttempts) {
+        if (shouldReconnectRef.current && event.code !== 1000 && event.code !== 1008 && reconnectAttemptsRef.current < maxReconnectAttempts) {
           const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 30000);
           console.log(`🔄 Reconnecting in ${delay}ms (attempt ${reconnectAttemptsRef.current + 1}/${maxReconnectAttempts})...`);
           
@@ -552,6 +555,7 @@ export function useProgressWebSocket({
   }, [coerceSummaryData]);
 
   const reset = useCallback(() => {
+    shouldReconnectRef.current = false;
     disconnect();
     setProgress({
       currentStep: 1, // ✅ Reset to step 1 (1-indexed)
