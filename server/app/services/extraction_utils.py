@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import logging
 import re
+from difflib import SequenceMatcher
 from dateutil import parser as date_parser
 
 logger = logging.getLogger(__name__)
@@ -83,6 +84,42 @@ SUMMARY_PHRASE_HINTS = [
         "weight": 0.3,
         "reason": "Matches writing agent metadata row"
     }
+]
+
+PLACEHOLDER_TOKENS = {
+    "unknown",
+    "null",
+    "none",
+    "n/a",
+    "na",
+    "not provided",
+    "pending"
+}
+
+LOGO_SKIP_TOKENS = {
+    "commission",
+    "statement",
+    "prepared for",
+    "prepared by",
+    "broker",
+    "agent",
+    "summary",
+    "batch date",
+    "to:",
+    "attn",
+    "consultant",
+    "due"
+}
+
+CARRIER_LOGO_PATTERNS = [
+    r'breckpoint',
+    r'redirect\s*health',
+    r'allied\s*benefit\s*systems',
+    r'united\s*health(?:care)?',
+    r'humana',
+    r'aetna',
+    r'anthem',
+    r'blue\s+cross\s+blue\s+shield'
 ]
 
 
@@ -393,10 +430,159 @@ def _infer_sub_column_name(rows: List[List[str]], column_index: int, sub_column_
             return "Rate"
         
         return None
-        
+    
     except Exception as e:
-        logger.warning(f"Error inferring sub-column name: {e}")
+        logger.debug(f"Error inferring sub-column name: {e}")
         return None
+
+def _normalize_name_for_similarity(value: Optional[str]) -> Optional[str]:
+    if not value or not isinstance(value, str):
+        return None
+    normalized = re.sub(r'[^a-z0-9]', '', value.lower())
+    return normalized or None
+
+
+def _name_similarity(a: Optional[str], b: Optional[str]) -> float:
+    norm_a = _normalize_name_for_similarity(a)
+    norm_b = _normalize_name_for_similarity(b)
+    if not norm_a or not norm_b:
+        return 0.0
+    return SequenceMatcher(None, norm_a, norm_b).ratio()
+
+
+def resolve_carrier_broker_roles(
+    document_metadata: Optional[Dict[str, Any]],
+    expected_carrier_name: Optional[str] = None,
+    uploader_company_name: Optional[str] = None,
+    pdf_text_snippet: Optional[str] = None
+) -> Tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
+    """
+    Ensure carrier_name and broker_company are assigned to the correct entities.
+    
+    Uses string-similarity heuristics between the extracted metadata, the expected carrier
+    (selected before extraction), and the uploader's own company to detect swaps.
+    
+    Returns: (updated_metadata, disambiguation_info)
+    """
+    if not document_metadata:
+        return document_metadata, None
+    
+    metadata = dict(document_metadata)
+    adjustments: Dict[str, Any] = {
+        "changed": False,
+        "actions": []
+    }
+    
+    extracted_carrier = metadata.get('carrier_name')
+    extracted_broker = metadata.get('broker_company')
+    
+    expected_similarity = _name_similarity(extracted_carrier, expected_carrier_name) if expected_carrier_name else 0.0
+    broker_similarity_to_expected = _name_similarity(extracted_broker, expected_carrier_name) if expected_carrier_name else 0.0
+    carrier_similarity_to_uploader = _name_similarity(extracted_carrier, uploader_company_name) if uploader_company_name else 0.0
+
+    def _is_placeholder(value: Optional[str]) -> bool:
+        if not value:
+            return True
+        trimmed = value.strip()
+        if not trimmed:
+            return True
+        return trimmed.lower() in PLACEHOLDER_TOKENS
+
+    logo_candidate_cache = {"value": None, "checked": False}
+
+    def _extract_carrier_from_document(text: Optional[str]) -> Optional[str]:
+        if not text:
+            return None
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        for line in lines[:8]:
+            lower = line.lower()
+            if any(skip in lower for skip in LOGO_SKIP_TOKENS):
+                continue
+            if re.search(r'\d', line) and sum(ch.isalpha() for ch in line) < 3:
+                continue
+            if len(line) < 3 or len(line) > 40:
+                continue
+            if extracted_broker and _name_similarity(line, extracted_broker) >= 0.75:
+                continue
+            return line
+        for pattern in CARRIER_LOGO_PATTERNS:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                candidate = match.group(1) if match.lastindex else match.group(0)
+                candidate = candidate.strip()
+                if extracted_broker and _name_similarity(candidate, extracted_broker) >= 0.75:
+                    continue
+                return candidate
+        return None
+
+    def _get_document_carrier() -> Optional[str]:
+        if logo_candidate_cache["checked"]:
+            return logo_candidate_cache["value"]
+        logo_candidate_cache["checked"] = True
+        logo_candidate_cache["value"] = _extract_carrier_from_document(pdf_text_snippet)
+        return logo_candidate_cache["value"]
+    
+    def _ensure_broker(value: Optional[str]):
+        if not value:
+            return
+        metadata['broker_company'] = value
+        metadata['broker_confidence'] = max(metadata.get('broker_confidence', 0.6), 0.85)
+    
+    def _set_carrier(value: Optional[str], reason: str):
+        if not value:
+            return
+        metadata['carrier_name'] = value
+        metadata['carrier_confidence'] = max(metadata.get('carrier_confidence', 0.7), 0.95)
+        adjustments['actions'].append(reason)
+        adjustments['changed'] = True
+
+    def _promote_document_carrier(reason: str, fallback: Optional[str] = None):
+        document_carrier = _get_document_carrier()
+        if document_carrier:
+            _set_carrier(document_carrier, reason)
+            return True
+        if fallback:
+            _set_carrier(fallback, f"{reason}_fallback")
+            return True
+        return False
+    
+    # 1. If the extracted carrier matches uploader's company, treat it as broker (common for MGAs uploading carrier files)
+    if uploader_company_name and carrier_similarity_to_uploader >= 0.8 and expected_carrier_name:
+        _ensure_broker(extracted_carrier or uploader_company_name)
+        if not _promote_document_carrier("carrier_extracted_from_document_logo", expected_carrier_name):
+            _set_carrier(expected_carrier_name, "carrier_matched_uploader_company")
+    
+    # 2. If broker field matches the expected carrier but carrier field does not, swap them
+    elif expected_carrier_name and broker_similarity_to_expected >= 0.75 and expected_similarity < 0.55:
+        _ensure_broker(extracted_carrier or extracted_broker)
+        if not _promote_document_carrier("broker_field_matched_expected_carrier", expected_carrier_name):
+            _set_carrier(expected_carrier_name, "broker_matched_expected_carrier")
+    
+    # 3. If the carrier name is missing entirely, fall back to the selected company
+    elif expected_carrier_name and not extracted_carrier:
+        if not _promote_document_carrier("carrier_missing_logo_recovery", expected_carrier_name):
+            _set_carrier(expected_carrier_name, "carrier_missing_set_to_selected_company")
+
+    # 4. If carrier equals broker or carrier looks placeholder, attempt document extraction
+    else:
+        carrier_name_current = metadata.get('carrier_name')
+        broker_name_current = metadata.get('broker_company')
+        if (
+            pdf_text_snippet
+            and (
+                (carrier_name_current and broker_name_current and _name_similarity(carrier_name_current, broker_name_current) >= 0.8)
+                or _is_placeholder(carrier_name_current)
+            )
+        ):
+            if _promote_document_carrier("carrier_equals_broker_logo_resolution"):
+                if broker_name_current and _name_similarity(metadata['carrier_name'], broker_name_current) >= 0.8:
+                    _ensure_broker(expected_carrier_name or uploader_company_name)
+    
+    if adjustments['changed']:
+        metadata['carrier_broker_disambiguation'] = adjustments
+        return metadata, adjustments
+    
+    return metadata, None
 
 
 def _match_sub_column_pattern(position: int, total_sub_columns: int) -> Optional[str]:
@@ -889,6 +1075,55 @@ def _values_within_tolerance(candidate_value: float, target_value: float, tolera
 
 
 
+def is_grand_total_table(table: Dict[str, Any]) -> bool:
+    """
+    Identify if a table is a grand total/summary table that should NOT be merged or calculated.
+    
+    Grand total tables are characterized by:
+    1. Very few rows (typically 1-3)
+    2. No identifier columns (Group ID, Group Name, Client Name, etc.)
+    3. Headers focused on financial totals only
+    4. Often labeled with "Total" in headers
+    """
+    headers = table.get("headers", []) or table.get("header", [])
+    rows = table.get("rows", [])
+    
+    if not headers or not rows:
+        return False
+    
+    # Check 1: Very few rows (1-3 rows is typical for grand totals)
+    has_few_rows = len(rows) <= 3
+    
+    # Check 2: No identifier columns
+    identifier_keywords = ['group id', 'client', 'company', 'policy', 'member', 'subscriber', 'agent', 'producer']
+    has_identifier = any(
+        any(keyword in str(header).lower() for keyword in identifier_keywords)
+        for header in headers
+    )
+    lacks_identifier = not has_identifier
+    
+    # Check 3: Headers focused on totals/financial amounts
+    total_keywords = ['total', 'commission', 'amount', 'paid', 'invoice', 'premium']
+    total_header_count = sum(
+        1 for header in headers
+        if any(keyword in str(header).lower() for keyword in total_keywords)
+    )
+    mostly_financial = total_header_count >= len(headers) * 0.8  # 80% of headers are financial
+    
+    # Check 4: All rows are summary rows
+    summary_rows = set(table.get("summaryRows", []) or table.get("summary_rows", []))
+    all_rows_summary = len(summary_rows) == len(rows) and len(rows) > 0
+    
+    # A table is a grand total table if it meets multiple criteria
+    is_grand_total = (
+        (has_few_rows and lacks_identifier) or  # Few rows + no identifiers
+        (has_few_rows and mostly_financial) or  # Few rows + mostly financial headers
+        (all_rows_summary and has_few_rows)     # All rows are summaries + few rows
+    )
+    
+    return is_grand_total
+
+
 def stitch_multipage_tables(
     tables: List[Dict[str, Any]],
     allow_fuzzy_merge: bool = False,
@@ -896,6 +1131,8 @@ def stitch_multipage_tables(
 ) -> List[Dict[str, Any]]:
     """
     Enhanced multi-strategy table stitching for tables spanning multiple pages.
+    
+    ✅ CRITICAL: Preserves grand total/summary tables as separate tables.
     
     Strategies:
     1. Canonical header identification and unification
@@ -905,24 +1142,48 @@ def stitch_multipage_tables(
     5. Structure-based matching (column count and data patterns)
     6. Continuation detection (headers only on first page)
     7. Column count alignment for missing headers
+    8. **Grand total table preservation** (DO NOT merge grand total tables)
     """
     if not tables:
         return tables
     
     print(f"📎 Enhanced multi-strategy stitching: Processing {len(tables)} tables")
     
-    # Step 1: Find canonical header (most complete header)
-    headers_list = [table.get("headers", []) for table in tables if table.get("headers") and len(table.get("headers", [])) > 0]
+    # ✅ CRITICAL: Separate grand total tables from detail tables
+    detail_tables = []
+    grand_total_tables = []
+    
+    for i, table in enumerate(tables):
+        if is_grand_total_table(table):
+            print(f"📎 Table {i+1} identified as GRAND TOTAL table - will NOT be merged")
+            grand_total_tables.append(table)
+        else:
+            detail_tables.append(table)
+    
+    if grand_total_tables:
+        print(f"📎 Preserved {len(grand_total_tables)} grand total table(s) from merging")
+    
+    # Only process detail tables for merging
+    tables_to_merge = detail_tables
+    print(f"📎 Processing {len(tables_to_merge)} detail tables for potential merging")
+    
+    # If no detail tables to merge, just return grand total tables
+    if not tables_to_merge:
+        print(f"📎 No detail tables to merge - returning {len(grand_total_tables)} grand total tables")
+        return grand_total_tables
+    
+    # Step 1: Find canonical header (most complete header) from DETAIL tables only
+    headers_list = [table.get("headers", []) for table in tables_to_merge if table.get("headers") and len(table.get("headers", [])) > 0]
     canonical_header = max(headers_list, key=len) if headers_list else []
     print(f"📎 Canonical header identified: {canonical_header} ({len(canonical_header)} columns)")
     
-    # **DEBUG: Log header information for each table**
-    for i, table in enumerate(tables):
+    # **DEBUG: Log header information for each detail table**
+    for i, table in enumerate(tables_to_merge):
         headers = table.get("headers", [])
-        print(f"📎 Table {i+1} headers: {headers} ({len(headers)} columns)")
+        print(f"📎 Detail table {i+1} headers: {headers} ({len(headers)} columns)")
     
-    # Step 2: Group tables by comprehensive similarity
-    table_groups = _group_tables_by_similarity(tables, canonical_header)
+    # Step 2: Group detail tables by comprehensive similarity
+    table_groups = _group_tables_by_similarity(tables_to_merge, canonical_header)
     if allow_fuzzy_merge and len(table_groups) > 1:
         print(f"📎 Fuzzy merge enabled. Attempting to combine similar header groups (threshold={fuzzy_similarity_threshold}).")
         table_groups = _merge_groups_by_similarity(
@@ -931,10 +1192,10 @@ def stitch_multipage_tables(
             fuzzy_similarity_threshold
         )
     
-    print(f"📎 Grouped {len(tables)} tables into {len(table_groups)} groups")
+    print(f"📎 Grouped {len(tables_to_merge)} detail tables into {len(table_groups)} groups")
     
     # Step 3: Merge each group
-    merged_tables = []
+    merged_detail_tables = []
     for i, group in enumerate(table_groups):
         print(f"📎 Merging group {i+1} with {len(group)} tables")
         merged_table = _merge_table_group(group, canonical_header)
@@ -943,13 +1204,16 @@ def stitch_multipage_tables(
         # **DEBUG: Log merged table structure**
         merged_headers = merged_table.get("headers", [])
         merged_rows = merged_table.get("rows", [])
-        print(f"📎 Merged table {i+1}: {len(merged_headers)} headers, {len(merged_rows)} rows")
+        print(f"📎 Merged detail table {i+1}: {len(merged_headers)} headers, {len(merged_rows)} rows")
         print(f"📎 Merged headers: {merged_headers}")
         
-        merged_tables.append(merged_table)
+        merged_detail_tables.append(merged_table)
     
-    print(f"📎 Enhanced stitching completed: {len(merged_tables)} final tables")
-    return merged_tables
+    # Step 4: Combine merged detail tables + preserved grand total tables
+    final_tables = merged_detail_tables + grand_total_tables
+    
+    print(f"📎 Enhanced stitching completed: {len(merged_detail_tables)} detail table(s) + {len(grand_total_tables)} grand total table(s) = {len(final_tables)} final tables")
+    return final_tables
 
 def _group_tables_by_similarity(tables: List[Dict[str, Any]], canonical_header: List[str]) -> List[List[Dict[str, Any]]]:
     """Group tables by comprehensive similarity analysis with improved identical header handling."""

@@ -9,24 +9,23 @@ fi
 
 # Enhanced timeout configuration for large file processing
 # Use environment variables with fallback defaults
-UVICORN_TIMEOUT_KEEP_ALIVE=${UVICORN_TIMEOUT_KEEP_ALIVE:-1800}  # 30 minutes default
-UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN=${UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN:-1800}  # 30 minutes default (CRITICAL FIX)
-UVICORN_WORKERS=${UVICORN_WORKERS:-1}  # Single worker default for stability
+GUNICORN_TIMEOUT=${GUNICORN_TIMEOUT:-900}
+GUNICORN_GRACEFUL_TIMEOUT=${GUNICORN_GRACEFUL_TIMEOUT:-900}
+GUNICORN_KEEPALIVE=${GUNICORN_KEEPALIVE:-65}
+GUNICORN_WORKERS=${GUNICORN_WORKERS:-1}
 
-echo "🚀 Starting server with timeout configuration:"
-echo "   - Keep-alive timeout: ${UVICORN_TIMEOUT_KEEP_ALIVE}s"
-echo "   - Graceful shutdown: ${UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN}s"
-echo "   - Workers: ${UVICORN_WORKERS}"
+echo "🚀 Starting server with Gunicorn:"
+echo "   - Timeout: ${GUNICORN_TIMEOUT}s"
+echo "   - Graceful timeout: ${GUNICORN_GRACEFUL_TIMEOUT}s"
+echo "   - Keep-alive: ${GUNICORN_KEEPALIVE}s"
+echo "   - Workers: ${GUNICORN_WORKERS}"
 
-# Start the FastAPI application as root (to access secrets)
-# Enhanced timeout for large file processing (30 minutes keep-alive)
-exec uvicorn app.main:app \
-  --host 0.0.0.0 \
-  --port 8000 \
-  --workers ${UVICORN_WORKERS} \
-  --timeout-keep-alive ${UVICORN_TIMEOUT_KEEP_ALIVE} \
-  --timeout-graceful-shutdown ${UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN} \
-  --limit-concurrency 100 \
-  --limit-max-requests 1000 \
-  --log-level info \
-  --loop asyncio 
+# Start the FastAPI application via Gunicorn/uvicorn worker (matches Render config)
+exec gunicorn app.main:app \
+  --worker-class uvicorn.workers.UvicornWorker \
+  --bind 0.0.0.0:8000 \
+  --workers ${GUNICORN_WORKERS} \
+  --timeout ${GUNICORN_TIMEOUT} \
+  --graceful-timeout ${GUNICORN_GRACEFUL_TIMEOUT} \
+  --keep-alive ${GUNICORN_KEEPALIVE} \
+  --log-level info

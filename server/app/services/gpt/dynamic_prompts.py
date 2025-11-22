@@ -82,6 +82,41 @@ PROMPT_TEMPLATES = [
     }
 ]
 
+CARRIER_LOGO_HINTS = {
+    "breckpoint": {
+        "display_name": "breckpoint",
+        "logo_description": "Colorful starburst/firework icon with lowercase 'breckpoint' text.",
+        "logo_position": "Top-left header next to the commission title.",
+        "logo_colors": ["multi-color", "rainbow", "orange/blue/green"],
+        "common_mistake": "The following line 'Innovative BPS' is the broker, not the carrier.",
+        "validation_hint": "If you see the breckpoint starburst, breckpoint is always the carrier."
+    },
+    "unitedhealthcare": {
+        "display_name": "UnitedHealthcare",
+        "logo_description": "Blue/orange text logo often accompanied by a sphere icon.",
+        "logo_position": "Top-left or centered above the statement title.",
+        "logo_colors": ["blue", "orange"],
+        "common_mistake": "Sometimes abbreviated as UHC or United Health Group in headers.",
+        "validation_hint": "Any variation of UnitedHealthcare/UHC should map to the UnitedHealthcare carrier."
+    },
+    "redirecthealth": {
+        "display_name": "Redirect Health",
+        "logo_description": "Directional arrow or chevron followed by 'Redirect Health'.",
+        "logo_position": "Top-center header block.",
+        "logo_colors": ["teal", "blue"],
+        "common_mistake": "Logo text split across two lines causing partial extraction.",
+        "validation_hint": "If arrow/chevron logo is present, Redirect Health is the carrier."
+    },
+    "alliedbenefitsystems": {
+        "display_name": "Allied Benefit Systems",
+        "logo_description": "Text logo 'Allied Benefit Systems' or acronym 'ABSF'.",
+        "logo_position": "Top-left header.",
+        "logo_colors": ["blue", "black"],
+        "common_mistake": "Abbreviated as 'Allied' or 'ABS' and confused with broker names.",
+        "validation_hint": "Any 'Allied Benefit Systems/ABSF' branding marks the carrier."
+    }
+}
+
 
 class GPTDynamicPrompts:
     """Prompts for GPT Document AI extraction"""
@@ -169,4 +204,26 @@ class GPTDynamicPrompts:
         """Return carrier-specific behavioral options (e.g., table merge hints)."""
         template = GPTDynamicPrompts._match_template(name)
         return template.get("options", {}) if template else {}
+
+    @staticmethod
+    def get_carrier_logo_hint(name: Optional[str]) -> str:
+        """Return carrier-specific logo extraction hints for the prompt."""
+        if not name:
+            return ""
+        
+        normalized_input = GPTDynamicPrompts._normalize(name)
+        for carrier_key, hint in CARRIER_LOGO_HINTS.items():
+            normalized_key = carrier_key.replace(" ", "")
+            if normalized_key in normalized_input or normalized_input in normalized_key:
+                colors = ", ".join(hint["logo_colors"])
+                return (
+                    f"\n\n🔍 CARRIER LOGO HINT for {hint['display_name']}:\n"
+                    f"- Logo Description: {hint['logo_description']}\n"
+                    f"- Typical Position: {hint['logo_position']}\n"
+                    f"- Logo Colors: {colors}\n"
+                    f"- ⚠️ Common Mistake: {hint['common_mistake']}\n"
+                    f"- ✅ Validation: {hint['validation_hint']}\n"
+                )
+        
+        return ""
 

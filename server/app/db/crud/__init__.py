@@ -7,7 +7,9 @@ from .company import (
     delete_company,
     update_company_name,
     get_latest_statement_upload_for_company,
-    merge_carriers
+    merge_carriers,
+    get_company_role_stats,
+    get_company_role_by_name
 )
 
 from .company_mapping import (
@@ -107,6 +109,7 @@ __all__ = [
     # Company operations
     'get_company_by_name', 'create_company', 'get_all_companies', 'get_company_by_id',
     'delete_company', 'update_company_name', 'get_latest_statement_upload_for_company',
+    'merge_carriers', 'get_company_role_stats', 'get_company_role_by_name',
     
     # Company mapping operations
     'save_company_mapping', 'get_company_configuration', 'save_company_configuration',

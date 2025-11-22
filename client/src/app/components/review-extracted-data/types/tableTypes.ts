@@ -46,9 +46,11 @@ export interface TableSelectionActions {
 export interface SummaryRowDetection {
   summaryRows: Set<number>;
   markAsSummaryRow: (rowIndex: number) => void;
+  markSummaryRows: (rowIndices: number[]) => void;
   unmarkSummaryRow: (rowIndex: number) => void;
+  unmarkSummaryRows: (rowIndices: number[]) => void;
   detectSimilarRows: (referenceRowIndex: number) => number[];
-  autoDetectSummaryRows: () => void;
+  autoDetectSummaryRows: () => number;
   isSummaryRow: (rowIndex: number) => boolean;
 }
 

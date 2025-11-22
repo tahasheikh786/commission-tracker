@@ -43,7 +43,7 @@ export interface ProgressState {
 }
 
 export interface ProgressMessage {
-  type: 'STEP_STARTED' | 'STEP_PROGRESS' | 'STEP_COMPLETED' | 'EXTRACTION_COMPLETE' | 'ERROR' | 'ping' | 'pong' | 'connection_established' | 'progress_update' | 'commission_message';
+  type: 'STEP_STARTED' | 'STEP_PROGRESS' | 'STEP_COMPLETED' | 'EXTRACTION_COMPLETE' | 'ERROR' | 'ping' | 'pong' | 'connection_established' | 'progress_update' | 'commission_message' | 'progress_ping';
   stepIndex?: number;
   stepId?: string;
   message?: string;
@@ -548,6 +548,10 @@ export function useProgressWebSocket({
           }
         }
         break;
+      
+      case 'progress_ping':
+        // Lightweight keepalive signal from server – no state changes needed
+        return;
 
       default:
         console.warn('Unknown message type:', data.type);

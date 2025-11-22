@@ -20,6 +20,7 @@ import asyncio
 import json
 import base64
 import tempfile
+import re
 from typing import Dict, Any, List, Optional, Tuple
 from pathlib import Path
 
@@ -59,6 +60,49 @@ from .utils import (
 from app.services.extraction_utils import normalize_multi_line_headers, normalize_statement_date
 
 logger = logging.getLogger(__name__)
+
+
+def _separate_carrier_and_broker(
+    carrier_name: Optional[str],
+    broker_company: Optional[str]
+) -> Optional[str]:
+    """
+    Remove broker/company fragments that occasionally get appended to the carrier name.
+    
+    Claude sometimes returns strings such as "Breckpoint / Innovative BPS" where the broker
+    is appended to the carrier with a delimiter. This helper removes any fragment that
+    exactly matches the broker_company (case-insensitive) while preserving the remaining
+    carrier tokens.
+    """
+    if not carrier_name:
+        return carrier_name
+    cleaned_carrier = carrier_name.strip()
+    if not broker_company:
+        return cleaned_carrier
+    broker_value = broker_company.strip()
+    if not broker_value:
+        return cleaned_carrier
+    
+    broker_lower = broker_value.lower()
+    # First try delimiter-based splitting so we only drop full broker segments
+    segments = [seg.strip() for seg in re.split(r'[\/\|,\-–—]', cleaned_carrier) if seg.strip()]
+    if len(segments) > 1:
+        remaining_segments = [seg for seg in segments if seg.lower() != broker_lower]
+        if remaining_segments and len(remaining_segments) != len(segments):
+            return " / ".join(remaining_segments).strip()
+    
+    # Fallback: remove the broker substring directly and clean leftover delimiters
+    if broker_lower in cleaned_carrier.lower():
+        pattern = re.compile(re.escape(broker_value), re.IGNORECASE)
+        without_broker = pattern.sub('', cleaned_carrier)
+        # Collapse dangling delimiters or double spaces
+        without_broker = re.sub(r'\s*[/\|,\-–—]\s*', ' ', without_broker)
+        without_broker = re.sub(r'\s{2,}', ' ', without_broker).strip(' -/|,')
+        without_broker = without_broker.strip()
+        if without_broker:
+            return without_broker
+    
+    return cleaned_carrier
 
 
 class ClaudeDocumentAIService:
@@ -825,6 +869,21 @@ class ClaudeDocumentAIService:
         if 'broker_agent' in parsed_data and isinstance(parsed_data['broker_agent'], dict):
             doc_metadata['broker_company'] = parsed_data['broker_agent'].get('company_name')
             doc_metadata['broker_confidence'] = parsed_data['broker_agent'].get('confidence', 0.8)
+        
+        # Remove broker fragments accidentally appended to carrier values
+        if doc_metadata.get('carrier_name') and doc_metadata.get('broker_company'):
+            separated_carrier = _separate_carrier_and_broker(
+                doc_metadata['carrier_name'],
+                doc_metadata['broker_company']
+            )
+            if separated_carrier and separated_carrier != doc_metadata['carrier_name']:
+                logger.info(
+                    "Carrier name cleaned to remove broker fragment: '%s' → '%s'",
+                    doc_metadata['carrier_name'],
+                    separated_carrier
+                )
+                doc_metadata['carrier_name'] = separated_carrier
+                doc_metadata['carrier_cleaned_from_broker'] = True
         
         # Standardize carrier name to prevent duplicates
         if doc_metadata.get('carrier_name'):

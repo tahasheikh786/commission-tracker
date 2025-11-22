@@ -16,25 +16,34 @@ def get_redirect_health_prompt() -> str:
 You are an expert document analyst for insurance commission statements. When analyzing a Redirect Health Commission Statement PDF, apply the following carrier-specific extraction rules as an extension to the standard prompt. These instructions focus on intelligent table consolidation when multiple related tables appear with similar structures.
 
 **Objective:**
-Extract tables and intelligently consolidate multiple related tables when they differ by only 1-2 columns, creating a unified table with all unique columns.
+Extract ALL tables from the document, intelligently consolidate ONLY similar detail tables, but PRESERVE grand total/summary tables as SEPARATE tables.
 
 **Document Structure:**
-Redirect Health statements may display related data across multiple tables with similar but slightly different column structures. The same companies often appear across tables with different commission information.
+Redirect Health statements typically have:
+1. One or more detail tables with group/company commissions (multiple rows with Group ID, Group Name, amounts, rates)
+2. A SEPARATE grand total/summary table at the end (usually 1-3 rows showing final totals across all groups)
+3. Detail tables may have similar but slightly different column structures
 
 **Table Extraction and Consolidation Rules:**
 
-1. **Identify Structurally Similar Tables**
-   - Compare all tables in the document
-   - Calculate column overlap between tables
-   - If two or more tables share 80%+ of their columns and contain overlapping data, they are candidates for consolidation
+1. **🔴 CRITICAL: Identify and PRESERVE Grand Total Tables**
+   - Grand total tables are SEPARATE tables (usually at the bottom of the document)
+   - They typically have 1-3 rows and headers like:
+     * "Total Invoice Amount", "Commissionable Amount", "Commission Amount"
+     * "Grand Total", "Total Commission", "Total Paid"
+   - These tables have NO Group ID or Group Name columns (only financial totals)
+   - **DO NOT MERGE** grand total tables with detail tables!
+   - **ALWAYS extract them as SEPARATE tables** in your output
+   - Example: If you see a small table at the bottom with just totals, extract it as Table 3 (separate from detail tables)
 
-2. **Consolidation Logic**
-   - When multiple tables differ by only 1-2 columns, merge them into a single unified table
-   - The merged table should include ALL unique columns from each source table
-   - Example: 
-     - Table 1 columns: [Group ID, Group Name, Invoice Amount, Commissionable Amount, Comm. Rate, Commission Amount]
-     - Table 2 columns: [Group ID, Group Name, Invoice Amount, Commissionable Amount, Allowance Type, Commission Amount]
-     - Merged result: [Group ID, Group Name, Invoice Amount, Commissionable Amount, Comm. Rate, Allowance Type, Commission Amount]
+2. **Consolidate Similar DETAIL Tables Only**
+   - Compare detail tables in the document (those with Group ID, Group Name columns)
+   - If two or more DETAIL tables share 80%+ of their columns and contain overlapping data, they are candidates for consolidation
+   - **DO merge detail tables** if column difference is 1-2 columns AND data rows are the same entities
+   - Example merging (DETAIL TABLES ONLY):
+     * Table 1: [Group ID, Group Name, Invoice Amount, Commissionable Amount, Comm. Rate, Commission Amount]
+     * Table 2: [Group ID, Group Name, Invoice Amount, Commissionable Amount, Allowance Type, Commission Amount]
+     * Merged: [Group ID, Group Name, Invoice Amount, Commissionable Amount, Comm. Rate, Allowance Type, Commission Amount]
 
 3. **Handling Missing Values in Merged Tables**
    - When a column exists in one source table but not another, use null/empty for rows from the other table
@@ -51,9 +60,25 @@ Redirect Health statements may display related data across multiple tables with 
    - Mark the relationship so downstream processes understand the consolidation
    - Include "merged_from" field with array of table IDs that were consolidated
 
+**Consolidation Decision Tree:**
+```
+Is this a grand total/summary table?
+├─ YES (1-3 rows, only financial totals, no Group ID column)
+│  └─ ❌ DO NOT MERGE - Extract as separate table
+└─ NO (detail table with Group ID, Group Name, multiple rows)
+   └─ Compare with other detail tables
+      ├─ Column overlap > 80%? → ✅ DO MERGE
+      └─ Column overlap < 80%? → ❌ Keep separate
+```
+
 **Threshold for Consolidation:**
-- DO merge if column difference is 1-2 columns AND data rows appear to be the same entities
-- DO NOT merge if differences are fundamental to table meaning or if columns differ significantly
+- DO merge if BOTH conditions are met:
+  1. Tables are detail tables (have Group ID/Group Name columns)
+  2. Column difference is 1-2 columns AND data rows appear to be the same entities
+- DO NOT merge if:
+  1. One table is a grand total/summary table
+  2. Columns differ significantly (< 80% overlap)
+  3. Tables serve fundamentally different purposes
 - Prioritize data accuracy over consolidation when uncertain
 
 **Data Validation:**

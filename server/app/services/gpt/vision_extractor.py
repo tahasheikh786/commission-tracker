@@ -29,12 +29,24 @@ from pathlib import Path
 from pypdf import PdfReader, PdfWriter
 
 from openai import AsyncOpenAI
+import httpx
 
 from .retry_handler import retry_with_backoff, RateLimitMonitor
 from .token_optimizer import TokenOptimizer, TokenTracker
 from .circuit_breaker import CircuitBreaker
 
 logger = logging.getLogger(__name__)
+
+CARRIER_TOTAL_PATTERNS = {
+    "allied": "Allied Benefit Systems statements usually place the Vendor total at the end of the final table on the last page under the label 'Total for Vendor'.",
+    "allied benefit systems": "Allied Benefit Systems statements usually place the Vendor total at the end of the final table on the last page under the label 'Total for Vendor'.",
+    "allied benefit": "Allied Benefit Systems statements usually place the Vendor total at the end of the final table on the last page under the label 'Total for Vendor'.",
+    "unitedhealthcare": "UnitedHealthcare statements often show the statement total within the first page summary block near 'Total Commission' or 'Net Payment'.",
+    "united healthcare": "UnitedHealthcare statements often show the statement total within the first page summary block near 'Total Commission' or 'Net Payment'.",
+    "redirect health": "Redirect Health statements typically list the grand total at the top-right of the first page under 'Total Commission Amount'.",
+    # Default fallback for unknown carriers
+    "_default": "For multi-page statements, the authoritative grand total usually appears at the END of the document (last page, bottom of final table) under labels like 'Grand Total', 'Total for Vendor', 'Net Commission', or 'Final Total'. Do NOT use subtotals from early pages."
+}
 
 
 class GPT5VisionExtractorWithPDF:
@@ -52,8 +64,22 @@ class GPT5VisionExtractorWithPDF:
     
     def __init__(self, api_key: Optional[str] = None):
         """Initialize GPT-5 PDF extractor with file management."""
+        timeout_seconds = float(os.getenv("OPENAI_HTTP_TIMEOUT", "600"))
+        connect_timeout = float(os.getenv("OPENAI_HTTP_CONNECT_TIMEOUT", "10"))
+        write_timeout = float(os.getenv("OPENAI_HTTP_WRITE_TIMEOUT", "60"))
+        self._http_timeout = httpx.Timeout(
+            timeout=timeout_seconds,
+            connect=connect_timeout,
+            read=timeout_seconds,
+            write=write_timeout
+        )
+        max_retries = int(os.getenv("OPENAI_HTTP_MAX_RETRIES", "2"))
         try:
-            self.client = AsyncOpenAI(api_key=api_key) if api_key else AsyncOpenAI()
+            self.client = AsyncOpenAI(
+                api_key=api_key,
+                timeout=self._http_timeout,
+                max_retries=max_retries
+            ) if api_key else AsyncOpenAI(timeout=self._http_timeout, max_retries=max_retries)
         except Exception as e:
             logger.warning(f"⚠️ OpenAI client initialization failed: {e}")
             self.client = None
@@ -79,6 +105,9 @@ class GPT5VisionExtractorWithPDF:
         
         # Cache expiry: 24 hours (OpenAI keeps files for 3 days by default)
         self.cache_ttl_hours = 24
+        self.total_pass_max_tokens = int(os.getenv("GPT5_TOTAL_PASS_MAX_TOKENS", "4000"))
+        self.total_pass_model = os.getenv("GPT5_TOTAL_PASS_MODEL", self.model_mini or self.model)
+        self.total_pass_reasoning = os.getenv("GPT5_TOTAL_PASS_REASONING", "medium")
         
         # Initialize utilities
         self.token_optimizer = TokenOptimizer()
@@ -1322,6 +1351,175 @@ class GPT5VisionExtractorWithPDF:
         
         return input_cost + output_cost
     
+    def _normalize_currency_value(self, value: Any) -> Optional[float]:
+        """Convert monetary strings into floats."""
+        if value in (None, "", "null"):
+            return None
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, str):
+            cleaned = (
+                value.replace("$", "")
+                .replace(",", "")
+                .replace("(", "-")
+                .replace(")", "")
+                .strip()
+            )
+            if not cleaned:
+                return None
+            try:
+                return float(cleaned)
+            except ValueError:
+                return None
+        return None
+    
+    def _coerce_total_entry(self, entry: Dict[str, Any]) -> Dict[str, Any]:
+        """Normalize total detection entry values."""
+        normalized = dict(entry or {})
+        normalized['amount'] = self._normalize_currency_value(entry.get('amount'))
+        if normalized['amount'] is None:
+            normalized.pop('amount', None)
+        if 'page_number' in normalized:
+            try:
+                normalized['page_number'] = int(normalized['page_number'])
+            except (ValueError, TypeError):
+                normalized.pop('page_number', None)
+        if 'confidence' in normalized:
+            try:
+                normalized['confidence'] = float(normalized['confidence'])
+            except (ValueError, TypeError):
+                normalized.pop('confidence', None)
+        return normalized
+    
+    def _normalize_total_pass_payload(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Normalize total pass response into consistent structure."""
+        if not isinstance(payload, dict):
+            return {}
+        result = dict(payload)
+        if 'authoritative_total' in result:
+            result['authoritative_total'] = self._coerce_total_entry(result.get('authoritative_total', {}))
+        if 'secondary_totals' in result:
+            result['secondary_totals'] = [
+                self._coerce_total_entry(entry)
+                for entry in result.get('secondary_totals', []) or []
+                if entry
+            ]
+        return result
+    
+    def _build_total_detection_prompt(
+        self,
+        carrier_name: Optional[str] = None
+    ) -> str:
+        """Construct a lightweight prompt focused on authoritative totals."""
+        carrier_hint = ""
+        if carrier_name:
+            normalized = carrier_name.strip().lower()
+            # Try exact match first, then use default fallback for unknown carriers
+            carrier_hint = CARRIER_TOTAL_PATTERNS.get(normalized, CARRIER_TOTAL_PATTERNS.get("_default", ""))
+        else:
+            # No carrier name provided, use default guidance
+            carrier_hint = CARRIER_TOTAL_PATTERNS.get("_default", "")
+        
+        hint_block = ""
+        if carrier_hint:
+            hint_block = f"\nCarrier-specific guidance:\n- {carrier_hint}\n"
+        
+        return f"""You are a forensic financial analyst focused on one task: identify the SINGLE authoritative total commission/net payment amount in this insurance commission statement.
+
+Instructions:
+1. Scan the ENTIRE document (all pages) for phrases such as "Total for Vendor", "Grand Total", "Net Payment", "Total Commission", "Statement Total".
+2. Prefer totals that appear:
+   - After all detail rows
+   - On the final page or end of a table section
+   - With wording that clearly indicates final settlement (not subtotals)
+3. Record location details (page number, nearby text) and provide a short rationale.
+4. Also capture up to three secondary totals if they look relevant but are less definitive.
+{hint_block}
+
+Return ONLY valid JSON using this exact structure:
+{{
+  "authoritative_total": {{
+    "amount": 0.0,
+    "label": "Total for Vendor",
+    "page_number": 1,
+    "confidence": 0.0,
+    "text_snippet": "Exact text that contained the total",
+    "rationale": "Why this is the authoritative total"
+  }},
+  "secondary_totals": [
+    {{
+      "amount": 0.0,
+      "label": "Net Payment",
+      "page_number": 1,
+      "confidence": 0.0,
+      "text_snippet": "Supportive text",
+      "rationale": "Why this is a secondary/backup total"
+    }}
+  ],
+  "notes": "Any observations or warnings if totals conflict"
+}}
+
+Amounts MUST be numeric (e.g., 3604.95). If you cannot find an authoritative total, set amount to null and explain why in notes."""
+
+    async def detect_authoritative_total(
+        self,
+        pdf_path: str,
+        carrier_name: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        """Lightweight pass devoted to finding the authoritative total amount."""
+        if not self.client:
+            return None
+        
+        try:
+            file_id = self._get_cached_file_id(pdf_path)
+            if not file_id:
+                file_id = await self._upload_pdf_to_files_api(pdf_path)
+            
+            messages = [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": self._build_total_detection_prompt(carrier_name)
+                        },
+                        {
+                            "type": "input_file",
+                            "file_id": file_id
+                        }
+                    ]
+                }
+            ]
+            
+            self.rate_limiter.wait_if_needed(max(1000, self.total_pass_max_tokens // 2))
+            
+            response_kwargs = {
+                "model": self.total_pass_model or self.model,
+                "input": messages,
+                "max_output_tokens": self.total_pass_max_tokens,
+                "text": {"format": {"type": "json_object"}},
+                "reasoning": {"effort": self.total_pass_reasoning}
+            }
+            
+            response = await self._execute_with_model_failover(response_kwargs)
+            if not hasattr(response, 'output_text') or not response.output_text:
+                logger.warning("⚠️ Total detection pass returned empty response")
+                return None
+            
+            output_text = response.output_text.strip()
+            if not output_text.startswith('{'):
+                logger.warning(f"⚠️ Total detection returned non-JSON payload: {output_text[:100]}")
+                return None
+            
+            payload = json.loads(output_text)
+            normalized = self._normalize_total_pass_payload(payload)
+            logger.info(f"📌 Authoritative total candidate: {normalized.get('authoritative_total')}")
+            return normalized
+        
+        except Exception as exc:
+            logger.warning(f"⚠️ Total detection pass failed: {exc}")
+            return None
+    
     def _get_pdf_extraction_prompt(
         self,
         carrier_name: str = None,
@@ -1366,16 +1564,43 @@ Your task: Extract comprehensive data from this commission statement.
 
 **EXTRACTION REQUIREMENTS:**
 
-1. **Document Metadata** (CRITICAL - Extract from header/top of document)
-   - Carrier (insurance company): Company name in header/logo
-   - Broker/Agent company: Recipient in "To:" section or header
-   - Statement date (YYYY-MM-DD format): Look for dates in format MM/DD/YYYY, YYYY-MM-DD, or "Period: MM/DD/YYYY - MM/DD/YYYY"
-     * Check header section for "Commission Statement", "Period:", "Statement Date:", "For Period Ending:", etc.
-     * Extract the most prominent date that represents when the statement was created or the period it covers
-     * If you see a date range like "07/01/2025 - 07/31/2025", use the END date (07/31/2025)
-   - Payment type: EFT, Check, Wire, ACH (look in header or payment details section)
-   - Total pages in document
-   - Statement number/ID
+1. **Document Metadata (CRITICAL)** – Follow this exact carrier/broker workflow.
+
+   🔴 **CARRIER IDENTIFICATION (INSURANCE ISSUER)**
+   
+   **STEP 1 – LOGO SCAN (Top-left/Top-center)**
+   - Inspect the first page header for any logo/branding (graphic or stylized text).
+   - Examples: "breckpoint" starburst, "UnitedHealthcare" blue/orange text, "Redirect Health" arrow.
+   - If a logo exists, that name IS the carrier. Use it immediately and skip to STEP 4.
+   
+   **STEP 2 – HEADER TEXT (Only if no logo)**
+   - Read the page-1 header/title for phrases like:
+     * "Commission Statement from [Carrier]"
+     * "Issuer: [Carrier]"
+     * "[Carrier] Agent Commission Report"
+   - Ignore large centered recipient text ("To: Innovative BPS")—that is the broker.
+   
+   **STEP 3 – FOOTER OR ISSUER LINES**
+   - If still unknown, check footer/legal sections for "Issued by" or company copyright statements.
+   
+   **STEP 4 – VALIDATION RULES**
+   - Carrier = company issuing policies (logo/issuer).
+   - Carrier ≠ "To:", "Prepared For:", "Attention:", or broker/agency names.
+   - If logo shows "breckpoint" but header shows "Innovative BPS", set carrier=breckpoint, broker=Innovative BPS.
+   - Confidence guidance:
+     * Logo detection → 0.95
+     * Header text → 0.85
+     * Footer/issuer fallback → 0.70
+   - If carrier equals broker, re-check logo/header until they differ.
+   
+   🟡 **BROKER/AGENT IDENTIFICATION (RECIPIENT)**
+   - Look for "To:", "Prepared For:", "Attention:", "Broker:", "Agency:", or "Agent:" labels.
+   - Broker names often appear centered/right below the title block and lack logos.
+   - Examples: "Innovative BPS", "ABC Insurance Agency".
+   
+   ✅ **ADDITIONAL METADATA**
+   - Statement date (YYYY-MM-DD). For ranges, use the END date.
+   - Payment type (EFT, Check, Wire, ACH), statement numbers, total pages, and payment identifiers.
 
 2. **Writing Agents**
    - Agent number
@@ -1393,10 +1618,14 @@ Your task: Extract comprehensive data from this commission statement.
    - Calculation method (Premium Equivalent, PEPM, %, Flat)
 
 4. **Tables** (CRITICAL - Summary Row Detection)
-   - Extract ALL tables found in the document
+   - Extract ALL tables found in the document (including detail tables AND separate summary/total tables)
    - Preserve headers exactly
    - Include all data rows
-   - **CRITICAL: Identify and mark summary/total rows**
+   - **🔴 CRITICAL: If the document has a SEPARATE summary/totals table (often at the bottom with just 1-3 rows showing final totals), extract it as a DISTINCT table!**
+     * Example: A small table at the end with headers like "Total Invoice Amount", "Commission Amount" containing final statement totals
+     * These grand total tables should be extracted as their own separate table, NOT merged with detail tables
+     * Even if it's just 1 row with final totals - extract it as a separate table!
+   - **CRITICAL: Identify and mark summary/total rows WITHIN tables**
      * Summary rows contain carrier-specific and generic cues (examples provided below)
      * Summary rows often have bold or different formatting
      * Summary rows typically have empty cells in some columns (especially identifier columns)
@@ -1521,11 +1750,20 @@ Return ONLY valid JSON (no markdown):
    - "Statement Date:" or "For Period Ending:"
    - Any prominent date in the top section of page 1
    - If you see a date range, use the END date as statement_date
-9. **FINANCIAL TOTALS ARE CRITICAL** - Extract from the document:
-   - `total_amount`: Total commission paid (look for "Total Commission", "Net Commission", "Total Paid")
-   - `total_invoice`: Total invoice/premium amount (look for "Total Invoice", "Total Premium", "Invoice Total")
-   - These are usually in summary rows or a totals section at the bottom of tables
+9. **FINANCIAL TOTALS ARE CRITICAL** - **SCAN THE ENTIRE DOCUMENT BEFORE EXTRACTING TOTALS:**
+   - **⚠️ CRITICAL: Do NOT use subtotals or partial totals from early pages!**
+   - **The authoritative total is almost always at the END of the document (last page/last table)**
+   - **Process flow:**
+     1. First, scan ALL pages to find ALL potential totals
+     2. Identify which total appears AFTER all detail rows (this is the authoritative total)
+     3. Prefer totals that appear on the LAST page or at the bottom of the final table
+     4. Common labels for the authoritative total: "Total for Vendor", "Grand Total", "Net Commission", "Final Total", "Total Commission Paid"
+     5. If you see multiple totals, use the one that appears LAST in the document
+   - `total_amount`: Total commission paid - **MUST be from the last page or end of final table**
+   - `total_invoice`: Total invoice/premium amount - **MUST be from the last page or end of final table**
+   - **⚠️ WARNING: Do NOT extract totals from page 1 header boxes - these are often subtotals or incorrect**
    - Use exact numerical values, including cents (e.g., 10700.40, not 10700)
+   - **Confidence scoring:** Set confidence to 0.95+ ONLY if the total appears after all detail rows
 10. **SUMMARY ROWS MUST BE IDENTIFIED** - Critical for accurate calculations:
     - Look for rows containing keywords informed by carrier context (see list below)
     - Summary rows often have empty first columns (no group ID or identifier)
@@ -1539,11 +1777,25 @@ Analyze the full document and return the complete extraction as JSON."""
         
         # Add carrier-specific prompts if available
         carrier_specific_prompt = ""
+        carrier_logo_hint = ""
+        carrier_total_hint = ""
         if carrier_name:
             from .dynamic_prompts import GPTDynamicPrompts
             carrier_specific_prompt = GPTDynamicPrompts.get_prompt_by_name(carrier_name)
             if not prompt_options:
                 prompt_options = GPTDynamicPrompts.get_prompt_options(carrier_name)
+            carrier_logo_hint = GPTDynamicPrompts.get_carrier_logo_hint(carrier_name)
+            
+            # ✅ NEW: Add carrier-specific total location hint
+            normalized = carrier_name.strip().lower()
+            carrier_total_location = CARRIER_TOTAL_PATTERNS.get(normalized, CARRIER_TOTAL_PATTERNS.get("_default", ""))
+            if carrier_total_location:
+                carrier_total_hint = f"\n\n**🎯 CARRIER-SPECIFIC TOTAL LOCATION GUIDANCE:**\n{carrier_total_location}"
+        else:
+            # No carrier specified, use default guidance
+            carrier_total_location = CARRIER_TOTAL_PATTERNS.get("_default", "")
+            if carrier_total_location:
+                carrier_total_hint = f"\n\n**🎯 TOTAL LOCATION GUIDANCE:**\n{carrier_total_location}"
         
         option_sections: List[str] = []
         if summary_keywords:
@@ -1581,6 +1833,12 @@ Analyze the full document and return the complete extraction as JSON."""
         if carrier_specific_prompt:
             logger.info(f"📋 Applied carrier-specific instructions for {carrier_name}")
             full_prompt += "\n\n" + carrier_specific_prompt
+        if carrier_logo_hint:
+            full_prompt += carrier_logo_hint
+        if carrier_total_hint:
+            # ✅ CRITICAL: Add total location guidance for this carrier
+            full_prompt += carrier_total_hint
+            logger.info(f"🎯 Added total location guidance for carrier: {carrier_name or 'default'}")
         
         return full_prompt
     

@@ -1,26 +1,26 @@
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763742994566_d1adlqajn
-INFO:     10.21.193.109:60628 - "OPTIONS /api/extract-tables-smart/ HTTP/1.1" 200 OK
+INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763746080555_gjuchgoob, session_id: session_1763746080567_fcr28z8y4
+INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763746080555_gjuchgoob
+INFO:     10.20.170.104:56346 - "OPTIONS /api/extract-tables-smart/ HTTP/1.1" 200 OK
 INFO:app.api.new_extract:📁 File: 08.06.2025 Allied Innovative Payment 2.pdf, Size: 227321 bytes, Hash: 98272fc00893adae..., User: f6cf1764-5bfc-4352-abd9-81b72b7cf191
 INFO:app.api.new_extract:🔍 Checking for duplicates BEFORE proceeding with upload...
 INFO:app.api.new_extract:✅ No duplicate found - proceeding with upload for file: 08.06.2025 Allied Innovative Payment 2.pdf
-INFO:app.api.new_extract:🚀 Starting extraction: 08.06.2025 Allied Innovative Payment 2.pdf (ID: upload_1763742994566_d1adlqajn)
-INFO:app.services.gcs_utils:✅ File uploaded to GCS: statements/2838a737-c649-4fc9-a1ca-1ceea61fb6e2/08.06.2025 Allied Innovative Payment 2.pdf
-INFO:app.api.new_extract:✅ Uploaded to GCS: statements/2838a737-c649-4fc9-a1ca-1ceea61fb6e2/08.06.2025 Allied Innovative Payment 2.pdf
-INFO:app.services.gcs_utils:🔐 Generating signed URL for: statements/2838a737-c649-4fc9-a1ca-1ceea61fb6e2/08.06.2025 Allied Innovative Payment 2.pdf
+INFO:app.api.new_extract:🚀 Starting extraction: 08.06.2025 Allied Innovative Payment 2.pdf (ID: upload_1763746080555_gjuchgoob)
+INFO:app.services.gcs_utils:✅ File uploaded to GCS: statements/e62dda3a-d8de-4a57-b985-80fb5df9dd4b/08.06.2025 Allied Innovative Payment 2.pdf
+INFO:app.api.new_extract:✅ Uploaded to GCS: statements/e62dda3a-d8de-4a57-b985-80fb5df9dd4b/08.06.2025 Allied Innovative Payment 2.pdf
+INFO:app.services.gcs_utils:🔐 Generating signed URL for: statements/e62dda3a-d8de-4a57-b985-80fb5df9dd4b/08.06.2025 Allied Innovative Payment 2.pdf
 INFO:app.services.gcs_utils:📝 Generating signed URL with:
 INFO:app.services.gcs_utils:   - Content-Type: application/pdf
 INFO:app.services.gcs_utils:   - Content-Disposition: inline
 INFO:app.services.gcs_utils:   - Expiration: 1 hour(s)
-INFO:app.services.gcs_utils:✅ Generated signed URL for GCS file with inline headers: statements/2838a737-c649-4fc9-a1ca-1ceea61fb6e2/08.06.2025 Allied Innovative Payment 2.pdf
-INFO:app.services.gcs_utils:   URL expires at: 2025-11-21 17:36:37.009261
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: STEP_STARTED
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-INFO:app.services.websocket_service:Step started: Uploading Document (Step 1) for upload_id upload_1763742994566_d1adlqajn
+INFO:app.services.gcs_utils:✅ Generated signed URL for GCS file with inline headers: statements/e62dda3a-d8de-4a57-b985-80fb5df9dd4b/08.06.2025 Allied Innovative Payment 2.pdf
+INFO:app.services.gcs_utils:   URL expires at: 2025-11-21 18:28:03.228809
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_STARTED
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
+INFO:app.services.websocket_service:Step started: Uploading Document (Step 1) for upload_id upload_1763746080555_gjuchgoob
 INFO:app.db.crud.environment:✅ Found existing default environment 9f4a7a57-5715-4b1e-98a9-b9901726a485 for user f6cf1764-5bfc-4352-abd9-81b72b7cf191 in company d883a865-a54f-41d6-968e-f94c3cb3f589
 INFO:app.api.new_extract:✅ Using user's default environment 9f4a7a57-5715-4b1e-98a9-b9901726a485 for upload consistency
-INFO:app.api.new_extract:📝 Upload metadata prepared (NOT saved to DB): 2838a737-c649-4fc9-a1ca-1ceea61fb6e2
-INFO:app.services.audit_logging_service:Audit: data_view by user f6cf1764-5bfc-4352-abd9-81b72b7cf191 on extraction_process (ID: 2838a737-c649-4fc9-a1ca-1ceea61fb6e2)
-INFO:     10.219.18.238:39906 - "GET /health HTTP/1.1" 200 OK
+INFO:app.api.new_extract:📝 Upload metadata prepared (NOT saved to DB): e62dda3a-d8de-4a57-b985-80fb5df9dd4b
+INFO:app.services.audit_logging_service:Audit: data_view by user f6cf1764-5bfc-4352-abd9-81b72b7cf191 on extraction_process (ID: e62dda3a-d8de-4a57-b985-80fb5df9dd4b)
 INFO:app.services.conversational_summary_service:✅ ConversationalSummaryService initialized with GPT-4o
 INFO:app.services.enhanced_extraction_service:================================================================================
 INFO:app.services.enhanced_extraction_service:✅ Enhanced Extraction Service initialized (OPTIMIZED)
@@ -39,31 +39,31 @@ INFO:app.services.enhanced_extraction_service:   Features: Structured outputs, t
 INFO:app.services.enhanced_extraction_service:   File: pdfs/08.06.2025 Allied Innovative Payment 2.pdf
 INFO:app.services.enhanced_extraction_service:   NOTE: Function name '_extract_with_claude_progress' is legacy - it USES GPT-5
 INFO:app.services.enhanced_extraction_service:================================================================================
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-INFO:app.services.websocket_service:Started stage document_processing for upload upload_1763742994566_d1adlqajn
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-INFO:app.services.websocket_service:Completed stage document_processing for upload upload_1763742994566_d1adlqajn
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
+INFO:app.services.websocket_service:Started stage document_processing for upload upload_1763746080555_gjuchgoob
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
+INFO:app.services.websocket_service:Completed stage document_processing for upload upload_1763746080555_gjuchgoob
 INFO:app.services.enhanced_extraction_service:ℹ️ Carrier from database 'Pinecrestconsulting' has no specific prompt. Continuing detection.
 INFO:app.services.enhanced_extraction_service:No carrier match detected inside provided text snippet.
 INFO:app.services.enhanced_extraction_service:No carrier match detected inside provided text snippet.
 INFO:app.services.enhanced_extraction_service:✓ Using carrier context for GPT prompts: Pinecrestconsulting (options: none)
 INFO:app.services.enhanced_extraction_service:📡 Emitting extraction step...
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: STEP_STARTED
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-INFO:app.services.websocket_service:Step started: Analyzing Document (Step 2) for upload_id upload_1763742994566_d1adlqajn
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_STARTED
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
+INFO:app.services.websocket_service:Step started: Analyzing Document (Step 2) for upload_id upload_1763746080555_gjuchgoob
 INFO:app.services.enhanced_extraction_service:📡 Emitting table_extraction step...
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: STEP_STARTED
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-INFO:app.services.websocket_service:Step started: Reading Commission Data (Step 3) for upload_id upload_1763742994566_d1adlqajn
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-INFO:app.services.websocket_service:Started stage table_detection for upload upload_1763742994566_d1adlqajn
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_STARTED
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
+INFO:app.services.websocket_service:Step started: Reading Commission Data (Step 3) for upload_id upload_1763746080555_gjuchgoob
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
+INFO:app.services.websocket_service:Started stage table_detection for upload upload_1763746080555_gjuchgoob
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
 INFO:app.services.enhanced_extraction_service:⭐ Starting GPT-5 Vision extraction for pdfs/08.06.2025 Allied Innovative Payment 2.pdf (enhanced=True)
 INFO:app.services.enhanced_extraction_service:   Using structured outputs for 99.9% reliability
 INFO:app.services.enhanced_extraction_service:   Token optimization: 60-80% savings via intelligent page selection
@@ -74,295 +74,205 @@ INFO:app.services.enhanced_extraction_service:   Carrier: Pinecrestconsulting
 INFO:app.services.enhanced_extraction_service:   Enhanced Mode: True
 INFO:app.services.enhanced_extraction_service:   Max Pages: 100 (intelligent page selection)
 INFO:app.services.enhanced_extraction_service:================================================================================
-INFO:app.services.gpt.enhanced_service:🚀 Starting enhanced extraction for Pinecrestconsulting | upload_1763742997
+INFO:app.services.gpt.enhanced_service:🚀 Starting enhanced extraction for Pinecrestconsulting | upload_1763746083
 INFO:app.services.gpt.vision_extractor:📄 Processing PDF with direct upload method: pdfs/08.06.2025 Allied Innovative Payment 2.pdf
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
 INFO:app.services.gpt.vision_extractor:📏 Document has 7 pages (> 6 single-call limit). Using chunked extraction.
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-INFO:app.services.gpt.vision_extractor:📤 Uploading PDF: /tmp/tmphftb3d34.pdf
-INFO:     10.219.19.58:58328 - "GET /health HTTP/1.1" 200 OK
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
+INFO:app.services.gpt.vision_extractor:📤 Uploading PDF: /tmp/tmpcpd_wua2.pdf
+INFO:     10.219.18.220:32798 - "GET /health HTTP/1.1" 200 OK
 INFO:httpx:HTTP Request: POST https://api.openai.com/v1/files "HTTP/1.1 200 OK"
-INFO:app.services.gpt.vision_extractor:✅ PDF uploaded: file-Rj8Lz7KMURdc7Ew4Vsz89S
+INFO:app.services.gpt.vision_extractor:✅ PDF uploaded: file-8ksmjjtXcwEnQjL9aLY42f
 INFO:app.services.gpt.dynamic_prompts:🔍 GPT: Looking up carrier prompt: 'Pinecrestconsulting' → normalized: 'pinecrestconsulting'
 INFO:app.services.gpt.dynamic_prompts:❌ No carrier-specific prompt found for 'Pinecrestconsulting', using standard prompt only
 INFO:app.services.gpt.dynamic_prompts:   Available carriers: ['UnitedHealthcare', 'United Healthcare', 'UHC', 'United Health Group', 'UnitedHealth', 'Redirect Health']
-INFO:app.services.gpt.vision_extractor:📋 Extracting from PDF using Responses API (file_id: file-Rj8Lz7KMURdc7Ew4Vsz89S)
-INFO:     10.219.18.238:39908 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.19.58:51584 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.18.238:56274 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-INFO:     10.219.19.58:51590 - "GET /health HTTP/1.1" 200 OK
-INFO:app.main:📢 Received signal 15, initiating graceful shutdown...
-INFO:app.main:📢 Notifying 0 active WebSocket connections...
-INFO:app.main:✅ Graceful shutdown complete - exiting
-INFO:app.services.process_monitor:Process monitoring cancelled
-INFO:app.services.process_monitor:Process monitoring loop stopped
-INFO:app.main:FastAPI shutdown event triggered
-INFO:app.services.process_monitor:Process monitoring stopped
-INFO:app.main:Process monitoring stopped
-INFO:app.main:Session cleanup task cancelled
-INFO:app.main:Graceful shutdown complete
-ERROR:    Traceback (most recent call last):
-  File "/usr/local/lib/python3.11/site-packages/uvicorn/_compat.py", line 30, in asyncio_run
-    return runner.run(main)
-           ^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/asyncio/runners.py", line 118, in run
-    return self._loop.run_until_complete(task)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/asyncio/base_events.py", line 641, in run_until_complete
-    self.run_forever()
-  File "/usr/local/lib/python3.11/asyncio/base_events.py", line 608, in run_forever
-    self._run_once()
-  File "/usr/local/lib/python3.11/asyncio/base_events.py", line 1898, in _run_once
-    event_list = self._selector.select(timeout)
-                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/selectors.py", line 468, in select
-    fd_event_list = self._selector.poll(timeout, max_ev)
-                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/app/app/main.py", line 87, in <lambda>
-    signal.signal(signal.SIGTERM, lambda s, f: shutdown_handler(s))
-                                               ^^^^^^^^^^^^^^^^^^^
-  File "/app/app/main.py", line 80, in shutdown_handler
-    sys.exit(0)
-SystemExit: 0
-During handling of the above exception, another exception occurred:
-Traceback (most recent call last):
-  File "/usr/local/lib/python3.11/site-packages/starlette/routing.py", line 701, in lifespan
-    await receive()
-  File "/usr/local/lib/python3.11/site-packages/uvicorn/lifespan/on.py", line 137, in receive
-    return await self.receive_queue.get()
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/asyncio/queues.py", line 158, in get
-    await getter
-asyncio.exceptions.CancelledError
-INFO:     10.219.19.58:40660 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-INFO:     10.219.19.58:40664 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.19.58:40678 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.19.58:56616 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-INFO:     10.219.19.58:56624 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.19.58:45874 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-INFO:     10.219.19.58:45884 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.19.58:43890 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-INFO:     10.219.19.58:43906 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.19.58:43908 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.19.58:40166 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-INFO:     10.219.19.58:40182 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-INFO:     10.219.19.58:37858 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.19.58:39202 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-INFO:     10.219.19.58:39210 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.19.58:39208 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.19.58:58392 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-INFO:     10.219.19.58:58408 - "GET /health HTTP/1.1" 200 OK
+INFO:app.services.gpt.vision_extractor:📋 Extracting from PDF using Responses API (file_id: file-8ksmjjtXcwEnQjL9aLY42f)
+INFO:     10.219.18.220:32804 - "GET /health HTTP/1.1" 200 OK
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
+INFO:     10.219.18.220:51476 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.220:51484 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.220:51480 - "GET /health HTTP/1.1" 200 OK
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
+INFO:     10.219.18.220:43350 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.220:43366 - "GET /health HTTP/1.1" 200 OK
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
+INFO:     10.219.18.220:43512 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.220:43524 - "GET /health HTTP/1.1" 200 OK
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
+INFO:     10.219.18.220:39780 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.220:39804 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.220:39790 - "GET /health HTTP/1.1" 200 OK
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
+INFO:     10.219.18.220:43994 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.220:44006 - "GET /health HTTP/1.1" 200 OK
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
+INFO:     10.219.18.220:38648 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.220:38660 - "GET /health HTTP/1.1" 200 OK
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
+INFO:     10.219.18.220:46828 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.220:46840 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.220:46842 - "GET /health HTTP/1.1" 200 OK
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
+INFO:     10.219.18.220:56064 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.220:56078 - "GET /health HTTP/1.1" 200 OK
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
+INFO:     10.219.18.220:49724 - "GET /health HTTP/1.1" 200 OK
 INFO:httpx:HTTP Request: POST https://api.openai.com/v1/responses "HTTP/1.1 200 OK"
-WARNING:app.services.gpt.vision_extractor:⚠️ Response incomplete/truncated at 6000 tokens. Retrying with 10000 tokens (attempt 1/2).
-INFO:     10.219.19.58:43194 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-INFO:     10.219.19.58:43204 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.19.58:41462 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-INFO:     10.219.19.58:41482 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.19.58:41474 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.19.58:54788 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-INFO:     10.219.19.58:54796 - "GET /health HTTP/1.1" 200 OK
+INFO:app.services.gpt.vision_extractor:📊 Response length: 15586 characters
+INFO:app.services.gpt.vision_extractor:✅ Extraction complete: 3 tables, 13030 tokens, $0.0018
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
+INFO:app.services.gpt.vision_extractor:📤 Uploading PDF: /tmp/tmpk46_kgaz.pdf
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/files "HTTP/1.1 200 OK"
+INFO:app.services.gpt.vision_extractor:✅ PDF uploaded: file-N393wsMbP3qFEJnx6Vxozs
+INFO:app.services.gpt.dynamic_prompts:🔍 GPT: Looking up carrier prompt: 'Pinecrestconsulting' → normalized: 'pinecrestconsulting'
+INFO:app.services.gpt.dynamic_prompts:❌ No carrier-specific prompt found for 'Pinecrestconsulting', using standard prompt only
+INFO:app.services.gpt.dynamic_prompts:   Available carriers: ['UnitedHealthcare', 'United Healthcare', 'UHC', 'United Health Group', 'UnitedHealth', 'Redirect Health']
+INFO:app.services.gpt.vision_extractor:📋 Extracting from PDF using Responses API (file_id: file-N393wsMbP3qFEJnx6Vxozs)
+INFO:     10.219.18.220:49728 - "GET /health HTTP/1.1" 200 OK
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
+INFO:     10.219.18.220:60538 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.220:60548 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.220:60558 - "GET /health HTTP/1.1" 200 OK
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
+INFO:     10.219.18.220:39830 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.220:39846 - "GET /health HTTP/1.1" 200 OK
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
+INFO:     10.219.18.220:42616 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.220:42628 - "GET /health HTTP/1.1" 200 OK
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
+INFO:     10.219.18.220:37420 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.220:37446 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.220:37434 - "GET /health HTTP/1.1" 200 OK
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
+INFO:     10.219.18.220:38504 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.220:38520 - "GET /health HTTP/1.1" 200 OK
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
+INFO:     10.219.18.220:42058 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.220:42060 - "GET /health HTTP/1.1" 200 OK
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
+INFO:     10.219.18.220:58624 - "GET /health HTTP/1.1" 200 OK
 INFO:app.services.orphan_cleanup_service:🧹 Starting orphan cleanup job...
 INFO:app.services.orphan_cleanup_service:✅ Orphan cleanup completed: no orphans found
-INFO:     10.219.19.58:55106 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-INFO:     10.219.19.58:55110 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.19.58:38548 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-INFO:     10.219.19.58:38550 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.19.58:38566 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.19.58:39674 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-INFO:     10.219.19.58:39680 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.19.58:51152 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-INFO:     10.219.19.58:51158 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.19.58:32916 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-INFO:     10.219.19.58:32926 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.19.58:32940 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.19.58:43208 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-INFO:     10.219.19.58:43210 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.19.58:58862 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-INFO:     10.219.19.58:58878 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.19.58:34900 - "GET /health HTTP/1.1" 200 OK
 INFO:httpx:HTTP Request: POST https://api.openai.com/v1/responses "HTTP/1.1 200 OK"
-INFO:app.services.gpt.vision_extractor:📊 Response length: 22881 characters
-INFO:app.services.gpt.vision_extractor:✅ Extraction complete: 3 tables, 13743 tokens, $0.0018
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-INFO:app.services.gpt.vision_extractor:📤 Uploading PDF: /tmp/tmp_y09i2sv.pdf
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-INFO:     10.219.19.58:34906 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.19.58:34908 - "GET /health HTTP/1.1" 200 OK
+INFO:app.services.gpt.vision_extractor:📊 Response length: 11747 characters
+INFO:app.services.gpt.vision_extractor:✅ Extraction complete: 3 tables, 10677 tokens, $0.0016
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
+INFO:app.services.gpt.vision_extractor:📤 Uploading PDF: /tmp/tmpwgjdcsh2.pdf
+INFO:     10.219.18.220:58640 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.220:58650 - "GET /health HTTP/1.1" 200 OK
 INFO:httpx:HTTP Request: POST https://api.openai.com/v1/files "HTTP/1.1 200 OK"
-INFO:app.services.gpt.vision_extractor:✅ PDF uploaded: file-CF5fUw8ZogCzcxhpQU6PGS
+INFO:app.services.gpt.vision_extractor:✅ PDF uploaded: file-SA2Ero1pCZSZVjpAf9J8Eq
 INFO:app.services.gpt.dynamic_prompts:🔍 GPT: Looking up carrier prompt: 'Pinecrestconsulting' → normalized: 'pinecrestconsulting'
 INFO:app.services.gpt.dynamic_prompts:❌ No carrier-specific prompt found for 'Pinecrestconsulting', using standard prompt only
 INFO:app.services.gpt.dynamic_prompts:   Available carriers: ['UnitedHealthcare', 'United Healthcare', 'UHC', 'United Health Group', 'UnitedHealth', 'Redirect Health']
-INFO:app.services.gpt.vision_extractor:📋 Extracting from PDF using Responses API (file_id: file-CF5fUw8ZogCzcxhpQU6PGS)
-INFO:     10.219.19.58:58046 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-INFO:     10.219.19.58:58062 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.19.58:59982 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-INFO:     10.219.19.58:59990 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.19.58:38668 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-INFO:     10.219.19.58:38670 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.19.58:38672 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.19.58:36544 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-INFO:     10.219.19.58:36550 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.19.58:49492 - "GET /health HTTP/1.1" 200 OK
-     ==> Detected service running on port 8000
-     ==> Docs on specifying a port: https://render.com/docs/web-services#port-binding
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-INFO:     10.219.19.58:49496 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.19.58:59156 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-INFO:     10.219.19.58:59172 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.19.58:59160 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.19.58:40130 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-INFO:     10.219.19.58:40138 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.19.58:41718 - "GET /health HTTP/1.1" 200 OK
+INFO:app.services.gpt.vision_extractor:📋 Extracting from PDF using Responses API (file_id: file-SA2Ero1pCZSZVjpAf9J8Eq)
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
+INFO:     10.219.18.220:33082 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.220:33092 - "GET /health HTTP/1.1" 200 OK
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
+INFO:     10.219.18.220:40722 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.220:40736 - "GET /health HTTP/1.1" 200 OK
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
+INFO:     10.219.18.220:47382 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.220:47390 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.220:47398 - "GET /health HTTP/1.1" 200 OK
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
+INFO:     10.219.18.220:50828 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.220:50830 - "GET /health HTTP/1.1" 200 OK
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
+INFO:     10.219.18.220:52648 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.220:52656 - "GET /health HTTP/1.1" 200 OK
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
+INFO:     10.219.18.220:49204 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.220:49218 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.220:49220 - "GET /health HTTP/1.1" 200 OK
 INFO:httpx:HTTP Request: POST https://api.openai.com/v1/responses "HTTP/1.1 200 OK"
-INFO:app.services.gpt.vision_extractor:📊 Response length: 12803 characters
-INFO:app.services.gpt.vision_extractor:✅ Extraction complete: 1 tables, 11143 tokens, $0.0016
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-INFO:app.services.gpt.vision_extractor:📤 Uploading PDF: /tmp/tmp7urmw1it.pdf
-INFO:httpx:HTTP Request: POST https://api.openai.com/v1/files "HTTP/1.1 200 OK"
-INFO:app.services.gpt.vision_extractor:✅ PDF uploaded: file-LTCoj9idxmvEPCvwT9fobP
-INFO:app.services.gpt.dynamic_prompts:🔍 GPT: Looking up carrier prompt: 'Pinecrestconsulting' → normalized: 'pinecrestconsulting'
-INFO:app.services.gpt.dynamic_prompts:❌ No carrier-specific prompt found for 'Pinecrestconsulting', using standard prompt only
-INFO:app.services.gpt.dynamic_prompts:   Available carriers: ['UnitedHealthcare', 'United Healthcare', 'UHC', 'United Health Group', 'UnitedHealth', 'Redirect Health']
-INFO:app.services.gpt.vision_extractor:📋 Extracting from PDF using Responses API (file_id: file-LTCoj9idxmvEPCvwT9fobP)
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-INFO:     10.219.19.58:41730 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.19.58:41768 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-INFO:     10.219.19.58:41772 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.19.58:41774 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.19.58:59162 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-INFO:     10.219.19.58:59170 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.orphan_cleanup_service:🧹 Starting orphan cleanup job...
-INFO:app.services.orphan_cleanup_service:✅ Orphan cleanup completed: no orphans found
-INFO:     10.219.19.58:39076 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-INFO:     10.219.19.58:39082 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.19.58:46102 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-INFO:     10.219.19.58:46118 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.19.58:46116 - "GET /health HTTP/1.1" 200 OK
-INFO:httpx:HTTP Request: POST https://api.openai.com/v1/responses "HTTP/1.1 200 OK"
-INFO:app.services.gpt.vision_extractor:📊 Response length: 7876 characters
-INFO:app.services.gpt.vision_extractor:✅ Extraction complete: 1 tables, 7195 tokens, $0.0010
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-INFO:app.services.gpt.vision_extractor:✅ Document processing complete: 5 tables, $0.0000
-INFO:app.services.gpt.monitoring:✅ Extraction success | upload_id=upload_1763742997 | pages=1 | tokens=32081 | cost=$0.0043 | time=325.04s
-INFO:app.services.gpt.enhanced_service:✅ Extraction complete: 5 tables, $0.0043, 325.04s
+INFO:app.services.gpt.vision_extractor:📊 Response length: 8987 characters
+INFO:app.services.gpt.vision_extractor:✅ Extraction complete: 1 tables, 7686 tokens, $0.0010
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
+INFO:app.services.gpt.vision_extractor:✅ Document processing complete: 7 tables, $0.0000
+INFO:app.services.gpt.monitoring:✅ Extraction success | upload_id=upload_1763746083 | pages=1 | tokens=31393 | cost=$0.0043 | time=226.36s
+INFO:app.services.gpt.enhanced_service:✅ Extraction complete: 7 tables, $0.0043, 226.36s
 INFO:app.services.enhanced_extraction_service:================================================================================
 INFO:app.services.enhanced_extraction_service:✅ GPT-5 VISION SERVICE COMPLETED SUCCESSFULLY
 INFO:app.services.enhanced_extraction_service:   Success: True
-INFO:app.services.enhanced_extraction_service:   Tables Extracted: 5
-INFO:app.services.enhanced_extraction_service:   Tokens Used: 32081
+INFO:app.services.enhanced_extraction_service:   Tables Extracted: 7
+INFO:app.services.enhanced_extraction_service:   Tokens Used: 31393
 INFO:app.services.enhanced_extraction_service:   Cost: $0.0043
 INFO:app.services.enhanced_extraction_service:================================================================================
 INFO:app.services.enhanced_extraction_service:⚡ Transforming GPT-5 Vision results to compatible format
 INFO:app.services.enhanced_extraction_service:📊 GPT-5 extraction results:
-INFO:app.services.enhanced_extraction_service:   - Tables: 5
-INFO:app.services.enhanced_extraction_service:   - Groups/Companies: 13
+INFO:app.services.enhanced_extraction_service:   - Tables: 7
+INFO:app.services.enhanced_extraction_service:   - Groups/Companies: 26
 INFO:app.services.enhanced_extraction_service:   - Writing Agents: 3
-INFO:app.services.enhanced_extraction_service:   - Carrier: ALLIED / Allied Benefit
+INFO:app.services.enhanced_extraction_service:   - Carrier: ALLIED
 INFO:app.services.enhanced_extraction_service:   - Broker: INNOVATIVE BPS LLC
 INFO:app.services.enhanced_extraction_service:   - Statement Date: 2025-08-06
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-INFO:app.services.enhanced_extraction_service:✅ GPT-5 metadata extracted: carrier=ALLIED / Allied Benefit, date=2025-08-06, broker=INNOVATIVE BPS LLC
-INFO:app.services.enhanced_extraction_service:   Cost: $0.0043, Tokens: 32081
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-📎 Enhanced multi-strategy stitching: Processing 5 tables
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
+INFO:app.services.enhanced_extraction_service:✅ GPT-5 metadata extracted: carrier=ALLIED, date=2025-08-06, broker=INNOVATIVE BPS LLC
+INFO:app.services.enhanced_extraction_service:   Cost: $0.0043, Tokens: 31393
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
+📎 Enhanced multi-strategy stitching: Processing 7 tables
 📎 Canonical header identified: ['Group No.', 'Group Name', 'Billing Period', 'Adj. Period', 'Invoice Total', 'Stoploss Total', 'Agent Rate', 'Calculation Method', 'Census Ct.', 'Paid Amount'] (10 columns)
 📎 Table 1 headers: ['Group No.', 'Group Name', 'Billing Period', 'Adj. Period', 'Invoice Total', 'Stoploss Total', 'Agent Rate', 'Calculation Method', 'Census Ct.', 'Paid Amount'] (10 columns)
 📎 Table 2 headers: ['Group No.', 'Group Name', 'Billing Period', 'Adj. Period', 'Invoice Total', 'Stoploss Total', 'Agent Rate', 'Calculation Method', 'Census Ct.', 'Paid Amount'] (10 columns)
 📎 Table 3 headers: ['Group No.', 'Group Name', 'Billing Period', 'Adj. Period', 'Invoice Total', 'Stoploss Total', 'Agent Rate', 'Calculation Method', 'Census Ct.', 'Paid Amount'] (10 columns)
 📎 Table 4 headers: ['Group No.', 'Group Name', 'Billing Period', 'Adj. Period', 'Invoice Total', 'Stoploss Total', 'Agent Rate', 'Calculation Method', 'Census Ct.', 'Paid Amount'] (10 columns)
 📎 Table 5 headers: ['Group No.', 'Group Name', 'Billing Period', 'Adj. Period', 'Invoice Total', 'Stoploss Total', 'Agent Rate', 'Calculation Method', 'Census Ct.', 'Paid Amount'] (10 columns)
+📎 Table 6 headers: ['Group No.', 'Group Name', 'Billing Period', 'Adj. Period', 'Invoice Total', 'Stoploss Total', 'Agent Rate', 'Calculation Method', 'Census Ct.', 'Paid Amount'] (10 columns)
+📎 Table 7 headers: ['Group No.', 'Group Name', 'Billing Period', 'Adj. Period', 'Invoice Total', 'Stoploss Total', 'Agent Rate', 'Calculation Method', 'Census Ct.', 'Paid Amount'] (10 columns)
 📎 Found 1 unique header patterns
-📎 Header pattern 'group no.' appears in 5 tables
-📎 Creating group with 5 tables (identical headers)
-📎 Grouped 5 tables into 1 groups
-📎 Merging group 1 with 5 tables
-INFO:app.services.extraction_utils:✅ Merged table created: 73 rows (enhancements preserved from individual tables)
-INFO:app.services.extraction_utils:Header normalization: 10 headers normalized
-INFO:app.services.enhanced_extraction_service:GPT-5: Verified normalized headers
-📎 Merged table 1: 10 headers, 73 rows
+📎 Header pattern 'group no.' appears in 7 tables
+📎 Creating group with 7 tables (identical headers)
+📎 Grouped 7 tables into 1 groups
+📎 Merging group 1 with 7 tables
+INFO:app.services.extraction_utils:✅ Merged table created: 74 rows (enhancements preserved from individual tables)
+📎 Merged table 1: 10 headers, 74 rows
 📎 Merged headers: ['Group No.', 'Group Name', 'Billing Period', 'Adj. Period', 'Invoice Total', 'Stoploss Total', 'Agent Rate', 'Calculation Method', 'Census Ct.', 'Paid Amount']
 📎 Enhanced stitching completed: 1 final tables
-INFO:app.services.enhanced_extraction_service:📊 Table 1 summary rows → model:14 heuristic:14 final:14
+INFO:app.services.extraction_utils:Header normalization: 10 headers normalized
+INFO:app.services.enhanced_extraction_service:GPT-5: Verified normalized headers
+INFO:app.services.enhanced_extraction_service:📊 Table 1 summary rows → model:13 heuristic:13 final:13
 INFO:app.services.enhanced_extraction_service:   ↳ Example reasoning row 3: score=1.7 reasons=['Row annotated as GroupSummary', 'Contains summary keyword', 'Matches expected rollup label', "Matches 'Total for Group' pattern", "Contains 'Total for ...' phrase", 'Matches running total of previous detail rows']
-INFO:app.services.enhanced_extraction_service:⭐ GPT-5: Processed 5 tables into 1 tables
+INFO:app.services.enhanced_extraction_service:⭐ GPT-5: Processed 7 tables into 1 tables
 INFO:app.services.enhanced_extraction_service:   Cost: $0.0043
-INFO:app.services.enhanced_extraction_service:   Tokens: 32081
+INFO:app.services.enhanced_extraction_service:   Tokens: 31393
 INFO:app.services.enhanced_extraction_service:✅ Using GPT-5's structured output summary row detection
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-INFO:app.services.websocket_service:Completed stage table_detection for upload upload_1763742994566_d1adlqajn
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-INFO:app.services.websocket_service:Started stage summary_generation for upload upload_1763742994566_d1adlqajn
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
+INFO:app.services.websocket_service:Completed stage table_detection for upload upload_1763746080555_gjuchgoob
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
+INFO:app.services.websocket_service:Started stage summary_generation for upload upload_1763746080555_gjuchgoob
 INFO:app.services.conversational_summary_service:🗣️ Generating conversational summary...
 INFO:app.services.conversational_summary_service:🔍 _build_summary_prompt called:
 INFO:app.services.conversational_summary_service:   - use_enhanced: True
@@ -373,7 +283,7 @@ INFO:app.services.conversational_summary_service:🎯 Building enhanced summary 
 INFO:app.services.conversational_summary_service:   - Entities: []
 INFO:app.services.conversational_summary_service:   - Relationships: []
 INFO:app.services.conversational_summary_service:   - Business Intelligence: ['number_of_groups', 'number_of_agents', 'total_commission', 'top_contributors']
-INFO:app.services.conversational_summary_service:✅ Using root-level groups_and_companies: 13 items
+INFO:app.services.conversational_summary_service:✅ Using root-level groups_and_companies: 26 items
 INFO:app.services.conversational_summary_service:✅ Using root-level writing_agents: 3 items
 INFO:app.services.conversational_summary_service:✅ SUCCESS: Enhanced prompts module imported
 INFO:app.services.conversational_summary_service:🚀 Using EnhancedClaudePrompts.get_intelligent_summarization_prompt()
@@ -381,128 +291,156 @@ INFO:app.services.conversational_summary_service:✅ SUCCESS: Enhanced prompts i
 INFO:app.services.conversational_summary_service:🚀 Calling GPT-4o API for summary generation...
 INFO:app.services.conversational_summary_service:   Model: gpt-4o
 INFO:app.services.conversational_summary_service:   Max tokens: 1200
-INFO:app.services.conversational_summary_service:   Prompt length: 117401 chars
+INFO:app.services.conversational_summary_service:   Prompt length: 120708 chars
 INFO:app.services.conversational_summary_service:   System prompt length: 1421 chars
-INFO:     10.219.19.58:55928 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-INFO:     10.219.19.58:55944 - "GET /health HTTP/1.1" 200 OK
-INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-INFO:app.services.conversational_summary_service:📊 Token usage - Input: 28,877, Output: 335
-INFO:app.services.conversational_summary_service:✅ GPT-4o API call successful
-INFO:app.services.conversational_summary_service:✅ Detected structured JSON response from GPT-4o
-INFO:app.services.conversational_summary_service:📊 GPT-4o provided 11 fields: ['carrier_name', 'broker_company', 'statement_date', 'broker_id', 'payment_type', 'total_amount', 'company_count', 'top_contributors', 'commission_structure', 'census_count', 'billing_periods']
-INFO:app.services.conversational_summary_service:✅ Extracted structured summary data (6 fields): ['statement_date', 'total_amount', 'company_count', 'broker_id_confidence', 'census_count', 'billing_periods']
-INFO:app.services.conversational_summary_service:✅ Fallback added 1 missing fields: ['broker_id_confidence']
-INFO:app.services.conversational_summary_service:📄 Generated summary length: 640 characters
-INFO:app.services.conversational_summary_service:📊 Final structured data keys: ['statement_date', 'total_amount', 'company_count', 'broker_id_confidence', 'census_count', 'billing_periods', 'carrier_name', 'broker_company', 'broker_id', 'payment_type', 'top_contributors', 'commission_structure']
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-INFO:app.services.websocket_service:Completed stage summary_generation for upload upload_1763742994566_d1adlqajn
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-INFO:app.services.websocket_service:Started stage validation for upload upload_1763742994566_d1adlqajn
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: completion
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-INFO:app.services.websocket_service:Completed processing for upload upload_1763742994566_d1adlqajn in 334.26 seconds
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+INFO:openai._base_client:Retrying request to /chat/completions in 0.380965 seconds
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+INFO:openai._base_client:Retrying request to /chat/completions in 0.912383 seconds
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
+INFO:     10.219.18.220:40552 - "GET /health HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+ERROR:app.services.conversational_summary_service:❌ Summary generation failed: Error code: 429 - {'error': {'message': 'Request too large for gpt-4o in organization org-DXuWxsjx0mXX2seALxBQOck1 on tokens per min (TPM): Limit 30000, Requested 30560. The input or output tokens must be reduced in order to run successfully. Visit https://platform.openai.com/account/rate-limits to learn more.', 'type': 'tokens', 'param': None, 'code': 'rate_limit_exceeded'}}
+ERROR:app.services.conversational_summary_service:   Error type: RateLimitError
+ERROR:app.services.conversational_summary_service:   Full traceback:
+Traceback (most recent call last):
+  File "/app/app/services/conversational_summary_service.py", line 227, in generate_conversational_summary
+    response = await self.client.chat.completions.create(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/openai/resources/chat/completions/completions.py", line 2585, in create
+    return await self._post(
+           ^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/openai/_base_client.py", line 1794, in post
+    return await self.request(cast_to, opts, stream=stream, stream_cls=stream_cls)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/openai/_base_client.py", line 1594, in request
+    raise self._make_status_error_from_response(err.response) from None
+openai.RateLimitError: Error code: 429 - {'error': {'message': 'Request too large for gpt-4o in organization org-DXuWxsjx0mXX2seALxBQOck1 on tokens per min (TPM): Limit 30000, Requested 30560. The input or output tokens must be reduced in order to run successfully. Visit https://platform.openai.com/account/rate-limits to learn more.', 'type': 'tokens', 'param': None, 'code': 'rate_limit_exceeded'}}
+ERROR:app.services.conversational_summary_service:   Extraction data keys: ['success', 'tables', 'extraction_method', 'file_type', 'document_metadata', 'extracted_carrier', 'extracted_date', 'groups_and_companies', 'writing_agents', 'business_intelligence', 'summary', 'total_tokens_used', 'estimated_cost_usd', 'processing_time_seconds', 'quality_summary', 'metadata', 'extraction_quality', 'structured_data', 'extraction_pipeline']
+WARNING:app.services.conversational_summary_service:🔄 Generating fallback summary...
+INFO:app.services.conversational_summary_service:   Using standard data: carrier=ALLIED, broker=Unknown, date=2025-08-06
+WARNING:app.services.conversational_summary_service:   Fallback summary: Commission statement from ALLIED. for period ending 2025-08-06. prepared for INNOVATIVE BPS LLC. Total commission: $2,100.58. 74 commission entries across 1 table(s).
+WARNING:app.services.conversational_summary_service:⚠️ Using fallback summary: Commission statement from ALLIED. for period ending 2025-08-06. prepared for INNOVATIVE BPS LLC. Total commission: $2,100.58. 74 commission entries across 1 table(s).
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
+INFO:app.services.websocket_service:Completed stage summary_generation for upload upload_1763746080555_gjuchgoob
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
+INFO:app.services.websocket_service:Started stage validation for upload upload_1763746080555_gjuchgoob
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: completion
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
+INFO:app.services.websocket_service:Completed processing for upload upload_1763746080555_gjuchgoob in 231.66 seconds
 INFO:app.api.new_extract:✅ Extraction completed successfully
-INFO:app.services.cancellation_manager:Cleared cancellation status for upload upload_1763742994566_d1adlqajn
-INFO:app.api.new_extract:🔍 Summary row refinement adjusted table 0: [3, 8, 14, 15, 17, 51, 53, 55, 57, 59, 60, 62, 64, 72] → [3, 8, 14, 15, 17, 51, 57, 58, 59, 60, 62, 64, 72]
+INFO:app.services.cancellation_manager:Cleared cancellation status for upload upload_1763746080555_gjuchgoob
+INFO:app.api.new_extract:🔍 Summary row refinement adjusted table 0: [3, 8, 14, 15, 19, 53, 55, 57, 59, 61, 62, 64, 73] → [3, 8, 14, 15, 19, 53, 59, 60, 61, 62, 64, 73]
 INFO:app.api.new_extract:✅ Extraction completed (data NOT saved to DB, will be saved on approval)
-INFO:app.services.audit_logging_service:Audit: data_view by user f6cf1764-5bfc-4352-abd9-81b72b7cf191 on extraction_complete (ID: 2838a737-c649-4fc9-a1ca-1ceea61fb6e2)
-INFO:app.api.new_extract:🆕 Carrier 'ALLIED / Allied Benefit' not found in database, creating automatically...
-INFO:app.api.new_extract:✅ Auto-created carrier: ALLIED / Allied Benefit with ID 08835c99-06dc-4df7-a1cb-e52fc6854c77
-INFO:app.api.new_extract:🎯 Format Learning: Using carrier ALLIED / Allied Benefit with ID 08835c99-06dc-4df7-a1cb-e52fc6854c77
-WARNING:app.api.new_extract:🚨 CARRIER MISMATCH DETECTED: File uploaded to d883a865-a54f-41d6-968e-f94c3cb3f589 but extracted as ALLIED / Allied Benefit (08835c99-06dc-4df7-a1cb-e52fc6854c77)
-INFO:app.api.new_extract:🔄 Reassigning file to correct carrier: ALLIED / Allied Benefit
-INFO:app.services.gcs_utils:✅ File copied in GCS: statements/2838a737-c649-4fc9-a1ca-1ceea61fb6e2/08.06.2025 Allied Innovative Payment 2.pdf -> statements/08835c99-06dc-4df7-a1cb-e52fc6854c77/08.06.2025 Allied Innovative Payment 2.pdf
-INFO:app.services.gcs_utils:✅ File deleted from GCS: statements/2838a737-c649-4fc9-a1ca-1ceea61fb6e2/08.06.2025 Allied Innovative Payment 2.pdf
-INFO:app.services.gcs_utils:🔐 Generating signed URL for: statements/08835c99-06dc-4df7-a1cb-e52fc6854c77/08.06.2025 Allied Innovative Payment 2.pdf
+INFO:app.services.audit_logging_service:Audit: data_view by user f6cf1764-5bfc-4352-abd9-81b72b7cf191 on extraction_complete (ID: e62dda3a-d8de-4a57-b985-80fb5df9dd4b)
+INFO:app.api.new_extract:🎯 Format Learning: Using carrier ALLIED with ID 5c9324ac-1794-4563-8e0e-8cd5c5317181
+WARNING:app.api.new_extract:🚨 CARRIER MISMATCH DETECTED: File uploaded to d883a865-a54f-41d6-968e-f94c3cb3f589 but extracted as ALLIED (5c9324ac-1794-4563-8e0e-8cd5c5317181)
+INFO:app.api.new_extract:🔄 Reassigning file to correct carrier: ALLIED
+INFO:app.services.gcs_utils:✅ File copied in GCS: statements/e62dda3a-d8de-4a57-b985-80fb5df9dd4b/08.06.2025 Allied Innovative Payment 2.pdf -> statements/5c9324ac-1794-4563-8e0e-8cd5c5317181/08.06.2025 Allied Innovative Payment 2.pdf
+INFO:app.services.gcs_utils:✅ File deleted from GCS: statements/e62dda3a-d8de-4a57-b985-80fb5df9dd4b/08.06.2025 Allied Innovative Payment 2.pdf
+INFO:app.services.gcs_utils:🔐 Generating signed URL for: statements/5c9324ac-1794-4563-8e0e-8cd5c5317181/08.06.2025 Allied Innovative Payment 2.pdf
 INFO:app.services.gcs_utils:📝 Generating signed URL with:
+🎯 FormatLearningService: Finding matching format for company 5c9324ac-1794-4563-8e0e-8cd5c5317181
 INFO:app.services.gcs_utils:   - Content-Type: application/pdf
 INFO:app.services.gcs_utils:   - Content-Disposition: inline
 INFO:app.services.gcs_utils:   - Expiration: 1 hour(s)
-🎯 FormatLearningService: Finding matching format for company 08835c99-06dc-4df7-a1cb-e52fc6854c77
-🎯 FormatLearningService: Headers: ['Group No.', 'Group Name', 'Billing Period', 'Adj. Period', 'Invoice Total', 'Stoploss Total', 'Agent Rate', 'Calculation Method', 'Census Ct.', 'Paid Amount']
-🎯 FormatLearningService: Table structure: {'row_count': 73, 'column_count': 10, 'has_financial_data': True}
-🎯 FormatLearningService: Headers type: <class 'list'>
-🎯 FormatLearningService: Headers length: 10
-🎯 CRUD: Finding best matching format for company 08835c99-06dc-4df7-a1cb-e52fc6854c77
-🎯 CRUD: Input headers: ['Group No.', 'Group Name', 'Billing Period', 'Adj. Period', 'Invoice Total', 'Stoploss Total', 'Agent Rate', 'Calculation Method', 'Census Ct.', 'Paid Amount']
-🎯 CRUD: Input table structure: {'row_count': 73, 'column_count': 10, 'has_financial_data': True}
-INFO:app.services.gcs_utils:✅ Generated signed URL for GCS file with inline headers: statements/08835c99-06dc-4df7-a1cb-e52fc6854c77/08.06.2025 Allied Innovative Payment 2.pdf
-INFO:app.services.gcs_utils:   URL expires at: 2025-11-21 17:42:13.486426
-INFO:app.api.new_extract:✅ File moved to correct carrier folder in GCS: statements/08835c99-06dc-4df7-a1cb-e52fc6854c77/08.06.2025 Allied Innovative Payment 2.pdf
-INFO:app.api.new_extract:✅ Updated upload metadata: carrier_id=08835c99-06dc-4df7-a1cb-e52fc6854c77, company_id stays as user's company=d883a865-a54f-41d6-968e-f94c3cb3f589
+INFO:app.services.gcs_utils:✅ Generated signed URL for GCS file with inline headers: statements/5c9324ac-1794-4563-8e0e-8cd5c5317181/08.06.2025 Allied Innovative Payment 2.pdf
+INFO:app.services.gcs_utils:   URL expires at: 2025-11-21 18:31:56.312600
+INFO:app.api.new_extract:✅ File moved to correct carrier folder in GCS: statements/5c9324ac-1794-4563-8e0e-8cd5c5317181/08.06.2025 Allied Innovative Payment 2.pdf
+INFO:app.api.new_extract:✅ Updated upload metadata: carrier_id=5c9324ac-1794-4563-8e0e-8cd5c5317181, company_id stays as user's company=d883a865-a54f-41d6-968e-f94c3cb3f589
 INFO:app.api.new_extract:📊 Single table detected, using it for field mapping
 INFO:app.api.new_extract:🎯 Using table 0 for field mapping with 10 headers
-INFO:     10.219.19.58:45448 - "GET /health HTTP/1.1" 200 OK
-🎯 CRUD: Found 0 saved formats for company
-🎯 FormatLearningService: Best match score: 0
-🎯 FormatLearningService: No matching format found
-INFO:app.api.new_extract:🎯 Format Learning: No matching format found (score: 0.0)
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: STEP_STARTED
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-INFO:app.services.websocket_service:Step started: Understanding Structure (Step 4) for upload_id upload_1763742994566_d1adlqajn
+🎯 FormatLearningService: Headers: ['Group No.', 'Group Name', 'Billing Period', 'Adj. Period', 'Invoice Total', 'Stoploss Total', 'Agent Rate', 'Calculation Method', 'Census Ct.', 'Paid Amount']
+🎯 FormatLearningService: Table structure: {'row_count': 74, 'column_count': 10, 'has_financial_data': True}
+🎯 FormatLearningService: Headers type: <class 'list'>
+🎯 FormatLearningService: Headers length: 10
+🎯 CRUD: Finding best matching format for company 5c9324ac-1794-4563-8e0e-8cd5c5317181
+🎯 CRUD: Input headers: ['Group No.', 'Group Name', 'Billing Period', 'Adj. Period', 'Invoice Total', 'Stoploss Total', 'Agent Rate', 'Calculation Method', 'Census Ct.', 'Paid Amount']
+🎯 CRUD: Input table structure: {'row_count': 74, 'column_count': 10, 'has_financial_data': True}
+🎯 CRUD: Found 1 saved formats for company
+🎯 CRUD: Comparing with saved format:
+🎯 CRUD:   Saved headers: ['Group No.', 'Group Name', 'Billing Period', 'Adj. Period', 'Invoice Total', 'Stoploss Total', 'Agent %', 'Calculation Method', 'Census Ct.', 'Paid Amount']
+🎯 CRUD:   Header similarity: 0.7200000000000001
+🎯 CRUD:   Structure similarity: 1.0
+🎯 CRUD:   Total score: 0.776
+🎯 CRUD:   -> New best match with score 0.776
+🎯 FormatLearningService: Best match score: 0.776
+🎯 FormatLearningService: Found matching format with signature: 434609905947a9e8728df0b79ba381ce
+🎯 FormatLearningService: Learned field mapping: {'Agent %': 'Commission Rate', 'Group No.': 'Policy Number', 'Census Ct.': 'Total Subscribers', 'Group Name': 'Client Name', 'Adj. Period': 'Adjustment Period Start', 'Paid Amount': 'Commission Earned', 'Invoice Total': 'Invoice Total', 'Billing Period': 'Coverage Period Start', 'Stoploss Total': 'Stoploss Total', 'Calculation Method': 'Plan Type'}
+🎯 FormatLearningService: Learned table editor settings: {'carrier_name': 'ALLIED', 'corrected_carrier_name': 'ALLIED', 'statement_date': '2025-01-08', 'corrected_statement_date': '2025-01-08', 'statement_total_amount': 9336.9, 'total_amount_field_name': 'Invoice Total'}
+INFO:app.api.new_extract:🎯 Format Learning: Found matching format with score 0.776
+INFO:app.api.new_extract:🎯 Format Learning: Applying corrected carrier name from learned format: ALLIED
+INFO:app.api.new_extract:🎯 Format Learning: Skipping statement date auto-apply (dates are document-specific)
+INFO:app.api.new_extract:✅ Total extracted from document_metadata: $2100.58
+WARNING:app.api.new_extract:⚠️ Replacing total_amount 2100.58 (method=document_metadata) with summary_row_scan=3604.95
+INFO:app.api.new_extract:🎯 Format Learning: Total validation result: {'matches': False, 'extracted_amount': 3604.95, 'learned_amount': 9336.9, 'difference': 5731.95, 'difference_percent': 61.39, 'status': 'mismatch', 'tolerance_percent': 5.0}
+INFO:app.api.new_extract:📊 Added total to document_metadata: $3604.95 (method: summary_row_scan)
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_STARTED
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
+INFO:app.services.websocket_service:Step started: Understanding Structure (Step 4) for upload_id upload_1763746080555_gjuchgoob
 INFO:app.services.ai_plan_type_detection_service:AI Plan Type Detection Service initialized successfully
 INFO:app.api.new_extract:🔍 AI Plan Type Detection: Detecting plan types during extraction
 INFO:app.services.ai_plan_type_detection_service:🔍 AI Plan Detection: Analyzing document for insurance plan types
 INFO:httpx:HTTP Request: POST https://api.mistral.ai/v1/chat/completions "HTTP/1.1 200 OK"
 INFO:app.services.ai_plan_type_detection_service:✅ AI successfully detected plan types
-INFO:app.services.ai_plan_type_detection_service:✅ AI Plan Detection: Found 1 plan types with 0.90 confidence
-INFO:app.api.new_extract:✅ AI Plan Detection: 1 plan types with 0.90 confidence
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: STEP_STARTED
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-INFO:app.services.websocket_service:Step started: AI Field Mapping (Step 5) for upload_id upload_1763742994566_d1adlqajn
+INFO:app.services.ai_plan_type_detection_service:✅ AI Plan Detection: Found 1 plan types with 0.85 confidence
+INFO:app.api.new_extract:✅ AI Plan Detection: 1 plan types with 0.85 confidence
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_STARTED
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
+INFO:app.services.websocket_service:Step started: AI Field Mapping (Step 5) for upload_id upload_1763746080555_gjuchgoob
 INFO:app.api.new_extract:🧠 AI Field Mapping: Starting field mapping during extraction
 INFO:app.api.new_extract:📋 Normalizing headers for AI mapping:
 INFO:app.api.ai_intelligent_mapping:🚀 Enhanced AI Analysis Request: User muhammad@pinecrestconsulting.com
 INFO:app.services.ai_field_mapping_service:🤖 AI Mapping: Analyzing 10 headers with AI intelligence
-INFO:app.services.ai_field_mapping_service:🔍 AI Mapping: carrier_id provided: True (value: 08835c99-06dc-4df7-a1cb-e52fc6854c77)
-INFO:     10.219.19.58:45462 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.ai_field_mapping_service:🎯 Carrier ID is valid, attempting to retrieve learned mapping for carrier 08835c99-06dc-4df7-a1cb-e52fc6854c77
+INFO:app.services.ai_field_mapping_service:🔍 AI Mapping: carrier_id provided: True (value: 5c9324ac-1794-4563-8e0e-8cd5c5317181)
+INFO:     10.219.18.220:40568 - "GET /health HTTP/1.1" 200 OK
+INFO:app.services.ai_field_mapping_service:🎯 Carrier ID is valid, attempting to retrieve learned mapping for carrier 5c9324ac-1794-4563-8e0e-8cd5c5317181
 INFO:app.services.ai_field_mapping_service:🔍 Generated format signature for lookup: 6f736ac611e1789c131a993b10321314
-INFO:app.services.ai_field_mapping_service:🔍 Looking up learned format for carrier 08835c99-06dc-4df7-a1cb-e52fc6854c77 with 10 headers
+INFO:app.services.ai_field_mapping_service:🔍 Looking up learned format for carrier 5c9324ac-1794-4563-8e0e-8cd5c5317181 with 10 headers
 INFO:app.services.ai_field_mapping_service:❌ No exact match found, trying fuzzy matching...
-INFO:app.services.ai_field_mapping_service:🔍 Found 0 saved formats for fuzzy matching
-INFO:app.services.ai_field_mapping_service:❌ No matching format found
-INFO:app.services.ai_field_mapping_service:❌ No learned mapping found for carrier 08835c99-06dc-4df7-a1cb-e52fc6854c77
-     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763742994571_ebz4fkox4clientIP="86.50.75.139" requestID="" responseTimeMS=378201 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-     [GET]500commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743374478_ips5flmhsclientIP="86.50.75.139" requestID="" responseTimeMS=2 responseBytes=145 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-     [GET]500commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743377217_jqy57u849clientIP="86.50.75.139" requestID="" responseTimeMS=2 responseBytes=145 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
+INFO:app.services.ai_field_mapping_service:🔍 Found 1 saved formats for fuzzy matching
+INFO:app.services.ai_field_mapping_service:🔍 Format signature 434609905947a9e8728df0b79ba381ce: similarity = 0.72
+INFO:app.services.ai_field_mapping_service:✅ New best match with similarity 0.72
+INFO:app.services.ai_field_mapping_service:✅ Found similar format with 0.72 similarity score
+INFO:app.services.ai_field_mapping_service:🎯 Found learned mapping for carrier with 0.72 confidence
 INFO:httpx:HTTP Request: POST https://api.mistral.ai/v1/chat/completions "HTTP/1.1 200 OK"
 INFO:app.services.ai_field_mapping_service:✅ AI successfully generated field mappings
-INFO:app.services.ai_field_mapping_service:✅ AI Mapping: Generated 10 mappings with 0.87 confidence
+INFO:app.services.ai_field_mapping_service:✅ AI Mapping: Generated 10 mappings with 0.89 confidence
 INFO:app.services.ai_plan_type_detection_service:🔍 AI Plan Detection: Analyzing document for insurance plan types
+INFO:     10.219.18.220:46248 - "GET /health HTTP/1.1" 200 OK
 INFO:httpx:HTTP Request: POST https://api.mistral.ai/v1/chat/completions "HTTP/1.1 200 OK"
 INFO:app.services.ai_plan_type_detection_service:✅ AI successfully detected plan types
 INFO:app.services.ai_plan_type_detection_service:✅ AI Plan Detection: Found 1 plan types with 0.90 confidence
 INFO:app.api.ai_intelligent_mapping:✅ Enhanced AI Analysis Complete: Overall confidence 0.89
-INFO:app.api.new_extract:✅ AI Field Mapping: 10 mappings with sample data, confidence 0.87
+INFO:app.api.new_extract:✅ AI Field Mapping: 10 mappings with sample data, confidence 0.89
 INFO:app.api.new_extract:✅ Conversational summary supplied by extraction pipeline
-INFO:app.api.new_extract:   Summary preview: This is an ABSF Commission Payment Summary from Allied Benefit for INNOVATIVE BPS LLC, dated August 6, 2025. The statement logs a total of $108,954.54 in commissions across 73 groups, with notable con
-INFO:app.api.new_extract:   Structured data keys: ['statement_date', 'total_amount', 'company_count', 'broker_id_confidence', 'census_count', 'billing_periods', 'carrier_name', 'broker_company', 'broker_id', 'payment_type', 'top_contributors', 'commission_structure']
-INFO:app.services.audit_logging_service:Audit: file_upload by user f6cf1764-5bfc-4352-abd9-81b72b7cf191 on statement_upload (ID: 2838a737-c649-4fc9-a1ca-1ceea61fb6e2)
+INFO:app.api.new_extract:   Summary preview: Commission statement from ALLIED. for period ending 2025-08-06. prepared for INNOVATIVE BPS LLC. Total commission: $2,100.58. 74 commission entries across 1 table(s).
+INFO:app.api.new_extract:   Structured data keys: []
+INFO:app.services.audit_logging_service:Audit: file_upload by user f6cf1764-5bfc-4352-abd9-81b72b7cf191 on statement_upload (ID: e62dda3a-d8de-4a57-b985-80fb5df9dd4b)
 INFO:app.api.new_extract:📤 Sending pre-generated enhanced summary via WebSocket...
-INFO:app.api.new_extract:📊 Sending structured data: {"statement_date": "2025-08-06", "total_amount": "108954.54", "company_count": 73, "broker_id_confidence": 0.7, "census_count": null, "billing_periods": null, "carrier_name": "Allied Benefit", "broker...
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763742994566_d1adlqajn
-ERROR:app.services.websocket_service:Timeout sending message to upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763742994571_ebz4fkox4
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763742994571_ebz4fkox4
+INFO:app.api.new_extract:📊 Sending structured data: {}...
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
+ERROR:app.services.websocket_service:Timeout sending message to upload_id=upload_1763746080555_gjuchgoob, session_id=session_1763746080567_fcr28z8y4
+INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763746080555_gjuchgoob, session_id=session_1763746080567_fcr28z8y4
+ERROR:app.services.websocket_service:Timeout sending message to upload_id=upload_1763746080555_gjuchgoob, session_id=session_1763746080567_fcr28z8y4
 INFO:     connection closed
 ERROR:asyncio:Task exception was never retrieved
-future: <Task finished name='Task-969' coro=<WebSocket.close() done, defined at /usr/local/lib/python3.11/site-packages/starlette/websockets.py:180> exception=RuntimeError('Cannot call "send" once a close message has been sent.')>
+future: <Task finished name='Task-1351' coro=<WebSocket.close() done, defined at /usr/local/lib/python3.11/site-packages/starlette/websockets.py:180> exception=RuntimeError('Cannot call "send" once a close message has been sent.')>
 Traceback (most recent call last):
   File "/usr/local/lib/python3.11/site-packages/starlette/websockets.py", line 181, in close
     await self.send({"type": "websocket.close", "code": code, "reason": reason or ""})
   File "/usr/local/lib/python3.11/site-packages/starlette/websockets.py", line 98, in send
     raise RuntimeError('Cannot call "send" once a close message has been sent.')
 RuntimeError: Cannot call "send" once a close message has been sent.
-ERROR:app.services.websocket_service:Error broadcasting to session session_1763742994571_ebz4fkox4: 
+ERROR:app.services.websocket_service:Error broadcasting to session session_1763746080567_fcr28z8y4: 
 Traceback (most recent call last):
   File "/usr/local/lib/python3.11/site-packages/websockets/legacy/protocol.py", line 1301, in close_connection
     await self.transfer_data_task
@@ -557,748 +495,73 @@ Traceback (most recent call last):
   File "/usr/local/lib/python3.11/site-packages/starlette/websockets.py", line 89, in send
     raise WebSocketDisconnect(code=1006)
 starlette.websockets.WebSocketDisconnect
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: STEP_STARTED
-WARNING:app.services.websocket_service:No active connections found for upload_id upload_1763742994566_d1adlqajn
-INFO:app.services.websocket_service:Step started: Preparing Results (Step 6) for upload_id upload_1763742994566_d1adlqajn
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_STARTED
+WARNING:app.services.websocket_service:No active connections found for upload_id upload_1763746080555_gjuchgoob
+INFO:app.services.websocket_service:Step started: Preparing Results (Step 6) for upload_id upload_1763746080555_gjuchgoob
 INFO:app.api.new_extract:📊 Calculating invoice total from 1 tables
 INFO:app.api.new_extract:📊 Table 0: Found invoice column at index 4: 'Invoice Total'
 INFO:app.api.new_extract:✅ Table 0: Calculated from rows: $66,325.44
 INFO:app.api.new_extract:✅ TOTAL invoice amount from all tables: $66,325.44
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: STEP_PROGRESS
-WARNING:app.services.websocket_service:No active connections found for upload_id upload_1763742994566_d1adlqajn
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763742994566_d1adlqajn: EXTRACTION_COMPLETE
-WARNING:app.services.websocket_service:No active connections found for upload_id upload_1763742994566_d1adlqajn
-INFO:app.services.websocket_service:Extraction complete for upload_id upload_1763742994566_d1adlqajn
-INFO:app.api.new_extract:✅ Extraction complete! Sent results via WebSocket for upload_id: upload_1763742994566_d1adlqajn
-ERROR:app.services.websocket_service:Error sending personal message: 
-Traceback (most recent call last):
-  File "/usr/local/lib/python3.11/site-packages/websockets/legacy/protocol.py", line 1301, in close_connection
-    await self.transfer_data_task
-  File "/usr/local/lib/python3.11/site-packages/websockets/legacy/protocol.py", line 963, in transfer_data
-    message = await self.read_message()
-              ^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/site-packages/websockets/legacy/protocol.py", line 1033, in read_message
-    frame = await self.read_data_frame(max_size=self.max_size)
-            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/site-packages/websockets/legacy/protocol.py", line 1108, in read_data_frame
-    frame = await self.read_frame(max_size)
-            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/site-packages/websockets/legacy/protocol.py", line 1165, in read_frame
-    frame = await Frame.read(
-            ^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/site-packages/websockets/legacy/framing.py", line 68, in read
-    data = await reader(2)
-           ^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/asyncio/streams.py", line 750, in readexactly
-    await self._wait_for_data('readexactly')
-  File "/usr/local/lib/python3.11/asyncio/streams.py", line 543, in _wait_for_data
-    await self._waiter
-asyncio.exceptions.CancelledError
-The above exception was the direct cause of the following exception:
-Traceback (most recent call last):
-  File "/usr/local/lib/python3.11/site-packages/uvicorn/protocols/websockets/websockets_impl.py", line 332, in asgi_send
-    await self.send(data)  # type: ignore[arg-type]
-    ^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/site-packages/websockets/legacy/protocol.py", line 635, in send
-    await self.ensure_open()
-  File "/usr/local/lib/python3.11/site-packages/websockets/legacy/protocol.py", line 948, in ensure_open
-    raise self.connection_closed_exc()
-websockets.exceptions.ConnectionClosedError: sent 1011 (internal error) keepalive ping timeout; no close frame received
-The above exception was the direct cause of the following exception:
-Traceback (most recent call last):
-  File "/usr/local/lib/python3.11/site-packages/starlette/websockets.py", line 86, in send
-    await self._send(message)
-  File "/usr/local/lib/python3.11/site-packages/starlette/_exception_handler.py", line 39, in sender
-    await send(message)
-  File "/usr/local/lib/python3.11/site-packages/uvicorn/protocols/websockets/websockets_impl.py", line 345, in asgi_send
-    raise ClientDisconnected from exc
-uvicorn.protocols.utils.ClientDisconnected
-During handling of the above exception, another exception occurred:
-Traceback (most recent call last):
-  File "/app/app/services/websocket_service.py", line 224, in send_personal_message
-    await asyncio.wait_for(
-  File "/usr/local/lib/python3.11/asyncio/tasks.py", line 489, in wait_for
-    return fut.result()
-           ^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/site-packages/starlette/websockets.py", line 166, in send_text
-    await self.send({"type": "websocket.send", "text": data})
-  File "/usr/local/lib/python3.11/site-packages/starlette/websockets.py", line 89, in send
-    raise WebSocketDisconnect(code=1006)
-starlette.websockets.WebSocketDisconnect
-INFO:app.api.websocket:WebSocket application state not CONNECTED for upload_id=upload_1763742994566_d1adlqajn
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763742994566_d1adlqajn
-INFO:     10.21.122.223:58632 - "POST /api/extract-tables-smart/ HTTP/1.1" 200 OK
-INFO:     10.219.19.58:33772 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.19.58:33774 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.19.58:49232 - "GET /health HTTP/1.1" 200 OK
-     [POST]200commission-tracker-1.onrender.com/api/extract-tables-smart/clientIP="86.50.75.139" requestID="bb85a225-c1b5-4815" responseTimeMS=387115 responseBytes=9571 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-     [GET]500commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743385943_3ph5f7039clientIP="86.50.75.139" requestID="" responseTimeMS=4 responseBytes=145 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-     [GET]500commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743385219_9fqxwkkkbclientIP="86.50.75.139" requestID="" responseTimeMS=18 responseBytes=145 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-INFO:     10.219.19.58:49240 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.19.58:36598 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.19.58:36610 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.19.58:46580 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.19.58:46586 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.19.58:46588 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.19.58:50792 - "GET /health HTTP/1.1" 200 OK
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763742994566_d1adlqajn. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743415223_0suyral39
-INFO:     10.20.252.252:51262 - "WebSocket /api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743415223_0suyral39" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743415223_0suyral39, timeout=1800s
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_PROGRESS
+WARNING:app.services.websocket_service:No active connections found for upload_id upload_1763746080555_gjuchgoob
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: EXTRACTION_COMPLETE
+WARNING:app.services.websocket_service:No active connections found for upload_id upload_1763746080555_gjuchgoob
+INFO:app.services.websocket_service:Extraction complete for upload_id upload_1763746080555_gjuchgoob
+INFO:app.api.new_extract:✅ Extraction complete! Sent results via WebSocket for upload_id: upload_1763746080555_gjuchgoob
+WARNING:app.api.websocket:WebSocket disconnected during message handling: WebSocket is not connected. Need to call "accept" first.
+INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763746080555_gjuchgoob
+INFO:     10.20.174.248:40256 - "POST /api/extract-tables-smart/ HTTP/1.1" 200 OK
+INFO:     10.219.18.220:50190 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.220:50202 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.220:50200 - "GET /health HTTP/1.1" 200 OK
+WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763746080555_gjuchgoob. This is allowed for progress tracking, but consider implementing token passing for production.
+INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763746080555_gjuchgoob, session_id: session_1763746371900_415uve3zk
+INFO:     10.20.16.82:59196 - "WebSocket /api/ws/progress/upload_1763746080555_gjuchgoob?session_id=session_1763746371900_415uve3zk" [accepted]
+INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763746080555_gjuchgoob, session_id=session_1763746371900_415uve3zk, timeout=1800s
 INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743415223_0suyral39
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763742994566_d1adlqajn
+INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763746080555_gjuchgoob, session_id: session_1763746371900_415uve3zk
+INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763746080555_gjuchgoob
+INFO:     10.219.18.220:37094 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.220:37104 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.220:37504 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.220:37518 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.220:44182 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.220:44192 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.220:44204 - "GET /health HTTP/1.1" 200 OK
 INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743415223_0suyral39
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743415223_0suyral39
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763742994566_d1adlqajn
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763742994566_d1adlqajn. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743415951_aewjzez13
-INFO:     10.21.204.84:40566 - "WebSocket /api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743415951_aewjzez13" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743415951_aewjzez13, timeout=1800s
+INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763746080555_gjuchgoob, session_id=session_1763746371900_415uve3zk
+INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763746080555_gjuchgoob, session_id=session_1763746371900_415uve3zk
+INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763746080555_gjuchgoob
+WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763746080555_gjuchgoob. This is allowed for progress tracking, but consider implementing token passing for production.
+INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763746080555_gjuchgoob, session_id: session_1763746401538_ygyrrxef3
+INFO:     10.20.33.62:36860 - "WebSocket /api/ws/progress/upload_1763746080555_gjuchgoob?session_id=session_1763746401538_ygyrrxef3" [accepted]
+INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763746080555_gjuchgoob, session_id=session_1763746401538_ygyrrxef3, timeout=1800s
 INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743415951_aewjzez13
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763742994566_d1adlqajn
+INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763746080555_gjuchgoob, session_id: session_1763746401538_ygyrrxef3
+INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763746080555_gjuchgoob
 INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743415951_aewjzez13
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743415951_aewjzez13
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763742994566_d1adlqajn
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763742994566_d1adlqajn. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743416672_w6miuydbl
-INFO:     10.20.252.252:51276 - "WebSocket /api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743416672_w6miuydbl" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743416672_w6miuydbl, timeout=1800s
+INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763746080555_gjuchgoob, session_id=session_1763746401538_ygyrrxef3
+INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763746080555_gjuchgoob, session_id=session_1763746401538_ygyrrxef3
+INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763746080555_gjuchgoob
+WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763746080555_gjuchgoob. This is allowed for progress tracking, but consider implementing token passing for production.
+INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763746080555_gjuchgoob, session_id: session_1763746402539_5kwk62jpw
+INFO:     10.20.148.164:38526 - "WebSocket /api/ws/progress/upload_1763746080555_gjuchgoob?session_id=session_1763746402539_5kwk62jpw" [accepted]
+INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763746080555_gjuchgoob, session_id=session_1763746402539_5kwk62jpw, timeout=1800s
 INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743416672_w6miuydbl
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763742994566_d1adlqajn
-     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743415223_0suyral39clientIP="86.50.75.139" requestID="" responseTimeMS=252 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743415951_aewjzez13clientIP="86.50.75.139" requestID="" responseTimeMS=294 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-INFO:     10.219.19.58:50796 - "GET /health HTTP/1.1" 200 OK
+INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763746080555_gjuchgoob, session_id: session_1763746402539_5kwk62jpw
+INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763746080555_gjuchgoob
+INFO:     10.219.18.220:57912 - "GET /health HTTP/1.1" 200 OK
 INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743416672_w6miuydbl
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743416672_w6miuydbl
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763742994566_d1adlqajn
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763742994566_d1adlqajn. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743419950_p8ukrkmdc
-INFO:     10.20.82.35:35240 - "WebSocket /api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743419950_p8ukrkmdc" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743419950_p8ukrkmdc, timeout=1800s
+INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763746080555_gjuchgoob, session_id=session_1763746402539_5kwk62jpw
+INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763746080555_gjuchgoob, session_id=session_1763746402539_5kwk62jpw
+INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763746080555_gjuchgoob
+WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763746080555_gjuchgoob. This is allowed for progress tracking, but consider implementing token passing for production.
+INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763746080555_gjuchgoob, session_id: session_1763746406539_8a34pghpr
+INFO:     10.20.166.78:58878 - "WebSocket /api/ws/progress/upload_1763746080555_gjuchgoob?session_id=session_1763746406539_8a34pghpr" [accepted]
+INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763746080555_gjuchgoob, session_id=session_1763746406539_8a34pghpr, timeout=1800s
 INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743419950_p8ukrkmdc
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763742994566_d1adlqajn
+INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763746080555_gjuchgoob, session_id: session_1763746406539_8a34pghpr
+INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763746080555_gjuchgoob
+INFO:     10.219.18.220:57926 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.220:58512 - "GET /health HTTP/1.1" 200 OK
 INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743419950_p8ukrkmdc
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743419950_p8ukrkmdc
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763742994566_d1adlqajn
-     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743416672_w6miuydblclientIP="86.50.75.139" requestID="" responseTimeMS=2807 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763742994566_d1adlqajn. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743420864_71oz3y9tx
-INFO:     10.20.166.78:36910 - "WebSocket /api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743420864_71oz3y9tx" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743420864_71oz3y9tx, timeout=1800s
-INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743420864_71oz3y9tx
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763742994566_d1adlqajn
-     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743419950_p8ukrkmdcclientIP="86.50.75.139" requestID="" responseTimeMS=280 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-     [GET]500commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743420674_93dv4lft2clientIP="86.50.75.139" requestID="" responseTimeMS=1 responseBytes=145 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-INFO:     10.219.19.58:41862 - "GET /health HTTP/1.1" 200 OK
-INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743420864_71oz3y9tx
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743420864_71oz3y9tx
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763742994566_d1adlqajn
-     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743420864_71oz3y9txclientIP="86.50.75.139" requestID="" responseTimeMS=2643 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763742994566_d1adlqajn. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743424145_y9zy1akq5
-INFO:     10.21.43.248:54322 - "WebSocket /api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743424145_y9zy1akq5" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743424145_y9zy1akq5, timeout=1800s
-INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743424145_y9zy1akq5
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763742994566_d1adlqajn
-     [GET]500commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743423953_lqxgjlmakclientIP="86.50.75.139" requestID="" responseTimeMS=3 responseBytes=145 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763742994566_d1adlqajn. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743424678_ku8qclw9g
-INFO:     10.21.105.54:56476 - "WebSocket /api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743424678_ku8qclw9g" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743424678_ku8qclw9g, timeout=1800s
-INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743424678_ku8qclw9g
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763742994566_d1adlqajn
-INFO:     10.219.19.58:41874 - "GET /health HTTP/1.1" 200 OK
-INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743424678_ku8qclw9g
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743424678_ku8qclw9g
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763742994566_d1adlqajn
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763742994566_d1adlqajn. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743427956_3wik86yxo
-INFO:     10.20.116.33:51514 - "WebSocket /api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743427956_3wik86yxo" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743427956_3wik86yxo, timeout=1800s
-INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743427956_3wik86yxo
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763742994566_d1adlqajn
-INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743427956_3wik86yxo
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743427956_3wik86yxo
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763742994566_d1adlqajn
-     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743424678_ku8qclw9gclientIP="86.50.75.139" requestID="" responseTimeMS=2812 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763742994566_d1adlqajn. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743428872_lrvvqf7bd
-INFO:     10.20.37.149:41894 - "WebSocket /api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743428872_lrvvqf7bd" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743428872_lrvvqf7bd, timeout=1800s
-INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743428872_lrvvqf7bd
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763742994566_d1adlqajn
-     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743427956_3wik86yxoclientIP="86.50.75.139" requestID="" responseTimeMS=432 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743428872_lrvvqf7bd
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743428872_lrvvqf7bd
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763742994566_d1adlqajn
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763742994566_d1adlqajn. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743432169_v4k2m4m9k
-INFO:     10.20.185.244:56648 - "WebSocket /api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743432169_v4k2m4m9k" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743432169_v4k2m4m9k, timeout=1800s
-INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743432169_v4k2m4m9k
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763742994566_d1adlqajn
-INFO:     10.219.19.58:50290 - "GET /health HTTP/1.1" 200 OK
-INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743432169_v4k2m4m9k
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743432169_v4k2m4m9k
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763742994566_d1adlqajn
-     [GET]500commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743431963_iz9hlojd6clientIP="86.50.75.139" requestID="" responseTimeMS=1 responseBytes=145 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743428872_lrvvqf7bdclientIP="86.50.75.139" requestID="" responseTimeMS=2627 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743432169_v4k2m4m9kclientIP="86.50.75.139" requestID="" responseTimeMS=222 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763742994566_d1adlqajn. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743432871_i48mipfp7
-INFO:     10.20.103.172:44930 - "WebSocket /api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743432871_i48mipfp7" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743432871_i48mipfp7, timeout=1800s
-INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743432871_i48mipfp7
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763742994566_d1adlqajn
-INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743424145_y9zy1akq5
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743424145_y9zy1akq5
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763742994566_d1adlqajn
-     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743424145_y9zy1akq5clientIP="86.50.75.139" requestID="" responseTimeMS=10103 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743432871_i48mipfp7
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743432871_i48mipfp7
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763742994566_d1adlqajn
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763742994566_d1adlqajn. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743435958_vr8rmnbrt
-INFO:     10.21.193.109:58322 - "WebSocket /api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743435958_vr8rmnbrt" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743435958_vr8rmnbrt, timeout=1800s
-INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743435958_vr8rmnbrt
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763742994566_d1adlqajn
-INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743435958_vr8rmnbrt
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743435958_vr8rmnbrt
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763742994566_d1adlqajn
-     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743432871_i48mipfp7clientIP="86.50.75.139" requestID="" responseTimeMS=2599 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743435958_vr8rmnbrtclientIP="86.50.75.139" requestID="" responseTimeMS=415 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763742994566_d1adlqajn. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743437077_eeodla907
-INFO:     10.20.166.78:40658 - "WebSocket /api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743437077_eeodla907" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743437077_eeodla907, timeout=1800s
-INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743437077_eeodla907
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763742994566_d1adlqajn
-     [GET]500commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743436876_m1qub26x3clientIP="86.50.75.139" requestID="" responseTimeMS=0 responseBytes=145 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-INFO:     10.219.19.58:50306 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.19.58:50320 - "GET /health HTTP/1.1" 200 OK
-INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743437077_eeodla907
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743437077_eeodla907
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763742994566_d1adlqajn
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763742994566_d1adlqajn. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743440196_1v3om98ym
-INFO:     10.21.105.54:48242 - "WebSocket /api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743440196_1v3om98ym" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743440196_1v3om98ym, timeout=1800s
-INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743440196_1v3om98ym
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763742994566_d1adlqajn
-     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743437077_eeodla907clientIP="86.50.75.139" requestID="" responseTimeMS=2461 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-     [GET]500commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743439962_qqaf5n56qclientIP="86.50.75.139" requestID="" responseTimeMS=0 responseBytes=145 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-INFO:     10.219.19.58:50152 - "GET /health HTTP/1.1" 200 OK
-INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743440196_1v3om98ym
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743440196_1v3om98ym
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763742994566_d1adlqajn
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763742994566_d1adlqajn. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743444160_gt5j6c5jw
-INFO:     10.20.237.61:53500 - "WebSocket /api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743444160_gt5j6c5jw" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743444160_gt5j6c5jw, timeout=1800s
-INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743444160_gt5j6c5jw
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763742994566_d1adlqajn
-     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743440196_1v3om98ymclientIP="86.50.75.139" requestID="" responseTimeMS=3297 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-     [GET]500commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743443965_kbu58ub2iclientIP="86.50.75.139" requestID="" responseTimeMS=0 responseBytes=145 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743444160_gt5j6c5jw
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743444160_gt5j6c5jw
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763742994566_d1adlqajn
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763742994566_d1adlqajn. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743445228_q50asym55
-INFO:     10.20.82.35:60462 - "WebSocket /api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743445228_q50asym55" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743445228_q50asym55, timeout=1800s
-INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743445228_q50asym55
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763742994566_d1adlqajn
-     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743444160_gt5j6c5jwclientIP="86.50.75.139" requestID="" responseTimeMS=616 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-INFO:     10.219.19.58:50156 - "GET /health HTTP/1.1" 200 OK
-INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743445228_q50asym55
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743445228_q50asym55
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763742994566_d1adlqajn
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763742994566_d1adlqajn. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743448198_si6venw9n
-INFO:     10.20.37.149:38160 - "WebSocket /api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743448198_si6venw9n" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743448198_si6venw9n, timeout=1800s
-INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743448198_si6venw9n
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763742994566_d1adlqajn
-     [GET]500commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743447969_7kdk1ism4clientIP="86.50.75.139" requestID="" responseTimeMS=0 responseBytes=145 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743448198_si6venw9nclientIP="86.50.75.139" requestID="" responseTimeMS=513 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743445228_q50asym55clientIP="86.50.75.139" requestID="" responseTimeMS=2280 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743448198_si6venw9n
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743448198_si6venw9n
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763742994566_d1adlqajn
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763742994566_d1adlqajn. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743449435_zxemc0lrg
-INFO:     10.20.16.82:47436 - "WebSocket /api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743449435_zxemc0lrg" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743449435_zxemc0lrg, timeout=1800s
-INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743449435_zxemc0lrg
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763742994566_d1adlqajn
-     [GET]500commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743449232_bwwkuxzzxclientIP="86.50.75.139" requestID="" responseTimeMS=0 responseBytes=145 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743449435_zxemc0lrg
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743449435_zxemc0lrg
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763742994566_d1adlqajn
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763742994566_d1adlqajn. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743452182_q5a84lomz
-INFO:     10.20.211.32:34238 - "WebSocket /api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743452182_q5a84lomz" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743452182_q5a84lomz, timeout=1800s
-INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743452182_q5a84lomz
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763742994566_d1adlqajn
-INFO:     10.219.19.58:34340 - "GET /health HTTP/1.1" 200 OK
-     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743449435_zxemc0lrgclientIP="86.50.75.139" requestID="" responseTimeMS=2036 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-     [GET]500commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743451972_m61kztxz6clientIP="86.50.75.139" requestID="" responseTimeMS=0 responseBytes=145 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763742994566_d1adlqajn. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743453236_y5em42bp1
-INFO:     10.20.33.62:55650 - "WebSocket /api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743453236_y5em42bp1" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743453236_y5em42bp1, timeout=1800s
-INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743453236_y5em42bp1
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763742994566_d1adlqajn
-     [GET]500commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743452888_9qok9fp91clientIP="86.50.75.139" requestID="" responseTimeMS=0 responseBytes=145 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743453236_y5em42bp1
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743453236_y5em42bp1
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763742994566_d1adlqajn
-     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743453236_y5em42bp1clientIP="86.50.75.139" requestID="" responseTimeMS=987 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763742994566_d1adlqajn. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743454688_9p40y83dv
-INFO:     10.20.37.149:38162 - "WebSocket /api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743454688_9p40y83dv" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743454688_9p40y83dv, timeout=1800s
-INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743454688_9p40y83dv
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763742994566_d1adlqajn
-INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743454688_9p40y83dv
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743454688_9p40y83dv
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763742994566_d1adlqajn
-     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743454688_9p40y83dvclientIP="86.50.75.139" requestID="" responseTimeMS=823 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763742994566_d1adlqajn. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743455977_0pafqp01s
-INFO:     10.20.211.32:34244 - "WebSocket /api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743455977_0pafqp01s" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743455977_0pafqp01s, timeout=1800s
-INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743455977_0pafqp01s
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763742994566_d1adlqajn
-INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743455977_0pafqp01s
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743455977_0pafqp01s
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763742994566_d1adlqajn
-     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743455977_0pafqp01sclientIP="86.50.75.139" requestID="" responseTimeMS=809 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-INFO:     10.219.19.58:34352 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.21.122.223:47016 - "GET /api/companies/?view_mode=my_data&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763742994566_d1adlqajn. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743457461_e3i9n4357
-INFO:     10.20.28.251:49356 - "WebSocket /api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743457461_e3i9n4357" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743457461_e3i9n4357, timeout=1800s
-INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743457461_e3i9n4357
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763742994566_d1adlqajn
-INFO:     10.20.57.237:33256 - "GET /api/companies/user-specific?environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743457461_e3i9n4357
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743457461_e3i9n4357
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763742994566_d1adlqajn
-     [GET]200commission-tracker-1.onrender.com/api/companies/?view_mode=my_data&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485clientIP="86.50.75.139" requestID="b33ab14f-7d1f-49dc" responseTimeMS=594 responseBytes=1140 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763742994566_d1adlqajn. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743458684_umn5aex6k
-INFO:     10.21.193.109:53078 - "WebSocket /api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743458684_umn5aex6k" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743458684_umn5aex6k, timeout=1800s
-INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743458684_umn5aex6k
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763742994566_d1adlqajn
-INFO:     10.20.57.237:33256 - "GET /api/companies/user-specific?environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743457461_e3i9n4357clientIP="86.50.75.139" requestID="" responseTimeMS=754 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-     [GET]200commission-tracker-1.onrender.com/api/companies/user-specific?environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485clientIP="86.50.75.139" requestID="2b7e427f-d06d-4a61" responseTimeMS=628 responseBytes=1062 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-     [GET]200commission-tracker-1.onrender.com/api/companies/user-specific?environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485clientIP="86.50.75.139" requestID="e8c12616-5322-405a" responseTimeMS=685 responseBytes=1062 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743458684_umn5aex6k
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743458684_umn5aex6k
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763742994566_d1adlqajn
-     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743458684_umn5aex6kclientIP="86.50.75.139" requestID="" responseTimeMS=888 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763742994566_d1adlqajn. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743459981_oulzzsdzu
-INFO:     10.20.148.164:37818 - "WebSocket /api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743459981_oulzzsdzu" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743459981_oulzzsdzu, timeout=1800s
-INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743459981_oulzzsdzu
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763742994566_d1adlqajn
-INFO:     10.20.166.78:34522 - "GET /api/companies/user-specific/5c9324ac-1794-4563-8e0e-8cd5c5317181/statements HTTP/1.1" 200 OK
-INFO:     10.20.237.61:48808 - "GET /api/earned-commission/carrier/user-specific/5c9324ac-1794-4563-8e0e-8cd5c5317181/stats HTTP/1.1" 200 OK
-     [GET]200commission-tracker-1.onrender.com/api/companies/user-specific/5c9324ac-1794-4563-8e0e-8cd5c5317181/statementsclientIP="86.50.75.139" requestID="41795102-5bbe-4c7e" responseTimeMS=673 responseBytes=1844 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743459981_oulzzsdzu
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743459981_oulzzsdzu
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763742994566_d1adlqajn
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763742994566_d1adlqajn. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743461440_q91zcpc25
-INFO:     10.20.174.248:42206 - "WebSocket /api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743461440_q91zcpc25" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743461440_q91zcpc25, timeout=1800s
-INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743461440_q91zcpc25
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763742994566_d1adlqajn
-     [GET]200commission-tracker-1.onrender.com/api/earned-commission/carrier/user-specific/5c9324ac-1794-4563-8e0e-8cd5c5317181/statsclientIP="86.50.75.139" requestID="828dec50-fca3-467a" responseTimeMS=850 responseBytes=975 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763742994566_d1adlqajn. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743462157_0snisz18e
-INFO:     10.21.204.84:34292 - "WebSocket /api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743462157_0snisz18e" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743462157_0snisz18e, timeout=1800s
-INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743462157_0snisz18e
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763742994566_d1adlqajn
-INFO:     10.219.19.58:38122 - "GET /health HTTP/1.1" 200 OK
-INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743452182_q5a84lomz
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743452182_q5a84lomz
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763742994566_d1adlqajn
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763742994566_d1adlqajn. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743462890_d4ylmo28z
-INFO:     10.21.247.224:46378 - "WebSocket /api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743462890_d4ylmo28z" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743462890_d4ylmo28z, timeout=1800s
-INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743462890_d4ylmo28z
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763742994566_d1adlqajn
-     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743459981_oulzzsdzuclientIP="86.50.75.139" requestID="" responseTimeMS=1013 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743452182_q5a84lomzclientIP="86.50.75.139" requestID="" responseTimeMS=10222 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-     [GET]500commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743461970_hsfsq2vekclientIP="86.50.75.139" requestID="" responseTimeMS=1 responseBytes=145 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-     [GET]500commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743462687_rxkpglds1clientIP="86.50.75.139" requestID="" responseTimeMS=0 responseBytes=145 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743462890_d4ylmo28z
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743462890_d4ylmo28z
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763742994566_d1adlqajn
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763742994566_d1adlqajn. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743464526_n0z6sq2sc
-INFO:     10.21.210.89:55646 - "WebSocket /api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743464526_n0z6sq2sc" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743464526_n0z6sq2sc, timeout=1800s
-INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743464526_n0z6sq2sc
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763742994566_d1adlqajn
-INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743464526_n0z6sq2sc
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743464526_n0z6sq2sc
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763742994566_d1adlqajn
-     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743462890_d4ylmo28zclientIP="86.50.75.139" requestID="" responseTimeMS=1134 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763742994566_d1adlqajn. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743465526_pdml7ljjc
-INFO:     10.20.80.107:34344 - "WebSocket /api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743465526_pdml7ljjc" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743465526_pdml7ljjc, timeout=1800s
-INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743465526_pdml7ljjc
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763742994566_d1adlqajn
-INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743465526_pdml7ljjc
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743465526_pdml7ljjc
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763742994566_d1adlqajn
-     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743464526_n0z6sq2scclientIP="86.50.75.139" requestID="" responseTimeMS=567 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763742994566_d1adlqajn. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743466525_am3roerp5
-INFO:     10.20.103.172:36924 - "WebSocket /api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743466525_am3roerp5" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743466525_am3roerp5, timeout=1800s
-INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743466525_am3roerp5
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763742994566_d1adlqajn
-     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743465526_pdml7ljjcclientIP="86.50.75.139" requestID="" responseTimeMS=563 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743466525_am3roerp5
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743466525_am3roerp5
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763742994566_d1adlqajn
-INFO:     10.219.19.58:38128 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.19.58:38130 - "GET /health HTTP/1.1" 200 OK
-     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743466525_am3roerp5clientIP="86.50.75.139" requestID="" responseTimeMS=551 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763742994566_d1adlqajn. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743467525_uim2ph7fy
-INFO:     10.20.103.172:36926 - "WebSocket /api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743467525_uim2ph7fy" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743467525_uim2ph7fy, timeout=1800s
-INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743467525_uim2ph7fy
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763742994566_d1adlqajn
-INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743467525_uim2ph7fy
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743467525_uim2ph7fy
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763742994566_d1adlqajn
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763742994566_d1adlqajn. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743468525_zlye5y59w
-INFO:     10.21.210.89:37374 - "WebSocket /api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743468525_zlye5y59w" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743468525_zlye5y59w, timeout=1800s
-INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743468525_zlye5y59w
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763742994566_d1adlqajn
-     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743467525_uim2ph7fyclientIP="86.50.75.139" requestID="" responseTimeMS=515 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743468525_zlye5y59w
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743468525_zlye5y59w
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763742994566_d1adlqajn
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763742994566_d1adlqajn. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743469525_vsk8m38l4
-INFO:     10.20.174.248:54490 - "WebSocket /api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743469525_vsk8m38l4" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743469525_vsk8m38l4, timeout=1800s
-INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743469525_vsk8m38l4
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763742994566_d1adlqajn
-     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743468525_zlye5y59wclientIP="86.50.75.139" requestID="" responseTimeMS=567 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743469525_vsk8m38l4
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743469525_vsk8m38l4
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763742994566_d1adlqajn
-     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743469525_vsk8m38l4clientIP="86.50.75.139" requestID="" responseTimeMS=1563 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743461440_q91zcpc25
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743461440_q91zcpc25
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763742994566_d1adlqajn
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763742994566_d1adlqajn. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743471525_mpavndb8d
-INFO:     10.21.231.218:41822 - "WebSocket /api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743471525_mpavndb8d" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743471525_mpavndb8d, timeout=1800s
-INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743471525_mpavndb8d
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763742994566_d1adlqajn
-INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743471525_mpavndb8d
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743471525_mpavndb8d
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763742994566_d1adlqajn
-INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743462157_0snisz18e
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743462157_0snisz18e
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763742994566_d1adlqajn
-     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743471525_mpavndb8dclientIP="86.50.75.139" requestID="" responseTimeMS=549 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-INFO:     10.219.19.58:52670 - "GET /health HTTP/1.1" 200 OK
-     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743461440_q91zcpc25clientIP="86.50.75.139" requestID="" responseTimeMS=10051 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763742994566_d1adlqajn. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743472525_kxrq18l7z
-INFO:     10.21.193.109:44196 - "WebSocket /api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743472525_kxrq18l7z" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743472525_kxrq18l7z, timeout=1800s
-INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743472525_kxrq18l7z
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763742994566_d1adlqajn
-     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743462157_0snisz18eclientIP="86.50.75.139" requestID="" responseTimeMS=10043 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743472525_kxrq18l7z
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743472525_kxrq18l7z
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763742994566_d1adlqajn
-     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743472525_kxrq18l7zclientIP="86.50.75.139" requestID="" responseTimeMS=2524 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763742994566_d1adlqajn. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743475525_vxff4b48r
-INFO:     10.20.57.237:44972 - "WebSocket /api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743475525_vxff4b48r" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743475525_vxff4b48r, timeout=1800s
-INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743475525_vxff4b48r
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763742994566_d1adlqajn
-INFO:     10.219.19.58:52680 - "GET /health HTTP/1.1" 200 OK
-INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743475525_vxff4b48r
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743475525_vxff4b48r
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763742994566_d1adlqajn
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763742994566_d1adlqajn. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743478527_gcjb8okn3
-INFO:     10.20.146.236:51092 - "WebSocket /api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743478527_gcjb8okn3" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743478527_gcjb8okn3, timeout=1800s
-INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743478527_gcjb8okn3
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763742994566_d1adlqajn
-     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743475525_vxff4b48rclientIP="86.50.75.139" requestID="" responseTimeMS=2551 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-INFO:app.services.orphan_cleanup_service:🧹 Starting orphan cleanup job...
-INFO:app.services.orphan_cleanup_service:✅ Orphan cleanup completed: no orphans found
-INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743478527_gcjb8okn3
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743478527_gcjb8okn3
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763742994566_d1adlqajn
-INFO:     10.219.19.58:35094 - "GET /health HTTP/1.1" 200 OK
-     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743478527_gcjb8okn3clientIP="86.50.75.139" requestID="" responseTimeMS=3545 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763742994566_d1adlqajn. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743483526_s6k18q4gm
-INFO:     10.20.148.164:59038 - "WebSocket /api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743483526_s6k18q4gm" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743483526_s6k18q4gm, timeout=1800s
-INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743483526_s6k18q4gm
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763742994566_d1adlqajn
-     [GET]500commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743482528_8x214modvclientIP="86.50.75.139" requestID="" responseTimeMS=0 responseBytes=145 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743483526_s6k18q4gm
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743483526_s6k18q4gm
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763742994566_d1adlqajn
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763742994566_d1adlqajn. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743485528_xh8sns2he
-INFO:     10.21.210.89:58290 - "WebSocket /api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743485528_xh8sns2he" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743485528_xh8sns2he, timeout=1800s
-INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743485528_xh8sns2he
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763742994566_d1adlqajn
-     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743483526_s6k18q4gmclientIP="86.50.75.139" requestID="" responseTimeMS=1500 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-INFO:     10.219.19.58:35098 - "GET /health HTTP/1.1" 200 OK
-INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743485528_xh8sns2he
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743485528_xh8sns2he
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763742994566_d1adlqajn
-INFO:     10.219.19.58:57510 - "GET /health HTTP/1.1" 200 OK
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763742994566_d1adlqajn. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743492527_fd71oybxu
-INFO:     10.20.211.32:57908 - "WebSocket /api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743492527_fd71oybxu" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743492527_fd71oybxu, timeout=1800s
-INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743492527_fd71oybxu
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763742994566_d1adlqajn
-     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743485528_xh8sns2heclientIP="86.50.75.139" requestID="" responseTimeMS=6532 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743492527_fd71oybxu
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743492527_fd71oybxu
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763742994566_d1adlqajn
-     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743492527_fd71oybxuclientIP="86.50.75.139" requestID="" responseTimeMS=2533 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763742994566_d1adlqajn. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743495529_3q610mgbo
-INFO:     10.21.45.69:33338 - "WebSocket /api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743495529_3q610mgbo" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743495529_3q610mgbo, timeout=1800s
-INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743495529_3q610mgbo
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763742994566_d1adlqajn
-INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743495529_3q610mgbo
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743495529_3q610mgbo
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763742994566_d1adlqajn
-INFO:     10.219.19.58:57524 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.19.58:57522 - "GET /health HTTP/1.1" 200 OK
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763742994566_d1adlqajn. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743497529_adp0ei1wi
-INFO:     10.21.193.109:53990 - "WebSocket /api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743497529_adp0ei1wi" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743497529_adp0ei1wi, timeout=1800s
-INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743497529_adp0ei1wi
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763742994566_d1adlqajn
-     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743495529_3q610mgboclientIP="86.50.75.139" requestID="" responseTimeMS=375 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743497529_adp0ei1wiclientIP="86.50.75.139" requestID="" responseTimeMS=455 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743497529_adp0ei1wi
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743497529_adp0ei1wi
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763742994566_d1adlqajn
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763742994566_d1adlqajn. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743498527_aatxgr4st
-INFO:     10.21.122.223:56448 - "WebSocket /api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743498527_aatxgr4st" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743498527_aatxgr4st, timeout=1800s
-INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743498527_aatxgr4st
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763742994566_d1adlqajn
-INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743498527_aatxgr4st
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743498527_aatxgr4st
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763742994566_d1adlqajn
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763742994566_d1adlqajn. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743501529_s5fprn6a2
-INFO:     10.21.210.89:46616 - "WebSocket /api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743501529_s5fprn6a2" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743501529_s5fprn6a2, timeout=1800s
-INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743501529_s5fprn6a2
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763742994566_d1adlqajn
-     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743498527_aatxgr4stclientIP="86.50.75.139" requestID="" responseTimeMS=2514 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743501529_s5fprn6a2
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743501529_s5fprn6a2
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763742994566_d1adlqajn
-     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743501529_s5fprn6a2clientIP="86.50.75.139" requestID="" responseTimeMS=362 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-INFO:     10.219.19.58:53362 - "GET /health HTTP/1.1" 200 OK
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763742994566_d1adlqajn. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743502525_pprp2od1j
-INFO:     10.20.28.251:36378 - "WebSocket /api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743502525_pprp2od1j" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743502525_pprp2od1j, timeout=1800s
-INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743502525_pprp2od1j
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763742994566_d1adlqajn
-INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743502525_pprp2od1j
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743502525_pprp2od1j
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763742994566_d1adlqajn
-     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743502525_pprp2od1jclientIP="86.50.75.139" requestID="" responseTimeMS=2416 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763742994566_d1adlqajn. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743505526_vnd6rorxg
-INFO:     10.20.103.172:44394 - "WebSocket /api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743505526_vnd6rorxg" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743505526_vnd6rorxg, timeout=1800s
-INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743505526_vnd6rorxg
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763742994566_d1adlqajn
-INFO:     10.219.19.58:53368 - "GET /health HTTP/1.1" 200 OK
-INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743505526_vnd6rorxg
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743505526_vnd6rorxg
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763742994566_d1adlqajn
-     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743505526_vnd6rorxgclientIP="86.50.75.139" requestID="" responseTimeMS=2565 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763742994566_d1adlqajn. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743508531_liyhebjto
-INFO:     10.21.45.69:51868 - "WebSocket /api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743508531_liyhebjto" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743508531_liyhebjto, timeout=1800s
-INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743508531_liyhebjto
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763742994566_d1adlqajn
-INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743508531_liyhebjto
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743508531_liyhebjto
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763742994566_d1adlqajn
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763742994566_d1adlqajn. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743509527_hir8edusn
-INFO:     10.20.82.35:58718 - "WebSocket /api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743509527_hir8edusn" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743509527_hir8edusn, timeout=1800s
-INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743509527_hir8edusn
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763742994566_d1adlqajn
-     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743508531_liyhebjtoclientIP="86.50.75.139" requestID="" responseTimeMS=364 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743509527_hir8edusn
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743509527_hir8edusn
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763742994566_d1adlqajn
-INFO:     10.219.19.58:50524 - "GET /health HTTP/1.1" 200 OK
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763742994566_d1adlqajn. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743512527_14icedu9x
-INFO:     10.21.208.114:49926 - "WebSocket /api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743512527_14icedu9x" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743512527_14icedu9x, timeout=1800s
-INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743512527_14icedu9x
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763742994566_d1adlqajn
-     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743509527_hir8edusnclientIP="86.50.75.139" requestID="" responseTimeMS=2541 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743512527_14icedu9x
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743512527_14icedu9x
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763742994566_d1adlqajn
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763742994566_d1adlqajn. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743515526_ymxh6aww2
-INFO:     10.20.237.61:46442 - "WebSocket /api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743515526_ymxh6aww2" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743515526_ymxh6aww2, timeout=1800s
-INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763742994566_d1adlqajn, session_id: session_1763743515526_ymxh6aww2
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763742994566_d1adlqajn
-     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743512527_14icedu9xclientIP="86.50.75.139" requestID="" responseTimeMS=2514 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743515526_ymxh6aww2
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763742994566_d1adlqajn, session_id=session_1763743515526_ymxh6aww2
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763742994566_d1adlqajn
-     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763742994566_d1adlqajn?session_id=session_1763743515526_ymxh6aww2clientIP="86.50.75.139" requestID="" responseTimeMS=502 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
-INFO:     10.219.19.58:50534 - "GET /health HTTP/1.1" 200 OK

@@ -14,7 +14,8 @@ class TimeoutSettings:
     
     # WebSocket timeouts
     websocket_connection: int = 1800  # 30 minutes
-    websocket_ping_interval: int = 15  # 15 seconds (Render keepalive threshold)
+    websocket_ping_interval: int = 5   # Ultra-aggressive ping (seconds)
+    websocket_progress_interval: int = 15  # Progress heartbeat broadcast interval
     websocket_keepalive: int = 300  # 5 minutes
     
     # API timeouts
@@ -43,7 +44,8 @@ class TimeoutSettings:
         """Load timeout settings from environment variables with fallback defaults"""
         return cls(
             websocket_connection=int(os.getenv('WEBSOCKET_TIMEOUT', '1800')),
-            websocket_ping_interval=int(os.getenv('WEBSOCKET_PING_INTERVAL', '15')),
+            websocket_ping_interval=int(os.getenv('WEBSOCKET_PING_INTERVAL', '5')),
+            websocket_progress_interval=int(os.getenv('WEBSOCKET_PROGRESS_INTERVAL', '15')),
             websocket_keepalive=int(os.getenv('WEBSOCKET_KEEPALIVE', '300')),
             mistral_api=int(os.getenv('MISTRAL_TIMEOUT', '1800')),
             gpt_api=int(os.getenv('GPT_TIMEOUT', '300')),

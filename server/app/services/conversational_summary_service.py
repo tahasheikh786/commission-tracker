@@ -13,6 +13,7 @@ from typing import Dict, Any, Optional
 from datetime import datetime
 from openai import AsyncOpenAI
 import os
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +30,21 @@ class ConversationalSummaryService:
     def __init__(self):
         """Initialize with OpenAI GPT for summary generation"""
         api_key = os.getenv("OPENAI_API_KEY")
-        self.client = AsyncOpenAI(api_key=api_key) if api_key else None
+        timeout_seconds = float(os.getenv("OPENAI_HTTP_TIMEOUT", "600"))
+        connect_timeout = float(os.getenv("OPENAI_HTTP_CONNECT_TIMEOUT", "10"))
+        write_timeout = float(os.getenv("OPENAI_HTTP_WRITE_TIMEOUT", "60"))
+        self._http_timeout = httpx.Timeout(
+            timeout=timeout_seconds,
+            connect=connect_timeout,
+            write=write_timeout,
+            read=timeout_seconds
+        )
+        max_retries = int(os.getenv("OPENAI_HTTP_MAX_RETRIES", "2"))
+        self.client = AsyncOpenAI(
+            api_key=api_key,
+            timeout=self._http_timeout,
+            max_retries=max_retries
+        ) if api_key else None
         self.model = "gpt-4o"  # GPT-4o - Fast, high-quality, multimodal model
         
         if self.client:
@@ -405,329 +420,138 @@ Keep it flowing and natural - these sentences should read as one cohesive paragr
 
 Remember: You're not just reporting data - you're telling the story of this commission statement AND providing structured fields for the UI."""
     
+
     def _build_summary_prompt(
         self,
         extraction_data: Dict[str, Any],
         document_context: Dict[str, Any],
         use_enhanced: bool = False
     ) -> str:
-        """
-        Build XML-structured prompt with chain-of-thought reasoning
-        
-        Based on Anthropic's XML best practices and Google's CoT research
-        
-        Args:
-            extraction_data: Extraction results
-            document_context: Additional context
-            use_enhanced: If True, use enhanced prompt format
-        """
-        
-        # Check if this is enhanced extraction data
+        """Build a compact summary prompt that respects tight token limits."""
         has_enhanced_data = (
-            'entities' in extraction_data or 
+            'entities' in extraction_data or
             'business_intelligence' in extraction_data or
             'relationships' in extraction_data
         )
-        
-        # DEBUG LOGGING
-        logger.info(f"🔍 _build_summary_prompt called:")
+
+        logger.info("🔍 _build_summary_prompt called:")
         logger.info(f"   - use_enhanced: {use_enhanced}")
         logger.info(f"   - has_enhanced_data: {has_enhanced_data}")
-        logger.info(f"   - extraction_data keys: {list(extraction_data.keys())}")
-        
-        # If we have enhanced data and should use enhanced prompts
+
+        enhanced_context_block = ""
         if has_enhanced_data and use_enhanced:
-            logger.info("✅ Using ENHANCED summary prompt (with enhanced prompts module)")
-            return self._build_enhanced_summary_prompt(extraction_data, document_context)
+            logger.info("✅ Attaching condensed enhanced context to prompt")
+            enhanced_context_block = self._build_enhanced_context_block(extraction_data)
         elif use_enhanced:
-            logger.warning(f"⚠️ use_enhanced=True but has_enhanced_data=False")
-            logger.warning(f"   Missing keys in extraction_data. Available: {list(extraction_data.keys())}")
-        else:
-            logger.info("📝 Using STANDARD summary prompt (enhanced mode disabled)")
-        
-        # Otherwise use standard prompt
-        
-        # Extract and analyze data
+            logger.warning("⚠️ Enhanced mode requested but enhanced data missing; defaulting to compact prompt")
+
         carrier = extraction_data.get('carrier_name') or extraction_data.get('extracted_carrier') or 'Unknown'
         date = extraction_data.get('statement_date') or extraction_data.get('extracted_date') or 'Unknown date'
         broker = extraction_data.get('broker_company') or 'Unknown'
         tables = extraction_data.get('tables', [])
-        
-        # ✨ ENHANCED: Get richer analysis using new helper methods
         total_amount = self._extract_total_amount(tables)
-        company_count = self._count_unique_companies(tables)
+        company_count = extraction_data.get('document_metadata', {}).get('company_count') or self._count_unique_companies(tables)
         top_companies = self._get_top_companies(tables, limit=3)
         special_payments = self._identify_special_payments(tables)
         plan_types = self._extract_plan_types(tables)
         payment_period = self._extract_payment_period(tables)
-        
-        # ✨ NEW: Extract broker ID from document metadata
         broker_id = self._extract_broker_id(extraction_data, document_context)
         payment_type = extraction_data.get('document_metadata', {}).get('payment_type', 'Unknown')
-        
-        # Get carrier-specific context
         carrier_context = self._get_carrier_context(carrier.lower())
         carrier_type = self._get_carrier_type(carrier)
-        
-        # Format date naturally
         formatted_date = self._format_date_conversational(date)
-        
-        # ✨ BUILD XML-STRUCTURED PROMPT
-        prompt = f"""<context>
-You are analyzing a commission statement to create a detailed, information-rich conversational summary.
+        document_metadata = extraction_data.get('document_metadata', {}) or {}
+        business_intel = extraction_data.get('business_intelligence', {}) or {}
+        metadata_total_str = self._format_currency_value(document_metadata.get('total_amount'))
+        metadata_method = document_metadata.get('total_extraction_method', 'unknown')
+        detail_sum_str = self._format_currency_value(document_metadata.get('detail_sum_amount'))
+        bi_total_str = self._format_currency_value(
+            business_intel.get('total_commission_amount') or business_intel.get('total_commission')
+        )
+        total_rows = sum(len(t.get('rows', [])) for t in tables)
+        total_candidates = document_metadata.get('total_candidates') or []
 
-**🎯 SUMMARY REQUIREMENTS:**
+        preferred_total_hint = metadata_total_str
+        if preferred_total_hint == "Not captured" and detail_sum_str != "Not captured":
+            preferred_total_hint = detail_sum_str
+        if preferred_total_hint == "Not captured" and total_amount and total_amount != "Not specified":
+            preferred_total_hint = total_amount
+        if preferred_total_hint == "Not captured" and bi_total_str != "Not captured":
+            preferred_total_hint = bi_total_str
 
-Your summary MUST include ALL of the following information (if available):
-1. Document type (e.g., "ABSF Commission Payment Summary", "Commission Statement")
-2. Carrier name
-3. Broker/agent company
-4. Statement/report date
-5. Document/broker ID (if present)
-6. Payment type (EFT, Check, Wire)
-7. **Total commission amount** ← CRITICAL, NEVER OMIT
-8. Number of companies/groups
-9. Top 2-3 contributors with amounts
-10. Plan types or commission structures
-11. Special payments, incentives, or notable items
+        totals_section = [
+            f"- Metadata total ({metadata_method}): {metadata_total_str}",
+            f"- Detail rows sum: {detail_sum_str}",
+            f"- Table heuristic total: {total_amount}",
+            f"- Business intelligence total: {bi_total_str}"
+        ]
+        if total_candidates:
+            strongest = max(total_candidates, key=lambda c: c.get('confidence', 0))
+            totals_section.append(
+                f"- Highest-confidence candidate: {strongest.get('method')} (${strongest.get('amount'):,.2f})"
+            )
 
-<carrier_info>
-Carrier: {carrier}
-Carrier Type: {carrier_type}
-{carrier_context}
-</carrier_info>
+        prompt_sections = [
+            f"""<context>
+You are an insurance commission statement analyst producing a concise summary for broker operations.
 
-<document_metadata>
-Statement Date: {date} ({formatted_date})
-Broker/Agent: {broker}
-Document/Broker ID: {broker_id if broker_id else 'Not found'}
-Payment Type: {payment_type}
-File Name: {document_context.get('file_name', 'Unknown')}
-Total Pages: {document_context.get('page_count', 'Unknown')}
-Extraction Method: {document_context.get('extraction_method', 'AI')}
-</document_metadata>
-</context>
-
-<data>
-<commission_summary>
-🔴 TOTAL AMOUNT (MUST INCLUDE): {total_amount}
-Company Count: {company_count}
-Payment Type: {payment_type}
-Document/Broker ID: {broker_id if broker_id else 'Not found'}
-Payment Period: {payment_period if payment_period else 'Not specified'}
-
-**CRITICAL INSTRUCTION**: 
-- You MUST mention the total amount in your summary (Sentence 2)
-- Format as: "The document shows $X,XXX.XX in total commissions/compensation..."
-- If total is "Not specified", say: "Total amount not explicitly stated in document"
-</commission_summary>
-
-<top_earners>
+Document Snapshot:
+- Carrier: {carrier} ({carrier_type})
+- Broker/Agent: {broker}
+- Statement Date: {date} ({formatted_date})
+- Document/Broker ID: {broker_id if broker_id else 'Not provided'}
+- Payment Type: {payment_type}
+- File Name: {document_context.get('file_name', 'Unknown')}
+- Pages: {document_context.get('page_count', 'Unknown')}
+- Extraction Method: {document_context.get('extraction_method', 'AI')}
+{carrier_context.strip() if carrier_context else ''}
+</context>""",
+            "<totals>\n"
+            + "\n".join(totals_section)
+            + f"\nPreferred total to cite (apply judgment): {preferred_total_hint}\n</totals>",
+            f"""<data_highlights>
+- Company/group count: {company_count}
+- Tables extracted: {len(tables)} with {total_rows} rows
+- Billing / payment period cue: {payment_period if payment_period else 'Not specified'}
+- Top contributors:
 {self._format_top_companies(top_companies)}
-</top_earners>
-
-<plan_breakdown>
-{self._format_plan_types(plan_types)}
-</plan_breakdown>
-
-<special_items>
+- Commission / plan mix: {self._format_plan_types(plan_types)}
+- Special payments or incentives:
 {self._format_special_payments(special_payments)}
-</special_items>
-
-<raw_tables>
-Tables Extracted: {len(tables)}
-Total Rows: {sum(len(t.get('rows', [])) for t in tables)}
-</raw_tables>
-</data>
-
-<thinking>
-Before writing the summary, analyze the data step-by-step:
-
-1. **Document Identification**: What type of commission statement is this? (Standard, multi-plan, renewal, etc.)
-
-2. **Key Financial Highlights**: 
-   - What is the total amount and is it significant?
-   - Who are the top 2-3 earners and what are their amounts?
-   - Are there any lump sum payments or bonuses?
-
-3. **Structure Analysis**:
-   - How many companies/groups are included?
-   - What plan types are represented? (Medical, Dental, Vision, etc.)
-   - Is there a mix of plan types or commission structures?
-
-4. **Notable Characteristics**:
-   - What makes this statement unique or interesting?
-   - Are there PEPM rates, subscriber counts, or enrollment data?
-   - Any special incentives, adjustments, or withholdings?
-
-5. **Carrier-Specific Context**:
-   - Does this match the typical format for {carrier}?
-   - What {carrier}-specific terminology or structure is present?
-
-Think through these points, then craft your summary to capture the most important insights.
-</thinking>
-
-<examples>
-<example_0>
-<input_data>
-Document Type: ABSF Commission Payment Summary
-Document Number: G0227540
-Carrier: Allied Benefit
-Date: January 8, 2025
-Broker: INNOVATIVE BPS LLC
-Payment Type: EFT
-Total: $1,027.20
-Companies: 1 (SOAR LOGISTICS LL)
-Groups: 4 billing periods
-Agent Rate: 6%
-Calculation Method: Premium Equivalent
-Census Count: 46 total
-</input_data>
-<ideal_summary>
-This is an ABSF Commission Payment Summary from Allied Benefit for INNOVATIVE BPS LLC, dated January 8, 2025 (document G0227540), with EFT as the payment type. The statement shows $1,027.20 in total compensation from SOAR LOGISTICS LL across 4 billing periods (December 2024 and January 2025), with a 6% agent rate applied using the Premium Equivalent calculation method. The commission covers 46 total census counts, with individual payments of $93.67 and $419.93 per period based on different group sizes.
-</ideal_summary>
-</example_0>
-
-<example_1>
-<input_data>
-Carrier: Aetna
-Date: March 11, 2025
-Broker: INNOVATIVE BPS LLC
-Total: $2,620.98
-Companies: 8
-Top Earner: K&K SOLOMON LOGISTICS - $1,071.80 (41% of total)
-Plan Types: Medical (MD Medical, CA Medical), Vision (Flat 10%), Dental (Middle Market Graded), AFA plans
-Special: $550 lump sum to KAVAC LOGISTICS (California SG Medical New Business Incentive)
-Payment Period: Feb 2025 subscriber activity
-</input_data>
-<ideal_summary>
-This is an Aetna commission statement for INNOVATIVE BPS LLC dated March 11, 2025, covering February 2025 subscriber activity. The document shows $2,620.98 in net compensation across 8 companies, with K&K SOLOMON LOGISTICS as the largest contributor at $1,071.80 (41% of the total). The statement includes diverse commission structures: Medical plans with PEPM rates ($28-$40 per subscriber), Vision commissions at 10%, and a Middle Market Dental graded commission, plus a $550 California SG Medical New Business Incentive to KAVAC LOGISTICS.
-</ideal_summary>
-</example_1>
-
-<example_2>
-<input_data>
-Carrier: UnitedHealthcare
-Date: April 15, 2025
-Broker: ABC Insurance Services
-Total: $15,432.67
-Companies: 12
-Top Earners: Tech Solutions Inc ($4,230.50), Metro Health Group ($3,890.25), Retail Partners LLC ($2,100.00)
-Plan Types: Medical, Dental, Vision
-Enrollment: 487 total subscribers across all groups
-PEPM: Ranging from $24-$52 depending on group size
-Special: Q1 production bonus of $1,500
-</input_data>
-<ideal_summary>
-This is a UnitedHealthcare commission statement for ABC Insurance Services dated April 15, 2025, detailing $15,432.67 in total commissions from 12 employer groups covering 487 subscribers. The largest payments went to Tech Solutions Inc ($4,230.50), Metro Health Group ($3,890.25), and Retail Partners LLC ($2,100.00), representing a mix of Medical, Dental, and Vision plans with PEPM rates from $24-$52. The statement includes a $1,500 Q1 production bonus in addition to the base commissions.
-</ideal_summary>
-</example_2>
-
-<example_3>
-<input_data>
-Carrier: Cigna
-Date: February 28, 2025
-Broker: Premier Benefits Group
-Total: $8,905.43
-Companies: 6
-Top Earner: Manufacturing Co ($3,250.00)
-Plan Types: Medical (tiered 5% and 7%), Behavioral Health (flat 6%)
-Special: First-year new business premium of 10% for one group
-No withholdings: Net = Gross
-</input_data>
-<ideal_summary>
-This is a Cigna commission statement for Premier Benefits Group dated February 28, 2025, showing $8,905.43 in gross commissions from 6 case groups with no withholdings. Manufacturing Co leads with $3,250.00, followed by a mix of Medical plans at tiered rates (5% and 7% based on group size) and Behavioral Health coverage at 6%. One group earned a first-year new business premium at 10%, reflecting Cigna's tiered commission structure.
-</ideal_summary>
-</example_3>
-</examples>
-
-<instructions>
-Now create a conversational summary for the current document following these steps:
-
-**Step 1 - Analyze** (internally, don't output this):
-- Review the <thinking> questions above
-- Identify the 2-3 most important insights
-- Note what makes this statement unique or notable
-
-**Step 2 - Structure** (internally, don't output this):
-- Sentence 1: Type, carrier, broker, date (and activity period if different)
-- Sentence 2: Total, company count, top earners with amounts
-- Sentence 3: Plan types, structure details, or special payments
-- (Optional Sentence 4): Additional unique characteristics if significant
-
-**Step 3 - Write** (THIS IS YOUR OUTPUT):
-Write a natural, flowing 3-4 sentence paragraph that:
-✓ Starts with "This is a..." or "This document shows..."
-✓ Includes ALL critical numbers (total, top earner amounts)
-✓ Names specific companies (not "various companies")
-✓ Details plan types/structure (PEPM rates, percentages, tiers)
-✓ Highlights special payments or notable items
-✓ Reads like a human explaining to another human
-✓ Flows as one coherent paragraph, not a list
-
-**Quality Checklist** (ensure your summary includes):
-- [ ] Document type (if specific, like "ABSF Commission Payment Summary")
-- [ ] Carrier name
-- [ ] Broker name
-- [ ] Exact date (formatted naturally)
-- [ ] Document/Broker ID (if found, e.g., "document G0227540")
-- [ ] Payment type (EFT, Check, Wire)
-- [ ] **🔴 TOTAL COMMISSION AMOUNT** ← **MANDATORY, NEVER SKIP**
-- [ ] Company count (specific number, e.g., "1 company" or "8 groups")
-- [ ] Top 1-2 company names with their amounts
-- [ ] Commission structure (e.g., "6% Premium Equivalent") or plan types
-- [ ] Census counts, PEPM rates, or enrollment data (if present)
-- [ ] Any special payments, bonuses, adjustments, or notable items
-
-**🚨 CRITICAL ERROR CHECK:**
-Before submitting your summary, verify:
-1. Did I include the total amount? (Look for "$X,XXX.XX in total")
-2. Did I mention specific company names? (Not "various companies")
-3. Did I cite specific numbers? (Not "several groups")
-4. Is it 3-4 sentences minimum? (Not just 1-2 brief sentences)
-
-If ANY of these checks fail, REVISE your summary immediately.
-
-Your summary should feel like Gemini's document summaries - comprehensive yet conversational, specific yet natural.
-</instructions>
-
-<output>
-⭐ **CRITICAL OUTPUT FORMAT**: Return VALID JSON ONLY (no markdown, no code blocks):
-
+</data_highlights>""",
+            """<instructions>
+1. Write a natural 3-4 sentence paragraph beginning with "This is..." that covers carrier, broker, statement date, payment type, and document type.
+2. Always mention the most authoritative total (metadata > detail sum > table heuristic > business intelligence) and reuse that number in key_value_data.total_amount (numeric string, no $ or commas).
+3. Include company/group count, top contributors with exact amounts, notable plan types or commission structures, and any incentives/adjustments.
+4. Mention payment period cues when available and keep the tone conversational—no bullet points or field labels.
+</instructions>""",
+            f"""<output_format>
+Return ONLY valid JSON:
 {{
-  "conversational_summary": "Your natural, flowing 3-4 sentence summary starting with 'This is...'",
+  "conversational_summary": "3-4 sentence natural paragraph...",
   "key_value_data": {{
     "carrier_name": "{carrier}",
     "broker_company": "{broker}",
     "statement_date": "{date}",
     "broker_id": "{broker_id if broker_id else 'null'}",
     "payment_type": "{payment_type}",
-    "total_amount": "{total_amount}",
+    "total_amount": "numeric string for the same total cited above (no $ or commas)",
     "company_count": {company_count},
     "top_contributors": [
-      {{"name": "Company Name", "amount": "123.45"}}
+      {{"name": "Name", "amount": "1234.56"}}
     ],
-    "commission_structure": "Brief description",
-    "census_count": "Total census if available",
-    "billing_periods": "Period range if available"
+    "commission_structure": "Summarize plan/commission mix",
+    "census_count": "If known else null",
+    "billing_periods": "{payment_period if payment_period else 'null'}"
   }}
 }}
+</output_format>"""
+        ]
 
-**conversational_summary**: Write a natural, flowing paragraph (3-4 sentences) starting with "This is..." or "This document shows..."
-- NO preambles, NO closing remarks, NO bullet points, NO field labels
-- Pack maximum information with specific names, amounts, and details
+        if enhanced_context_block:
+            prompt_sections.append(f"<enhanced_context>\n{enhanced_context_block}\n</enhanced_context>")
 
-**key_value_data**: Extract ALL available fields from the data provided above
-- Use exact values from the source data
-- Convert amounts to numeric strings without $ or commas
-- Include company_count, top_contributors (top 2-3), commission structures, etc.
-- Set fields to null if not available (don't omit them)
-
-Return ONLY the JSON object. Do not wrap in markdown code blocks or add any text before/after.
-</output>"""
-
-        return prompt
-    
+        return "\n\n".join(prompt_sections)
     def _get_carrier_context(self, carrier_lower: str) -> str:
         """
         Provide carrier-specific context to make summaries more accurate
@@ -821,6 +645,28 @@ Return ONLY the JSON object. Do not wrap in markdown code blocks or add any text
         except:
             pass
         return date_str
+
+    def _format_currency_value(self, value: Any) -> str:
+        """Normalize numeric or string values into $X,XXX.XX strings."""
+        if value in (None, "", "Not specified"):
+            return "Not captured"
+        try:
+            if isinstance(value, str):
+                cleaned = (
+                    value.replace("$", "")
+                    .replace(",", "")
+                    .replace("(", "-")
+                    .replace(")", "")
+                    .strip()
+                )
+                if not cleaned:
+                    return "Not captured"
+                numeric = float(cleaned)
+            else:
+                numeric = float(value)
+            return f"${numeric:,.2f}"
+        except (ValueError, TypeError):
+            return str(value)
     
     def _extract_total_amount(self, tables: list) -> str:
         """
@@ -1247,146 +1093,87 @@ Return ONLY the JSON object. Do not wrap in markdown code blocks or add any text
             logger.debug(f"Error extracting broker ID: {e}")
             return None
     
-    def _build_enhanced_summary_prompt(
+
+    def _build_enhanced_context_block(
         self,
-        extraction_data: Dict[str, Any],
-        document_context: Dict[str, Any]
+        extraction_data: Dict[str, Any]
     ) -> str:
-        """
-        Build enhanced summary prompt using semantic extraction data.
-        
-        This uses the three-phase extraction data:
-        - Entities (carriers, brokers, agents, groups)
-        - Relationships (entity connections)
-        - Business Intelligence (patterns, insights)
-        
-        ⭐ CRITICAL FIX: Falls back to table data if entities are empty
-        """
-        import json
-        
-        logger.info("🎯 Building enhanced summary prompt...")
-        
-        # Extract components
-        entities = extraction_data.get('entities', {})
-        relationships = extraction_data.get('relationships', {})
-        business_intel = extraction_data.get('business_intelligence', {})
-        
-        logger.info(f"   - Entities: {list(entities.keys()) if entities else []}")
-        logger.info(f"   - Relationships: {list(relationships.keys()) if relationships else []}")
-        logger.info(f"   - Business Intelligence: {list(business_intel.keys()) if business_intel else []}")
-        
-        # ⭐ CRITICAL FIX: Use root-level data if entities are empty
-        # This happens when Claude extracts tables but not semantic entities
-        groups_and_companies = entities.get('groups_and_companies', []) if entities else []
-        writing_agents = entities.get('writing_agents', []) if entities else []
-        
-        # Fallback to root level if empty
-        if not groups_and_companies:
-            groups_and_companies = extraction_data.get('groups_and_companies', [])
-            if groups_and_companies:
-                logger.info(f"✅ Using root-level groups_and_companies: {len(groups_and_companies)} items")
-        
-        if not writing_agents:
-            writing_agents = extraction_data.get('writing_agents', [])
-            if writing_agents:
-                logger.info(f"✅ Using root-level writing_agents: {len(writing_agents)} items")
-        
-        if not business_intel:
-            business_intel = extraction_data.get('business_intelligence', {})
-            if business_intel:
-                logger.info(f"✅ Using root-level business_intelligence: {list(business_intel.keys())}")
-        
-        # Build enhanced data structure for prompt
-        enhanced_data = {
-            'carrier': entities.get('carrier', {}) if entities else {},
-            'broker': entities.get('broker', {}) if entities else {},
-            'document_metadata': entities.get('document_metadata', {}) if entities else extraction_data.get('document_metadata', {}),
-            'writing_agents': writing_agents,
-            'groups_and_companies': groups_and_companies,
-            'business_intelligence': business_intel,
-            'relationships': relationships,
-            'tables': extraction_data.get('tables', [])  # ← CRITICAL: Include tables for analysis
-        }
-        
-        # Format for prompt
-        extraction_json = json.dumps(enhanced_data, indent=2)
-        relationship_json = json.dumps(relationships, indent=2)
-        
-        # Try to use enhanced prompt (FIXED PATH)
-        try:
-            from app.services.claude.enhanced_prompts import EnhancedClaudePrompts
-            logger.info("✅ SUCCESS: Enhanced prompts module imported")
-            logger.info("🚀 Using EnhancedClaudePrompts.get_intelligent_summarization_prompt()")
-            return EnhancedClaudePrompts.get_intelligent_summarization_prompt(
-                extraction_json,
-                relationship_json
-            )
-        except ImportError as e:
-            logger.error(f"❌ CRITICAL: Enhanced prompts import failed: {e}")
-            logger.error(f"   ImportError details: {type(e).__name__}: {str(e)}")
-            logger.warning("   Falling back to standard enhanced prompt format")
-            # Fallback to standard prompt with enhanced data
-            return self._build_standard_enhanced_prompt(enhanced_data, document_context)
-        except Exception as e:
-            logger.error(f"❌ CRITICAL: Unexpected error in enhanced prompt generation: {e}")
-            logger.error(f"   Error type: {type(e).__name__}")
-            logger.exception("   Full traceback:")
-            logger.warning("   Falling back to standard enhanced prompt format")
-            return self._build_standard_enhanced_prompt(enhanced_data, document_context)
-    
-    def _build_standard_enhanced_prompt(
-        self,
-        enhanced_data: Dict[str, Any],
-        document_context: Dict[str, Any]
-    ) -> str:
-        """
-        Build standard prompt format with enhanced data.
-        Fallback when enhanced prompts module is not available.
-        """
-        import json
-        
-        carrier = enhanced_data.get('carrier', {}).get('name', 'Unknown')
-        broker = enhanced_data.get('broker', {}).get('company_name', 'Unknown')
-        doc_meta = enhanced_data.get('document_metadata', {})
-        business_intel = enhanced_data.get('business_intelligence', {})
-        
-        prompt = f"""<context>
-You are analyzing a commission statement to create a comprehensive, conversational summary.
+        """Create a lightweight context block from enhanced entities/BI data."""
+        entities = extraction_data.get('entities', {}) or {}
+        relationships = extraction_data.get('relationships', {}) or {}
+        business_intel = (
+            extraction_data.get('business_intelligence')
+            or entities.get('business_intelligence')
+            or {}
+        )
+        groups = (
+            entities.get('groups_and_companies')
+            or extraction_data.get('groups_and_companies')
+            or []
+        )
+        writing_agents = (
+            entities.get('writing_agents')
+            or extraction_data.get('writing_agents')
+            or []
+        )
 
-<document_info>
-Carrier: {carrier}
-Broker: {broker}
-Statement Date: {doc_meta.get('statement_date', 'Unknown')}
-Payment Type: {doc_meta.get('payment_type', 'Unknown')}
-</document_info>
+        lines = []
 
-<business_intelligence>
-Total Commission: {business_intel.get('total_commission_amount', 'Not specified')}
-Number of Groups: {business_intel.get('number_of_groups', 0)}
-Top Contributors: {json.dumps(business_intel.get('top_contributors', []), indent=2)}
-Commission Structures: {', '.join(business_intel.get('commission_structures', []))}
-Patterns: {json.dumps(business_intel.get('patterns_detected', []), indent=2)}
-</business_intelligence>
+        if business_intel:
+            lines.append("Business Intelligence Highlights:")
+            if business_intel.get('total_commission_amount'):
+                lines.append(
+                    f"- BI total commission: {self._format_currency_value(business_intel.get('total_commission_amount'))}"
+                )
+            if business_intel.get('number_of_groups'):
+                lines.append(f"- Groups detected: {business_intel.get('number_of_groups')}")
+            if business_intel.get('top_contributors'):
+                top_bi = business_intel.get('top_contributors', [])[:3]
+                formatted = [
+                    f"{item.get('name')}: {item.get('amount')}"
+                    for item in top_bi
+                    if isinstance(item, dict)
+                ]
+                if formatted:
+                    lines.append("- BI top contributors: " + "; ".join(formatted))
+            if business_intel.get('commission_structures'):
+                structures = ', '.join(business_intel.get('commission_structures')[:3])
+                lines.append(f"- Commission structures: {structures}")
+            if business_intel.get('patterns_detected'):
+                patterns = ', '.join(business_intel.get('patterns_detected')[:3])
+                lines.append(f"- Patterns observed: {patterns}")
 
-<writing_agents>
-{json.dumps(enhanced_data.get('writing_agents', []), indent=2)}
-</writing_agents>
-</context>
+        if writing_agents:
+            agent_lines = []
+            for agent in writing_agents[:3]:
+                name = agent.get('name') or agent.get('writing_agent_name')
+                if not name:
+                    continue
+                groups_count = agent.get('group_count') or agent.get('groups_managed')
+                agent_lines.append(
+                    f"{name}{' (' + str(groups_count) + ' groups)' if groups_count else ''}"
+                )
+            if agent_lines:
+                lines.append("Writing Agents: " + ", ".join(agent_lines))
 
-<instructions>
-Create a comprehensive, conversational summary (3-4 sentences) that:
+        if groups:
+            group_lines = []
+            for group in groups[:5]:
+                name = group.get('name') or group.get('group_name') or group.get('company_name')
+                amount = group.get('total_amount') or group.get('paid_amount')
+                if not name:
+                    continue
+                snippet = name
+                if amount:
+                    snippet += f" ({self._format_currency_value(amount)})"
+                group_lines.append(snippet)
+            if group_lines:
+                lines.append("Sample Groups: " + "; ".join(group_lines))
 
-1. Starts with document type, carrier, broker, and date
-2. Includes total commission, number of groups, and top 2-3 contributors with amounts
-3. Mentions commission structures, agent details, and payment type
-4. Highlights any notable patterns or special features
+        if relationships:
+            rel_keys = ", ".join(list(relationships.keys())[:5])
+            if rel_keys:
+                lines.append(f"Relationship maps available: {rel_keys}")
 
-Write in natural, flowing prose - NO bullet points or field labels.
-Be specific with names and amounts - avoid generic terms.
-Make it information-rich but conversational.
-
-Start immediately with "This is..." or "This document..."
-</instructions>"""
-        
-        return prompt
+        return "\n".join(lines[:8])
 

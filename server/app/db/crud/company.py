@@ -1,10 +1,10 @@
-from ..models import Company
+from ..models import Company, User, StatementUpload
 from ..schemas import CompanyCreate
 from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import text
+from sqlalchemy import text, func, or_, and_
 from uuid import UUID
-from typing import Optional
+from typing import Optional, Dict, Any
 
 async def get_company_by_name(db, name: str):
     """
@@ -19,7 +19,6 @@ async def get_company_by_name(db, name: str):
     
     # CRITICAL FIX: Use case-insensitive matching to prevent duplicate carriers
     # e.g., "UnitedHealthcare", "unitedhealthcare", "UNITEDHEALTHCARE" should all match
-    from sqlalchemy import func
     result = await db.execute(
         select(Company).where(func.lower(Company.name) == func.lower(name))
     )
@@ -125,6 +124,73 @@ async def update_company_name(db, company_id: str, new_name: str):
     await db.commit()
     await db.refresh(company)
     return company
+
+
+async def get_company_role_stats(db: AsyncSession, company_id: UUID) -> Dict[str, Any]:
+    """
+    Determine how a company record is typically used across the platform.
+    Returns counts that indicate whether the company behaves like a broker (has users)
+    or as a carrier (referenced as carrier_id on uploads).
+    """
+    if isinstance(company_id, str):
+        try:
+            company_id = UUID(company_id)
+        except ValueError:
+            return {
+                "company_id": company_id,
+                "user_count": 0,
+                "carrier_usage_count": 0,
+                "classification": "unknown"
+            }
+    
+    user_count_result = await db.execute(
+        select(func.count()).select_from(User).where(User.company_id == company_id)
+    )
+    user_count = int(user_count_result.scalar() or 0)
+    
+    carrier_usage_result = await db.execute(
+        select(func.count())
+        .select_from(StatementUpload)
+        .where(
+            or_(
+                StatementUpload.carrier_id == company_id,
+                and_(
+                    StatementUpload.company_id == company_id,
+                    StatementUpload.carrier_id.is_(None)
+                )
+            )
+        )
+    )
+    carrier_usage_count = int(carrier_usage_result.scalar() or 0)
+    
+    if carrier_usage_count > 0 and user_count == 0:
+        classification = "carrier"
+    elif user_count > 0 and carrier_usage_count == 0:
+        classification = "broker"
+    elif user_count > 0 and carrier_usage_count > 0:
+        classification = "mixed"
+    else:
+        classification = "unknown"
+    
+    return {
+        "company_id": str(company_id),
+        "user_count": user_count,
+        "carrier_usage_count": carrier_usage_count,
+        "classification": classification
+    }
+
+
+async def get_company_role_by_name(db: AsyncSession, name: str) -> Optional[Dict[str, Any]]:
+    """
+    Convenience helper to fetch role stats by company name.
+    """
+    company = await get_company_by_name(db, name)
+    if not company:
+        return None
+    
+    stats = await get_company_role_stats(db, company.id)
+    stats["company_name"] = company.name
+    return stats
 
 async def get_latest_statement_upload_for_company(db, company_id):
     from ..models import StatementUpload as StatementUploadModel

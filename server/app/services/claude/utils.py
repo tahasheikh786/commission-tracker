@@ -722,6 +722,35 @@ class ClaudeResponseParser:
         return parsed
     
     @staticmethod
+    def _normalize_summary_row_indices(summary_rows: Any) -> List[int]:
+        """
+        Normalize summary_rows into a list of row indices (ints).
+        Claude responses sometimes include dicts with metadata instead of plain ints.
+        """
+        normalized: List[int] = []
+        if not summary_rows:
+            return normalized
+        
+        seen = set()
+        for entry in summary_rows:
+            idx = None
+            if isinstance(entry, dict):
+                idx = entry.get('index')
+                if idx is None:
+                    idx = entry.get('row_index')
+            elif isinstance(entry, (int, float)):
+                idx = int(entry)
+            elif isinstance(entry, str):
+                if entry.isdigit():
+                    idx = int(entry)
+            if idx is None:
+                continue
+            if idx not in seen:
+                seen.add(idx)
+                normalized.append(idx)
+        return normalized
+    
+    @staticmethod
     def _fix_false_positive_summary_markers(table: Dict[str, Any]) -> Dict[str, Any]:
         """
         ✅ Fix false positive summary markers from Claude.
@@ -741,7 +770,10 @@ class ClaudeResponseParser:
         
         headers = table.get('headers', [])
         rows = table.get('rows', [])
-        summary_rows = set(table.get('summary_rows', []))
+        raw_summary_rows = table.get('summary_rows', [])
+        normalized_summary_rows = ClaudeResponseParser._normalize_summary_row_indices(raw_summary_rows)
+        summary_rows = set(normalized_summary_rows)
+        table['summary_rows'] = normalized_summary_rows
         
         if not rows or len(rows) < 2:
             return table

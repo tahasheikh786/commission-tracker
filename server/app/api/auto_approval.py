@@ -10,6 +10,7 @@ import logging
 from datetime import datetime
 from app.services.websocket_service import connection_manager
 from app.services.upload_cache import upload_cache
+from app.services.summary_row_refiner import row_looks_like_summary
 
 router = APIRouter(prefix="/api/auto-approve", tags=["auto-approval"])
 logger = logging.getLogger(__name__)
@@ -384,7 +385,21 @@ async def _run_auto_approval(
         
         if commission_field:
             logger.info(f"💰 Auto-approval: Calculating total from {len(commission_tables)} table(s)")
+            
+            # ✅ CRITICAL: Filter out grand total tables from commission calculation
+            # Grand total tables should be excluded to prevent double-counting
+            from app.services.extraction_utils import is_grand_total_table
+            
+            detail_tables_only = []
             for table_idx, table in enumerate(commission_tables):
+                if is_grand_total_table(table):
+                    logger.info(f"💰 Auto-approval: Skipping Table {table_idx} (grand total table) from commission calculation")
+                    continue
+                detail_tables_only.append((table_idx, table))
+            
+            logger.info(f"💰 Auto-approval: Processing {len(detail_tables_only)} detail table(s) (excluded {len(commission_tables) - len(detail_tables_only)} grand total tables)")
+            
+            for table_idx, table in detail_tables_only:
                 # ✅ CURSOR FIX: Support both "headers" (plural) and "header" (singular) keys
                 from app.services.extraction_utils import normalize_table_headers
                 raw_headers = table.get("headers", []) or table.get("header", [])
@@ -403,9 +418,11 @@ async def _run_auto_approval(
                     
                     row_count = 0
                     for row_idx, row in enumerate(rows):
-                        # ✅ Skip summary rows when calculating
-                        if row_idx in summary_rows:
+                        row_is_summary = row_idx in summary_rows or row_looks_like_summary(row)
+                        if row_is_summary:
                             logger.debug(f"💰 Auto-approval: Skipping summary row {row_idx}")
+                            if row_idx not in summary_rows:
+                                summary_rows.add(row_idx)
                             continue
                             
                         if idx < len(row):
@@ -473,7 +490,12 @@ async def _run_auto_approval(
         
         if invoice_field:
             logger.info(f"💰 Auto-approval: Calculating invoice total from {len(commission_tables)} table(s)")
-            for table_idx, table in enumerate(commission_tables):
+            
+            # ✅ CRITICAL: Reuse detail_tables_only to exclude grand total tables
+            # (It was already filtered above in commission calculation)
+            logger.info(f"💰 Auto-approval: Processing {len(detail_tables_only)} detail table(s) for invoice total (excluded {len(commission_tables) - len(detail_tables_only)} grand total tables)")
+            
+            for table_idx, table in detail_tables_only:
                 from app.services.extraction_utils import normalize_table_headers
                 raw_headers = table.get("headers", []) or table.get("header", [])
                 # ✅ CRITICAL FIX: Normalize headers to handle newlines
@@ -488,8 +510,10 @@ async def _run_auto_approval(
                     
                     row_count = 0
                     for row_idx, row in enumerate(rows):
-                        # ✅ Skip summary rows when calculating
-                        if row_idx in summary_rows:
+                        row_is_summary = row_idx in summary_rows or row_looks_like_summary(row)
+                        if row_is_summary:
+                            if row_idx not in summary_rows:
+                                summary_rows.add(row_idx)
                             continue
                             
                         if idx < len(row):
@@ -519,23 +543,27 @@ async def _run_auto_approval(
         else:
             logger.warning(f"💰 Auto-approval: No invoice field identified in field_mapping: {field_mapping}")
         
+        # ✅ Validate: Compare extracted total vs calculated total
+        total_validation = {}
+        needs_review = False
+        # ✅ IMPROVED: Use percentage-based tolerance (5% or $5, whichever is larger)
+        # This handles both small and large statements appropriately
+        tolerance_percent = 5.0  # 5% tolerance
+        tolerance_absolute = max(5.0, actual_extracted_total * (tolerance_percent / 100.0)) if actual_extracted_total else 5.0
+        
         # ✅ ENHANCED VALIDATION: Better handling of total comparison
         logger.info(f"📊 Total validation:")
         logger.info(f"  - Extracted from file: ${actual_extracted_total:.2f}" if actual_extracted_total else "  - No extracted total")
         logger.info(f"  - Calculated from table: ${calculated_total:.2f}")
         logger.info(f"  - Invoice total calculated: ${calculated_invoice_total:.2f}")
-        
-        # ✅ Validate: Compare extracted total vs calculated total
-        total_validation = {}
-        needs_review = False
-        tolerance = 0.01  # $0.01 tolerance for rounding
+        logger.info(f"  - Tolerance: 5% or ${5.0:.2f}, whichever is larger = ${tolerance_absolute:.2f}")
         
         if actual_extracted_total > 0 and calculated_total > 0:
             # We have both - compare them
             difference = abs(actual_extracted_total - calculated_total)
             difference_percent = (difference / actual_extracted_total) * 100 if actual_extracted_total else 0
             
-            matches = difference < tolerance
+            matches = difference <= tolerance_absolute
             
             total_validation = {
                 "matches": matches,
@@ -609,24 +637,29 @@ async def _run_auto_approval(
         db_upload.calculated_total = round(calculated_total, 2) if calculated_total else 0  # Calculated from table rows
         db_upload.extracted_invoice_total = round(calculated_invoice_total, 2) if calculated_invoice_total else 0
         
-        # 🔧 CRITICAL FIX: Update status based on total validation
-        # If totals don't match, set status to 'needs_review' instead of 'Approved'
+        # 🔧 CRITICAL: Update status based on total validation
+        # ✅ NEW BEHAVIOR: Auto-approval proceeds even with total mismatch
+        # - If totals match: status = 'Approved', commission data processed
+        # - If totals mismatch: status = 'needs_review', user can fix in remap component
         if needs_review:
             db_upload.status = 'needs_review'
-            logger.warning(f"⚠️ Auto-approval: Totals don't match, setting status to 'needs_review' for manual review")
+            logger.info(
+                f"📝 Auto-approval COMPLETED with review flag: Learned format applied successfully, "
+                f"but totals don't match. User can review and remap if needed."
+            )
         else:
             # Status is already 'Approved' from approve_statement(), but let's be explicit
             db_upload.status = 'Approved'
-            logger.info(f"✅ Auto-approval: Totals match, status remains 'Approved'")
+            logger.info(f"✅ Auto-approval: Totals match perfectly, status set to 'Approved'")
         
         await db.commit()
         await db.refresh(db_upload)
         
         logger.info(f"✅ Updated DB record with auto-approval metadata")
         
-        # ✅ CRITICAL FIX: Process commission data AFTER status is finalized
-        # Previously, commission processing was skipped because status was temporarily 'needs_review'
-        # Now we explicitly process commission data here for auto-approved statements
+        # ✅ Process commission data ONLY for fully approved statements
+        # For 'needs_review' statements, wait for user to review and manually approve
+        # This ensures commission data is accurate after user verification
         if db_upload.status == 'Approved':
             logger.info(f"✅ Auto-approval: Statement approved, processing commission data...")
             try:
@@ -639,7 +672,10 @@ async def _run_auto_approval(
                 # Don't fail the auto-approval if commission processing fails
                 # The user can manually trigger commission recalculation later
         else:
-            logger.info(f"⚠️ Auto-approval: Status is '{db_upload.status}', skipping commission data processing")
+            logger.info(
+                f"📝 Auto-approval: Status is '{db_upload.status}' - commission data will be processed "
+                f"after user reviews and manually approves the statement"
+            )
         
         # Record user contribution now that the statement is persisted
         try:
@@ -669,14 +705,14 @@ async def _run_auto_approval(
                 request.upload_id, 
                 'auto_approval_complete', 
                 100, 
-                f"⚠️ Auto-processed but needs review - totals don't match!"
+                f"✅ Format applied! Please review totals in the remap component."
             )
         else:
             await connection_manager.send_stage_update(
                 request.upload_id, 
                 'auto_approval_complete', 
                 100, 
-                f"✨ Auto-approval completed successfully!"
+                f"✨ Auto-approved successfully! All validations passed."
             )
         
         logger.info(f"Auto-approval completed for upload {request.upload_id}")

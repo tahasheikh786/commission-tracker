@@ -1006,8 +1006,16 @@ class EnhancedExtractionService:
             gpt5_business_intel = gpt5_result.get('business_intelligence', {})
             
             # ✅ CRITICAL FIX: Extract groups and writing agents from GPT response
-            groups_and_companies = gpt5_result.get('groups_and_companies', [])
-            writing_agents = gpt5_result.get('writing_agents', [])
+            def _coerce_list(value):
+                """Normalize GPT outputs that might be None or single objects."""
+                if value is None:
+                    return []
+                if isinstance(value, list):
+                    return value
+                return [value]
+
+            groups_and_companies = _coerce_list(gpt5_result.get('groups_and_companies'))
+            writing_agents = _coerce_list(gpt5_result.get('writing_agents'))
             
             # Log what we extracted
             logger.info(f"📊 GPT-5 extraction results:")
@@ -1078,6 +1086,21 @@ class EnhancedExtractionService:
                     'quality_grade': 'A'
                 }
             }
+
+            carrier_value = (gpt5_doc_meta.get('carrier_name') or "").strip()
+            broker_value = (gpt5_doc_meta.get('broker_company') or "").strip()
+            logger.info(
+                "📋 GPT-5 carrier/broker extraction → carrier='%s' (%.2f) | broker='%s' (%.2f)",
+                carrier_value or "N/A",
+                gpt5_doc_meta.get('carrier_confidence', 0.0),
+                broker_value or "N/A",
+                gpt5_doc_meta.get('broker_confidence', 0.0)
+            )
+            if carrier_value and broker_value and carrier_value.lower() == broker_value.lower():
+                logger.error(
+                    "❌ CRITICAL: Carrier and broker resolved to the same value '%s'. Re-run logo/header checks.",
+                    carrier_value
+                )
             
             # Build metadata dictionary for response
             gpt_metadata = {

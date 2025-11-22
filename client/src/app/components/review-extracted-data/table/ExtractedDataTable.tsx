@@ -34,13 +34,30 @@ export default function ExtractedDataTable({
   const rows = Array.isArray(table.rows) ? table.rows : [];
   const totalRows = rows.length;
   
-  // ✅ CRITICAL: Ensure summaryRows is properly set
-  const summaryRowsArray = table.summaryRows 
-    ? (Array.isArray(table.summaryRows) ? table.summaryRows : Array.from(table.summaryRows as Set<number>))
-    : [];
+  // Normalize summary rows once per render for consistent references
+  const summaryRowsSet = useMemo(() => {
+    if (!table.summaryRows) return new Set<number>();
+    return table.summaryRows instanceof Set
+      ? table.summaryRows
+      : new Set(table.summaryRows);
+  }, [table.summaryRows]);
+
+  const summaryRowsArray = useMemo(
+    () => Array.from(summaryRowsSet),
+    [summaryRowsSet]
+  );
 
   // Hooks
   const selection = useTableSelection(totalRows);
+  const {
+    selectedRows,
+    isAllSelected,
+    isIndeterminate,
+    toggleRowSelection,
+    toggleAllRowsSelection,
+    clearSelection,
+    isRowSelected
+  } = selection;
   const summaryDetection = useSummaryRowDetection(table, onTableChange);
   const operations = useTableOperations(table, onTableChange);
   
@@ -51,15 +68,19 @@ export default function ExtractedDataTable({
   const [showColumnActions, setShowColumnActions] = useState<number | null>(null);
 
   // Get visible rows
+  const rowsWithIndices = useMemo(
+    () => rows.map((row, idx) => ({ row, originalIdx: idx })),
+    [rows]
+  );
+
   const visibleRows = useMemo(() => {
     if (showSummaryRows) {
-      return rows.map((row, idx) => ({ row, originalIdx: idx }));
-    } else {
-      return rows
-        .map((row, idx) => ({ row, originalIdx: idx }))
-        .filter(({ originalIdx }) => !summaryDetection.isSummaryRow(originalIdx));
+      return rowsWithIndices;
     }
-  }, [rows, showSummaryRows, summaryDetection]);
+    return rowsWithIndices.filter(
+      ({ originalIdx }) => !summaryRowsSet.has(originalIdx)
+    );
+  }, [rowsWithIndices, showSummaryRows, summaryRowsSet]);
 
   // Handle cell edit save
   const handleSaveCellEdit = useCallback((rowIndex: number, colIndex: number, value: string) => {
@@ -69,40 +90,38 @@ export default function ExtractedDataTable({
 
   // Handle bulk delete
   const handleDeleteSelected = useCallback(() => {
-    const selectedIndices = Array.from(selection.selectedRows).sort((a, b) => b - a);
+    const selectedIndices = Array.from(selectedRows).sort((a, b) => b - a);
     if (selectedIndices.length === 0) return;
 
     operations.deleteRows(selectedIndices);
-    selection.clearSelection();
+    clearSelection();
     toast.success(`Deleted ${selectedIndices.length} row(s)`);
-  }, [selection, operations]);
+  }, [selectedRows, clearSelection, operations]);
 
   // Handle mark as summary
   const handleMarkAsSummary = useCallback(() => {
-    const selectedIndices = Array.from(selection.selectedRows);
-    selectedIndices.forEach(idx => {
-      summaryDetection.markAsSummaryRow(idx);
-    });
-    selection.clearSelection();
+    const selectedIndices = Array.from(selectedRows);
+    if (selectedIndices.length === 0) return;
+    summaryDetection.markSummaryRows(selectedIndices);
+    clearSelection();
     toast.success(`Marked ${selectedIndices.length} row(s) as summary`);
-  }, [selection, summaryDetection]);
+  }, [selectedRows, clearSelection, summaryDetection]);
 
   // Handle unmark summary
   const handleUnmarkSummary = useCallback(() => {
-    const selectedIndices = Array.from(selection.selectedRows);
-    selectedIndices.forEach(idx => {
-      summaryDetection.unmarkSummaryRow(idx);
-    });
-    selection.clearSelection();
+    const selectedIndices = Array.from(selectedRows);
+    if (selectedIndices.length === 0) return;
+    summaryDetection.unmarkSummaryRows(selectedIndices);
+    clearSelection();
     toast.success(`Unmarked ${selectedIndices.length} row(s) as summary`);
-  }, [selection, summaryDetection]);
+  }, [selectedRows, clearSelection, summaryDetection]);
 
   // Calculate how many selected rows are summary rows
   const selectedSummaryCount = useMemo(() => {
-    return Array.from(selection.selectedRows).filter(idx => 
-      summaryDetection.isSummaryRow(idx)
+    return Array.from(selectedRows).filter(idx =>
+      summaryRowsSet.has(idx)
     ).length;
-  }, [selection.selectedRows, summaryDetection]);
+  }, [selectedRows, summaryRowsSet]);
 
   // Handle auto-detect summary rows
   const handleAutoDetect = useCallback(() => {
@@ -193,9 +212,9 @@ export default function ExtractedDataTable({
               {/* Select All Checkbox */}
               <th className="px-4 py-3 text-left w-12 border-b border-gray-200 dark:border-slate-700 border-r border-gray-200 dark:border-slate-700 sticky left-0 bg-gray-50 dark:bg-slate-700 z-20">
                 <TableRowSelector
-                  isSelected={selection.isAllSelected}
-                  isIndeterminate={selection.isIndeterminate}
-                  onToggle={selection.toggleAllRowsSelection}
+                  isSelected={isAllSelected}
+                  isIndeterminate={isIndeterminate}
+                  onToggle={toggleAllRowsSelection}
                   ariaLabel="Select all rows"
                 />
               </th>
@@ -255,10 +274,10 @@ export default function ExtractedDataTable({
                   key={originalIdx}
                   row={row}
                   rowIndex={originalIdx}
-                  isSelected={selection.isRowSelected(originalIdx)}
+                  isSelected={isRowSelected(originalIdx)}
                   isSummary={summaryDetection.isSummaryRow(originalIdx)}
                   editingCell={operations.editingCell}
-                  onToggleSelection={selection.toggleRowSelection}
+                  onToggleSelection={toggleRowSelection}
                   onStartCellEdit={operations.startCellEdit}
                   onSaveCellEdit={handleSaveCellEdit}
                   onCancelCellEdit={operations.cancelCellEdit}
@@ -275,12 +294,12 @@ export default function ExtractedDataTable({
 
       {/* Bulk Actions Bar */}
       <BulkActionsBar
-        selectedCount={selection.selectedRows.size}
+        selectedCount={selectedRows.size}
         selectedSummaryCount={selectedSummaryCount}
         onDeleteSelected={handleDeleteSelected}
         onMarkAsSummary={handleMarkAsSummary}
         onUnmarkSummary={handleUnmarkSummary}
-        onClearSelection={selection.clearSelection}
+        onClearSelection={clearSelection}
       />
     </div>
   );

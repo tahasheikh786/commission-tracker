@@ -77,6 +77,7 @@ class GPT5VisionService:
         self.monitor = extraction_monitor
         self.health_checker = health_checker
         self.performance_analyzer = performance_analyzer
+        self.use_two_pass = os.getenv("USE_TWO_PASS_EXTRACTION", "false").lower() == "true"
         
         logger.info("✅ Enhanced GPT-5 Vision Service initialized (Direct PDF mode)")
     
@@ -128,6 +129,17 @@ class GPT5VisionService:
                     upload_id
                 )
             
+            total_pass_data = None
+            if self.use_two_pass:
+                try:
+                    logger.info("🔎 Running pre-pass to locate authoritative total amount")
+                    total_pass_data = await self.vision_extractor.detect_authoritative_total(
+                        pdf_path=file_path,
+                        carrier_name=carrier_name
+                    )
+                except Exception as total_exc:
+                    logger.warning(f"⚠️ Total pass failed (continuing): {total_exc}")
+            
             # NEW: Use unified process_document() method
             # This handles: analysis, page selection, extraction, and result merging
             extraction_result = await self.vision_extractor.process_document(
@@ -137,6 +149,9 @@ class GPT5VisionService:
                 carrier_name=carrier_name,  # ✅ Pass carrier name for carrier-specific prompts
                 prompt_options=prompt_options or {}
             )
+            
+            if total_pass_data:
+                self._merge_authoritative_total(extraction_result, total_pass_data)
             
             # ✅ Check for partial failures
             if extraction_result.get("partial_success"):
@@ -194,6 +209,7 @@ class GPT5VisionService:
             )
             
             return enhanced_result
+
             
         except Exception as e:
             processing_time = time.time() - start_time
@@ -485,6 +501,62 @@ class GPT5VisionService:
                 'success': False,
                 'error': str(e)
             }
+
+    def _merge_authoritative_total(
+        self,
+        extraction_result: Dict[str, Any],
+        total_pass_data: Optional[Dict[str, Any]]
+    ):
+        """Merge two-pass total detection output into the primary extraction payload."""
+        if not total_pass_data:
+            return
+        
+        doc_meta = extraction_result.setdefault('document_metadata', {})
+        authoritative = total_pass_data.get('authoritative_total') or {}
+        candidate_amount = self._safe_float(authoritative.get('amount'))
+        existing_amount = self._safe_float(doc_meta.get('total_amount'))
+        
+        should_replace = candidate_amount is not None and (
+            existing_amount is None or
+            abs(candidate_amount - existing_amount) > max(5.0, (existing_amount or 0) * 0.05)
+        )
+        
+        if should_replace and candidate_amount is not None:
+            doc_meta['total_amount'] = candidate_amount
+            if authoritative.get('label'):
+                doc_meta['total_amount_label'] = authoritative.get('label')
+            doc_meta['total_amount_confidence'] = authoritative.get('confidence', 0.96)
+            doc_meta['total_amount_method'] = 'two_pass_authoritative_total'
+            if authoritative.get('page_number') is not None:
+                doc_meta['total_amount_page'] = authoritative.get('page_number')
+            if authoritative.get('text_snippet'):
+                doc_meta['total_amount_snippet'] = authoritative.get('text_snippet')
+        
+        doc_meta['total_pass_analysis'] = total_pass_data
+        extraction_result['total_pass_analysis'] = total_pass_data
+
+    @staticmethod
+    def _safe_float(value: Any) -> Optional[float]:
+        """Best-effort conversion of various numeric representations to float."""
+        if value in (None, "", "null"):
+            return None
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, str):
+            cleaned = (
+                value.replace("$", "")
+                .replace(",", "")
+                .replace("(", "-")
+                .replace(")", "")
+                .strip()
+            )
+            if not cleaned:
+                return None
+            try:
+                return float(cleaned)
+            except ValueError:
+                return None
+        return None
 
 
 # Global instance - Use this for all extractions

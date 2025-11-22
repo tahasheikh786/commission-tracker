@@ -96,6 +96,30 @@ const AnimatedBackground: React.FC = () => {
 };
 
 // Compact Info Item for key-value display (3-column layout)
+const PLACEHOLDER_DISPLAY_VALUES = new Set([
+  'unknown',
+  'null',
+  'none',
+  'n/a',
+  'na',
+  'not provided',
+  'pending'
+]);
+
+const formatDisplayValue = (rawValue: string) => {
+  if (rawValue === undefined || rawValue === null) {
+    return '—';
+  }
+  const trimmed = rawValue.toString().trim();
+  if (!trimmed) {
+    return '—';
+  }
+  if (PLACEHOLDER_DISPLAY_VALUES.has(trimmed.toLowerCase())) {
+    return '—';
+  }
+  return rawValue;
+};
+
 interface InfoItemProps {
   icon: React.ReactNode;
   label: string;
@@ -105,6 +129,7 @@ interface InfoItemProps {
 }
 
 function InfoItem({ icon, label, value, highlight, badge }: InfoItemProps) {
+  const displayValue = formatDisplayValue(value);
   return (
     <div className={`p-3 rounded-lg border ${
       highlight 
@@ -123,7 +148,7 @@ function InfoItem({ icon, label, value, highlight, badge }: InfoItemProps) {
       <p className={`text-sm font-semibold ml-6 ${
         highlight ? 'text-emerald-900' : 'text-gray-900'
       }`}>
-        {value}
+        {displayValue}
       </p>
     </div>
   );

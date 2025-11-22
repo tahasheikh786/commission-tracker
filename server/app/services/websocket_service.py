@@ -6,6 +6,7 @@ Enhanced with timeout management and keepalive functionality for large file proc
 import asyncio
 import json
 import logging
+from collections import deque
 from typing import Dict, Set, Any, Optional
 from fastapi import WebSocket, WebSocketDisconnect
 from datetime import datetime
@@ -34,10 +35,16 @@ class ConnectionManager:
         # Configure longer timeouts for large file processing
         self.websocket_timeout = timeout_settings.websocket_connection
         self.keepalive_timeout = timeout_settings.websocket_keepalive
-        self.ping_interval = timeout_settings.websocket_ping_interval  # Keepalive interval driven by config
+        self.ping_interval = timeout_settings.websocket_ping_interval  # Ultra-aggressive ping interval
+        self.progress_interval = timeout_settings.websocket_progress_interval
         
         # Track keepalive tasks
         self.keepalive_tasks: Dict[str, asyncio.Task] = {}
+        self.progress_tasks: Dict[str, asyncio.Task] = {}
+        
+        # Message backlog for replay (per upload_id)
+        self.message_backlog: Dict[str, deque] = {}
+        self.backlog_limit = int(os.getenv("WEBSOCKET_BACKLOG_LIMIT", "50"))
     
     async def connect(self, websocket: WebSocket, upload_id: str, session_id: str, user_id: str = None):
         """
@@ -68,6 +75,9 @@ class ConnectionManager:
         self.keepalive_tasks[keepalive_key] = asyncio.create_task(
             self._keepalive_task(websocket, upload_id, session_id)
         )
+        self.progress_tasks[keepalive_key] = asyncio.create_task(
+            self._progress_update_task(websocket, upload_id, session_id)
+        )
         
         # Send initial connection confirmation
         await self.send_personal_message({
@@ -79,7 +89,9 @@ class ConnectionManager:
                 'keepalive_interval': self.ping_interval
             },
             'timestamp': datetime.utcnow().isoformat()
-        }, upload_id, session_id)
+        }, upload_id, session_id, record_backlog=False)
+        
+        await self._replay_backlog(upload_id, session_id)
     
     async def _keepalive_task(self, websocket: WebSocket, upload_id: str, session_id: str):
         """Enhanced keepalive with aggressive ping schedule to prevent Render 1006 errors."""
@@ -89,7 +101,7 @@ class ConnectionManager:
         
         try:
             while websocket.client_state.name == 'CONNECTED':
-                await asyncio.sleep(self.ping_interval)  # 15 seconds
+                await asyncio.sleep(self.ping_interval)
                 
                 # Check if connection still exists
                 if upload_id not in self.active_connections or session_id not in self.active_connections[upload_id]:
@@ -108,7 +120,8 @@ class ConnectionManager:
                                 'message': 'Connection active'
                             },
                             upload_id,
-                            session_id
+                            session_id,
+                            record_backlog=False
                         ),
                         timeout=5.0
                     )
@@ -147,6 +160,35 @@ class ConnectionManager:
         finally:
             if keepalive_key in self.keepalive_tasks:
                 del self.keepalive_tasks[keepalive_key]
+
+    async def _progress_update_task(self, websocket: WebSocket, upload_id: str, session_id: str):
+        """Periodic progress heartbeat broadcasting lightweight updates."""
+        task_key = f"{upload_id}:{session_id}"
+        try:
+            while websocket.client_state.name == 'CONNECTED':
+                await asyncio.sleep(self.progress_interval)
+                
+                if upload_id not in self.active_connections or session_id not in self.active_connections[upload_id]:
+                    break
+                
+                await self.send_personal_message(
+                    {
+                        'type': 'progress_ping',
+                        'upload_id': upload_id,
+                        'session_id': session_id,
+                        'message': 'Processing continues – keeping connection warm',
+                        'timestamp': datetime.utcnow().isoformat()
+                    },
+                    upload_id,
+                    session_id,
+                    record_backlog=False
+                )
+        except asyncio.CancelledError:
+            logger.debug(f"🛑 Progress heartbeat cancelled: {upload_id}")
+        except Exception as exc:
+            logger.warning(f"⚠️ Progress heartbeat error ({upload_id}): {exc}")
+        finally:
+            self.progress_tasks.pop(task_key, None)
     
     def disconnect(self, upload_id: str, session_id: str):
         """Remove a WebSocket connection and cleanup keepalive task with idempotency."""
@@ -162,6 +204,14 @@ class ConnectionManager:
                 cleanup_performed = True
             except Exception as e:
                 logger.warning(f"Error cancelling keepalive task: {e}")
+        
+        if keepalive_key in self.progress_tasks:
+            try:
+                self.progress_tasks[keepalive_key].cancel()
+                del self.progress_tasks[keepalive_key]
+                cleanup_performed = True
+            except Exception as e:
+                logger.warning(f"Error cancelling progress task: {e}")
         
         # Remove from active connections
         if upload_id in self.active_connections and session_id in self.active_connections[upload_id]:
@@ -198,7 +248,13 @@ class ConnectionManager:
         else:
             logger.debug(f"Disconnect called but connection already cleaned up: upload_id={upload_id}, session_id={session_id}")
     
-    async def send_personal_message(self, message: Dict[str, Any], upload_id: str, session_id: str):
+    async def send_personal_message(
+        self,
+        message: Dict[str, Any],
+        upload_id: str,
+        session_id: str,
+        record_backlog: bool = True
+    ):
         """Send a message to a specific connection with robust state checking."""
         if upload_id not in self.active_connections or session_id not in self.active_connections[upload_id]:
             logger.debug(f"Connection not found: upload_id={upload_id}, session_id={session_id}")
@@ -225,6 +281,9 @@ class ConnectionManager:
                 websocket.send_text(json.dumps(message)),
                 timeout=5.0  # 5 second timeout for send operation
             )
+            
+            if record_backlog and self._should_record_backlog(message):
+                self._append_to_backlog(upload_id, message)
             
         except asyncio.TimeoutError:
             logger.error(f"Timeout sending message to upload_id={upload_id}, session_id={session_id}")
@@ -291,6 +350,9 @@ class ConnectionManager:
         # Clean up disconnected sessions
         for session_id in disconnected_sessions:
             self.disconnect(upload_id, session_id)
+        
+        if self._should_record_backlog(message):
+            self._append_to_backlog(upload_id, message)
     
     async def send_progress_update(self, upload_id: str, progress_data: Dict[str, Any]):
         """Send a progress update to all connections for an upload."""
@@ -462,6 +524,8 @@ class ConnectionManager:
         }
         await self.broadcast_to_upload(message, upload_id)
         logger.info(f"Extraction complete for upload_id {upload_id}")
+        # Completion marks end of backlog relevance
+        self.message_backlog.pop(upload_id, None)
     
     # Helper method for step-based workflow
     # ✅ CRITICAL: Step order must match frontend UPLOAD_STEPS in SummaryProgressLoader.tsx
@@ -592,6 +656,32 @@ class ConnectionManager:
                 for upload_id, sessions in self.active_connections.items()
             }
         }
+    
+    def _append_to_backlog(self, upload_id: str, message: Dict[str, Any]):
+        """Store recent messages so new connections can replay progress."""
+        if upload_id not in self.message_backlog:
+            self.message_backlog[upload_id] = deque(maxlen=self.backlog_limit)
+        # Store a shallow copy to avoid mutation
+        self.message_backlog[upload_id].append(json.loads(json.dumps(message)))
+    
+    async def _replay_backlog(self, upload_id: str, session_id: str):
+        """Replay recent messages for a newly connected session."""
+        if upload_id not in self.message_backlog:
+            return
+        
+        for cached_message in list(self.message_backlog[upload_id]):
+            await self.send_personal_message(
+                cached_message,
+                upload_id,
+                session_id,
+                record_backlog=False
+            )
+    
+    @staticmethod
+    def _should_record_backlog(message: Dict[str, Any]) -> bool:
+        """Determine whether a message should be stored for replay."""
+        message_type = message.get('type')
+        return message_type not in {'ping', 'progress_ping'}
 
 # Global connection manager instance
 connection_manager = ConnectionManager()

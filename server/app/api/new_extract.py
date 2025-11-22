@@ -20,14 +20,17 @@ from uuid import uuid4, UUID
 from app.services.gcs_utils import upload_file_to_gcs, get_gcs_file_url, download_file_from_gcs, generate_gcs_signed_url
 from app.services.websocket_service import connection_manager
 import logging
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List, Tuple
+from dataclasses import dataclass
 from fastapi.responses import JSONResponse
 import re
 import hashlib
 import copy
+from pypdf import PdfReader
 from app.services.cancellation_manager import cancellation_manager
 from app.constants.statuses import VALID_PERSISTENT_STATUSES
-from app.services.summary_row_refiner import refine_summary_rows
+from app.services.summary_row_refiner import refine_summary_rows, row_looks_like_summary
+from app.services.extraction_utils import resolve_carrier_broker_roles
 from app.services.upload_cache import upload_cache
 
 router = APIRouter(prefix="/api", tags=["new-extract"])
@@ -81,6 +84,281 @@ SUMMARY_TOTAL_KEYWORDS = [
     ("total due", 3.0)
 ]
 
+GLOBAL_TOTAL_KEYWORDS = {
+    "total for vendor",
+    "vendor total",
+    "carrier total",
+    "total for carrier",
+    "total for statement",
+    "statement total",
+    "report total",
+    "grand total",
+    "overall total",
+    "net payment",
+    "net commission",
+    "net remit",
+    "total commission payment",
+    "total commission amount",
+}
+
+
+@dataclass
+class TotalCandidate:
+    amount: float
+    label: str
+    row_index: int
+    score: float
+    source: str
+
+
+def guess_carrier_from_pdf(file_path: str) -> Optional[str]:
+    """
+    Attempt to infer the carrier name directly from the PDF text layer.
+    Focuses on the first page and filters out common header keywords.
+    """
+    try:
+        reader = PdfReader(file_path)
+        if not reader.pages:
+            return None
+        first_page = reader.pages[0]
+        text = first_page.extract_text() or ""
+        if not text:
+            return None
+        
+        candidates: List[str] = []
+        for line in text.splitlines():
+            cleaned = line.strip()
+            if not cleaned:
+                continue
+            lower = cleaned.lower()
+            if any(
+                keyword in lower
+                for keyword in (
+                    "commission",
+                    "statement",
+                    "summary",
+                    "prepared for",
+                    "broker",
+                    "agent",
+                    "payment",
+                    "period"
+                )
+            ):
+                continue
+            if ":" in cleaned:
+                continue
+            if len(cleaned) > 80:
+                continue
+            if re.match(r"^\d", cleaned):
+                continue
+            if re.search(r"\d", cleaned) and not re.search(r"[A-Za-z]", cleaned):
+                continue
+            candidates.append(cleaned)
+            if len(candidates) >= 5:
+                break
+        
+        return candidates[0] if candidates else None
+    except Exception as exc:
+        logger.debug(f"Carrier guess from PDF failed: {exc}")
+        return None
+
+
+def extract_pdf_text_snippet(file_path: str, max_chars: int = 1500) -> Optional[str]:
+    """
+    Extract a small text snippet from the first page of a PDF for carrier detection.
+    """
+    try:
+        reader = PdfReader(file_path)
+        if not reader.pages:
+            return None
+        first_page = reader.pages[0]
+        text = first_page.extract_text() or ""
+        snippet = text.replace('\r', '\n').strip()
+        if not snippet:
+            return None
+        return snippet[:max_chars]
+    except Exception as exc:
+        logger.debug(f"Unable to extract PDF snippet from '{file_path}': {exc}")
+        return None
+
+
+async def validate_carrier_metadata_with_db(
+    db: AsyncSession,
+    document_metadata: Dict[str, Any],
+    fallback_carrier_name: Optional[str],
+    file_path: str,
+    pdf_text_snippet: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Cross-check extracted carrier/broker names against known companies in the database.
+    Prevents GPT from misclassifying brokers as carriers and vice versa.
+    """
+    if not document_metadata:
+        return document_metadata
+    
+    if pdf_text_snippet is None:
+        pdf_text_snippet = extract_pdf_text_snippet(file_path)
+    
+    metadata, disambig = resolve_carrier_broker_roles(
+        document_metadata,
+        expected_carrier_name=fallback_carrier_name,
+        uploader_company_name=None,
+        pdf_text_snippet=pdf_text_snippet
+    )
+    if disambig:
+        logger.info(f"📎 Carrier/Broker resolution adjustments applied: {disambig}")
+    
+    metadata = metadata or {}
+    validation_events: List[Dict[str, Any]] = []
+    extracted_carrier = metadata.get('carrier_name')
+    extracted_broker = metadata.get('broker_company')
+    placeholder_tokens = {"unknown", "null", "none", "n/a", "na", "not provided", "pending"}
+    
+    def _is_placeholder(value: Optional[str]) -> bool:
+        if value is None:
+            return True
+        trimmed = value.strip()
+        if not trimmed:
+            return True
+        return trimmed.lower() in placeholder_tokens
+    
+    def _split_composite_name(value: Optional[str]) -> List[str]:
+        if not value:
+            return []
+        if not any(sep in value for sep in ('/', '|', '•')):
+            return []
+        parts = [segment.strip(" -–—•") for segment in re.split(r'[\/\|•]+', value)]
+        return [part for part in parts if part]
+    
+    async def _handle_composite_carrier(value: Optional[str]) -> List[Dict[str, Any]]:
+        events: List[Dict[str, Any]] = []
+        segments = _split_composite_name(value)
+        if len(segments) < 2:
+            return events
+        
+        segment_roles: List[Tuple[str, Optional[Dict[str, Any]]]] = []
+        for segment in segments:
+            try:
+                role_info = await with_db_retry(db, crud.get_company_role_by_name, name=segment)
+            except Exception as exc:
+                logger.debug(f"Composite carrier lookup failed for '{segment}': {exc}")
+                role_info = None
+            segment_roles.append((segment, role_info))
+        
+        broker_candidates = [
+            seg for seg, role in segment_roles
+            if role and role.get('classification') == 'broker'
+        ]
+        carrier_candidates = [
+            seg for seg, role in segment_roles
+            if role and role.get('classification') in ('carrier', 'mixed')
+        ]
+        
+        selected_carrier = None
+        if carrier_candidates:
+            selected_carrier = carrier_candidates[0]
+        elif fallback_carrier_name:
+            selected_carrier = fallback_carrier_name
+        elif segments:
+            selected_carrier = segments[0]
+        
+        if selected_carrier and selected_carrier != value:
+            metadata['carrier_name'] = selected_carrier
+            metadata['carrier_confidence'] = max(metadata.get('carrier_confidence', 0.6), 0.9)
+            events.append({
+                "issue": "composite_carrier_cleaned",
+                "matched_segments": segments,
+                "selected_carrier": selected_carrier
+            })
+        
+        if broker_candidates:
+            broker_choice = broker_candidates[0]
+            if _is_placeholder(metadata.get('broker_company')):
+                metadata['broker_company'] = broker_choice
+                metadata['broker_confidence'] = max(metadata.get('broker_confidence', 0.6), 0.85)
+            events.append({
+                "issue": "composite_broker_identified",
+                "broker_candidate": broker_choice
+            })
+        
+        return events
+    
+    # First handle composite carrier/broker strings such as "Carrier / Broker"
+    if extracted_carrier and any(sep in extracted_carrier for sep in ('/', '|', '•')):
+        composite_events = await _handle_composite_carrier(extracted_carrier)
+        validation_events.extend(composite_events)
+        extracted_carrier = metadata.get('carrier_name')
+        extracted_broker = metadata.get('broker_company')
+    
+    carrier_role_info = None
+    if extracted_carrier and not _split_composite_name(extracted_carrier):
+        carrier_role_info = await with_db_retry(db, crud.get_company_role_by_name, name=extracted_carrier)
+        if carrier_role_info:
+            metadata['carrier_name_db_role'] = carrier_role_info
+            if carrier_role_info.get('classification') == 'broker':
+                logger.warning(
+                    "⚠️ Carrier '%s' matches broker profile in DB. Reclassifying as broker.",
+                    extracted_carrier
+                )
+                inferred_carrier = fallback_carrier_name or guess_carrier_from_pdf(file_path)
+                metadata['broker_company'] = metadata.get('broker_company') or extracted_carrier
+                metadata['broker_confidence'] = max(
+                    metadata.get('broker_confidence', 0.6),
+                    metadata.get('carrier_confidence', 0.6)
+                )
+                metadata['carrier_name'] = inferred_carrier
+                metadata['carrier_confidence'] = 0.35 if inferred_carrier else 0.0
+                
+                validation_events.append({
+                    "issue": "carrier_matched_known_broker",
+                    "matched_company": carrier_role_info.get('company_name'),
+                    "fallback_carrier": inferred_carrier,
+                    "action": "promoted_to_broker" if inferred_carrier else "needs_manual_review"
+                })
+    
+    if extracted_broker:
+        broker_role_info = await with_db_retry(db, crud.get_company_role_by_name, name=extracted_broker)
+        if broker_role_info:
+            metadata['broker_company_db_role'] = broker_role_info
+            if (
+                broker_role_info.get('classification') == 'carrier'
+                and not metadata.get('carrier_name')
+            ):
+                logger.warning(
+                    "⚠️ Broker '%s' matches carrier profile in DB. Treating as carrier.",
+                    extracted_broker
+                )
+                metadata['carrier_name'] = extracted_broker
+                metadata['carrier_confidence'] = max(metadata.get('carrier_confidence', 0.4), 0.4)
+                validation_events.append({
+                    "issue": "broker_matched_known_carrier",
+                    "matched_company": broker_role_info.get('company_name'),
+                    "action": "promoted_to_carrier"
+                })
+    
+    if validation_events:
+        metadata['carrier_broker_validation'] = {
+            "events": validation_events,
+            "validated_at": datetime.utcnow().isoformat()
+        }
+    
+    return metadata
+
+
+TOTAL_METHOD_PRIORITY = {
+    'grand_total_table': 95,  # ✅ HIGHEST: Dedicated grand total table (e.g., Table 2 with final totals)
+    'two_pass_authoritative_total': 90,
+    'document_metadata': 88,  # ✅ CRITICAL: GPT extracts from document header/summary - VERY reliable!
+    'summary_row_scan': 85,
+    'table_footer': 80,
+    'table_scan': 75,
+    'business_intelligence': 70,
+    'gpt_summary_regex': 55,
+    'calculated_sum': 40,
+    'calculated': 40,
+    None: 0,
+}
+
 
 def _sync_structured_summary(
     structured_data: Optional[Dict[str, Any]],
@@ -118,26 +396,93 @@ def _sync_structured_summary(
     return structured_data
 
 COMMISSION_COLUMN_KEYWORDS = [
-    "paid amount",
-    "paid amt",
-    "commission",
-    "net commission",
+    "commission earned",
     "commission amount",
     "commission paid",
+    "total commission",
+    "net commission",
     "net payment",
     "payment amount",
-    "total commission",
-    "total payment"
+    "paid amount",
+    "paid amt",
+    "total payment",
+    "commission"
 ]
+
+# Columns that must be ignored even though they contain the word "commission"
+COMMISSION_COLUMN_EXCLUSIONS = [
+    "commissionable",
+    "rate",
+    "percentage",
+    "percent",
+    "comm rate",
+    "comm. rate"
+]
+
+# Higher weight indicates a better match for the true commission column
+COMMISSION_COLUMN_PRIORITY = [
+    ("commission earned", 8),
+    ("commission amount", 7),
+    ("commission paid", 6),
+    ("total commission", 6),
+    ("net commission", 5),
+    ("net payment", 4),
+    ("payment amount", 4),
+    ("paid amount", 3),
+    ("paid amt", 3),
+    ("total payment", 3),
+    ("commission", 1)
+]
+
+
+def _normalize_header_token(header: Any) -> str:
+    """Normalize header text for keyword comparisons."""
+    if header is None:
+        return ""
+    token = str(header).lower()
+    token = token.replace("\n", " ")
+    token = re.sub(r"[^a-z0-9\s\.]", " ", token)
+    token = re.sub(r"\s+", " ", token).strip()
+    return token
+
+
+def _detect_commission_column_index(headers: List[Any]) -> Optional[int]:
+    """
+    Identify the most likely commission column using weighted keywords and exclusion rules.
+    """
+    best_idx = None
+    best_score = 0
+    normalized_headers = [_normalize_header_token(h) for h in headers]
+    
+    for idx, token in enumerate(normalized_headers):
+        if not token:
+            continue
+        if any(exclusion in token for exclusion in COMMISSION_COLUMN_EXCLUSIONS):
+            continue
+        
+        score = 0
+        for keyword, weight in COMMISSION_COLUMN_PRIORITY:
+            if keyword in token:
+                score = max(score, weight)
+        if score == 0:
+            if any(keyword in token for keyword in COMMISSION_COLUMN_KEYWORDS):
+                score = 1
+        
+        if score > best_score:
+            best_score = score
+            best_idx = idx
+    
+    return best_idx
 
 
 def _extract_commission_total_from_table(
     table: Dict[str, Any],
     parse_currency_value
-) -> Optional[float]:
+) -> Optional[TotalCandidate]:
     """
     Identify the best commission total candidate from summary rows.
     Prioritizes rows that contain 'Total for Vendor/Group', 'Commission Total', etc.
+    Returns a TotalCandidate with metadata for downstream validation.
     """
     if not table or not parse_currency_value:
         return None
@@ -147,23 +492,22 @@ def _extract_commission_total_from_table(
     if not headers or not rows:
         return None
     
-    header_tokens = [str(header).lower() for header in headers]
-    candidate_columns = [
-        idx for idx, header in enumerate(header_tokens)
-        if any(keyword in header for keyword in COMMISSION_COLUMN_KEYWORDS)
-    ]
-    if not candidate_columns:
-        candidate_columns = [len(headers) - 1] if headers else []
+    candidate_idx = _detect_commission_column_index(headers)
+    candidate_columns: List[int] = []
+    if candidate_idx is not None:
+        candidate_columns.append(candidate_idx)
+    # Fall back to last column if no commission-like headers detected
+    if not candidate_columns and headers:
+        candidate_columns.append(len(headers) - 1)
     
     summary_rows = set(table.get('summaryRows', []) or table.get('summary_rows', []))
-    best_value = None
-    best_score = -1.0
     total_rows = len(rows)
+    best_candidate: Optional[TotalCandidate] = None
     
     for idx, row in enumerate(rows):
         if not row:
             continue
-        row_text = ' '.join(str(cell).lower() for cell in row if cell)
+        row_text = ' '.join(str(cell).lower() for cell in row if cell).strip()
         if not row_text:
             continue
         
@@ -177,6 +521,8 @@ def _extract_commission_total_from_table(
             phrase_score += 3.5
         if idx >= total_rows - 3:
             phrase_score += 1.5
+        if any(term in row_text for term in GLOBAL_TOTAL_KEYWORDS):
+            phrase_score += 4.5
         
         if phrase_score <= 0:
             continue
@@ -187,34 +533,150 @@ def _extract_commission_total_from_table(
             value = parse_currency_value(str(row[col_idx]))
             if value is None:
                 continue
-            if phrase_score > best_score:
-                best_score = phrase_score
-                best_value = value
+            
+            candidate_score = phrase_score
+            if best_candidate is None or candidate_score > best_candidate.score + 0.25:
+                best_candidate = TotalCandidate(
+                    amount=value,
+                    label=row_text,
+                    row_index=idx,
+                    score=candidate_score,
+                    source="summary_row"
+                )
+            elif best_candidate and abs(candidate_score - best_candidate.score) <= 0.25:
+                if value > best_candidate.amount:
+                    best_candidate = TotalCandidate(
+                        amount=value,
+                        label=row_text,
+                        row_index=idx,
+                        score=candidate_score,
+                        source="summary_row"
+                    )
     
-    return best_value
+    return best_candidate
 
 
-def _should_replace_total(existing_amount: Optional[float], existing_method: Optional[str], candidate_amount: float) -> bool:
+def _calculate_detail_commission_total(
+    table: Dict[str, Any],
+    parse_currency_value
+) -> Optional[float]:
+    """
+    Calculate the total commission by summing detail rows (excluding summary rows)
+    for the detected commission column.
+    """
+    if not table or not parse_currency_value:
+        return None
+    
+    headers = table.get('header') or table.get('headers') or []
+    rows = table.get('rows') or []
+    if not headers or not rows:
+        return None
+    
+    amount_col_idx = _detect_commission_column_index(headers)
+    if amount_col_idx is None:
+        return None
+    
+    summary_indices = set(table.get('summaryRows', []) or table.get('summary_rows', []))
+    augmented_indices = set()
+    total = 0.0
+    detail_rows = 0
+    
+    for row_idx, row in enumerate(rows):
+        row_is_summary = row_idx in summary_indices or row_looks_like_summary(row)
+        if row_is_summary:
+            if row_idx not in summary_indices:
+                augmented_indices.add(row_idx)
+                summary_indices.add(row_idx)
+            continue
+        if amount_col_idx >= len(row):
+            continue
+        raw_value = str(row[amount_col_idx])
+        value = parse_currency_value(raw_value)
+        if value is None:
+            cleaned = (
+                raw_value.replace('$', '')
+                .replace(',', '')
+                .replace('(', '-')
+                .replace(')', '')
+                .strip()
+            )
+            try:
+                value = float(cleaned)
+            except (ValueError, TypeError):
+                value = None
+        if value is None:
+            continue
+        total += value
+        detail_rows += 1
+
+    if augmented_indices:
+        updated_indices = sorted(summary_indices)
+        table['summaryRows'] = updated_indices
+        if 'summary_rows' in table:
+            table['summary_rows'] = updated_indices
+    
+    return total if detail_rows > 0 else None
+
+
+def _should_replace_total(
+    existing_amount: Optional[float],
+    existing_method: Optional[str],
+    candidate_amount: Optional[float],
+    candidate_method: Optional[str]
+) -> bool:
     """
     Determine if a newly detected total should override the current one.
-    Prefers summary-row totals over metadata when there is a large discrepancy.
+    ✅ NEW: Strictly respects priority order - higher priority methods are NEVER replaced by lower priority.
+    ✅ NEW: Massive discrepancies (> 100%) are rejected regardless of priority (likely extraction error).
     """
     if candidate_amount is None:
         return False
     if existing_amount is None:
         return True
     
+    existing_priority = TOTAL_METHOD_PRIORITY.get(existing_method, 10)
+    candidate_priority = TOTAL_METHOD_PRIORITY.get(candidate_method, 10)
     difference = abs(candidate_amount - existing_amount)
-    tolerance = max(5.0, abs(existing_amount) * 0.05)
+    tolerance = max(5.0, abs(existing_amount) * 0.05)  # ✅ 5% tolerance
+    difference_percent = (difference / max(abs(existing_amount), 1.0)) * 100
     
-    if difference <= tolerance:
+    logger.info(
+        f"🔍 _should_replace_total: existing=${existing_amount:.2f} ({existing_method}, priority={existing_priority}) "
+        f"vs candidate=${candidate_amount:.2f} ({candidate_method}, priority={candidate_priority}), "
+        f"diff=${difference:.2f} ({difference_percent:.1f}%), tolerance=${tolerance:.2f}"
+    )
+    
+    # ✅ CRITICAL: Reject massive discrepancies (> 100%) - likely extraction error
+    # Example: $9,343 vs $2,560 = 265% difference → reject!
+    if difference_percent > 100:
+        logger.warning(
+            f"  → REJECTED: Massive discrepancy ({difference_percent:.1f}%) detected! "
+            f"This suggests extraction error. Keeping existing value."
+        )
         return False
     
-    if existing_method in {None, 'document_metadata', 'gpt_summary_regex'}:
-        return True
+    # ✅ CRITICAL: Lower priority candidates can NEVER replace higher priority values
+    # This prevents summary_row_scan (85) from replacing document_metadata (88)
+    if candidate_priority < existing_priority:
+        logger.info(f"  → REJECTED: Candidate has lower priority ({candidate_priority} < {existing_priority})")
+        return False
     
-    # Prefer candidate if it is significantly larger and existing method was heuristic
-    return candidate_amount > existing_amount
+    # ✅ Same priority: only replace when candidate provides materially different AND larger value
+    if candidate_priority == existing_priority:
+        should_replace = difference > tolerance and candidate_amount > existing_amount
+        logger.info(
+            f"  → Same priority - replace only if diff > tolerance AND candidate > existing: {should_replace}"
+        )
+        return should_replace
+    
+    # ✅ Higher priority candidate: allow replacement
+    # But skip if difference is trivial (just rounding)
+    if difference <= tolerance:
+        logger.info(f"  → Candidate has higher priority but difference is trivial - keeping existing")
+        return False
+    
+    logger.info(f"  → ACCEPTED: Candidate has higher priority ({candidate_priority} > {existing_priority})")
+    return True
 
 @router.post("/extract-tables-smart/")
 async def extract_tables_smart(
@@ -278,7 +740,7 @@ async def extract_tables_smart(
     # Check for duplicates ONLY in successfully extracted files
     # This allows re-upload of failed/cancelled/processing files
     # CRITICAL: Use correct status values from constants module
-    logger.info(f"🔍 Checking for duplicates BEFORE proceeding with upload...")
+    logger.info("🔍 Checking for duplicates BEFORE proceeding with upload...")
     
     existing_upload = await crud.get_statement_by_file_hash_and_status(
         db=db,
@@ -355,6 +817,14 @@ async def extract_tables_smart(
             os.remove(file_path)
             raise HTTPException(status_code=404, detail="Company not found")
 
+        uploader_company_name = None
+        if current_user.company_id:
+            try:
+                uploader_company = await with_db_retry(db, crud.get_company_by_id, company_id=current_user.company_id)
+                uploader_company_name = uploader_company.name if uploader_company else None
+            except Exception as uploader_company_error:
+                logger.debug(f"Unable to resolve uploader company name: {uploader_company_error}")
+
         # Upload to GCS
         gcs_key = f"statements/{upload_id_uuid}/{file.filename}"
         from app.services.gcs_utils import gcs_service
@@ -377,7 +847,7 @@ async def extract_tables_smart(
             await connection_manager.emit_upload_step(upload_id, 'upload', 10)
         
         # Get or create environment
-        from app.db.crud.environment import get_or_create_default_environment, get_environment_by_id
+        from app.db.crud.environment import get_or_create_default_environment
         
         # CRITICAL: ALWAYS use user's default environment for ALL uploads
         # This ensures consistency and prevents environment mismatches
@@ -530,10 +1000,11 @@ async def extract_tables_smart(
             'completion_time': datetime.utcnow().isoformat(),
             'tables_count': len(refined_tables),
             'extraction_method_used': extraction_method,
+            # Note: raw_data stored in DB but NOT sent to frontend to reduce response size
             'raw_data': copy.deepcopy(refined_tables),
             'field_mapping': field_mapping
         })
-        logger.info(f"✅ Extraction completed (data NOT saved to DB, will be saved on approval)")
+        logger.info("✅ Extraction completed (data NOT saved to DB, will be saved on approval)")
         
         # ===== DATA QUALITY VALIDATION =====
         # Validate extracted company count to catch potential summary row inclusion
@@ -573,7 +1044,26 @@ async def extract_tables_smart(
         )
         
         # Extract carrier and date information from document metadata
+        pdf_text_snippet = extract_pdf_text_snippet(file_path)
         document_metadata = extraction_result.get('document_metadata', {})
+        document_metadata, carrier_broker_note = resolve_carrier_broker_roles(
+            document_metadata,
+            expected_carrier_name=company.name if company else None,
+            uploader_company_name=uploader_company_name,
+            pdf_text_snippet=pdf_text_snippet
+        )
+        if carrier_broker_note:
+            logger.info(f"🤖 Carrier/Broker disambiguation applied: {carrier_broker_note}")
+        
+        document_metadata = await validate_carrier_metadata_with_db(
+            db=db,
+            document_metadata=document_metadata,
+            fallback_carrier_name=company.name if company else None,
+            file_path=file_path,
+            pdf_text_snippet=pdf_text_snippet
+        )
+        extraction_result['document_metadata'] = document_metadata
+        
         extracted_carrier = document_metadata.get('carrier_name')
         extracted_date = document_metadata.get('statement_date')
         
@@ -639,7 +1129,7 @@ async def extract_tables_smart(
                             })
                             logger.info(f"✅ Updated upload metadata: carrier_id={carrier.id}, company_id stays as user's company={upload_metadata.get('company_id')}")
                         else:
-                            logger.warning(f"⚠️ Failed to move file in GCS, keeping original location")
+                            logger.warning("⚠️ Failed to move file in GCS, keeping original location")
                             # CRITICAL CHANGE: Update metadata only (no DB record yet)
                             upload_metadata.update({
                                 'carrier_id': str(carrier.id)
@@ -780,7 +1270,7 @@ async def extract_tables_smart(
                         # NOTE: We do NOT auto-apply statement dates from format learning 
                         # because dates are document-specific, not format-specific
                         # The extracted date from the current document should be used as-is
-                        logger.info(f"🎯 Format Learning: Skipping statement date auto-apply (dates are document-specific)")
+                        logger.info("🎯 Format Learning: Skipping statement date auto-apply (dates are document-specific)")
                         
                         # CRITICAL FIX: Auto-apply table deletions from learned format
                         if table_editor_settings.get('deleted_tables') or table_editor_settings.get('table_deletions'):
@@ -829,6 +1319,44 @@ async def extract_tables_smart(
                         # ✨ ENHANCED: Extract total amount from current file for validation
                         current_total_amount = None
                         total_extraction_method = None
+                        total_candidates: List[Dict[str, Any]] = []
+                        business_intel = extraction_result.get('business_intelligence') or {}
+                        detail_sum_amount = None
+                        total_pass_analysis = document_metadata.get('total_pass_analysis') if document_metadata else None
+
+                        def _record_total_candidate(method: str, amount: Optional[float], confidence: float, context: Optional[str] = None):
+                            if amount is None:
+                                return
+                            try:
+                                numeric_amount = float(amount)
+                            except (TypeError, ValueError):
+                                return
+                            total_candidates.append({
+                                "method": method,
+                                "amount": round(numeric_amount, 2),
+                                "confidence": round(confidence, 2),
+                                "context": context
+                            })
+
+                        if total_pass_analysis:
+                            authoritative = total_pass_analysis.get('authoritative_total') or {}
+                            candidate_amount = authoritative.get('amount')
+                            try:
+                                candidate_value = float(candidate_amount)
+                            except (TypeError, ValueError):
+                                candidate_value = None
+                            confidence_value = authoritative.get('confidence', 0.96)
+                            try:
+                                confidence_value = float(confidence_value)
+                            except (TypeError, ValueError):
+                                confidence_value = 0.96
+                            if candidate_value:
+                                _record_total_candidate(
+                                    'two_pass_authoritative_total',
+                                    candidate_value,
+                                    confidence_value,
+                                    authoritative.get('label')
+                                )
                         
                         # STRATEGY 1: Check document_metadata.total_amount (most reliable)
                         if document_metadata and 'total_amount' in document_metadata:
@@ -836,21 +1364,20 @@ async def extract_tables_smart(
                                 current_total_amount = float(document_metadata['total_amount'])
                                 total_extraction_method = 'document_metadata'
                                 logger.info(f"✅ Total extracted from document_metadata: ${current_total_amount:.2f}")
+                                _record_total_candidate('document_metadata', current_total_amount, 0.95, 'document_metadata.total_amount')
                             except (ValueError, TypeError):
                                 pass
                         
                         # STRATEGY 2: Parse from summary text (GPT metadata)
                         if current_total_amount is None and document_metadata and document_metadata.get('summary'):
                             summary_text = document_metadata['summary']
-                            
-                            # Pattern 1: "Total for Vendor: $1,027.20" or "Total: $1,027.20"
                             total_patterns = [
-                                r'[Tt]otal\s+for\s+(?:Vendor|Group|Broker)[:\s]*\$?([\d,]+\.?\d{2})',  # Total for Vendor: $X.XX
-                                r'[Tt]otal\s+[Cc]ompensation[:\s]*\$?([\d,]+\.?\d{2})',  # Total Compensation: $X.XX
-                                r'[Tt]otal\s+[Aa]mount[:\s]*\$?([\d,]+\.?\d{2})',  # Total Amount: $X.XX
-                                r'[Nn]et\s+[Pp]ayment[:\s]*\$?([\d,]+\.?\d{2})',  # Net Payment: $X.XX
-                                r'[Gg]rand\s+[Tt]otal[:\s]*\$?([\d,]+\.?\d{2})',  # Grand Total: $X.XX
-                                r'\$?([\d,]+\.?\d{2})\s+in\s+total'  # "$1,027.20 in total"
+                                r'[Tt]otal\s+for\s+(?:Vendor|Group|Broker)[:\s]*\$?([\d,]+\.?\d{2})',
+                                r'[Tt]otal\s+[Cc]ompensation[:\s]*\$?([\d,]+\.?\d{2})',
+                                r'[Tt]otal\s+[Aa]mount[:\s]*\$?([\d,]+\.?\d{2})',
+                                r'[Nn]et\s+[Pp]ayment[:\s]*\$?([\d,]+\.?\d{2})',
+                                r'[Gg]rand\s+[Tt]otal[:\s]*\$?([\d,]+\.?\d{2})',
+                                r'\$?([\d,]+\.?\d{2})\s+in\s+total'
                             ]
                             
                             for pattern in total_patterns:
@@ -861,21 +1388,41 @@ async def extract_tables_smart(
                                         current_total_amount = float(total_str)
                                         total_extraction_method = 'gpt_summary_regex'
                                         logger.info(f"✅ Total extracted from summary text: ${current_total_amount:.2f}")
+                                        _record_total_candidate('gpt_summary_regex', current_total_amount, 0.72, 'document_metadata.summary')
                                         break
                                     except ValueError:
                                         continue
+
+                        # STRATEGY 2B: Use business intelligence totals if available
+                        if current_total_amount is None and business_intel:
+                            bi_total_raw = (
+                                business_intel.get('total_commission_amount')
+                                or business_intel.get('total_commission')
+                                or business_intel.get('total_amount')
+                            )
+                            if bi_total_raw is not None:
+                                try:
+                                    if isinstance(bi_total_raw, str):
+                                        cleaned = bi_total_raw.replace('$', '').replace(',', '').strip()
+                                        bi_total_value = float(cleaned)
+                                    else:
+                                        bi_total_value = float(bi_total_raw)
+                                    current_total_amount = bi_total_value
+                                    total_extraction_method = 'business_intelligence'
+                                    logger.info(f"✅ Total extracted from business intelligence: ${current_total_amount:.2f}")
+                                    _record_total_candidate('business_intelligence', current_total_amount, 0.8, 'business_intelligence.total_commission_amount')
+                                except (ValueError, TypeError):
+                                    pass
                         
                         # STRATEGY 3: Extract from table footer rows
                         learned_total_amount = table_editor_settings.get("statement_total_amount")
                         total_field_name = table_editor_settings.get("total_amount_field_name")
                         
                         if current_total_amount is None and total_field_name and selected_table:
-                            # Find the total amount in the current extraction
                             try:
                                 headers = selected_table.get("header", [])
                                 rows = selected_table.get("rows", [])
                                 
-                                # Find the field index
                                 total_idx = None
                                 for idx, header in enumerate(headers):
                                     if header.lower() == total_field_name.lower():
@@ -883,80 +1430,160 @@ async def extract_tables_smart(
                                         break
                                 
                                 if total_idx is not None:
-                                    # Check last 10 rows for total (some statements have detailed breakdowns before total)
                                     for row in reversed(rows[-10:]):
                                         if total_idx < len(row):
                                             potential_total = format_learning_service.parse_currency_value(str(row[total_idx]))
                                             if potential_total and potential_total > 0:
-                                                # Validate this looks like a total row
                                                 row_text = ' '.join(str(cell).lower() for cell in row)
                                                 if any(keyword in row_text for keyword in ['total', 'vendor', 'grand', 'net', 'payment']):
                                                     current_total_amount = potential_total
                                                     total_extraction_method = 'table_footer'
                                                     logger.info(f"✅ Total extracted from table footer: ${current_total_amount:.2f}")
+                                                    _record_total_candidate('table_footer', current_total_amount, 0.88, total_field_name)
                                                     break
                             except Exception as e:
                                 logger.warning(f"Failed to extract current total amount: {e}")
                         
                         # STRATEGY 3B: Inspect summary rows for vendor/carrier totals
-                        if current_total_amount is None and selected_table:
-                            summary_row_total = _extract_commission_total_from_table(
-                                selected_table,
-                                format_learning_service.parse_currency_value
-                            )
-                            if summary_row_total is not None:
-                                current_total_amount = summary_row_total
-                                total_extraction_method = 'summary_row_scan'
-                                logger.info(f"✅ Total extracted from summary rows: ${current_total_amount:.2f}")
-                        elif current_total_amount is not None and selected_table:
-                            summary_row_total = _extract_commission_total_from_table(
-                                selected_table,
-                                format_learning_service.parse_currency_value
-                            )
-                            if summary_row_total is not None and _should_replace_total(
-                                current_total_amount,
-                                total_extraction_method,
-                                summary_row_total
-                            ):
-                                logger.warning(
-                                    f"⚠️ Replacing total_amount {current_total_amount:.2f} "
-                                    f"(method={total_extraction_method}) with summary_row_scan={summary_row_total:.2f}"
-                                )
-                                current_total_amount = summary_row_total
-                                total_extraction_method = 'summary_row_scan'
+                        # ✅ CRITICAL FIX: Check ALL tables, prioritizing pure summary/grand total tables
+                        logger.info(f"🔍 Total extraction: Analyzing {len(tables)} tables for grand total")
+                        summary_candidate = None
+                        grand_total_candidate = None
                         
-                        # STRATEGY 4: Calculate from paid_amount column if still not found
-                        if current_total_amount is None and selected_table:
+                        # First pass: Look for pure grand total tables (usually have 1-3 rows, all summary rows)
+                        for table_idx, table in enumerate(tables):
+                            table_type = table.get("table_type", "").lower()
+                            rows = table.get("rows", [])
+                            summary_rows_set = set(table.get("summaryRows", []) or table.get("summary_rows", []))
+                            
+                            logger.debug(
+                                f"  Table {table_idx}: type='{table_type}', rows={len(rows)}, "
+                                f"summary_rows={len(summary_rows_set)}"
+                            )
+                            
+                            # Identify grand total tables:
+                            # 1. Explicitly marked as summary table type
+                            # 2. OR: Very few rows (1-3) where ALL rows are summary rows
+                            # 3. OR: Single-row tables (often grand totals)
+                            is_grand_total_table = (
+                                table_type in ['summary_table', 'total_summary', 'vendor_total', 'grand_total', 'summary'] or
+                                (len(rows) <= 3 and len(rows) > 0 and len(summary_rows_set) == len(rows)) or
+                                (len(rows) == 1)  # Single-row tables are often grand totals
+                            )
+                            
+                            if is_grand_total_table:
+                                logger.info(f"  ✓ Table {table_idx} identified as GRAND TOTAL table")
+                                candidate = _extract_commission_total_from_table(
+                                    table,
+                                    format_learning_service.parse_currency_value
+                                )
+                                if candidate:
+                                    # Boost score for grand total tables
+                                    candidate.score += 10.0  # Make them heavily preferred
+                                    if grand_total_candidate is None or candidate.score > grand_total_candidate.score:
+                                        grand_total_candidate = candidate
+                                        logger.info(
+                                            f"🎯 Found grand total table (table {table_idx}): "
+                                            f"${candidate.amount:.2f} (score: {candidate.score:.2f})"
+                                        )
+                        
+                        # Second pass: If no grand total table, check summary rows in selected_table
+                        if not grand_total_candidate and selected_table:
+                            summary_candidate = _extract_commission_total_from_table(
+                                selected_table,
+                                format_learning_service.parse_currency_value
+                            )
+                        
+                        # Prefer grand total table over summary rows
+                        best_summary_candidate = grand_total_candidate or summary_candidate
+                        
+                        if best_summary_candidate:
+                            # Use higher confidence for grand total tables
+                            confidence = 0.95 if grand_total_candidate else 0.82
+                            source_label = "grand_total_table" if grand_total_candidate else "summary_row_scan"
+                            
+                            should_replace = (
+                                current_total_amount is None or
+                                _should_replace_total(
+                                    current_total_amount,
+                                    total_extraction_method,
+                                    best_summary_candidate.amount,
+                                    source_label
+                                )
+                            )
+                            if should_replace:
+                                if current_total_amount is not None:
+                                    logger.warning(
+                                        f"⚠️ Replacing total_amount {current_total_amount:.2f} "
+                                        f"(method={total_extraction_method}) with {source_label}={best_summary_candidate.amount:.2f}"
+                                    )
+                                else:
+                                    logger.info(f"✅ Total extracted from {source_label}: ${best_summary_candidate.amount:.2f}")
+                                current_total_amount = best_summary_candidate.amount
+                                total_extraction_method = source_label
+                            _record_total_candidate(source_label, best_summary_candidate.amount, confidence, best_summary_candidate.label)
+                        
+                        # STRATEGY 4: Calculate from paid_amount column and use as authoritative fallback
+                        if selected_table:
                             try:
-                                headers = selected_table.get('header', [])
-                                rows = selected_table.get('rows', [])
-                                summary_indices = set(selected_table.get('summaryRows', []) or selected_table.get('summary_rows', []))
-                                
-                                # Find "Paid Amount" or similar column
-                                amount_col_idx = None
-                                for idx, header in enumerate(headers):
-                                    h_lower = str(header).lower()
-                                    if any(kw in h_lower for kw in ['paid amount', 'commission', 'net compensation', 'amount']):
-                                        amount_col_idx = idx
-                                        break
-                                
-                                if amount_col_idx is not None:
-                                    calculated_total = 0.0
-                                    for row_idx, row in enumerate(rows):
-                                        if row_idx in summary_indices:
-                                            continue
-                                        if amount_col_idx < len(row):
-                                            amount = format_learning_service.parse_currency_value(str(row[amount_col_idx]))
-                                            if amount:
-                                                calculated_total += amount
-                                    
-                                    if calculated_total > 0:
-                                        current_total_amount = calculated_total
+                                detail_sum_amount = _calculate_detail_commission_total(
+                                    selected_table,
+                                    format_learning_service.parse_currency_value
+                                )
+                                if detail_sum_amount is not None:
+                                    document_metadata['detail_sum_amount'] = detail_sum_amount
+                                    should_replace = (
+                                        current_total_amount is None or
+                                        _should_replace_total(
+                                            current_total_amount,
+                                            total_extraction_method,
+                                            detail_sum_amount,
+                                            'calculated_sum'
+                                        )
+                                    )
+                                    if should_replace:
+                                        if current_total_amount is not None:
+                                            logger.warning(
+                                                f"⚠️ Replacing total_amount {current_total_amount:.2f} "
+                                                f"(method={total_extraction_method}) with calculated_sum={detail_sum_amount:.2f}"
+                                            )
+                                        else:
+                                            logger.info(f"✅ Total CALCULATED from data rows: ${detail_sum_amount:.2f}")
+                                        current_total_amount = detail_sum_amount
                                         total_extraction_method = 'calculated_sum'
-                                        logger.info(f"✅ Total CALCULATED from data rows: ${current_total_amount:.2f}")
-                                        
+                                    _record_total_candidate('calculated_sum', detail_sum_amount, 0.9, 'detail_rows_sum')
                             except Exception as calc_error:
                                 logger.warning(f"Failed to calculate total from rows: {calc_error}")
+                        
+                        # Flag discrepancies between summary totals and calculated sums
+                        # ✅ NEW BEHAVIOR: Total mismatch does NOT block auto-approval
+                        # Instead, we flag for review and let user fix in UI
+                        has_total_discrepancy = False
+                        if best_summary_candidate and detail_sum_amount is not None:
+                            diff_value = abs(detail_sum_amount - best_summary_candidate.amount)
+                            tolerance_value = max(5.0, best_summary_candidate.amount * 0.05)  # ✅ 5% tolerance
+                            if diff_value > tolerance_value:
+                                diff_percent = (diff_value / max(best_summary_candidate.amount, 1.0)) * 100
+                                if document_metadata is None:
+                                    document_metadata = {}
+                                document_metadata['total_discrepancy'] = {
+                                    'summary_total': round(best_summary_candidate.amount, 2),
+                                    'detail_sum_total': round(detail_sum_amount, 2),
+                                    'difference': round(diff_value, 2),
+                                    'difference_percent': round(diff_percent, 2)
+                                }
+                                logger.warning(
+                                    "⚠️ Total discrepancy detected: summary %.2f vs detail %.2f "
+                                    "(Δ=%.2f, %.2f%%) - will flag for review but ALLOW auto-approval",
+                                    best_summary_candidate.amount,
+                                    detail_sum_amount,
+                                    diff_value,
+                                    diff_percent
+                                )
+                                has_total_discrepancy = True
+                                # ✅ REMOVED: No longer blocks auto-approval
+                                # Old code: can_automate = False
+                                # User can review and fix in remap component
                         
                         # Validate total amount if we have both values
                         total_validation = None
@@ -968,11 +1595,20 @@ async def extract_tables_smart(
                             )
                             logger.info(f"🎯 Format Learning: Total validation result: {total_validation}")
                         
+                        # ✅ NEW: Determine requires_review based on total discrepancy
+                        # Auto-approval proceeds, but statement needs review if totals don't match
+                        requires_review = has_total_discrepancy
+                        if has_total_discrepancy:
+                            logger.info(
+                                "📝 Auto-approval will proceed, but statement flagged for review due to total mismatch"
+                            )
+                        
                         # Add automation eligibility to format learning data
                         format_learning_data.update({
                             "can_automate": can_automate,
                             "automation_reason": automation_reason,
-                            "requires_review": not can_automate,
+                            "requires_review": requires_review,  # ✅ Based on total discrepancy, not can_automate
+                            "has_total_discrepancy": has_total_discrepancy,  # ✅ NEW: Explicit flag
                             "current_total_amount": current_total_amount,
                             "learned_total_amount": learned_total_amount,
                             "total_validation": total_validation,
@@ -989,6 +1625,8 @@ async def extract_tables_smart(
                                 'total_extraction_method': total_extraction_method,
                                 'total_confidence': 0.95 if total_extraction_method in ['document_metadata', 'table_footer'] else 0.7
                             })
+                            if total_candidates:
+                                document_metadata['total_candidates'] = total_candidates
                             
                             logger.info(f"📊 Added total to document_metadata: ${current_total_amount:.2f} (method: {total_extraction_method})")
                     else:
@@ -1118,7 +1756,7 @@ async def extract_tables_smart(
                         original_headers = selected_table.get('header', [])
                         normalized_headers = [h.replace('\n', ' ').strip() for h in original_headers]
                         
-                        logger.info(f"📋 Normalizing headers for AI mapping:")
+                        logger.info("📋 Normalizing headers for AI mapping:")
                         for orig, norm in zip(original_headers, normalized_headers):
                             if orig != norm:
                                 logger.info(f"   '{orig}' → '{norm}'")
@@ -1285,9 +1923,11 @@ async def extract_tables_smart(
                 logger.warning(f"Conversational summary initialization failed (non-critical): {summary_error}")
         
         # ✅ CRITICAL FIX: Transform GPT's summary_rows (snake_case) to summaryRows (camelCase) for frontend
+        # Also remove large metadata fields that frontend doesn't use (reduces response size)
         transformed_tables = []
         for table in extraction_result.get('tables', []):
             transformed_table = dict(table)  # Create a copy
+            
             # Convert summary_rows to summaryRows if present
             if 'summary_rows' in transformed_table:
                 transformed_table['summaryRows'] = transformed_table.pop('summary_rows')
@@ -1295,6 +1935,17 @@ async def extract_tables_smart(
             # Ensure summaryRows exists even if empty
             if 'summaryRows' not in transformed_table:
                 transformed_table['summaryRows'] = []
+            
+            # ✅ OPTIMIZATION: Remove large metadata fields that frontend doesn't need
+            # These are kept in DB raw_data but excluded from API response to reduce size
+            fields_to_remove = ['row_annotations', 'table_blueprint', 'summary_detection']
+            for field in fields_to_remove:
+                transformed_table.pop(field, None)
+            
+            # Remove detailed table_profile from metadata (keep other metadata)
+            if 'metadata' in transformed_table and isinstance(transformed_table['metadata'], dict):
+                transformed_table['metadata'].pop('table_profile', None)
+            
             transformed_tables.append(transformed_table)
         
         # Prepare client response WITH plan type detection (field mapping happens after editing)
@@ -1323,7 +1974,8 @@ async def extract_tables_smart(
             ),
             
             # CRITICAL FIX: Include upload_metadata so frontend has access to environment_id
-            "upload_metadata": upload_metadata,
+            # But exclude raw_data to reduce response size (it's a duplicate of tables)
+            "upload_metadata": {k: v for k, v in upload_metadata.items() if k != 'raw_data'},
             # Also add environment_id at top level for easier access
             "environment_id": str(target_env.id),
             "user_id": str(current_user.id),
@@ -1516,7 +2168,7 @@ async def extract_tables_smart(
                     extracted_invoice_total = total_invoice_sum
                     logger.info(f"✅ TOTAL invoice amount from all tables: ${extracted_invoice_total:,.2f}")
                 else:
-                    logger.warning(f"⚠️ Could not calculate invoice total from tables")
+                    logger.warning("⚠️ Could not calculate invoice total from tables")
                     
             except Exception as e:
                 logger.warning(f"Failed to extract invoice total from tables: {e}")
@@ -1585,7 +2237,7 @@ async def extract_tables_smart(
         
         return client_response
         
-    except HTTPException as he:
+    except HTTPException:
         # CRITICAL CHANGE: No DB record to cleanup anymore
         # Just clean up GCS files and local files
         try:
@@ -1832,12 +2484,6 @@ async def extract_tables_gpt(
         from app.services.enhanced_extraction_service import EnhancedExtractionService
         enhanced_service = EnhancedExtractionService()
         
-        # Create a mock progress tracker for metadata extraction
-        class MockProgressTracker:
-            def __init__(self):
-                self.upload_id = upload_id
-                
-        mock_tracker = MockProgressTracker()
         gpt_metadata = await enhanced_service._extract_metadata_with_gpt(temp_pdf_path)
         
         # Store document metadata for response
@@ -1876,7 +2522,7 @@ async def extract_tables_gpt(
                 detail=f"GPT extraction failed: {extraction_result.get('error', 'Unknown error')}"
             )
         
-        logger.info(f"GPT extraction completed successfully")
+        logger.info("GPT extraction completed successfully")
         
         # Check if extraction was successful
         if not extraction_result.get("success"):
@@ -2074,7 +2720,7 @@ async def extract_tables_gpt(
         response_data = {
             "status": "success",
             "success": True,
-                            "message": f"Successfully extracted tables with GPT-5 Vision using high quality image processing and intelligent table merging",
+                            "message": "Successfully extracted tables with GPT-5 Vision using high quality image processing and intelligent table merging",
             "job_id": str(uuid4()),
             "upload_id": upload_id,
             "extraction_id": upload_id,

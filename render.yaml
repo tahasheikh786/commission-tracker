@@ -11,8 +11,8 @@ services:
     buildCommand: |
       pip install --upgrade pip
       pip install -r server/requirements.txt
-    startCommand: |
-      cd server && uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1 --timeout-keep-alive 1800 --timeout-graceful-shutdown 1800 --access-log --loop asyncio --ws websockets --ws-ping-interval 0 --ws-ping-timeout 0
+    startCommand: >
+      cd server &&\n      gunicorn app.main:app\n      --worker-class uvicorn.workers.UvicornWorker\n      --bind 0.0.0.0:$PORT\n      --workers 1\n      --timeout 900\n      --graceful-timeout 900\n      --keep-alive 65\n      --log-level info
     healthCheckPath: /health
     envVars:
       - key: PYTHON_VERSION
@@ -61,7 +61,9 @@ services:
       - key: WEBSOCKET_TIMEOUT
         value: "1800"
       - key: WEBSOCKET_PING_INTERVAL
-        value: "15"  # ✅ CHANGED: 15 seconds (was 30) - aggressive keepalive for Render
+        value: "5"
+      - key: WEBSOCKET_PROGRESS_INTERVAL
+        value: "15"
       - key: WEBSOCKET_KEEPALIVE
         value: "300"
       - key: MISTRAL_TIMEOUT
@@ -86,3 +88,9 @@ services:
         value: "1200"
       - key: MAX_TIMEOUT
         value: "1800"
+      - key: USE_TWO_PASS_EXTRACTION
+        value: "true"
+      - key: GPT5_TOTAL_PASS_MAX_TOKENS
+        value: "4000"
+      - key: WEBSOCKET_BACKLOG_LIMIT
+        value: "50"

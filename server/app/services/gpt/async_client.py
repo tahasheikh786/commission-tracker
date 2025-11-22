@@ -15,8 +15,10 @@ import asyncio
 import base64
 import json
 import logging
+import os
 from typing import Dict, List, Any, Optional
 from openai import AsyncOpenAI, OpenAIError
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -40,8 +42,22 @@ class AsyncVisionClient:
             api_key: Optional OpenAI API key
             model: Model to use (default: "gpt-5" for vision)
         """
+        timeout_seconds = float(os.getenv("OPENAI_HTTP_TIMEOUT", "600"))
+        connect_timeout = float(os.getenv("OPENAI_HTTP_CONNECT_TIMEOUT", "10"))
+        write_timeout = float(os.getenv("OPENAI_HTTP_WRITE_TIMEOUT", "60"))
+        self._http_timeout = httpx.Timeout(
+            timeout=timeout_seconds,
+            connect=connect_timeout,
+            read=timeout_seconds,
+            write=write_timeout
+        )
+        max_retries = int(os.getenv("OPENAI_HTTP_MAX_RETRIES", "2"))
         try:
-            self.client = AsyncOpenAI(api_key=api_key) if api_key else AsyncOpenAI()
+            self.client = AsyncOpenAI(
+                api_key=api_key,
+                timeout=self._http_timeout,
+                max_retries=max_retries
+            ) if api_key else AsyncOpenAI(timeout=self._http_timeout, max_retries=max_retries)
         except Exception as e:
             logger.warning(f"⚠️ Async OpenAI client initialization failed: {e}")
             self.client = None

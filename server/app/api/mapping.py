@@ -17,7 +17,7 @@ format_learning_service = FormatLearningService()
 logger = logging.getLogger(__name__)
 
 # --- New Pydantic schema for mapping config ---
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 class MappingConfig(BaseModel):
     mapping: Dict[str, str]
@@ -27,6 +27,31 @@ class MappingConfig(BaseModel):
     table_data: List[List[str]] = []  # Add table data for learning
     headers: List[str] = []  # Add headers for learning
     selected_statement_date: Optional[Dict[str, Any]] = None  # Add selected statement date
+
+    @field_validator("headers", mode="before")
+    @classmethod
+    def sanitize_headers(cls, value):
+        """Ensure headers are always strings to prevent validation errors."""
+        if not isinstance(value, list):
+            return value
+        return ["" if header is None else str(header) for header in value]
+
+    @field_validator("table_data", mode="before")
+    @classmethod
+    def sanitize_table_data(cls, value):
+        """Convert None cells to empty strings so Pydantic accepts the payload."""
+        if not isinstance(value, list):
+            return value
+        sanitized_rows: List[List[str]] = []
+        for row in value:
+            if isinstance(row, list):
+                sanitized_rows.append([
+                    "" if cell is None else str(cell)
+                    for cell in row
+                ])
+            else:
+                sanitized_rows.append(row)
+        return sanitized_rows
 
 @router.get("/companies/{company_id}/mapping/", response_model=MappingConfig)
 async def get_company_mapping(

@@ -1,180 +1,66 @@
-(base) kayttaja@Kayttajas-MacBook-Pro commision-tracker % cd server
-(base) kayttaja@Kayttajas-MacBook-Pro server % source venv/bin/activ
-ate
-(venv) (base) kayttaja@Kayttajas-MacBook-Pro server % uvicorn app.ma
-in:app --reload
-INFO:     Will watch for changes in these directories: ['/Users/kayttaja/Desktop/commision-tracker/server']
-INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
-INFO:     Started reloader process [7002] using StatReload
-✅ Using Render PostgreSQL database
-✅ Using Render PostgreSQL database
-INFO:app.services.company_name_service:spaCy not available, using pattern matching only
-INFO:app.services.gpt4o_vision_service:GPT-5 Vision service initialized successfully
-INFO:app.services.gpt.retry_handler:🔧 Rate limiter initialized: 45 RPM, 360,000 TPM
-INFO:app.services.gpt.circuit_breaker:🔌 Circuit breaker initialized: threshold=5, timeout=30s
-INFO:app.services.gpt.vision_extractor:✅ GPT-5 PDF Extractor initialized (Responses API mode with direct PDF upload)
-INFO:app.services.gpt.batch_processor:✅ Batch Processor initialized (Direct PDF mode)
-INFO:app.services.gpt.enhanced_service:✅ Initialized with direct PDF upload support (November 2025)
-INFO:app.services.gpt.enhanced_service:✅ Enhanced GPT-5 Vision Service initialized (Direct PDF mode)
-INFO:app.services.ai_field_mapping_service:AI Field Mapping Service initialized successfully
-INFO:app.services.ai_plan_type_detection_service:AI Plan Type Detection Service initialized successfully
-INFO:app.services.gcs_utils:✅ GCS initialized - Project: pdf-tables-extractor-465009, Bucket: pdf_extraction_files_saver
-🌐 CORS Configuration - Allowed Origins: ['http://localhost:3000', 'http://127.0.0.1:3000', 'https://commission-tracker-1.onrender.com', 'https://commission-tracker-ochre.vercel.app']
-INFO:     Started server process [7014]
-INFO:     Waiting for application startup.
-INFO:app.main:🚀 Application starting up...
-INFO:app.main:✅ Orphan cleanup scheduler started (runs every 3 minutes)
-INFO:app.services.process_monitor:Process monitor initialized: max_time=1800s, heartbeat_timeout=300s
-INFO:app.services.process_monitor:Process monitoring started
-INFO:app.main:Process monitoring started for large file processing
-INFO:app.main:Application startup complete with enhanced monitoring and signal handlers
-INFO:app.services.orphan_cleanup_service:🚀 Starting orphan cleanup scheduler (runs every 3 minutes)
-INFO:app.services.orphan_cleanup_service:🧹 Starting orphan cleanup job...
-INFO:app.services.process_monitor:Starting process monitoring loop
-INFO:     Application startup complete.
-INFO:app.main:Cleaned up 500 expired/inactive sessions
-INFO:app.services.orphan_cleanup_service:✅ Orphan cleanup completed: no orphans found
-INFO:app.services.orphan_cleanup_service:🧹 Starting orphan cleanup job...
-INFO:app.services.orphan_cleanup_service:✅ Orphan cleanup completed: no orphans found
-🔍 Auth Status - All cookies: ['session_token', 'refresh_token']
-🔍 Auth Status - Access token present: False
-🔍 Auth Status - Request host: localhost:8000
-🔍 Auth Status - Request origin: http://localhost:3000
-🔍 Auth Status - Cookie session_token: 3c12155c-6fff-4ae7-b...
-🔍 Auth Status - Cookie refresh_token: eyJhbGciOiJIUzI1NiIs...
-INFO:     127.0.0.1:50188 - "GET /api/auth/otp/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50191 - "OPTIONS /environments HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50188 - "GET /environments HTTP/1.1" 401 Unauthorized
-INFO:     127.0.0.1:50196 - "OPTIONS /api/auth/otp/request HTTP/1.1" 200 OK
-⚠️ Redis connection failed: Error 61 connecting to localhost:6379. Connection refused.
-⚠️ OTP service will use database-only mode
-✅ OTP email sent to muhammad@pinecrestconsulting.com
-INFO:app.services.audit_logging_service:Audit: logout by user a0a721cb-b9fa-46a8-afcc-2892cf1a528c on user_authentication
-INFO:     127.0.0.1:50198 - "POST /api/auth/otp/request HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50460 - "OPTIONS /api/auth/otp/verify HTTP/1.1" 200 OK
-🍪 Setting cookies for user muhammad@pinecrestconsulting.com
-🍪 Request origin: http://localhost:3000
-🍪 Request host: localhost:8000
-🍪 Request URL: http://localhost:8000/api/auth/otp/verify
-🍪 Request scheme: http
-🍪 Response object type: <class 'starlette.responses.Response'>
-🍪 Response has set_cookie method: True
-🍪 Response headers before: {}
-🍪 Response status code: None
-🍪 Environment variables:
-🍪   ENVIRONMENT: not_set
-🍪   NODE_ENV: not_set
-🍪   RENDER: not_set
-🍪   PORT: not_set
-🍪 HTTPS Detection:
-🍪   request.url.scheme: http
-🍪   x-forwarded-proto: not_set
-🍪   x-forwarded-ssl: not_set
-🍪   x-forwarded-scheme: not_set
-🍪   Final is_https: False
-🍪 Environment check: is_production=False, is_render=False, is_https=False
-🍪 Cross-origin check: origin=http://localhost:3000, host=localhost:8000, origin_domain=localhost:3000, is_cross_origin=True
-🍪 Using samesite=lax
-⚠️  Local development cross-origin detected - using samesite=lax (samesite=none requires HTTPS)
-🍪 Setting cookie: access_token with samesite=lax, secure=False
-🍪 Using local development cookie settings for access_token
-🍪 Cookie access_token set successfully
-🍪 Set-Cookie headers for access_token: ['access_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmNmNmMTc2NC01YmZjLTQzNTItYWJkOS04MWI3MmI3Y2YxOTEiLCJlbWFpbCI6Im11aGFtbWFkQHBpbmVjcmVzdGNvbnN1bHRpbmcuY29tIiwicm9sZSI6ImFkbWluIiwiY29tcGFueV9pZCI6ImQ4ODNhODY1LWE1NGYtNDFkNi05NjhlLWY5NGMzY2IzZjU4OSIsImFjY2Vzc19sZXZlbCI6ImJhc2ljIiwiZXhwIjoxNzYzNzQzMTY4LCJ0eXBlIjoiYWNjZXNzIiwiaWF0IjoxNzYzNzM5NTY4LCJqdGkiOiIxZTEzMzcwMTc3NmNlZjZlZDY3NGU0YzczMzU3OWI1MyJ9.-XmYUDoKRPsa6rQa4A6_nHoo25TY2yBPcHDDP0L3VvA; HttpOnly; Max-Age=3600; Path=/; SameSite=lax']
-🍪 Environment variables:
-🍪   ENVIRONMENT: not_set
-🍪   NODE_ENV: not_set
-🍪   RENDER: not_set
-🍪   PORT: not_set
-🍪 HTTPS Detection:
-🍪   request.url.scheme: http
-🍪   x-forwarded-proto: not_set
-🍪   x-forwarded-ssl: not_set
-🍪   x-forwarded-scheme: not_set
-🍪   Final is_https: False
-🍪 Environment check: is_production=False, is_render=False, is_https=False
-🍪 Cross-origin check: origin=http://localhost:3000, host=localhost:8000, origin_domain=localhost:3000, is_cross_origin=True
-🍪 Using samesite=lax
-⚠️  Local development cross-origin detected - using samesite=lax (samesite=none requires HTTPS)
-🍪 Setting cookie: refresh_token with samesite=lax, secure=False
-🍪 Using local development cookie settings for refresh_token
-🍪 Cookie refresh_token set successfully
-🍪 Set-Cookie headers for refresh_token: ['access_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmNmNmMTc2NC01YmZjLTQzNTItYWJkOS04MWI3MmI3Y2YxOTEiLCJlbWFpbCI6Im11aGFtbWFkQHBpbmVjcmVzdGNvbnN1bHRpbmcuY29tIiwicm9sZSI6ImFkbWluIiwiY29tcGFueV9pZCI6ImQ4ODNhODY1LWE1NGYtNDFkNi05NjhlLWY5NGMzY2IzZjU4OSIsImFjY2Vzc19sZXZlbCI6ImJhc2ljIiwiZXhwIjoxNzYzNzQzMTY4LCJ0eXBlIjoiYWNjZXNzIiwiaWF0IjoxNzYzNzM5NTY4LCJqdGkiOiIxZTEzMzcwMTc3NmNlZjZlZDY3NGU0YzczMzU3OWI1MyJ9.-XmYUDoKRPsa6rQa4A6_nHoo25TY2yBPcHDDP0L3VvA; HttpOnly; Max-Age=3600; Path=/; SameSite=lax']
-🍪 Environment variables:
-🍪   ENVIRONMENT: not_set
-🍪   NODE_ENV: not_set
-🍪   RENDER: not_set
-🍪   PORT: not_set
-🍪 HTTPS Detection:
-🍪   request.url.scheme: http
-🍪   x-forwarded-proto: not_set
-🍪   x-forwarded-ssl: not_set
-🍪   x-forwarded-scheme: not_set
-🍪   Final is_https: False
-🍪 Environment check: is_production=False, is_render=False, is_https=False
-🍪 Cross-origin check: origin=http://localhost:3000, host=localhost:8000, origin_domain=localhost:3000, is_cross_origin=True
-🍪 Using samesite=lax
-⚠️  Local development cross-origin detected - using samesite=lax (samesite=none requires HTTPS)
-🍪 Setting cookie: session_token with samesite=lax, secure=False
-🍪 Using local development cookie settings for session_token
-🍪 Cookie session_token set successfully
-🍪 Set-Cookie headers for session_token: ['access_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmNmNmMTc2NC01YmZjLTQzNTItYWJkOS04MWI3MmI3Y2YxOTEiLCJlbWFpbCI6Im11aGFtbWFkQHBpbmVjcmVzdGNvbnN1bHRpbmcuY29tIiwicm9sZSI6ImFkbWluIiwiY29tcGFueV9pZCI6ImQ4ODNhODY1LWE1NGYtNDFkNi05NjhlLWY5NGMzY2IzZjU4OSIsImFjY2Vzc19sZXZlbCI6ImJhc2ljIiwiZXhwIjoxNzYzNzQzMTY4LCJ0eXBlIjoiYWNjZXNzIiwiaWF0IjoxNzYzNzM5NTY4LCJqdGkiOiIxZTEzMzcwMTc3NmNlZjZlZDY3NGU0YzczMzU3OWI1MyJ9.-XmYUDoKRPsa6rQa4A6_nHoo25TY2yBPcHDDP0L3VvA; HttpOnly; Max-Age=3600; Path=/; SameSite=lax']
-🍪 Cookies set successfully
-🍪 Response headers after setting cookies: {'set-cookie': 'access_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmNmNmMTc2NC01YmZjLTQzNTItYWJkOS04MWI3MmI3Y2YxOTEiLCJlbWFpbCI6Im11aGFtbWFkQHBpbmVjcmVzdGNvbnN1bHRpbmcuY29tIiwicm9sZSI6ImFkbWluIiwiY29tcGFueV9pZCI6ImQ4ODNhODY1LWE1NGYtNDFkNi05NjhlLWY5NGMzY2IzZjU4OSIsImFjY2Vzc19sZXZlbCI6ImJhc2ljIiwiZXhwIjoxNzYzNzQzMTY4LCJ0eXBlIjoiYWNjZXNzIiwiaWF0IjoxNzYzNzM5NTY4LCJqdGkiOiIxZTEzMzcwMTc3NmNlZjZlZDY3NGU0YzczMzU3OWI1MyJ9.-XmYUDoKRPsa6rQa4A6_nHoo25TY2yBPcHDDP0L3VvA; HttpOnly; Max-Age=3600; Path=/; SameSite=lax'}
-INFO:app.services.audit_logging_service:Audit: logout by user f6cf1764-5bfc-4352-abd9-81b72b7cf191 on user_authentication
-INFO:     127.0.0.1:50462 - "POST /api/auth/otp/verify HTTP/1.1" 200 OK
-🔍 Debug - All cookies received: ['__next_hmr_refresh_hash__', 'access_token', 'refresh_token', 'session_token']
-🔍 Debug - Access token present: True
-INFO:     127.0.0.1:50497 - "GET /api/auth/permissions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50462 - "GET /environments HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50497 - "GET /api/earned-commission/carriers-detailed?view_mode=my_data&year=2025 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50504 - "GET /api/dashboard/earned-commissions?view_mode=my_data&year=2025 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50506 - "GET /api/earned-commission/carriers HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50502 - "GET /api/dashboard/stats?view_mode=my_data HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50462 - "GET /api/earned-commission/companies-aggregated?view_mode=my_data&year=2025 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50500 - "GET /api/earned-commission/stats?view_mode=my_data&year=2025 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50497 - "GET /api/earned-commission/stats?view_mode=my_data&year=2025&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50504 - "GET /api/dashboard/stats?view_mode=my_data&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50506 - "GET /api/dashboard/earned-commissions?view_mode=my_data&year=2025&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50462 - "GET /api/earned-commission/companies-aggregated?view_mode=my_data&year=2025&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50502 - "GET /api/earned-commission/carriers-detailed?view_mode=my_data&year=2025&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50500 - "GET /api/earned-commission/carriers-detailed?view_mode=my_data&year=2025 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50497 - "GET /api/dashboard/earned-commissions?view_mode=my_data&year=2025 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50504 - "GET /api/earned-commission/carriers HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50462 - "GET /api/earned-commission/companies-aggregated?view_mode=my_data&year=2025 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50506 - "GET /api/dashboard/stats?view_mode=my_data HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50502 - "GET /api/earned-commission/stats?view_mode=my_data&year=2025 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50770 - "GET /api/database-fields/?active_only=true HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50770 - "GET /api/database-fields/?active_only=true HTTP/1.1" 200 OK
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763739631732_kd3owj46q. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763739631732_kd3owj46q, session_id: session_1763739631754_7w2c1ychd
-INFO:     127.0.0.1:50796 - "WebSocket /api/ws/progress/upload_1763739631732_kd3owj46q?session_id=session_1763739631754_7w2c1ychd" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763739631732_kd3owj46q, session_id=session_1763739631754_7w2c1ychd, timeout=1800s
-INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763739631732_kd3owj46q, session_id: session_1763739631754_7w2c1ychd
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763739631732_kd3owj46q
-INFO:     127.0.0.1:50802 - "OPTIONS /api/extract-tables-smart/ HTTP/1.1" 200 OK
-INFO:app.services.orphan_cleanup_service:🧹 Starting orphan cleanup job...
-INFO:app.api.new_extract:📁 File: 08.06.2025 Allied Innovative Payment 2.pdf, Size: 227321 bytes, Hash: 98272fc00893adae..., User: f6cf1764-5bfc-4352-abd9-81b72b7cf191
-INFO:app.api.new_extract:🔍 Checking for duplicates BEFORE proceeding with upload...
-INFO:app.api.new_extract:✅ No duplicate found - proceeding with upload for file: 08.06.2025 Allied Innovative Payment 2.pdf
-INFO:app.api.new_extract:🚀 Starting extraction: 08.06.2025 Allied Innovative Payment 2.pdf (ID: upload_1763739631732_kd3owj46q)
-INFO:app.services.gcs_utils:✅ File uploaded to GCS: statements/4953de18-1aa0-4b75-9cf8-f6432e90cc77/08.06.2025 Allied Innovative Payment 2.pdf
-INFO:app.api.new_extract:✅ Uploaded to GCS: statements/4953de18-1aa0-4b75-9cf8-f6432e90cc77/08.06.2025 Allied Innovative Payment 2.pdf
-INFO:app.services.gcs_utils:🔐 Generating signed URL for: statements/4953de18-1aa0-4b75-9cf8-f6432e90cc77/08.06.2025 Allied Innovative Payment 2.pdf
+INFO:     127.0.0.1:63926 - "GET /api/pdf-preview?gcs_key=statements%2F66cf10c5-443b-49f4-adee-7a35897bf08e%2F2025.01%20Breckpoint%20Statement.pdf HTTP/1.1" 307 Temporary Redirect
+INFO:app.api.statements:🔍 PDF preview requested for: statements/66cf10c5-443b-49f4-adee-7a35897bf08e/2025.01 Breckpoint Statement.pdf
+INFO:app.api.statements:🔍 Checking if file exists in GCS: statements/66cf10c5-443b-49f4-adee-7a35897bf08e/2025.01 Breckpoint Statement.pdf
+INFO:app.api.statements:✅ File exists, generating signed URL: statements/66cf10c5-443b-49f4-adee-7a35897bf08e/2025.01 Breckpoint Statement.pdf
+INFO:app.services.gcs_utils:🔐 Generating signed URL for: statements/66cf10c5-443b-49f4-adee-7a35897bf08e/2025.01 Breckpoint Statement.pdf
 INFO:app.services.gcs_utils:📝 Generating signed URL with:
 INFO:app.services.gcs_utils:   - Content-Type: application/pdf
 INFO:app.services.gcs_utils:   - Content-Disposition: inline
 INFO:app.services.gcs_utils:   - Expiration: 1 hour(s)
-INFO:app.services.gcs_utils:✅ Generated signed URL for GCS file with inline headers: statements/4953de18-1aa0-4b75-9cf8-f6432e90cc77/08.06.2025 Allied Innovative Payment 2.pdf
-INFO:app.services.gcs_utils:   URL expires at: 2025-11-21 16:40:37.998375
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763739631732_kd3owj46q: STEP_STARTED
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763739631732_kd3owj46q
+INFO:app.services.gcs_utils:✅ Generated signed URL for GCS file with inline headers: statements/66cf10c5-443b-49f4-adee-7a35897bf08e/2025.01 Breckpoint Statement.pdf
+INFO:app.services.gcs_utils:   URL expires at: 2025-11-22 01:29:42.082879
+INFO:app.api.statements:✅ Signed URL generated successfully for: statements/66cf10c5-443b-49f4-adee-7a35897bf08e/2025.01 Breckpoint Statement.pdf
+INFO:     127.0.0.1:63926 - "GET /api/pdf-preview/?gcs_key=statements%2F66cf10c5-443b-49f4-adee-7a35897bf08e%2F2025.01%20Breckpoint%20Statement.pdf HTTP/1.1" 200 OK
+INFO:app.api.statements:🔍 PDF preview requested for: statements/66cf10c5-443b-49f4-adee-7a35897bf08e/2025.01 Breckpoint Statement.pdf
+INFO:app.api.statements:🔍 Checking if file exists in GCS: statements/66cf10c5-443b-49f4-adee-7a35897bf08e/2025.01 Breckpoint Statement.pdf
+INFO:app.api.statements:✅ File exists, generating signed URL: statements/66cf10c5-443b-49f4-adee-7a35897bf08e/2025.01 Breckpoint Statement.pdf
+INFO:app.services.gcs_utils:🔐 Generating signed URL for: statements/66cf10c5-443b-49f4-adee-7a35897bf08e/2025.01 Breckpoint Statement.pdf
+INFO:app.services.gcs_utils:📝 Generating signed URL with:
+INFO:app.services.gcs_utils:   - Content-Type: application/pdf
+INFO:app.services.gcs_utils:   - Content-Disposition: inline
+INFO:app.services.gcs_utils:   - Expiration: 1 hour(s)
+INFO:app.services.gcs_utils:✅ Generated signed URL for GCS file with inline headers: statements/66cf10c5-443b-49f4-adee-7a35897bf08e/2025.01 Breckpoint Statement.pdf
+INFO:app.services.gcs_utils:   URL expires at: 2025-11-22 01:29:42.357521
+INFO:app.api.statements:✅ Signed URL generated successfully for: statements/66cf10c5-443b-49f4-adee-7a35897bf08e/2025.01 Breckpoint Statement.pdf
+INFO:app.api.pdf_proxy:🔄 Proxying PDF from: https://storage.googleapis.com/pdf_extraction_files_saver/statements/66cf10c5-443b-49f4-adee-7a35897...
+INFO:     127.0.0.1:63926 - "GET /api/pdf-preview/?gcs_key=statements%2F66cf10c5-443b-49f4-adee-7a35897bf08e%2F2025.01%20Breckpoint%20Statement.pdf HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: GET https://storage.googleapis.com/pdf_extraction_files_saver/statements/66cf10c5-443b-49f4-adee-7a35897bf08e/2025.01%20Breckpoint%20Statement.pdf?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=docsai-table-extractor%40pdf-tables-extractor-465009.iam.gserviceaccount.com%2F20251122%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20251122T002942Z&X-Goog-Expires=3599&X-Goog-SignedHeaders=host&response-content-disposition=inline&response-content-type=application%2Fpdf&X-Goog-Signature=3b1d9acda7fa3f021e2eabb70389bea417aeecd6db43b53eff35d0f8dbcf7474ad1836f6b14ebff8c876be6bfeaf8e16efbc013a8e6402e3785399d16f20890610db5b0717c507ef14836a46510e695f55e0f81f543904aac0148a019d6f81f0bb3216a0ef9f0584a974d2551799ed2b02b2d1eee648017a8cbc88679056a543d965776265a3427957023eac07dc1ed629aed95754015700e86fa57bc43dfa45efa070138f7f1b740f8ecc2f6a305138238f0055eb121e14f77429985a9f30319a8a32e91379b8521747821d2c2327dfcd2b3d51dc8442bf620f90b35927700875736b4436022637d7b678b5eb99ad2f464b4b73cdd1286f4e605e909f9a757a "HTTP/1.1 200 OK"
+INFO:     127.0.0.1:63961 - "GET /api/pdf-proxy?url=https%3A%2F%2Fstorage.googleapis.com%2Fpdf_extraction_files_saver%2Fstatements%2F66cf10c5-443b-49f4-adee-7a35897bf08e%2F2025.01%2520Breckpoint%2520Statement.pdf%3FX-Goog-Algorithm%3DGOOG4-RSA-SHA256%26X-Goog-Credential%3Ddocsai-table-extractor%2540pdf-tables-extractor-465009.iam.gserviceaccount.com%252F20251122%252Fauto%252Fstorage%252Fgoog4_request%26X-Goog-Date%3D20251122T002942Z%26X-Goog-Expires%3D3599%26X-Goog-SignedHeaders%3Dhost%26response-content-disposition%3Dinline%26response-content-type%3Dapplication%252Fpdf%26X-Goog-Signature%3D3b1d9acda7fa3f021e2eabb70389bea417aeecd6db43b53eff35d0f8dbcf7474ad1836f6b14ebff8c876be6bfeaf8e16efbc013a8e6402e3785399d16f20890610db5b0717c507ef14836a46510e695f55e0f81f543904aac0148a019d6f81f0bb3216a0ef9f0584a974d2551799ed2b02b2d1eee648017a8cbc88679056a543d965776265a3427957023eac07dc1ed629aed95754015700e86fa57bc43dfa45efa070138f7f1b740f8ecc2f6a305138238f0055eb121e14f77429985a9f30319a8a32e91379b8521747821d2c2327dfcd2b3d51dc8442bf620f90b35927700875736b4436022637d7b678b5eb99ad2f464b4b73cdd1286f4e605e909f9a757a HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63925 - "GET /api/database-fields/?active_only=true HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63925 - "GET /api/database-fields/?active_only=true HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64001 - "GET /api/companies/user-specific/8340174b-f6ed-42eb-976d-4868bb06c844/statements HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64002 - "GET /api/earned-commission/carrier/user-specific/8340174b-f6ed-42eb-976d-4868bb06c844/stats HTTP/1.1" 200 OK
+INFO:app.services.orphan_cleanup_service:🧹 Starting orphan cleanup job...
+INFO:     127.0.0.1:64166 - "GET /api/database-fields/?active_only=true HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64166 - "GET /api/database-fields/?active_only=true HTTP/1.1" 200 OK
 INFO:app.services.orphan_cleanup_service:✅ Orphan cleanup completed: no orphans found
-INFO:app.services.websocket_service:Step started: Uploading Document (Step 1) for upload_id upload_1763739631732_kd3owj46q
+WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763771444886_thbu0hbs6. This is allowed for progress tracking, but consider implementing token passing for production.
+INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763771444886_thbu0hbs6, session_id: session_1763771444900_5b36p7gvn
+INFO:     127.0.0.1:64234 - "WebSocket /api/ws/progress/upload_1763771444886_thbu0hbs6?session_id=session_1763771444900_5b36p7gvn" [accepted]
+INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763771444886_thbu0hbs6, session_id=session_1763771444900_5b36p7gvn, timeout=1800s
+INFO:     connection open
+INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763771444886_thbu0hbs6, session_id: session_1763771444900_5b36p7gvn
+INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763771444886_thbu0hbs6
+INFO:app.api.new_extract:📁 File: 2025.06.pdf, Size: 74848 bytes, Hash: ada8fed3f7804b1c..., User: f6cf1764-5bfc-4352-abd9-81b72b7cf191
+INFO:app.api.new_extract:🔍 Checking for duplicates BEFORE proceeding with upload...
+INFO:app.api.new_extract:✅ No duplicate found - proceeding with upload for file: 2025.06.pdf
+INFO:app.api.new_extract:🚀 Starting extraction: 2025.06.pdf (ID: upload_1763771444886_thbu0hbs6)
+INFO:app.services.gcs_utils:✅ File uploaded to GCS: statements/5cd02a5f-cbc8-48a2-bd5a-ba3fe223dc68/2025.06.pdf
+INFO:app.api.new_extract:✅ Uploaded to GCS: statements/5cd02a5f-cbc8-48a2-bd5a-ba3fe223dc68/2025.06.pdf
+INFO:app.services.gcs_utils:🔐 Generating signed URL for: statements/5cd02a5f-cbc8-48a2-bd5a-ba3fe223dc68/2025.06.pdf
+INFO:app.services.gcs_utils:📝 Generating signed URL with:
+INFO:app.services.gcs_utils:   - Content-Type: application/pdf
+INFO:app.services.gcs_utils:   - Content-Disposition: inline
+INFO:app.services.gcs_utils:   - Expiration: 1 hour(s)
+INFO:app.services.gcs_utils:✅ Generated signed URL for GCS file with inline headers: statements/5cd02a5f-cbc8-48a2-bd5a-ba3fe223dc68/2025.06.pdf
+INFO:app.services.gcs_utils:   URL expires at: 2025-11-22 01:30:50.787254
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763771444886_thbu0hbs6: STEP_STARTED
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763771444886_thbu0hbs6
+INFO:app.services.websocket_service:Step started: Uploading Document (Step 1) for upload_id upload_1763771444886_thbu0hbs6
 INFO:app.db.crud.environment:✅ Found existing default environment 9f4a7a57-5715-4b1e-98a9-b9901726a485 for user f6cf1764-5bfc-4352-abd9-81b72b7cf191 in company d883a865-a54f-41d6-968e-f94c3cb3f589
 INFO:app.api.new_extract:✅ Using user's default environment 9f4a7a57-5715-4b1e-98a9-b9901726a485 for upload consistency
-INFO:app.api.new_extract:📝 Upload metadata prepared (NOT saved to DB): 4953de18-1aa0-4b75-9cf8-f6432e90cc77
-INFO:app.services.audit_logging_service:Audit: data_view by user f6cf1764-5bfc-4352-abd9-81b72b7cf191 on extraction_process (ID: 4953de18-1aa0-4b75-9cf8-f6432e90cc77)
+INFO:app.api.new_extract:📝 Upload metadata prepared (NOT saved to DB): 5cd02a5f-cbc8-48a2-bd5a-ba3fe223dc68
+INFO:app.services.audit_logging_service:Audit: data_view by user f6cf1764-5bfc-4352-abd9-81b72b7cf191 on extraction_process (ID: 5cd02a5f-cbc8-48a2-bd5a-ba3fe223dc68)
 INFO:app.services.conversational_summary_service:✅ ConversationalSummaryService initialized with GPT-4o
 INFO:app.services.enhanced_extraction_service:================================================================================
 INFO:app.services.enhanced_extraction_service:✅ Enhanced Extraction Service initialized (OPTIMIZED)
@@ -190,75 +76,326 @@ INFO:app.services.enhanced_extraction_service:==================================
 INFO:app.services.enhanced_extraction_service:⭐⭐⭐ ROUTING TO GPT-5 VISION EXTRACTION ⭐⭐⭐
 INFO:app.services.enhanced_extraction_service:   Extraction Method: smart
 INFO:app.services.enhanced_extraction_service:   Features: Structured outputs, token optimization, intelligent page selection
-INFO:app.services.enhanced_extraction_service:   File: pdfs/08.06.2025 Allied Innovative Payment 2.pdf
+INFO:app.services.enhanced_extraction_service:   File: pdfs/2025.06.pdf
 INFO:app.services.enhanced_extraction_service:   NOTE: Function name '_extract_with_claude_progress' is legacy - it USES GPT-5
 INFO:app.services.enhanced_extraction_service:================================================================================
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763739631732_kd3owj46q: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763739631732_kd3owj46q
-INFO:app.services.websocket_service:Started stage document_processing for upload upload_1763739631732_kd3owj46q
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763739631732_kd3owj46q: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763739631732_kd3owj46q
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763739631732_kd3owj46q: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763739631732_kd3owj46q
-INFO:app.services.websocket_service:Completed stage document_processing for upload upload_1763739631732_kd3owj46q
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763771444886_thbu0hbs6: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763771444886_thbu0hbs6
+INFO:app.services.websocket_service:Started stage document_processing for upload upload_1763771444886_thbu0hbs6
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763771444886_thbu0hbs6: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763771444886_thbu0hbs6
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763771444886_thbu0hbs6: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763771444886_thbu0hbs6
+INFO:app.services.websocket_service:Completed stage document_processing for upload upload_1763771444886_thbu0hbs6
 INFO:app.services.enhanced_extraction_service:ℹ️ Carrier from database 'Pinecrestconsulting' has no specific prompt. Continuing detection.
 INFO:app.services.enhanced_extraction_service:No carrier match detected inside provided text snippet.
-INFO:app.services.enhanced_extraction_service:No carrier match detected inside provided text snippet.
-INFO:app.services.enhanced_extraction_service:✓ Using carrier context for GPT prompts: Pinecrestconsulting (options: none)
+INFO:app.services.enhanced_extraction_service:🔎 Detected carrier 'Redirect Health' from contextual text match.
+INFO:app.services.enhanced_extraction_service:✓ Carrier detected from PDF text: Redirect Health
+INFO:app.services.enhanced_extraction_service:✓ Using carrier context for GPT prompts: Redirect Health (options: {'merge_similar_tables': True, 'summary_keywords': ['total', 'grand total', 'subtotal', 'sum', 'broker total', 'group invoices total', 'commission summary'], 'summary_row_templates': ['Group Invoices for Broker Commissions', 'Group ID / Group Name rollups', "Lines that start with 'Total' or end with 'Totals'"], 'expected_rollups': ['Group Total', 'Group Invoices Total', 'Commission Amount Total', 'Allowance Type Total', 'Grand Total'], 'numeric_tolerance_bps': 65, 'row_role_examples': [{'label': 'GroupSummary', 'signature': "Identifier columns blank or show 'Group Total' but dollar columns populated with the sum of above rows."}, {'label': 'AllowanceSummary', 'signature': 'Rows where only the Allowance Type and numeric columns are populated and the numeric values equal the prior block.'}, {'label': 'CarrierSummary', 'signature': 'Rows near the end of a table that restate Invoice Amount, Commissionable Amount, and Commission Amount.'}], 'domain_notes': 'Redirect Health statements bundle 1-2 page tables where writing agent subtotals appear above grand totals. Summary rows frequently blank out the Group ID column but repeat invoice, commissionable, and commission totals.'})
 INFO:app.services.enhanced_extraction_service:📡 Emitting extraction step...
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763739631732_kd3owj46q: STEP_STARTED
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763739631732_kd3owj46q
-INFO:app.services.websocket_service:Step started: Analyzing Document (Step 2) for upload_id upload_1763739631732_kd3owj46q
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763771444886_thbu0hbs6: STEP_STARTED
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763771444886_thbu0hbs6
+INFO:app.services.websocket_service:Step started: Analyzing Document (Step 2) for upload_id upload_1763771444886_thbu0hbs6
 INFO:app.services.enhanced_extraction_service:📡 Emitting table_extraction step...
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763739631732_kd3owj46q: STEP_STARTED
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763739631732_kd3owj46q
-INFO:app.services.websocket_service:Step started: Reading Commission Data (Step 3) for upload_id upload_1763739631732_kd3owj46q
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763739631732_kd3owj46q: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763739631732_kd3owj46q
-INFO:app.services.websocket_service:Started stage table_detection for upload upload_1763739631732_kd3owj46q
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763739631732_kd3owj46q: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763739631732_kd3owj46q
-INFO:app.services.enhanced_extraction_service:⭐ Starting GPT-5 Vision extraction for pdfs/08.06.2025 Allied Innovative Payment 2.pdf (enhanced=True)
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763771444886_thbu0hbs6: STEP_STARTED
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763771444886_thbu0hbs6
+INFO:app.services.websocket_service:Step started: Reading Commission Data (Step 3) for upload_id upload_1763771444886_thbu0hbs6
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763771444886_thbu0hbs6: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763771444886_thbu0hbs6
+INFO:app.services.websocket_service:Started stage table_detection for upload upload_1763771444886_thbu0hbs6
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763771444886_thbu0hbs6: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763771444886_thbu0hbs6
+INFO:app.services.enhanced_extraction_service:⭐ Starting GPT-5 Vision extraction for pdfs/2025.06.pdf (enhanced=True)
 INFO:app.services.enhanced_extraction_service:   Using structured outputs for 99.9% reliability
 INFO:app.services.enhanced_extraction_service:   Token optimization: 60-80% savings via intelligent page selection
 INFO:app.services.enhanced_extraction_service:================================================================================
 INFO:app.services.enhanced_extraction_service:🚀 CALLING GPT-5 VISION SERVICE FOR EXTRACTION
-INFO:app.services.enhanced_extraction_service:   File: pdfs/08.06.2025 Allied Innovative Payment 2.pdf
-INFO:app.services.enhanced_extraction_service:   Carrier: Pinecrestconsulting
+INFO:app.services.enhanced_extraction_service:   File: pdfs/2025.06.pdf
+INFO:app.services.enhanced_extraction_service:   Carrier: Redirect Health
 INFO:app.services.enhanced_extraction_service:   Enhanced Mode: True
 INFO:app.services.enhanced_extraction_service:   Max Pages: 100 (intelligent page selection)
 INFO:app.services.enhanced_extraction_service:================================================================================
-INFO:app.services.gpt.enhanced_service:🚀 Starting enhanced extraction for Pinecrestconsulting | upload_1763739639
-INFO:app.services.gpt.vision_extractor:📄 Processing PDF with direct upload method: pdfs/08.06.2025 Allied Innovative Payment 2.pdf
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763739631732_kd3owj46q: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763739631732_kd3owj46q
-INFO:app.services.gpt.vision_extractor:📏 Document has 7 pages (> 6 single-call limit). Using chunked extraction.
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763739631732_kd3owj46q: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763739631732_kd3owj46q
-INFO:app.services.gpt.vision_extractor:📤 Uploading PDF: /var/folders/2g/bqpglbdx7xd0zlkzpbb60nqc0000gn/T/tmp0teowv80.pdf
+INFO:app.services.gpt.enhanced_service:🚀 Starting enhanced extraction for Redirect Health | upload_1763771452
+INFO:app.services.gpt.vision_extractor:📄 Processing PDF with direct upload method: pdfs/2025.06.pdf
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763771444886_thbu0hbs6: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763771444886_thbu0hbs6
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763771444886_thbu0hbs6: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763771444886_thbu0hbs6
+INFO:app.services.gpt.vision_extractor:📤 Uploading PDF: pdfs/2025.06.pdf
 INFO:httpx:HTTP Request: POST https://api.openai.com/v1/files "HTTP/1.1 200 OK"
-INFO:app.services.gpt.vision_extractor:✅ PDF uploaded: file-LyPAscMU6fyRKvbM6XZuhE
-INFO:app.services.gpt.dynamic_prompts:🔍 GPT: Looking up carrier prompt: 'Pinecrestconsulting' → normalized: 'pinecrestconsulting'
-INFO:app.services.gpt.dynamic_prompts:❌ No carrier-specific prompt found for 'Pinecrestconsulting', using standard prompt only
-INFO:app.services.gpt.dynamic_prompts:   Available carriers: ['UnitedHealthcare', 'United Healthcare', 'UHC', 'United Health Group', 'UnitedHealth', 'Redirect Health']
-INFO:app.services.gpt.vision_extractor:📋 Extracting from PDF using Responses API (file_id: file-LyPAscMU6fyRKvbM6XZuhE)
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763739631732_kd3owj46q: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763739631732_kd3owj46q
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763739631732_kd3owj46q: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763739631732_kd3owj46q
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763739631732_kd3owj46q: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763739631732_kd3owj46q
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763739631732_kd3owj46q: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763739631732_kd3owj46q
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763739631732_kd3owj46q: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763739631732_kd3owj46q
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763739631732_kd3owj46q: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763739631732_kd3owj46q
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763739631732_kd3owj46q: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763739631732_kd3owj46q
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763739631732_kd3owj46q: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763739631732_kd3owj46q
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763739631732_kd3owj46q: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763739631732_kd3owj46q
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763739631732_kd3owj46q: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763739631732_kd3owj46q
+INFO:app.services.gpt.vision_extractor:✅ PDF uploaded: file-DtBscHLwgSFJMrjU6Do2cb
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763771444886_thbu0hbs6: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763771444886_thbu0hbs6
+INFO:app.services.gpt.dynamic_prompts:🔍 GPT: Looking up carrier prompt: 'Redirect Health' → normalized: 'redirecthealth'
+INFO:app.services.gpt.dynamic_prompts:✅ MATCH FOUND! Using carrier-specific prompt for: Redirect Health
+INFO:app.services.gpt.vision_extractor:📋 Applied carrier-specific instructions for Redirect Health
+INFO:app.services.gpt.vision_extractor:📋 Extracting from PDF using Responses API (file_id: file-DtBscHLwgSFJMrjU6Do2cb)
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763771444886_thbu0hbs6: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763771444886_thbu0hbs6
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763771444886_thbu0hbs6: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763771444886_thbu0hbs6
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763771444886_thbu0hbs6: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763771444886_thbu0hbs6
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763771444886_thbu0hbs6: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763771444886_thbu0hbs6
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763771444886_thbu0hbs6: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763771444886_thbu0hbs6
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763771444886_thbu0hbs6: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763771444886_thbu0hbs6
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763771444886_thbu0hbs6: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763771444886_thbu0hbs6
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763771444886_thbu0hbs6: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763771444886_thbu0hbs6
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763771444886_thbu0hbs6: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763771444886_thbu0hbs6
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763771444886_thbu0hbs6: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763771444886_thbu0hbs6
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763771444886_thbu0hbs6: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763771444886_thbu0hbs6
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763771444886_thbu0hbs6: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763771444886_thbu0hbs6
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763771444886_thbu0hbs6: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763771444886_thbu0hbs6
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/responses "HTTP/1.1 200 OK"
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763771444886_thbu0hbs6: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763771444886_thbu0hbs6
+INFO:app.services.gpt.vision_extractor:📊 Response length: 11284 characters
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763771444886_thbu0hbs6: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763771444886_thbu0hbs6
+INFO:app.services.gpt.vision_extractor:✅ Extraction complete: 3 tables, 10266 tokens, $0.0015
+INFO:app.services.gpt.vision_extractor:✅ Document processing complete: 3 tables, $0.0015
+INFO:app.services.gpt.monitoring:✅ Extraction success | upload_id=upload_1763771452 | pages=1 | tokens=10266 | cost=$0.0015 | time=64.14s
+INFO:app.services.gpt.enhanced_service:✅ Extraction complete: 3 tables, $0.0015, 64.14s
+INFO:app.services.enhanced_extraction_service:================================================================================
+INFO:app.services.enhanced_extraction_service:✅ GPT-5 VISION SERVICE COMPLETED SUCCESSFULLY
+INFO:app.services.enhanced_extraction_service:   Success: True
+INFO:app.services.enhanced_extraction_service:   Tables Extracted: 3
+INFO:app.services.enhanced_extraction_service:   Tokens Used: 10266
+INFO:app.services.enhanced_extraction_service:   Cost: $0.0015
+INFO:app.services.enhanced_extraction_service:================================================================================
+INFO:app.services.enhanced_extraction_service:⚡ Transforming GPT-5 Vision results to compatible format
+INFO:app.services.enhanced_extraction_service:📊 GPT-5 extraction results:
+INFO:app.services.enhanced_extraction_service:   - Tables: 3
+INFO:app.services.enhanced_extraction_service:   - Groups/Companies: 20
+INFO:app.services.enhanced_extraction_service:   - Writing Agents: 0
+INFO:app.services.enhanced_extraction_service:   - Carrier: Redirect Health
+INFO:app.services.enhanced_extraction_service:   - Broker: Innovative BPS LLC
+INFO:app.services.enhanced_extraction_service:   - Statement Date: 2025-06-30
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763771444886_thbu0hbs6: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763771444886_thbu0hbs6
+INFO:app.services.enhanced_extraction_service:📋 GPT-5 carrier/broker extraction → carrier='Redirect Health' (0.95) | broker='Innovative BPS LLC' (0.95)
+INFO:app.services.enhanced_extraction_service:✅ GPT-5 metadata extracted: carrier=Redirect Health, date=2025-06-30, broker=Innovative BPS LLC
+INFO:app.services.enhanced_extraction_service:   Cost: $0.0015, Tokens: 10266
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763771444886_thbu0hbs6: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763771444886_thbu0hbs6
+📎 Enhanced multi-strategy stitching: Processing 3 tables
+📎 Canonical header identified: ['Group ID', 'Group Name', 'Invoice Amount', 'Commissionable Amount', 'Comm. Rate', 'Commission Amount'] (6 columns)
+📎 Table 1 headers: ['Group ID', 'Group Name', 'Invoice Amount', 'Commissionable Amount', 'Comm. Rate', 'Commission Amount'] (6 columns)
+📎 Table 2 headers: ['Group ID', 'Group Name', 'Invoice Amount', 'Commissionable Amount', 'Allowance Type', 'Commission Amount'] (6 columns)
+📎 Table 3 headers: ['Total Invoice Amount', 'Commissionable Amount', 'Commission Amount'] (3 columns)
+📎 Found 3 unique header patterns
+📎 Fuzzy merge enabled. Attempting to combine similar header groups (threshold=0.8).
+📎 Similarity breakdown for tables:
+   Header: 0.905
+   Column count: 1.000
+   Row format: 1.000
+   Data pattern: 0.833
+   Structure: 0.667
+   Final score: 0.913
+📎 Fuzzy merge: combining group 1 with 2 (similarity=0.913)
+   🔍 Smart column splitting detected - using enhanced similarity
+   Smart splitting similarity: phrase=0.894, word=0.400, combined=0.746
+📎 Similarity breakdown for tables:
+   Header: 0.746
+   Column count: 0.500
+   Row format: 0.500
+   Data pattern: 0.333
+   Structure: 0.667
+   Final score: 0.565
+📎 Grouped 3 tables into 2 groups
+📎 Merging group 1 with 2 tables
+INFO:app.services.extraction_utils:✅ Merged table created: 22 rows (enhancements preserved from individual tables)
+📎 Merged table 1: 6 headers, 22 rows
+📎 Merged headers: ['Group ID', 'Group Name', 'Invoice Amount', 'Commissionable Amount', 'Comm. Rate', 'Commission Amount']
+📎 Merging group 2 with 1 tables
+INFO:app.services.extraction_utils:✅ Merged table created: 1 rows (enhancements preserved from individual tables)
+📎 Merged table 2: 3 headers, 1 rows
+📎 Merged headers: ['Total Invoice Amount', 'Commissionable Amount', 'Commission Amount']
+📎 Enhanced stitching completed: 2 final tables
+INFO:app.services.extraction_utils:Header normalization: 6 headers normalized
+INFO:app.services.enhanced_extraction_service:GPT-5: Verified normalized headers
+INFO:app.services.extraction_utils:Header normalization: 3 headers normalized
+INFO:app.services.enhanced_extraction_service:GPT-5: Verified normalized headers
+INFO:app.services.enhanced_extraction_service:📊 Table 1 summary rows → model:1 heuristic:0 final:1
+INFO:app.services.enhanced_extraction_service:📊 Table 2 summary rows → model:1 heuristic:1 final:1
+INFO:app.services.enhanced_extraction_service:   ↳ Example reasoning row 0: score=0.55 reasons=['Row annotated as CarrierSummary', 'Row is mostly numeric']
+INFO:app.services.enhanced_extraction_service:⭐ GPT-5: Processed 3 tables into 2 tables
+INFO:app.services.enhanced_extraction_service:   Cost: $0.0015
+INFO:app.services.enhanced_extraction_service:   Tokens: 10266
+INFO:app.services.enhanced_extraction_service:✅ Using GPT-5's structured output summary row detection
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763771444886_thbu0hbs6: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763771444886_thbu0hbs6
+INFO:app.services.websocket_service:Completed stage table_detection for upload upload_1763771444886_thbu0hbs6
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763771444886_thbu0hbs6: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763771444886_thbu0hbs6
+INFO:app.services.websocket_service:Started stage summary_generation for upload upload_1763771444886_thbu0hbs6
+INFO:app.services.conversational_summary_service:🗣️ Generating conversational summary...
+INFO:app.services.conversational_summary_service:🔍 _build_summary_prompt called:
+INFO:app.services.conversational_summary_service:   - use_enhanced: True
+INFO:app.services.conversational_summary_service:   - has_enhanced_data: True
+INFO:app.services.conversational_summary_service:✅ Attaching condensed enhanced context to prompt
+INFO:app.services.conversational_summary_service:Calculated total from data rows: $162,951.00
+INFO:app.services.conversational_summary_service:✅ SUCCESS: Enhanced prompts imported correctly
+INFO:app.services.conversational_summary_service:🚀 Calling GPT-4o API for summary generation...
+INFO:app.services.conversational_summary_service:   Model: gpt-4o
+INFO:app.services.conversational_summary_service:   Max tokens: 1200
+INFO:app.services.conversational_summary_service:   Prompt length: 2806 chars
+INFO:app.services.conversational_summary_service:   System prompt length: 1421 chars
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763771444886_thbu0hbs6: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763771444886_thbu0hbs6
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.services.conversational_summary_service:📊 Token usage - Input: 1,036, Output: 286
+INFO:app.services.conversational_summary_service:✅ GPT-4o API call successful
+INFO:app.services.conversational_summary_service:✅ Detected structured JSON response from GPT-4o
+INFO:app.services.conversational_summary_service:📊 GPT-4o provided 11 fields: ['carrier_name', 'broker_company', 'statement_date', 'broker_id', 'payment_type', 'total_amount', 'company_count', 'top_contributors', 'commission_structure', 'census_count', 'billing_periods']
+INFO:app.services.conversational_summary_service:✅ Extracted structured summary data (4 fields): ['statement_date', 'total_amount', 'company_count', 'broker_id_confidence']
+INFO:app.services.conversational_summary_service:✅ Fallback added 1 missing fields: ['broker_id_confidence']
+INFO:app.services.conversational_summary_service:📄 Generated summary length: 480 characters
+INFO:app.services.conversational_summary_service:📊 Final structured data keys: ['statement_date', 'total_amount', 'company_count', 'broker_id_confidence', 'carrier_name', 'broker_company', 'broker_id', 'payment_type', 'top_contributors', 'commission_structure', 'census_count', 'billing_periods']
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763771444886_thbu0hbs6: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763771444886_thbu0hbs6
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763771444886_thbu0hbs6: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763771444886_thbu0hbs6
+INFO:app.services.websocket_service:Completed stage summary_generation for upload upload_1763771444886_thbu0hbs6
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763771444886_thbu0hbs6: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763771444886_thbu0hbs6
+INFO:app.services.websocket_service:Started stage validation for upload upload_1763771444886_thbu0hbs6
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763771444886_thbu0hbs6: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763771444886_thbu0hbs6
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763771444886_thbu0hbs6: completion
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763771444886_thbu0hbs6
+INFO:app.services.websocket_service:Completed processing for upload upload_1763771444886_thbu0hbs6 in 71.01 seconds
+INFO:app.api.new_extract:✅ Extraction completed successfully
+INFO:app.services.cancellation_manager:Cleared cancellation status for upload upload_1763771444886_thbu0hbs6
+INFO:app.api.new_extract:🔍 Summary row refinement adjusted table 1: [0] → []
+INFO:app.api.new_extract:✅ Extraction completed (data NOT saved to DB, will be saved on approval)
+INFO:app.services.audit_logging_service:Audit: data_view by user f6cf1764-5bfc-4352-abd9-81b72b7cf191 on extraction_complete (ID: 5cd02a5f-cbc8-48a2-bd5a-ba3fe223dc68)
+INFO:app.api.new_extract:🎯 Format Learning: Using carrier Redirect Health with ID 8340174b-f6ed-42eb-976d-4868bb06c844
+WARNING:app.api.new_extract:🚨 CARRIER MISMATCH DETECTED: File uploaded to d883a865-a54f-41d6-968e-f94c3cb3f589 but extracted as Redirect Health (8340174b-f6ed-42eb-976d-4868bb06c844)
+INFO:app.api.new_extract:🔄 Reassigning file to correct carrier: Redirect Health
+INFO:app.services.gcs_utils:✅ File copied in GCS: statements/5cd02a5f-cbc8-48a2-bd5a-ba3fe223dc68/2025.06.pdf -> statements/8340174b-f6ed-42eb-976d-4868bb06c844/2025.06.pdf
+INFO:app.services.gcs_utils:✅ File deleted from GCS: statements/5cd02a5f-cbc8-48a2-bd5a-ba3fe223dc68/2025.06.pdf
+INFO:app.services.gcs_utils:🔐 Generating signed URL for: statements/8340174b-f6ed-42eb-976d-4868bb06c844/2025.06.pdf
+INFO:app.services.gcs_utils:📝 Generating signed URL with:
+INFO:app.services.gcs_utils:   - Content-Type: application/pdf
+INFO:app.services.gcs_utils:   - Content-Disposition: inline
+INFO:app.services.gcs_utils:   - Expiration: 1 hour(s)
+INFO:app.services.gcs_utils:✅ Generated signed URL for GCS file with inline headers: statements/8340174b-f6ed-42eb-976d-4868bb06c844/2025.06.pdf
+INFO:app.services.gcs_utils:   URL expires at: 2025-11-22 01:32:05.809437
+INFO:app.api.new_extract:✅ File moved to correct carrier folder in GCS: statements/8340174b-f6ed-42eb-976d-4868bb06c844/2025.06.pdf
+INFO:app.api.new_extract:✅ Updated upload metadata: carrier_id=8340174b-f6ed-42eb-976d-4868bb06c844, company_id stays as user's company=d883a865-a54f-41d6-968e-f94c3cb3f589
+INFO:app.api.new_extract:🔍 Multiple tables detected (2), analyzing for field mapping suitability
+INFO:app.api.new_extract:   Table 0: type=, rows=22, score=87
+INFO:app.api.new_extract:   Table 1: type=, rows=1, score=61
+INFO:app.api.new_extract:🎯 INTELLIGENT SELECTION: Using table 0 for field mapping
+INFO:app.api.new_extract:   Reasoning: Selected table 0 (table_type=, rows=22, commission_headers=3, score=87)
+INFO:app.api.new_extract:🎯 Using table 0 for field mapping with 6 headers
+🎯 FormatLearningService: Finding matching format for company 8340174b-f6ed-42eb-976d-4868bb06c844
+🎯 FormatLearningService: Headers: ['Group ID', 'Group Name', 'Invoice Amount', 'Commissionable Amount', 'Comm. Rate', 'Commission Amount']
+🎯 FormatLearningService: Table structure: {'row_count': 22, 'column_count': 6, 'has_financial_data': True}
+🎯 FormatLearningService: Headers type: <class 'list'>
+🎯 FormatLearningService: Headers length: 6
+🎯 CRUD: Finding best matching format for company 8340174b-f6ed-42eb-976d-4868bb06c844
+🎯 CRUD: Input headers: ['Group ID', 'Group Name', 'Invoice Amount', 'Commissionable Amount', 'Comm. Rate', 'Commission Amount']
+🎯 CRUD: Input table structure: {'row_count': 22, 'column_count': 6, 'has_financial_data': True}
+🎯 CRUD: Found 1 saved formats for company
+🎯 CRUD: Comparing with saved format:
+🎯 CRUD:   Saved headers: ['Group ID', 'Group Name', 'Invoice Amount', 'Commissionable Amount', 'Comm. Rate', 'Commission Amount']
+🎯 CRUD:   Header similarity: 0.8
+🎯 CRUD:   Structure similarity: 1.0
+🎯 CRUD:   Total score: 0.8400000000000001
+🎯 CRUD:   -> New best match with score 0.8400000000000001
+🎯 FormatLearningService: Best match score: 0.8400000000000001
+🎯 FormatLearningService: Found matching format with signature: f0d2424f7efd76c2fcfb224d0246d1f1
+🎯 FormatLearningService: Learned field mapping: {'Group ID': 'Policy Number', 'Comm. Rate': 'Commission Rate', 'Group Name': 'Client Name', 'Invoice Amount': 'Invoice Total', 'Commission Amount': 'Commission Earned', 'Commissionable Amount': 'Premium Total'}
+🎯 FormatLearningService: Learned table editor settings: {'headers': ['Group ID', 'Group Name', 'Invoice Amount', 'Commissionable Amount', 'Comm. Rate', 'Commission Amount'], 'summary_rows': [], 'corrected_carrier_name': '', 'corrected_statement_date': '2025-10-31', 'user_corrections': {'carrier_name': '', 'statement_date': '2025-10-31'}}
+INFO:app.api.new_extract:🎯 Format Learning: Found matching format with score 0.8400000000000001
+INFO:app.api.new_extract:🎯 Format Learning: Skipping statement date auto-apply (dates are document-specific)
+INFO:app.api.new_extract:✅ Total extracted from document_metadata: $9343.30
+WARNING:app.api.new_extract:⚠️ Replacing total_amount 9343.30 (method=document_metadata) with summary_row_scan=13294.00
+WARNING:app.api.new_extract:⚠️ Total discrepancy detected: summary 13294.00 vs detail 162951.00 (Δ=149657.00, 1125.75%)
+INFO:app.api.new_extract:📊 Added total to document_metadata: $13294.00 (method: summary_row_scan)
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763771444886_thbu0hbs6: STEP_STARTED
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763771444886_thbu0hbs6
+INFO:app.services.websocket_service:Step started: Understanding Structure (Step 4) for upload_id upload_1763771444886_thbu0hbs6
+INFO:app.services.ai_plan_type_detection_service:AI Plan Type Detection Service initialized successfully
+INFO:app.api.new_extract:🔍 AI Plan Type Detection: Detecting plan types during extraction
+INFO:app.services.ai_plan_type_detection_service:🔍 AI Plan Detection: Analyzing document for insurance plan types
+INFO:httpx:HTTP Request: POST https://api.mistral.ai/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.services.ai_plan_type_detection_service:✅ AI successfully detected plan types
+INFO:app.services.ai_plan_type_detection_service:✅ AI Plan Detection: Found 1 plan types with 0.90 confidence
+INFO:app.api.new_extract:✅ AI Plan Detection: 1 plan types with 0.90 confidence
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763771444886_thbu0hbs6: STEP_STARTED
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763771444886_thbu0hbs6
+INFO:app.services.websocket_service:Step started: AI Field Mapping (Step 5) for upload_id upload_1763771444886_thbu0hbs6
+INFO:app.api.new_extract:🧠 AI Field Mapping: Starting field mapping during extraction
+INFO:app.api.new_extract:📋 Normalizing headers for AI mapping:
+INFO:app.api.ai_intelligent_mapping:🚀 Enhanced AI Analysis Request: User muhammad@pinecrestconsulting.com
+INFO:app.services.ai_field_mapping_service:🤖 AI Mapping: Analyzing 6 headers with AI intelligence
+INFO:app.services.ai_field_mapping_service:🔍 AI Mapping: carrier_id provided: True (value: 8340174b-f6ed-42eb-976d-4868bb06c844)
+INFO:app.services.ai_field_mapping_service:🎯 Carrier ID is valid, attempting to retrieve learned mapping for carrier 8340174b-f6ed-42eb-976d-4868bb06c844
+INFO:app.services.ai_field_mapping_service:🔍 Generated format signature for lookup: f0d2424f7efd76c2fcfb224d0246d1f1
+INFO:app.services.ai_field_mapping_service:🔍 Looking up learned format for carrier 8340174b-f6ed-42eb-976d-4868bb06c844 with 6 headers
+INFO:app.services.ai_field_mapping_service:✅ Found EXACT match for learned format with signature f0d2424f7efd76c2fcfb224d0246d1f1
+INFO:app.services.ai_field_mapping_service:✅ Learned field mapping has 6 mappings
+INFO:app.services.ai_field_mapping_service:🎯 Found learned mapping for carrier with 1.00 confidence
+INFO:app.services.ai_field_mapping_service:🎯 Using learned mappings directly with match score 1.0
+INFO:app.services.ai_field_mapping_service:✅ Learned field_mapping contains 6 mappings
+INFO:app.services.ai_field_mapping_service:✅ Applied 6 learned mappings directly - returning early
+INFO:app.services.ai_field_mapping_service:✅ Response includes learned_format_used=True flag
+INFO:app.services.ai_plan_type_detection_service:🔍 AI Plan Detection: Analyzing document for insurance plan types
+INFO:httpx:HTTP Request: POST https://api.mistral.ai/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.services.ai_plan_type_detection_service:✅ AI successfully detected plan types
+INFO:app.services.ai_plan_type_detection_service:✅ AI Plan Detection: Found 1 plan types with 0.90 confidence
+INFO:app.api.ai_intelligent_mapping:✅ Enhanced AI Analysis Complete: Overall confidence 0.93
+INFO:app.api.new_extract:✅ AI Field Mapping: 6 mappings with sample data, confidence 0.95
+INFO:app.api.new_extract:✅ Conversational summary supplied by extraction pipeline
+INFO:app.api.new_extract:   Summary preview: This is a commission statement from Redirect Health, dated June 30, 2025. Although the broker's identity remains unknown, the statement reflects a total commission amount of $9,343.30. It highlights p
+INFO:app.api.new_extract:   Structured data keys: ['statement_date', 'total_amount', 'company_count', 'broker_id_confidence', 'carrier_name', 'broker_company', 'broker_id', 'payment_type', 'top_contributors', 'commission_structure', 'census_count', 'billing_periods']
+INFO:app.services.audit_logging_service:Audit: file_upload by user f6cf1764-5bfc-4352-abd9-81b72b7cf191 on statement_upload (ID: 5cd02a5f-cbc8-48a2-bd5a-ba3fe223dc68)
+INFO:app.api.new_extract:📤 Sending pre-generated enhanced summary via WebSocket...
+INFO:app.api.new_extract:📊 Sending structured data: {"statement_date": "2025-06-30", "total_amount": "9343.30", "company_count": 13, "broker_id_confidence": 0.7, "carrier_name": "Redirect Health", "broker_company": "Unknown", "broker_id": "null", "paym...
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763771444886_thbu0hbs6: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763771444886_thbu0hbs6
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763771444886_thbu0hbs6: STEP_STARTED
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763771444886_thbu0hbs6
+INFO:app.services.websocket_service:Step started: Preparing Results (Step 6) for upload_id upload_1763771444886_thbu0hbs6
+INFO:app.api.new_extract:📊 Calculating invoice total from 2 tables
+INFO:app.api.new_extract:📊 Table 0: Found invoice column at index 2: 'Invoice Amount'
+INFO:app.api.new_extract:✅ Table 0: Calculated from rows: $331,022.00
+INFO:app.api.new_extract:📊 Table 1: Found invoice column at index 0: 'Total Invoice Amount'
+INFO:app.api.new_extract:✅ Table 1: Calculated from rows: $103,457.00
+INFO:app.api.new_extract:✅ TOTAL invoice amount from all tables: $434,479.00
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763771444886_thbu0hbs6: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763771444886_thbu0hbs6
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763771444886_thbu0hbs6: EXTRACTION_COMPLETE
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763771444886_thbu0hbs6
+INFO:app.services.websocket_service:Extraction complete for upload_id upload_1763771444886_thbu0hbs6
+INFO:app.api.new_extract:✅ Extraction complete! Sent results via WebSocket for upload_id: upload_1763771444886_thbu0hbs6
+INFO:     connection closed
+INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763771444886_thbu0hbs6, session_id=session_1763771444900_5b36p7gvn
+INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763771444886_thbu0hbs6, session_id=session_1763771444900_5b36p7gvn
+INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763771444886_thbu0hbs6
+INFO:     127.0.0.1:64236 - "POST /api/extract-tables-smart/ HTTP/1.1" 200 OK
+INFO:app.api.pdf_proxy:🔄 Proxying PDF from: https://storage.googleapis.com/pdf_extraction_files_saver/statements/8340174b-f6ed-42eb-976d-4868bb0...
+INFO:httpx:HTTP Request: GET https://storage.googleapis.com/pdf_extraction_files_saver/statements/8340174b-f6ed-42eb-976d-4868bb06c844/2025.06.pdf?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=docsai-table-extractor%40pdf-tables-extractor-465009.iam.gserviceaccount.com%2F20251122%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20251122T003205Z&X-Goog-Expires=3599&X-Goog-SignedHeaders=host&response-content-disposition=inline&response-content-type=application%2Fpdf&X-Goog-Signature=23046ade6a5a29c50140a62ec6b1f0d3a2b758d09bceea1c186329b88c961683f8388f4e2f2f2531492f7f897e08f1454d527fed0c4dbbf3191fd09a71411ab3be065988efc5d8cf8c30170ca9812ef5e9b6d98c9d649e4e423a6870d23b260166613b2628bd1ce1b17dd3e69ab2fa8669c1213ec7d885a93a985f9cf93341e91ce49dfb6f24e7b5da7dc941227afdb0b15c595ab7db885686c506176c633b1a46deff313aac74347359408d214d83254fa611d75b20afcaaecc055abcfb1f65a563732d28b1d840027fb557c7110db13d59ffae95801e4ada31a2544e1b63d936544767b9a3c45506ca05ce1b53fadcf267b8a0030ced3d77f9801d8c1176a6 "HTTP/1.1 200 OK"
+INFO:     127.0.0.1:64629 - "GET /api/pdf-proxy?url=https%3A%2F%2Fstorage.googleapis.com%2Fpdf_extraction_files_saver%2Fstatements%2F8340174b-f6ed-42eb-976d-4868bb06c844%2F2025.06.pdf%3FX-Goog-Algorithm%3DGOOG4-RSA-SHA256%26X-Goog-Credential%3Ddocsai-table-extractor%2540pdf-tables-extractor-465009.iam.gserviceaccount.com%252F20251122%252Fauto%252Fstorage%252Fgoog4_request%26X-Goog-Date%3D20251122T003205Z%26X-Goog-Expires%3D3599%26X-Goog-SignedHeaders%3Dhost%26response-content-disposition%3Dinline%26response-content-type%3Dapplication%252Fpdf%26X-Goog-Signature%3D23046ade6a5a29c50140a62ec6b1f0d3a2b758d09bceea1c186329b88c961683f8388f4e2f2f2531492f7f897e08f1454d527fed0c4dbbf3191fd09a71411ab3be065988efc5d8cf8c30170ca9812ef5e9b6d98c9d649e4e423a6870d23b260166613b2628bd1ce1b17dd3e69ab2fa8669c1213ec7d885a93a985f9cf93341e91ce49dfb6f24e7b5da7dc941227afdb0b15c595ab7db885686c506176c633b1a46deff313aac74347359408d214d83254fa611d75b20afcaaecc055abcfb1f65a563732d28b1d840027fb557c7110db13d59ffae95801e4ada31a2544e1b63d936544767b9a3c45506ca05ce1b53fadcf267b8a0030ced3d77f9801d8c1176a6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64626 - "GET /api/pending/progress/5cd02a5f-cbc8-48a2-bd5a-ba3fe223dc68/table_editor HTTP/1.1" 200 OK
+INFO:app.services.orphan_cleanup_service:🧹 Starting orphan cleanup job...
+INFO:app.services.orphan_cleanup_service:✅ Orphan cleanup completed: no orphans found
+INFO:app.services.orphan_cleanup_service:🧹 Starting orphan cleanup job...
+INFO:app.services.orphan_cleanup_service:✅ Orphan cleanup completed: no orphans found
+INFO:app.services.orphan_cleanup_service:🧹 Starting orphan cleanup job...
+INFO:app.services.orphan_cleanup_service:✅ Orphan cleanup completed: no orphans found
+INFO:app.services.orphan_cleanup_service:🧹 Starting orphan cleanup job...
+INFO:app.services.orphan_cleanup_service:✅ Orphan cleanup completed: no orphans found

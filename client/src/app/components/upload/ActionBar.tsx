@@ -62,24 +62,6 @@ export default function ActionBar({
   const isStatementDateMissing = !statementDate || statementDate.trim() === '' || statementDate === 'Not detected';
   const canContinueToMapping = !isCarrierNameMissing && !isStatementDateMissing;
 
-  // Debug logging for button state (only in table_review mode)
-  React.useEffect(() => {
-    if (viewMode === 'table_review') {
-      console.log('🔍 ActionBar Button State Debug:');
-      console.log('  - hasReviewRequired:', hasReviewRequired);
-      console.log('  - canProceed:', canProceed);
-      console.log('  - isSubmitting:', isSubmitting);
-      console.log('  - canSubmit:', canSubmit);
-      console.log('  - isCarrierNameMissing:', isCarrierNameMissing, '(carrier:', carrierName, ')');
-      console.log('  - isStatementDateMissing:', isStatementDateMissing, '(date:', statementDate, ')');
-      console.log('  - canContinueToMapping:', canContinueToMapping);
-      console.log('  - BUTTON DISABLED:', !canSubmit || !canContinueToMapping);
-      if (mappingStats) {
-        console.log('  - mappingStats:', mappingStats);
-      }
-    }
-  }, [viewMode, hasReviewRequired, canProceed, isSubmitting, canSubmit, canContinueToMapping, carrierName, statementDate, mappingStats]);
-  
   // Generate validation message
   const getValidationMessage = () => {
     if (isCarrierNameMissing && isStatementDateMissing) {

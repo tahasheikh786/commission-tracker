@@ -216,32 +216,52 @@ export default function UnifiedTableEditor({
 
   // Initialize AI mapping results from extraction data
   useEffect(() => {
-    if (!aiMappingResults) {
-      // Check for format learning suggested mappings first
-      if (extractedData?.format_learning?.suggested_mapping && extractedData?.format_learning?.found_match) {
-        // Convert format learning suggested mappings to AI mapping format
-        const suggestedMappings = extractedData.format_learning.suggested_mapping;
-        const mappings = Object.entries(suggestedMappings).map(([field, dbField]) => ({
-          statement_field: field,
-          database_field: dbField as string,
-          confidence_score: extractedData.format_learning?.match_score || 0.9,
-          sample_value: '',  // Will be populated from table data
-          is_from_learned_format: true
-        }));
-        
-        setAIMappingResults({
-          ai_enabled: true,
-          mappings: mappings,
-          unmapped_fields: [],
-          confidence: extractedData.format_learning?.match_score || 0.9,
-          learned_format_used: true
-        });
-      } else if (extractedData?.ai_intelligence?.field_mapping) {
-        // Fall back to AI intelligence mappings
-        setAIMappingResults(extractedData.ai_intelligence.field_mapping);
-      }
+    if (aiMappingResults) {
+      return;
     }
-  }, [extractedData]);
+    
+    const formatLearning = extractedData?.format_learning;
+    const aiFieldMapping = extractedData?.ai_intelligence?.field_mapping;
+
+    // Prefer the learned format mapping because it should auto-approve
+    if (formatLearning?.suggested_mapping && formatLearning?.found_match) {
+      const suggestedMappings = formatLearning.suggested_mapping as Record<string, string>;
+      const matchScore = typeof formatLearning.match_score === 'number'
+        ? formatLearning.match_score
+        : 0.9;
+      
+      const normalizedMappings = Object.entries(suggestedMappings).map(([header, databaseFieldName]) => {
+        const safeHeader = header.trim();
+        const safeDbField = (databaseFieldName || '').trim();
+        
+        return {
+          extracted_field: safeHeader,
+          mapped_to: safeDbField,
+          mapped_to_column: safeDbField
+            ? safeDbField.toLowerCase().replace(/\s+/g, '_')
+            : '',
+          database_field_id: '',
+          confidence: matchScore,
+          reasoning: 'Learned from previous approval of this carrier format.',
+          alternatives: [],
+          requires_review: false
+        } as FieldMapping;
+      });
+
+      setAIMappingResults({
+        ai_enabled: true,
+        mappings: normalizedMappings,
+        unmapped_fields: [],
+        confidence: matchScore,
+        learned_format_used: true
+      });
+      return;
+    }
+
+    if (aiFieldMapping) {
+      setAIMappingResults(aiFieldMapping);
+    }
+  }, [aiMappingResults, extractedData]);
 
   // AI field mapping now happens during extraction, not when viewing the field mapping screen
   // This prevents duplicate API calls and loading states

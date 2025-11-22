@@ -612,11 +612,25 @@ async def save_statement_review(
         if commission_source_field:
             calculated_total = 0
             
-            # Calculate total from final_data
+            # ✅ CRITICAL: Filter out grand total tables from commission calculation
+            # Grand total tables should be excluded to prevent double-counting
+            from app.services.extraction_utils import is_grand_total_table
+            
+            detail_tables_only = []
+            grand_total_count = 0
             for table_idx, table in enumerate(final_data):
                 if not isinstance(table, dict):
                     continue
-                    
+                if is_grand_total_table(table):
+                    print(f"  💰 Skipping Table {table_idx} (grand total table) from commission calculation")
+                    grand_total_count += 1
+                    continue
+                detail_tables_only.append((table_idx, table))
+            
+            print(f"  💰 Processing {len(detail_tables_only)} detail table(s) (excluded {grand_total_count} grand total tables)")
+            
+            # Calculate total from detail tables only
+            for table_idx, table in detail_tables_only:
                 headers = table.get('header') or table.get('headers', [])
                 rows = table.get('rows', [])
                 summary_rows_set = set(table.get('summaryRows', []))
@@ -779,11 +793,12 @@ async def save_statement_review(
         if invoice_source_field:
             calculated_invoice = 0
             
-            # Calculate total from final_data
-            for table_idx, table in enumerate(final_data):
-                if not isinstance(table, dict):
-                    continue
-                    
+            # ✅ CRITICAL: Filter out grand total tables from invoice calculation
+            # Use the same detail_tables_only that was already filtered above
+            print(f"  💰 Calculating invoice total from {len(detail_tables_only)} detail table(s) (excluding grand total tables)")
+            
+            # Calculate total from detail tables only
+            for table_idx, table in detail_tables_only:
                 headers = table.get('header') or table.get('headers', [])
                 rows = table.get('rows', [])
                 summary_rows_set = set(table.get('summaryRows', []))
