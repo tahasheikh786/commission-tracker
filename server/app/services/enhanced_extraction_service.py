@@ -9,12 +9,15 @@ import logging
 import time
 import sys
 import os
+import tempfile
 from typing import Dict, List, Any, Optional, Union
 from pathlib import Path
 from datetime import datetime
 import uuid
 from fastapi import HTTPException
-from pypdf import PdfReader
+from openai import AsyncOpenAI
+import httpx
+from pypdf import PdfReader, PdfWriter
 
 # CRITICAL: Load environment variables FIRST, before importing any services
 from dotenv import load_dotenv
@@ -76,6 +79,39 @@ class EnhancedExtractionService:
                 self.summary_service = None
         else:
             self.summary_service = None
+        
+        # GPT-5 metadata extraction client (first-page carrier/date detection)
+        self._metadata_client = None
+        self.metadata_model = os.getenv("GPT5_METADATA_MODEL", os.getenv("GPT5_MINI_MODEL", "gpt-5-mini"))
+        self.metadata_reasoning_effort = os.getenv("GPT5_METADATA_REASONING", "low")
+        self.metadata_max_tokens = int(os.getenv("GPT5_METADATA_MAX_TOKENS", "900"))
+        api_key = os.getenv("OPENAI_API_KEY")
+        if api_key:
+            timeout_seconds = float(os.getenv("OPENAI_HTTP_TIMEOUT", "600"))
+            connect_timeout = float(os.getenv("OPENAI_HTTP_CONNECT_TIMEOUT", "10"))
+            write_timeout = float(os.getenv("OPENAI_HTTP_WRITE_TIMEOUT", "60"))
+            self._metadata_http_timeout = httpx.Timeout(
+                timeout=timeout_seconds,
+                connect=connect_timeout,
+                read=timeout_seconds,
+                write=write_timeout
+            )
+            max_retries = int(os.getenv("OPENAI_HTTP_MAX_RETRIES", "2"))
+            try:
+                self._metadata_client = AsyncOpenAI(
+                    api_key=api_key,
+                    timeout=self._metadata_http_timeout,
+                    max_retries=max_retries
+                )
+                logger.debug(
+                    "✅ GPT-5 metadata client initialized (model=%s, max_tokens=%s)",
+                    self.metadata_model,
+                    self.metadata_max_tokens
+                )
+            except Exception as exc:
+                logger.warning("⚠️ Could not initialize GPT-5 metadata client: %s", exc)
+        else:
+            logger.warning("⚠️ OPENAI_API_KEY not set - GPT-5 metadata extraction disabled")
         
         # ❌ LAZY LOAD - Initialize only when actually called
         self._claude_service = None  # Fallback only
@@ -1629,201 +1665,135 @@ class EnhancedExtractionService:
             logger.error(f"Quality assessment failed: {e}")
             return 50  # Default quality score
 
+    def _build_metadata_prompt(self) -> str:
+        """
+        Prompt guiding GPT-5 to identify carrier, broker, and statement date from the
+        first page (header/footer sections only).
+        """
+        return (
+            "You are reviewing the FIRST PAGE of an insurance commission statement PDF. "
+            "Extract ONLY high-confidence metadata:\n"
+            "- carrier_name: Issuer/carrier from logos, headers, or 'Issued by' text.\n"
+            "- statement_date: Statement/report date near titles or labels (Statement Date, Period Ending).\n"
+            "- broker_company: Broker/agency receiving the statement (labels like Broker, To, Prepared For, Agent).\n"
+            "Provide confidence scores between 0 and 1. If unavailable, return null with a low confidence. "
+            "Ignore detail tables; focus on branding blocks, headers, and footers."
+        )
+    
+    def _get_metadata_schema_payload(self) -> Dict[str, Any]:
+        """Structured output schema for GPT-5 metadata extraction."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "carrier_name": {"type": ["string", "null"]},
+                "carrier_confidence": {"type": ["number", "null"]},
+                "statement_date": {"type": ["string", "null"]},
+                "date_confidence": {"type": ["number", "null"]},
+                "broker_company": {"type": ["string", "null"]},
+                "broker_confidence": {"type": ["number", "null"]},
+                "summary": {"type": ["string", "null"]},
+                "evidence": {"type": ["string", "null"]}
+            },
+            "required": ["carrier_name", "statement_date", "broker_company"],
+            "additionalProperties": True
+        }
+        return {
+            "format": {
+                "type": "json_schema",
+                "name": "CommissionMetadata",
+                "schema": schema,
+                "strict": False
+            }
+        }
+    
+    def _create_first_page_pdf(self, file_path: str) -> str:
+        """Persist the first page of a PDF to a temporary file for targeted GPT analysis."""
+        reader = PdfReader(file_path)
+        if len(reader.pages) == 0:
+            raise ValueError("PDF has no pages")
+        writer = PdfWriter()
+        writer.add_page(reader.pages[0])
+        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+        writer.write(temp_file)
+        temp_file.close()
+        return temp_file.name
+    
     async def _extract_metadata_with_gpt(self, file_path: str) -> Dict[str, Any]:
         """
-        Extract carrier name and statement date from the first page of PDF using GPT-4.
-        
-        Args:
-            file_path: Path to the PDF file
-            
-        Returns:
-            Dictionary with carrier_name, statement_date, and confidence scores
+        Extract carrier, broker, and statement date using GPT-5 Responses API with
+        direct PDF upload (no legacy GPT-4 vision dependency).
         """
+        if not self._metadata_client:
+            return {'success': False, 'error': 'GPT-5 metadata client not available'}
+        
+        logger.info("🔍 Starting GPT-5 metadata extraction for %s", file_path)
+        
         try:
-            logger.info(f"🔍 Starting _extract_metadata_with_gpt for file: {file_path}")
-            import fitz  # PyMuPDF
-            import base64
-            from io import BytesIO
-            from PIL import Image
+            first_page_pdf = self._create_first_page_pdf(file_path)
+        except Exception as exc:
+            logger.error("❌ Unable to prepare first page PDF: %s", exc)
+            return {'success': False, 'error': str(exc)}
+        
+        file_id = None
+        try:
+            with open(first_page_pdf, "rb") as pdf_file:
+                upload = await self._metadata_client.files.create(file=pdf_file, purpose="user_data")
+                file_id = upload.id
             
-            logger.info(f"Extracting metadata with GPT from first page of {file_path}")
+            messages = [{
+                "role": "user",
+                "content": [
+                    {"type": "input_text", "text": self._build_metadata_prompt()},
+                    {"type": "input_file", "file_id": file_id}
+                ]
+            }]
             
-            # Open PDF and get first page
-            logger.info(f"📄 Opening PDF file: {file_path}")
-            doc = fitz.open(file_path)
-            if len(doc) == 0:
-                logger.error("❌ PDF has no pages")
-                return {'success': False, 'error': 'PDF has no pages'}
-            
-            logger.info(f"📄 PDF has {len(doc)} pages, loading first page")
-            first_page = doc.load_page(0)
-            
-            # Convert first page to high-quality image
-            logger.info("🖼️ Converting first page to image...")
-            matrix = fitz.Matrix(300/72, 300/72)  # 300 DPI for good quality
-            pix = first_page.get_pixmap(matrix=matrix, alpha=False)
-            
-            # Convert to PIL Image
-            logger.info("🖼️ Converting to PIL Image...")
-            img_data = pix.tobytes("png")
-            img = Image.open(BytesIO(img_data))
-            
-            # Convert to base64
-            logger.info("🖼️ Converting to base64...")
-            buffer = BytesIO()
-            img.save(buffer, format='PNG', optimize=True)
-            img_base64 = base64.b64encode(buffer.getvalue()).decode()
-            
-            doc.close()
-            
-            logger.info(f"✅ Converted first page to image ({len(img_base64)} chars)")
-            
-            # Check if GPT service is available
-            logger.info("🔍 Checking GPT service availability...")
-            if not self.gpt4o_service.is_available():
-                logger.warning("❌ GPT-4 service not available")
-                return {'success': False, 'error': 'GPT-4 service not available'}
-            
-            logger.info("✅ GPT-4 service is available")
-            
-            # Create specialized prompt for metadata extraction
-            system_prompt = """You are an expert at extracting metadata from commission statement documents.
-
-Your task is to analyze the first page of a commission statement and extract:
-1. CARRIER NAME - The insurance company that issued this statement (e.g., "Aetna", "Blue Cross Blue Shield", "Cigna", "UnitedHealthcare", "Allied Benefit Systems", etc.)
-   - Look in headers, logos, letterhead, and document branding
-   - Look at page footers where companies often place their logos
-   - DO NOT extract from table data columns - look at document structure elements only
-   
-2. STATEMENT DATE - The date of this commission statement (e.g., "12/31/2024", "October 31, 2024")
-   - Look for "Statement Date:", "Commission Summary For:", "Report Date:", etc.
-   - Look in document headers and titles
-   - DO NOT extract random dates from table data
-
-3. BROKER/AGENT COMPANY - The broker or agent entity receiving commissions (e.g., "Innovative BPS", "ABC Insurance Agency", etc.)
-   - Look for "Agent:", "Broker:", "Agency:", "To:", "Prepared For:" labels
-   - Usually appears near the top of the document
-   - This is different from the carrier - it's the entity receiving the statement
-
-4. SUMMARY - A summary of the document, extract structured invoice data as Markdown. 
-    Format your response as structured markdown without code blocks. Dont return tables. 
-    You must not wrap inside a code block. (```markdown...```)
-    Extract the following information from the document:
-    - Document name/number
-    - Document date
-    - Total amount
-    - Currency
-    - Vendor name
-    - Customer name
-    - Additional metadata
-    - Complete summary about the document (dont return tables)
-
-
-Return your response in the following JSON format ONLY:
-{
-  "carrier_name": "Exact carrier name as it appears",
-  "carrier_confidence": 0.95,
-  "statement_date": "Date in original format",
-  "date_confidence": 0.90,
-  "broker_company": "Broker/Agent company name as it appears",
-  "broker_confidence": 0.85,
-  "evidence": "Brief explanation of where you found this information",
-  "summary": "Summary of the document"
-}
-
-If you cannot find the information with high confidence, use null for the value and a lower confidence score."""
-
-            user_prompt = "Extract the carrier name, statement date, broker/agent and summary company from this commission statement first page."
-            
-            # Call GPT-4 Vision API
-            messages = [
-                {"role": "system", "content": system_prompt},
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": user_prompt},
-                        {
-                            "type": "image_url",
-                            "image_url": {"url": f"data:image/png;base64,{img_base64}"}
-                        }
-                    ]
-                }
-            ]
-            
-            logger.info("Calling GPT-4 Vision API for metadata extraction")
-            
-            response = self.gpt4o_service.client.chat.completions.create(
-                model="gpt-4o",  # Use gpt-4o for vision
-                messages=messages,
-                max_tokens=500,
-                temperature=0.1  # Low temperature for consistent extraction
+            response = await self._metadata_client.responses.create(
+                model=self.metadata_model,
+                input=messages,
+                text=self._get_metadata_schema_payload(),
+                max_output_tokens=self.metadata_max_tokens,
+                reasoning={"effort": self.metadata_reasoning_effort}
             )
             
-            if not response.choices or len(response.choices) == 0:
-                logger.error("GPT-4 returned no response")
-                return {'success': False, 'error': 'GPT-4 returned no response'}
+            output_text = (getattr(response, "output_text", "") or "").strip()
+            if not output_text:
+                raise ValueError("Empty GPT-5 metadata response")
+            if not output_text.endswith(("}", "]")):
+                raise ValueError("Metadata JSON appears truncated")
             
-            content = response.choices[0].message.content
-            logger.info(f"GPT-4 response: {content}")
+            parsed = json.loads(output_text)
+            normalized_date = normalize_statement_date(parsed.get('statement_date'))
             
-            # Parse JSON response
-            import json
-            import re
+            logger.info(
+                "📄 GPT-5 metadata extracted → carrier=%s, broker=%s, date=%s",
+                parsed.get('carrier_name'),
+                parsed.get('broker_company'),
+                parsed.get('statement_date')
+            )
             
-            # Clean response content
-            cleaned_content = content.strip()
-            if cleaned_content.startswith('```json'):
-                cleaned_content = cleaned_content[7:]
-            if cleaned_content.startswith('```'):
-                cleaned_content = cleaned_content[3:]
-            if cleaned_content.endswith('```'):
-                cleaned_content = cleaned_content[:-3]
-            cleaned_content = cleaned_content.strip()
-            
-            # Parse JSON
-            try:
-                metadata = json.loads(cleaned_content)
-            except json.JSONDecodeError as e:
-                logger.error(f"Failed to parse GPT response as JSON: {e}")
-                # Try to extract using regex as fallback
-                carrier_match = re.search(r'"carrier_name":\s*"([^"]+)"', cleaned_content)
-                date_match = re.search(r'"statement_date":\s*"([^"]+)"', cleaned_content)
-                summary_match = re.search(r'"summary":\s*"([^"]+)"', cleaned_content)
-                metadata = {
-                    'carrier_name': carrier_match.group(1) if carrier_match else None,
-                    'statement_date': date_match.group(1) if date_match else None,
-                    'carrier_confidence': 0.7,
-                    'date_confidence': 0.7,
-                    'summary': summary_match.group(1) if summary_match else None,
-                    'evidence': 'Extracted with regex fallback'
-                }
-            
-            # Apply date normalization before returning
-            raw_date = metadata.get('statement_date')
-            normalized_date = normalize_statement_date(raw_date) if raw_date else None
-            
-            # Return results
-            result = {
-                'success': True,
-                'carrier_name': metadata.get('carrier_name'),
-                'carrier_confidence': metadata.get('carrier_confidence', 0.8),
-                'statement_date': normalized_date,
-                'date_confidence': metadata.get('date_confidence', 0.8),
-                'broker_company': metadata.get('broker_company'),
-                'broker_confidence': metadata.get('broker_confidence', 0.8),
-                'summary': metadata.get('summary', ''),
-                'evidence': metadata.get('evidence', ''),
-                'extraction_method': 'gpt4o_vision_first_page'
-            }
-            
-            logger.info(f"✅ GPT metadata extraction successful: {result}")
-            return result
-            
-        except Exception as e:
-            logger.error(f"❌ Error extracting metadata with GPT: {e}", exc_info=True)
-            import traceback
-            logger.error(f"❌ Traceback: {traceback.format_exc()}")
             return {
-                'success': False,
-                'error': f'Metadata extraction failed: {str(e)}'
+                'success': True,
+                'carrier_name': parsed.get('carrier_name'),
+                'carrier_confidence': parsed.get('carrier_confidence'),
+                'statement_date': normalized_date,
+                'date_confidence': parsed.get('date_confidence'),
+                'broker_company': parsed.get('broker_company'),
+                'broker_confidence': parsed.get('broker_confidence'),
+                'summary': parsed.get('summary'),
+                'evidence': parsed.get('evidence'),
+                'model': self.metadata_model
             }
+        except Exception as exc:
+            logger.error("❌ GPT-5 metadata extraction failed: %s", exc, exc_info=True)
+            return {'success': False, 'error': str(exc)}
+        finally:
+            if file_id:
+                try:
+                    await self._metadata_client.files.delete(file_id)
+                except Exception:
+                    pass
+            try:
+                os.remove(first_page_pdf)
+            except OSError:
+                pass

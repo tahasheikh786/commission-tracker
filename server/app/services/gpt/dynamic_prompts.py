@@ -9,6 +9,7 @@ from typing import List, Optional, Dict, Any
 
 from ..claude.uhc import get_uhc_prompt
 from ..claude.redirect_health import get_redirect_health_prompt
+from ..claude.breckpoint import get_breckpoint_prompt
 
 PROMPT_TEMPLATES = [
     {
@@ -78,6 +79,116 @@ PROMPT_TEMPLATES = [
                 }
             ],
             "domain_notes": "Redirect Health statements bundle 1-2 page tables where writing agent subtotals appear above grand totals. Summary rows frequently blank out the Group ID column but repeat invoice, commissionable, and commission totals."
+        }
+    },
+    {
+        "name": "breckpoint",
+        "configuration": get_breckpoint_prompt(),
+        "options": {
+            "merge_similar_tables": False,
+            "summary_keywords": [
+                "total",
+                "totals",
+                "grand total",
+                "statement total"
+            ],
+            "summary_row_templates": [
+                "Row with 'Total' or 'Totals' in first column",
+                "Rows where all numeric columns are populated but identifier columns are blank"
+            ],
+            "expected_rollups": [
+                "Totals",
+                "Grand Total"
+            ],
+            "numeric_tolerance_bps": 50,
+            "row_role_examples": [
+                {
+                    "label": "Detail",
+                    "signature": "Company name populated + all 8 numeric columns populated with individual amounts"
+                },
+                {
+                    "label": "CarrierSummary",
+                    "signature": "First column blank or 'Totals', remaining 7 columns sum detail rows above"
+                }
+            ],
+            "domain_notes": (
+                "Breckpoint statements ALWAYS have exactly 8 columns. "
+                "The rightmost column 'Consultant Due This Period' is CRITICAL and must not be missed. "
+                "Summary rows typically appear at the bottom with 'Totals' label."
+            ),
+            "required_columns": [
+                "Company Name",
+                "Company Group ID",
+                "Plan Period", 
+                "Total Commission",
+                "Total Payment Applied",
+                "Consultant Due",
+                "Consultant Paid",
+                "Consultant Due This Period"
+            ],
+            "column_count": 8,
+            "critical_columns": ["Consultant Due This Period"],
+            "no_fallback_columns": {
+                "Consultant Due This Period": [
+                    "Consultant Due",
+                    "Consultant Paid"
+                ]
+            }
+        }
+    },
+    {
+        "name": "Breckpoint",
+        "configuration": get_breckpoint_prompt(),
+        "options": {
+            "merge_similar_tables": False,
+            "summary_keywords": [
+                "total",
+                "totals",
+                "grand total",
+                "statement total"
+            ],
+            "summary_row_templates": [
+                "Row with 'Total' or 'Totals' in first column",
+                "Rows where all numeric columns are populated but identifier columns are blank"
+            ],
+            "expected_rollups": [
+                "Totals",
+                "Grand Total"
+            ],
+            "numeric_tolerance_bps": 50,
+            "row_role_examples": [
+                {
+                    "label": "Detail",
+                    "signature": "Company name populated + all 8 numeric columns populated with individual amounts"
+                },
+                {
+                    "label": "CarrierSummary",
+                    "signature": "First column blank or 'Totals', remaining 7 columns sum detail rows above"
+                }
+            ],
+            "domain_notes": (
+                "Breckpoint statements ALWAYS have exactly 8 columns. "
+                "The rightmost column 'Consultant Due This Period' is CRITICAL and must not be missed. "
+                "Summary rows typically appear at the bottom with 'Totals' label."
+            ),
+            "required_columns": [
+                "Company Name",
+                "Company Group ID",
+                "Plan Period", 
+                "Total Commission",
+                "Total Payment Applied",
+                "Consultant Due",
+                "Consultant Paid",
+                "Consultant Due This Period"
+            ],
+            "column_count": 8,
+            "critical_columns": ["Consultant Due This Period"],
+            "no_fallback_columns": {
+                "Consultant Due This Period": [
+                    "Consultant Due",
+                    "Consultant Paid"
+                ]
+            }
         }
     }
 ]

@@ -8,11 +8,165 @@ from uuid import UUID
 from typing import Optional, List, Dict, Any
 import asyncio
 import time
+import logging
 from decimal import Decimal
 from ...services.company_name_service import CompanyNameDetectionService
 
+logger = logging.getLogger(__name__)
+
 # Create a global instance of the company name service for cleaning
 company_name_service = CompanyNameDetectionService()
+
+
+def find_similar_column(
+    target_field: str, 
+    available_headers: List[str], 
+    carrier_name: str = None
+) -> Optional[str]:
+    """
+    Find a similar column name if exact match doesn't exist.
+    
+    ✅ DEDUPLICATED: Single module-level function used by all processing flows.
+    
+    Args:
+        target_field: The field name to find
+        available_headers: List of available column headers
+        carrier_name: Optional carrier name for carrier-specific validation
+    
+    Returns:
+        Matching header name or None if no match found
+    """
+    if not target_field:
+        return None
+    
+    target_normalized = target_field.lower().replace(' ', '').replace('_', '')
+    
+    # Try exact match first
+    if target_field in available_headers:
+        return target_field
+    
+    # Try case-insensitive match
+    for header in available_headers:
+        if header.lower() == target_field.lower():
+            return header
+    
+    # ✅ CRITICAL: NO FALLBACK for specific Breckpoint columns - they have different meanings!
+    # "Consultant Due This Period" ($650) ≠ "Consultant Due" ($1,560) 
+    # These represent THIS PERIOD vs ALL PERIODS - cannot be substituted
+    forbidden_fallbacks = {
+        'consultant due this period': ['consultant due', 'consultant paid', 'consultant', 'due'],
+        'consultant due': ['consultant due this period', 'consultant paid'],  
+        'consultant paid': ['consultant due this period', 'consultant due']
+    }
+    
+    target_lower = target_field.lower().strip()
+    if target_lower in forbidden_fallbacks:
+        logger.error(f"❌ FORBIDDEN FALLBACK ATTEMPTED: '{target_field}' cannot use substitutes")
+        logger.error(f"   Requested: {target_field}")
+        logger.error(f"   Available headers: {available_headers}")
+        logger.error(f"   Forbidden substitutes: {forbidden_fallbacks[target_lower]}")
+        logger.error(f"   These columns have DIFFERENT amounts and purposes - extraction must be re-run")
+        # Do NOT attempt fallback - return None to force error/re-extraction
+        return None
+    
+    # Try partial match (contains key terms) - but ONLY for non-critical fields
+    key_terms = ['consultant', 'due', 'this', 'period', 'commission', 'earned', 'paid', 'amount']
+    target_terms = [term for term in key_terms if term in target_normalized]
+    
+    best_match = None
+    best_score = 0
+    
+    for header in available_headers:
+        header_normalized = header.lower().replace(' ', '').replace('_', '')
+        header_lower = header.lower().strip()
+        
+        # ✅ SAFETY CHECK: Don't use forbidden columns as fallbacks
+        is_forbidden = False
+        for forbidden_list in forbidden_fallbacks.values():
+            if any(forbidden.replace(' ', '').lower() in header_normalized for forbidden in forbidden_list):
+                if header_lower in [f.lower() for f in forbidden_list]:
+                    is_forbidden = True
+                    break
+        
+        if is_forbidden:
+            continue  # Skip this header as a potential match
+        
+        # Count matching terms
+        matching_terms = sum(1 for term in target_terms if term in header_normalized)
+        
+        # Bonus if header contains critical commission keywords
+        if matching_terms > 0 and any(keyword in header_normalized for keyword in ['commission', 'due', 'earned', 'paid']):
+            if matching_terms > best_score:
+                best_score = matching_terms
+                best_match = header
+    
+    if best_match and best_score >= 2:  # At least 2 matching terms
+        logger.info(f"💡 Using similar column '{best_match}' as fallback for '{target_field}'")
+        return best_match
+    
+    return None
+
+
+def validate_breckpoint_columns(headers: List[str], carrier_name: str = None) -> Dict[str, Any]:
+    """
+    Validate that Breckpoint tables have all required columns.
+    
+    Args:
+        headers: List of column headers extracted from the table
+        carrier_name: Optional carrier name to check if validation should apply
+    
+    Returns:
+        Dict with validation result:
+            - valid: bool - Whether validation passed
+            - expected_count: int - Expected number of columns
+            - actual_count: int - Actual number of columns found
+            - missing_columns: List[str] - List of missing column names
+            - message: str - Human-readable validation message
+    """
+    # Only validate for Breckpoint statements
+    if carrier_name and 'breckpoint' not in carrier_name.lower():
+        return {"valid": True, "message": "Not a Breckpoint statement"}
+    
+    required_columns = [
+        'Company Name',
+        'Company Group ID', 
+        'Plan Period',
+        'Total Commission',
+        'Total Payment Applied',
+        'Consultant Due',
+        'Consultant Paid',
+        'Consultant Due This Period'  # ← CRITICAL!
+    ]
+    
+    # Normalize for comparison
+    normalized_headers = [h.lower().strip() for h in headers]
+    missing_columns = []
+    
+    for req_col in required_columns:
+        # Check if column exists (case-insensitive)
+        found = any(req_col.lower() == h for h in normalized_headers)
+        if not found:
+            missing_columns.append(req_col)
+    
+    if missing_columns:
+        return {
+            "valid": False,
+            "expected_count": 8,
+            "actual_count": len(headers),
+            "missing_columns": missing_columns,
+            "message": (
+                f"❌ Breckpoint validation FAILED: Missing {len(missing_columns)} columns: {missing_columns}. "
+                f"Expected 8 columns, found {len(headers)}."
+            )
+        }
+    
+    return {
+        "valid": True,
+        "expected_count": 8,
+        "actual_count": len(headers),
+        "message": f"✅ Breckpoint validation PASSED: All 8 required columns present"
+    }
+
 
 async def create_earned_commission(db: AsyncSession, commission: EarnedCommissionCreate):
     """Create a new earned commission record."""
@@ -1255,29 +1409,73 @@ async def process_commission_data_from_statement(db: AsyncSession, statement_upl
     print(f"Processing {len(statement_upload.final_data)} rows with fields: client={client_name_field}, commission={commission_earned_field}, invoice={invoice_total_field}")
     print(f"Final data sample: {statement_upload.final_data[:2] if statement_upload.final_data else 'No data'}")
     
+    # Get carrier name for validation (try to infer from statement if available)
+    carrier_name = None
+    if hasattr(statement_upload, 'carrier_name') and statement_upload.carrier_name:
+        carrier_name = statement_upload.carrier_name
+    
     # Process each row in the final_data
-    for table in statement_upload.final_data:
+    for table_index, table in enumerate(statement_upload.final_data):
         if not isinstance(table, dict) or 'rows' not in table:
             continue
             
         # Get headers from table to map field names to indices
         headers = table.get('header', []) or table.get('headers', [])
         if not headers:
-            print(f"⚠️  No headers found in table, skipping")
+            logger.warning(f"⚠️  Table {table_index}: No headers found in table, skipping")
             continue
+        
+        # ✅ FIX: Validate Breckpoint columns BEFORE processing rows
+        if carrier_name and 'breckpoint' in carrier_name.lower():
+            validation = validate_breckpoint_columns(headers, carrier_name)
+            if not validation["valid"]:
+                logger.error(f"❌ Table {table_index}: {validation['message']}")
+                logger.error(f"   Missing columns: {validation.get('missing_columns', [])}")
+                logger.error(f"   Skipping table due to invalid structure - extraction must be re-run")
+                continue  # Skip this table
+            else:
+                logger.info(f"✅ Table {table_index}: {validation['message']}")
             
         # Create field-to-index mapping
         field_indices = {}
         for idx, header in enumerate(headers):
             field_indices[header] = idx
-            
-        # Check if required fields exist in headers
+        
+        # Check if required fields exist in headers (with fallback to similar names)
         if client_name_field not in field_indices:
-            print(f"⚠️  Client field '{client_name_field}' not found in headers: {headers}")
-            continue
+            similar_client = find_similar_column(client_name_field, headers, carrier_name)
+            if similar_client:
+                client_name_field = similar_client
+                field_indices[client_name_field] = headers.index(similar_client)
+            else:
+                logger.warning(f"⚠️  Table {table_index}: Client field '{client_name_field}' not found in headers: {headers}")
+                continue
+        
         if commission_earned_field not in field_indices:
-            print(f"⚠️  Commission field '{commission_earned_field}' not found in headers: {headers}")
-            continue
+            # ✅ FIX: Hard-fail for Breckpoint missing columns instead of silent skip
+            if carrier_name and 'breckpoint' in carrier_name.lower():
+                logger.error(
+                    f"❌ CRITICAL BRECKPOINT ERROR: Statement missing required column '{commission_earned_field}'. "
+                    f"Available headers: {headers}. "
+                    f"Cannot proceed with commission calculations. Re-extraction required."
+                )
+                # Don't try fallback for Breckpoint - this is a critical error
+                raise ValueError(
+                    f"CRITICAL: Breckpoint statement missing required column '{commission_earned_field}'. "
+                    f"Cannot proceed with commission calculations. Re-extraction required."
+                )
+            
+            # For other carriers, try fallback
+            similar_commission = find_similar_column(commission_earned_field, headers, carrier_name)
+            if similar_commission:
+                logger.info(f"💡 FALLBACK: Using '{similar_commission}' instead of missing '{commission_earned_field}'")
+                commission_earned_field = similar_commission
+                field_indices[commission_earned_field] = headers.index(similar_commission)
+            else:
+                logger.warning(f"⚠️  Table {table_index}: Commission field '{commission_earned_field}' not found in headers: {headers}")
+                logger.warning(f"⚠️  Available headers: {headers}")
+                logger.warning(f"⚠️  This means NO commission records will be created from this table!")
+                continue
             
         # Get field indices
         client_idx = field_indices[client_name_field]
@@ -1462,6 +1660,23 @@ async def bulk_process_commissions(db: AsyncSession, statement_upload: Statement
     statement_date, statement_month, statement_year = extract_statement_date_info(statement_upload)
     print(f"📅 Statement date: {statement_date} (month: {statement_month}, year: {statement_year})")
     
+    # Get carrier name for validation (try to get from carrier_id lookup if available)
+    carrier_name = None
+    if hasattr(statement_upload, 'carrier_name') and statement_upload.carrier_name:
+        carrier_name = statement_upload.carrier_name
+    elif statement_upload.carrier_id:
+        # Try to get carrier name from carrier_id
+        try:
+            carrier_result = await db.execute(
+                select(Company.company_name).where(Company.id == statement_upload.carrier_id)
+            )
+            carrier_row = carrier_result.first()
+            if carrier_row:
+                carrier_name = carrier_row[0]
+                logger.info(f"Retrieved carrier name from ID: {carrier_name}")
+        except Exception as e:
+            logger.warning(f"Could not retrieve carrier name: {e}")
+    
     # ✅ OPTIMIZED: Extract all commission data in memory (no DB calls)
     commission_records = []
     
@@ -1472,26 +1687,65 @@ async def bulk_process_commissions(db: AsyncSession, statement_upload: Statement
         # Get headers from table to map field names to indices
         headers = table.get('header', []) or table.get('headers', [])
         if not headers:
-            print(f"⚠️  Table {table_index}: No headers found, skipping table")
+            logger.warning(f"⚠️  Table {table_index}: No headers found, skipping table")
             continue
         
         # ✅ CRITICAL FIX: Normalize headers to remove newlines for field matching
         # Legacy data may have headers like 'Commission\nAmount' instead of 'Commission Amount'
         from app.services.extraction_utils import normalize_table_headers
         normalized_headers = normalize_table_headers(headers)
+        
+        # ✅ FIX: Validate Breckpoint columns BEFORE processing rows
+        if carrier_name and 'breckpoint' in carrier_name.lower():
+            validation = validate_breckpoint_columns(normalized_headers, carrier_name)
+            if not validation["valid"]:
+                logger.error(f"❌ Table {table_index}: {validation['message']}")
+                logger.error(f"   Missing columns: {validation.get('missing_columns', [])}")
+                logger.error(f"   Skipping table due to invalid structure - extraction must be re-run")
+                continue  # Skip this table
+            else:
+                logger.info(f"✅ Table {table_index}: {validation['message']}")
             
         # Create field-to-index mapping using normalized headers
         field_indices = {}
         for idx, header in enumerate(normalized_headers):
             field_indices[header] = idx
-            
-        # Check if required fields exist in headers
+        
+        # Check if required fields exist in headers (with fallback to similar names)
         if client_name_field not in field_indices:
-            print(f"⚠️  Table {table_index}: Client field '{client_name_field}' not found in headers: {headers}")
-            continue
+            similar_client = find_similar_column(client_name_field, normalized_headers, carrier_name)
+            if similar_client:
+                client_name_field = similar_client
+                field_indices[client_name_field] = normalized_headers.index(similar_client)
+            else:
+                logger.warning(f"⚠️  Table {table_index}: Client field '{client_name_field}' not found in headers: {normalized_headers}")
+                continue
+        
         if commission_earned_field not in field_indices:
-            print(f"⚠️  Table {table_index}: Commission field '{commission_earned_field}' not found in headers: {headers}")
-            continue
+            # ✅ FIX: Hard-fail for Breckpoint missing columns instead of silent skip
+            if carrier_name and 'breckpoint' in carrier_name.lower():
+                logger.error(
+                    f"❌ CRITICAL BRECKPOINT ERROR: Statement missing required column '{commission_earned_field}'. "
+                    f"Available headers: {normalized_headers}. "
+                    f"Cannot proceed with commission calculations. Re-extraction required."
+                )
+                # Don't try fallback for Breckpoint - this is a critical error
+                raise ValueError(
+                    f"CRITICAL: Breckpoint statement missing required column '{commission_earned_field}'. "
+                    f"Cannot proceed with commission calculations. Re-extraction required."
+                )
+            
+            # For other carriers, try fallback
+            similar_commission = find_similar_column(commission_earned_field, normalized_headers, carrier_name)
+            if similar_commission:
+                logger.info(f"💡 FALLBACK: Using '{similar_commission}' instead of missing '{commission_earned_field}'")
+                commission_earned_field = similar_commission
+                field_indices[commission_earned_field] = normalized_headers.index(similar_commission)
+            else:
+                logger.warning(f"⚠️  Table {table_index}: Commission field '{commission_earned_field}' not found in headers: {normalized_headers}")
+                logger.warning(f"⚠️  Available headers: {normalized_headers}")
+                logger.warning(f"⚠️  This means NO commission records will be created from this table!")
+                continue
             
         # Get field indices
         client_idx = field_indices[client_name_field]
@@ -1518,46 +1772,55 @@ async def bulk_process_commissions(db: AsyncSession, statement_upload: Statement
             if row_index in summary_rows_set:
                 print(f"⏭️ Skipping summary row {row_index} in table {table_index}")
                 continue
-                
-            # Handle both dict and list row formats
-            if isinstance(row, dict):
-                # Row is a dictionary - use field names directly
-                client_name = row.get(client_name_field, '').strip()
-                commission_str = str(row.get(commission_earned_field, '0')).strip()
-                invoice_str = str(row.get(invoice_total_field, '0')).strip() if invoice_total_field else '0'
-            elif isinstance(row, list):
-                # Row is a list - use indices
-                client_name = str(row[client_idx]).strip() if client_idx < len(row) else ''
-                commission_str = str(row[commission_idx]).strip() if commission_idx < len(row) else '0'
-                invoice_str = str(row[invoice_idx]).strip() if invoice_idx and invoice_idx < len(row) else '0'
-            else:
-                print(f"⚠️  Skipping invalid row type: {type(row)}")
-                continue
-                
-            # Clean company name to remove state codes and numbers
-            client_name = company_name_service.clean_company_name(client_name)
-            if not client_name:
-                continue
             
-            commission_earned = parse_currency_amount(commission_str)
-            invoice_total = parse_currency_amount(invoice_str)
-            
-            # Only process records with commission or invoice data
-            if commission_earned != 0 or invoice_total != 0:
-                # ✅ FIX: Use carrier_id if available (new flow), otherwise fall back to company_id (old flow)
-                effective_carrier_id = statement_upload.carrier_id if statement_upload.carrier_id else statement_upload.company_id
-                commission_records.append({
-                    'carrier_id': effective_carrier_id,
-                    'client_name': client_name,
-                    'commission_earned': commission_earned,
-                    'invoice_total': invoice_total,
-                    'statement_month': statement_month,
-                    'statement_year': statement_year,
-                    'statement_date': statement_date,
-                    'upload_id': str(statement_upload.id),
-                    'user_id': user_id,  # CRITICAL: Include user_id for proper data isolation
-                    'environment_id': environment_id  # CRITICAL: Include environment_id for environment isolation
-                })
+            try:
+                # Handle both dict and list row formats
+                if isinstance(row, dict):
+                    # Row is a dictionary - use field names directly
+                    client_name = row.get(client_name_field, '').strip()
+                    commission_str = str(row.get(commission_earned_field, '0')).strip()
+                    invoice_str = str(row.get(invoice_total_field, '0')).strip() if invoice_total_field else '0'
+                elif isinstance(row, list):
+                    # Row is a list - use indices
+                    client_name = str(row[client_idx]).strip() if client_idx < len(row) else ''
+                    commission_str = str(row[commission_idx]).strip() if commission_idx < len(row) else '0'
+                    invoice_str = str(row[invoice_idx]).strip() if invoice_idx and invoice_idx < len(row) else '0'
+                else:
+                    print(f"⚠️  Skipping invalid row type: {type(row)}")
+                    continue
+                    
+                # Clean company name to remove state codes and numbers
+                client_name = company_name_service.clean_company_name(client_name)
+                if not client_name:
+                    continue
+                
+                commission_earned = parse_currency_amount(commission_str)
+                invoice_total = parse_currency_amount(invoice_str)
+                
+                # Only process records with commission or invoice data
+                if commission_earned != 0 or invoice_total != 0:
+                    # ✅ FIX: Use carrier_id if available (new flow), otherwise fall back to company_id (old flow)
+                    effective_carrier_id = statement_upload.carrier_id if statement_upload.carrier_id else statement_upload.company_id
+                    commission_records.append({
+                        'carrier_id': effective_carrier_id,
+                        'client_name': client_name,
+                        'commission_earned': commission_earned,
+                        'invoice_total': invoice_total,
+                        'statement_month': statement_month,
+                        'statement_year': statement_year,
+                        'statement_date': statement_date,
+                        'upload_id': str(statement_upload.id),
+                        'user_id': user_id,  # CRITICAL: Include user_id for proper data isolation
+                        'environment_id': environment_id  # CRITICAL: Include environment_id for environment isolation
+                    })
+            except Exception as e:
+                print(f"❌ ERROR processing row {row_index} in table {table_index}: {e}")
+                print(f"   Row data: {row}")
+                print(f"   Exception type: {type(e).__name__}")
+                import traceback
+                print(f"   Traceback: {traceback.format_exc()}")
+                # Continue processing other rows instead of failing completely
+                continue
     
     if not commission_records:
         print("ℹ️ No commission records to process")

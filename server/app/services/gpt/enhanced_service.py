@@ -150,6 +150,44 @@ class GPT5VisionService:
                 prompt_options=prompt_options or {}
             )
             
+            # ✅ NEW: Validate Breckpoint extraction
+            if carrier_name and 'breckpoint' in carrier_name.lower():
+                validation = self._validate_breckpoint_extraction(extraction_result, carrier_name)
+                
+                if not validation["valid"]:
+                    logger.error(f"❌ Breckpoint validation failed: {validation['message']}")
+                    logger.error(f"Missing columns: {validation.get('missing_columns', [])}")
+                    
+                    # ✅ AUTO-RETRY with enhanced prompt
+                    if validation.get('retry_recommended', False):
+                        logger.warning("🔄 Retrying extraction with enhanced column detection prompt...")
+                        
+                        # Add stronger prompt options
+                        enhanced_prompt_options = prompt_options.copy() if prompt_options else {}
+                        enhanced_prompt_options['force_column_scan'] = True
+                        enhanced_prompt_options['expected_columns'] = 8
+                        enhanced_prompt_options['critical_columns'] = ['Consultant Due This Period']
+                        
+                        # Retry extraction
+                        extraction_result = await self.vision_extractor.process_document(
+                            pdf_path=file_path,
+                            max_pages=max_pages,
+                            progress_tracker=progress_tracker,
+                            carrier_name=carrier_name,
+                            prompt_options=enhanced_prompt_options
+                        )
+                        
+                        # Validate retry
+                        retry_validation = self._validate_breckpoint_extraction(extraction_result, carrier_name)
+                        if not retry_validation["valid"]:
+                            logger.error("❌ Retry also failed - flagging for manual review")
+                            extraction_result['needs_manual_review'] = True
+                            extraction_result['validation_errors'] = retry_validation
+                        else:
+                            logger.info("✅ Retry successful - all columns extracted")
+                else:
+                    logger.info(validation["message"])
+            
             if total_pass_data:
                 self._merge_authoritative_total(extraction_result, total_pass_data)
             
@@ -324,6 +362,83 @@ class GPT5VisionService:
     def retrieve_batch_results(self, batch_job_id: str) -> Dict[str, Any]:
         """Retrieve results from completed batch job."""
         return self.batch_processor.retrieve_batch_results(batch_job_id)
+    
+    def _validate_breckpoint_extraction(
+        self, 
+        extraction_result: Dict[str, Any],
+        carrier_name: str
+    ) -> Dict[str, Any]:
+        """
+        Validate Breckpoint extraction has all required columns.
+        
+        Args:
+            extraction_result: Extraction result to validate
+            carrier_name: Carrier name
+        
+        Returns:
+            Dict with validation status and details:
+                - valid: bool
+                - message: str
+                - expected_count: int
+                - actual_count: int
+                - missing_columns: List[str]
+                - critical_missing: List[str]
+                - retry_recommended: bool
+        """
+        if not extraction_result.get('success'):
+            return {"valid": False, "message": "Extraction failed", "retry_recommended": False}
+        
+        tables = extraction_result.get('tables', [])
+        if not tables:
+            return {"valid": False, "message": "No tables extracted", "retry_recommended": True}
+        
+        # Check first table (main commission table)
+        first_table = tables[0] if isinstance(tables, list) else tables
+        headers = first_table.get('headers', [])
+        
+        required_columns = [
+            'Company Name',
+            'Company Group ID',
+            'Plan Period',
+            'Total Commission',
+            'Total Payment Applied',
+            'Consultant Due',
+            'Consultant Paid',
+            'Consultant Due This Period'
+        ]
+        
+        # Normalize for comparison
+        normalized_headers = [h.lower().strip() for h in headers]
+        missing_columns = []
+        
+        for req_col in required_columns:
+            found = any(req_col.lower().strip() == h for h in normalized_headers)
+            if not found:
+                missing_columns.append(req_col)
+        
+        if missing_columns:
+            # Check if it's the critical rightmost columns
+            critical_missing = [col for col in missing_columns 
+                              if col in ['Consultant Paid', 'Consultant Due This Period']]
+            
+            return {
+                "valid": False,
+                "expected_count": 8,
+                "actual_count": len(headers),
+                "missing_columns": missing_columns,
+                "critical_missing": critical_missing,
+                "message": (
+                    f"❌ Breckpoint validation FAILED: Missing {len(missing_columns)} columns. "
+                    f"Expected 8, got {len(headers)}. Missing: {missing_columns}"
+                ),
+                "retry_recommended": True if critical_missing else False
+            }
+        
+        return {
+            "valid": True,
+            "column_count": len(headers),
+            "message": "✅ Breckpoint validation PASSED: All 8 required columns present"
+        }
     
     async def _enhance_with_business_intelligence(
         self,

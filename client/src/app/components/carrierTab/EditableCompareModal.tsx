@@ -188,15 +188,11 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
     const tableData = statement.edited_tables || statement.final_data || statement.raw_data;
     
     if (Array.isArray(tableData) && tableData.length > 0) {
-     
-      
       // ✅ CRITICAL FIX: Transform rows from DICT format to ARRAY format
       // Backend stores rows as dictionaries but frontend expects arrays
       const normalizedTables = tableData.map((table, tableIdx) => {
         const headers = table.header || table.headers || [];
         let rows = table.rows || [];
-        
-        
         
         // Check if rows are in dictionary format and convert to arrays
         if (rows.length > 0 && typeof rows[0] === 'object' && !Array.isArray(rows[0])) {
@@ -206,23 +202,48 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
           });
         }
         
-        const summaryRowsNormalized = Array.isArray(table.summaryRows) 
-          ? table.summaryRows 
-          : (table.summaryRows instanceof Set 
-            ? Array.from(table.summaryRows) 
-            : []);  // Convert {} or any non-array/Set to []
+        // ✅ CRITICAL: Properly normalize summaryRows from backend
+        // Backend may send: Array, Set, empty object {}, null, or undefined
+        let summaryRowsNormalized: number[] = [];
         
+        if (Array.isArray(table.summaryRows)) {
+          summaryRowsNormalized = table.summaryRows;
+        } else if (table.summaryRows instanceof Set) {
+          summaryRowsNormalized = Array.from(table.summaryRows);
+        } else if (table.summaryRows && typeof table.summaryRows === 'object' && Object.keys(table.summaryRows).length === 0) {
+          // Empty object {} - convert to empty array
+          summaryRowsNormalized = [];
+          console.warn(`Table ${tableIdx}: Converted empty object {} to []`);
+        } else if (!table.summaryRows) {
+          // null or undefined
+          summaryRowsNormalized = [];
+        }
+        
+        console.log(`📊 Loading table ${tableIdx}:`, {
+          name: table.name,
+          rowCount: rows.length,
+          summaryRowsInput: table.summaryRows,
+          summaryRowsNormalized: summaryRowsNormalized,
+          summaryRowsCount: summaryRowsNormalized.length
+        });
         
         return {
           ...table,
           header: headers,
           rows: rows,
-          summaryRows: summaryRowsNormalized
+          summaryRows: summaryRowsNormalized  // Always an array of numbers
         };
       });
       
       setTables(normalizedTables);
       setCurrentTableIndex(0);
+      
+      console.log('✅ Tables loaded in EditableCompareModal:', normalizedTables.map(t => ({
+        name: t.name,
+        rowCount: t.rows?.length,
+        summaryRowsCount: t.summaryRows?.length,
+        summaryRows: t.summaryRows
+      })));
     }
   }, [statement]);
 
@@ -281,7 +302,26 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
 
   // Handle table changes
   const handleTablesChange = (updatedTables: any[]) => {
-    setTables(updatedTables);
+    // ✅ Accept table changes as-is - let component handle summaryRows updates
+    // Only normalize empty objects to empty arrays for consistency
+    const normalizedTables = updatedTables.map((table, idx) => {
+      // Only fix if summaryRows is an empty object {} (which happens due to JSON serialization issues)
+      // DO NOT interfere if summaryRows is a valid array (even if empty []) or Set
+      if (table.summaryRows && 
+          typeof table.summaryRows === 'object' && 
+          !(table.summaryRows instanceof Array) && 
+          !(table.summaryRows instanceof Set) &&
+          Object.keys(table.summaryRows).length === 0) {
+        console.warn(`⚠️ Converting empty object {} to empty array [] for table ${idx}`);
+        return {
+          ...table,
+          summaryRows: []
+        };
+      }
+      return table;
+    });
+    
+    setTables(normalizedTables);
   };
 
   // Fetch format learned mappings when view mode changes to field_mapping
@@ -594,9 +634,25 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
       setSaveProgress(20);
       toast('Saving edited tables...');
       
+      // ✅ CRITICAL FIX: Convert summaryRows Set to Array BEFORE sending to backend
+      // Sets don't serialize properly to JSON and become empty objects {}
+      const tablesForSave = tables.map(table => ({
+        ...table,
+        summaryRows: table.summaryRows instanceof Set 
+          ? Array.from(table.summaryRows) 
+          : (Array.isArray(table.summaryRows) ? table.summaryRows : [])
+      }));
+      
+      console.log('💾 Saving tables with summaryRows:', tablesForSave.map(t => ({
+        name: t.name,
+        rowCount: t.rows?.length,
+        summaryRowsCount: t.summaryRows?.length,
+        summaryRows: t.summaryRows
+      })));
+      
       const saveTablesPayload = {
         upload_id: statement.id,
-        tables: tables,
+        tables: tablesForSave,  // ✅ Use converted tables with Array summaryRows
         company_id: carrierId,
         selected_statement_date: statement.selected_statement_date,
         extracted_carrier: editedCarrierName,
@@ -622,7 +678,7 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
         `${process.env.NEXT_PUBLIC_API_URL}/api/table-editor/learn-format-patterns`,
         {
           upload_id: statement.id,
-          tables: tables,
+          tables: tablesForSave,  // ✅ Use converted tables with Array summaryRows
           company_id: updatedCarrierId,
           selected_statement_date: statement.selected_statement_date,
           extracted_carrier: editedCarrierName,
@@ -798,6 +854,71 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
         );
       } else {
         toast.success('✅ Statement recalculated successfully!');
+      }
+      
+      // ✅ CRITICAL FIX: Refetch statement data from backend to get updated summaryRows
+      // This ensures the modal displays the latest data with preserved summary row metadata
+      try {
+        const refreshedStatementResponse = await axios.get(
+          `${process.env.NEXT_PUBLIC_API_URL}/api/companies/${carrierId}/statements/`,
+          { withCredentials: true }
+        );
+        
+        const refreshedStatement = refreshedStatementResponse.data.find(
+          (s: any) => s.id === statement.id
+        );
+        
+        if (refreshedStatement) {
+          // Update tables with refreshed data
+          const tableData = refreshedStatement.edited_tables || refreshedStatement.final_data || refreshedStatement.raw_data;
+          
+          if (Array.isArray(tableData) && tableData.length > 0) {
+            const normalizedTables = tableData.map((table: any) => {
+              const headers = table.header || table.headers || [];
+              let rows = table.rows || [];
+              
+              // Convert dict rows to array format if needed
+              if (rows.length > 0 && typeof rows[0] === 'object' && !Array.isArray(rows[0])) {
+                rows = rows.map((rowDict: Record<string, any>) => {
+                  return headers.map((header: string) => rowDict[header] || '');
+                });
+              }
+              
+              // ✅ CRITICAL: Properly normalize summaryRows from backend
+              let summaryRowsNormalized: number[] = [];
+              
+              if (Array.isArray(table.summaryRows)) {
+                summaryRowsNormalized = table.summaryRows;
+              } else if (table.summaryRows instanceof Set) {
+                summaryRowsNormalized = Array.from(table.summaryRows);
+              } else if (table.summaryRows && typeof table.summaryRows === 'object' && Object.keys(table.summaryRows).length === 0) {
+                // Empty object {} - convert to empty array
+                summaryRowsNormalized = [];
+              } else if (!table.summaryRows) {
+                // null or undefined
+                summaryRowsNormalized = [];
+              }
+              
+              return {
+                ...table,
+                header: headers,
+                rows: rows,
+                summaryRows: summaryRowsNormalized
+              };
+            });
+            
+            setTables(normalizedTables);
+            console.log('✅ Tables refreshed after save with updated summaryRows:', normalizedTables.map(t => ({
+              name: t.name,
+              rowCount: t.rows?.length,
+              summaryRowsCount: t.summaryRows?.length,
+              summaryRows: t.summaryRows
+            })));
+          }
+        }
+      } catch (refreshError) {
+        console.error('⚠️ Failed to refresh statement data:', refreshError);
+        // Continue anyway - data might still be valid
       }
       
       // Wait a moment to show completion
@@ -1060,9 +1181,26 @@ export default function EditableCompareModal({ statement, onClose, onComplete }:
                 <ExtractedDataTable
                   table={currentTable}
                   onTableChange={(updatedTable) => {
+                    // ✅ Accept table updates directly from ExtractedDataTable
+                    // The component already handles summaryRows correctly via useSummaryRowDetection
                     const updatedTables = [...tables];
                     updatedTables[currentTableIndex] = updatedTable;
-                    handleTablesChange(updatedTables);
+                    setTables(updatedTables);
+                    
+                    // Log for debugging
+                    const summaryRowsCount = updatedTable.summaryRows instanceof Set 
+                      ? updatedTable.summaryRows.size 
+                      : (updatedTable.summaryRows?.length || 0);
+                    
+                    console.log('📝 Table updated:', {
+                      tableIndex: currentTableIndex,
+                      tableName: updatedTable.name,
+                      rowCount: updatedTable.rows?.length,
+                      summaryRowsCount: summaryRowsCount,
+                      summaryRows: updatedTable.summaryRows instanceof Set 
+                        ? Array.from(updatedTable.summaryRows)
+                        : updatedTable.summaryRows
+                    });
                   }}
                   showSummaryRows={true}
                   onToggleSummaryRows={() => {}}

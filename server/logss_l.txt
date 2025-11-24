@@ -1,566 +1,541 @@
-INFO:app.services.ai_field_mapping_service:🔍 AI Mapping: carrier_id provided: True (value: 8340174b-f6ed-42eb-976d-4868bb06c844)
-INFO:app.services.ai_field_mapping_service:🎯 Carrier ID is valid, attempting to retrieve learned mapping for carrier 8340174b-f6ed-42eb-976d-4868bb06c844
-INFO:app.services.ai_field_mapping_service:🔍 Generated format signature for lookup: f0d2424f7efd76c2fcfb224d0246d1f1
-INFO:app.services.ai_field_mapping_service:🔍 Looking up learned format for carrier 8340174b-f6ed-42eb-976d-4868bb06c844 with 6 headers
-INFO:app.services.ai_field_mapping_service:✅ Found EXACT match for learned format with signature f0d2424f7efd76c2fcfb224d0246d1f1
-INFO:app.services.ai_field_mapping_service:✅ Learned field mapping has 6 mappings
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1764016970866_qecv8do0h: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1764016970866_qecv8do0h
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1764016970866_qecv8do0h: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1764016970866_qecv8do0h
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/responses "HTTP/1.1 200 OK"
+WARNING:app.services.gpt.vision_extractor:⚠️ Response incomplete/truncated at 6000 tokens. Retrying with 10000 tokens (attempt 1/2).
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1764016970866_qecv8do0h: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1764016970866_qecv8do0h
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1764016970866_qecv8do0h: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1764016970866_qecv8do0h
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1764016970866_qecv8do0h: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1764016970866_qecv8do0h
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1764016970866_qecv8do0h: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1764016970866_qecv8do0h
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1764016970866_qecv8do0h: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1764016970866_qecv8do0h
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1764016970866_qecv8do0h: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1764016970866_qecv8do0h
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1764016970866_qecv8do0h: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1764016970866_qecv8do0h
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1764016970866_qecv8do0h: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1764016970866_qecv8do0h
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/responses "HTTP/1.1 200 OK"
+INFO:app.services.gpt.vision_extractor:📊 Response length: 17657 characters
+INFO:app.services.gpt.vision_extractor:✅ Extraction complete: 3 tables, 15454 tokens, $0.0023
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1764016970866_qecv8do0h: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1764016970866_qecv8do0h
+INFO:app.services.gpt.vision_extractor:📤 Uploading PDF: /var/folders/2g/bqpglbdx7xd0zlkzpbb60nqc0000gn/T/tmp8u1o22vn.pdf
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1764016970866_qecv8do0h: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1764016970866_qecv8do0h
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/files "HTTP/1.1 200 OK"
+INFO:app.services.gpt.vision_extractor:✅ PDF uploaded: file-QAt4u8EGW8qTzzXjnHnqB3
+INFO:app.services.gpt.dynamic_prompts:🔍 GPT: Looking up carrier prompt: 'Pinecrestconsulting' → normalized: 'pinecrestconsulting'
+INFO:app.services.gpt.dynamic_prompts:❌ No carrier-specific prompt found for 'Pinecrestconsulting', using standard prompt only
+INFO:app.services.gpt.dynamic_prompts:   Available carriers: ['UnitedHealthcare', 'United Healthcare', 'UHC', 'United Health Group', 'UnitedHealth', 'Redirect Health', 'breckpoint', 'Breckpoint']
+INFO:app.services.gpt.vision_extractor:🎯 Added total location guidance for carrier: Pinecrestconsulting
+INFO:app.services.gpt.vision_extractor:📋 Extracting from PDF using Responses API (file_id: file-QAt4u8EGW8qTzzXjnHnqB3)
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1764016970866_qecv8do0h: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1764016970866_qecv8do0h
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1764016970866_qecv8do0h: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1764016970866_qecv8do0h
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1764016970866_qecv8do0h: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1764016970866_qecv8do0h
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1764016970866_qecv8do0h: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1764016970866_qecv8do0h
+INFO:app.services.orphan_cleanup_service:🧹 Starting orphan cleanup job...
+INFO:app.services.orphan_cleanup_service:✅ Orphan cleanup completed: no orphans found
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1764016970866_qecv8do0h: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1764016970866_qecv8do0h
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1764016970866_qecv8do0h: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1764016970866_qecv8do0h
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1764016970866_qecv8do0h: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1764016970866_qecv8do0h
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1764016970866_qecv8do0h: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1764016970866_qecv8do0h
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/responses "HTTP/1.1 200 OK"
+WARNING:app.services.gpt.vision_extractor:⚠️ Response incomplete/truncated at 6000 tokens. Retrying with 10000 tokens (attempt 1/2).
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1764016970866_qecv8do0h: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1764016970866_qecv8do0h
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1764016970866_qecv8do0h: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1764016970866_qecv8do0h
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1764016970866_qecv8do0h: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1764016970866_qecv8do0h
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1764016970866_qecv8do0h: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1764016970866_qecv8do0h
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1764016970866_qecv8do0h: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1764016970866_qecv8do0h
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1764016970866_qecv8do0h: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1764016970866_qecv8do0h
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1764016970866_qecv8do0h: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1764016970866_qecv8do0h
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1764016970866_qecv8do0h: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1764016970866_qecv8do0h
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/responses "HTTP/1.1 200 OK"
+INFO:app.services.gpt.vision_extractor:📊 Response length: 12341 characters
+INFO:app.services.gpt.vision_extractor:✅ Extraction complete: 1 tables, 13345 tokens, $0.0021
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1764016970866_qecv8do0h: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1764016970866_qecv8do0h
+INFO:app.services.gpt.vision_extractor:📤 Uploading PDF: /var/folders/2g/bqpglbdx7xd0zlkzpbb60nqc0000gn/T/tmppabtz7_e.pdf
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1764016970866_qecv8do0h: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1764016970866_qecv8do0h
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/files "HTTP/1.1 200 OK"
+INFO:app.services.gpt.vision_extractor:✅ PDF uploaded: file-47A8FsWJQo4ub4naJpRtoa
+INFO:app.services.gpt.dynamic_prompts:🔍 GPT: Looking up carrier prompt: 'Pinecrestconsulting' → normalized: 'pinecrestconsulting'
+INFO:app.services.gpt.dynamic_prompts:❌ No carrier-specific prompt found for 'Pinecrestconsulting', using standard prompt only
+INFO:app.services.gpt.dynamic_prompts:   Available carriers: ['UnitedHealthcare', 'United Healthcare', 'UHC', 'United Health Group', 'UnitedHealth', 'Redirect Health', 'breckpoint', 'Breckpoint']
+INFO:app.services.gpt.vision_extractor:🎯 Added total location guidance for carrier: Pinecrestconsulting
+INFO:app.services.gpt.vision_extractor:📋 Extracting from PDF using Responses API (file_id: file-47A8FsWJQo4ub4naJpRtoa)
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1764016970866_qecv8do0h: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1764016970866_qecv8do0h
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1764016970866_qecv8do0h: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1764016970866_qecv8do0h
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1764016970866_qecv8do0h: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1764016970866_qecv8do0h
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1764016970866_qecv8do0h: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1764016970866_qecv8do0h
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/responses "HTTP/1.1 200 OK"
+INFO:app.services.gpt.vision_extractor:📊 Response length: 5960 characters
+INFO:app.services.gpt.vision_extractor:✅ Extraction complete: 1 tables, 9169 tokens, $0.0015
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1764016970866_qecv8do0h: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1764016970866_qecv8do0h
+INFO:app.services.gpt.vision_extractor:✅ Document processing complete: 5 tables, $0.0000
+INFO:app.services.gpt.monitoring:✅ Extraction success | upload_id=upload_1764016978 | pages=1 | tokens=37968 | cost=$0.0060 | time=401.89s
+INFO:app.services.gpt.enhanced_service:✅ Extraction complete: 5 tables, $0.0060, 401.89s
+INFO:app.services.enhanced_extraction_service:================================================================================
+INFO:app.services.enhanced_extraction_service:✅ GPT-5 VISION SERVICE COMPLETED SUCCESSFULLY
+INFO:app.services.enhanced_extraction_service:   Success: True
+INFO:app.services.enhanced_extraction_service:   Tables Extracted: 5
+INFO:app.services.enhanced_extraction_service:   Tokens Used: 37968
+INFO:app.services.enhanced_extraction_service:   Cost: $0.0060
+INFO:app.services.enhanced_extraction_service:================================================================================
+INFO:app.services.enhanced_extraction_service:⚡ Transforming GPT-5 Vision results to compatible format
+INFO:app.services.enhanced_extraction_service:📊 GPT-5 extraction results:
+INFO:app.services.enhanced_extraction_service:   - Tables: 5
+INFO:app.services.enhanced_extraction_service:   - Groups/Companies: 13
+INFO:app.services.enhanced_extraction_service:   - Writing Agents: 3
+INFO:app.services.enhanced_extraction_service:   - Carrier: ALLIED
+INFO:app.services.enhanced_extraction_service:   - Broker: INNOVATIVE BPS LLC
+INFO:app.services.enhanced_extraction_service:   - Statement Date: 2025-08-06
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1764016970866_qecv8do0h: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1764016970866_qecv8do0h
+INFO:app.services.enhanced_extraction_service:📋 GPT-5 carrier/broker extraction → carrier='ALLIED' (0.95) | broker='INNOVATIVE BPS LLC' (0.95)
+INFO:app.services.enhanced_extraction_service:✅ GPT-5 metadata extracted: carrier=ALLIED, date=2025-08-06, broker=INNOVATIVE BPS LLC
+INFO:app.services.enhanced_extraction_service:   Cost: $0.0060, Tokens: 37968
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1764016970866_qecv8do0h: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1764016970866_qecv8do0h
+📎 Enhanced multi-strategy stitching: Processing 5 tables
+📎 Processing 5 detail tables for potential merging
+📎 Canonical header identified: ['Group No.', 'Group Name', 'Billing Period', 'Adj. Period', 'Invoice Total', 'Stoploss Total', 'Agent Rate', 'Calculation Method', 'Census Ct.', 'Paid Amount'] (10 columns)
+📎 Detail table 1 headers: ['Group No.', 'Group Name', 'Billing Period', 'Adj. Period', 'Invoice Total', 'Stoploss Total', 'Agent Rate', 'Calculation Method', 'Census Ct.', 'Paid Amount'] (10 columns)
+📎 Detail table 2 headers: ['Group No.', 'Group Name', 'Billing Period', 'Adj. Period', 'Invoice Total', 'Stoploss Total', 'Agent Rate', 'Calculation Method', 'Census Ct.', 'Paid Amount'] (10 columns)
+📎 Detail table 3 headers: ['Group No.', 'Group Name', 'Billing Period', 'Adj. Period', 'Invoice Total', 'Stoploss Total', 'Agent Rate', 'Calculation Method', 'Census Ct.', 'Paid Amount'] (10 columns)
+📎 Detail table 4 headers: ['Group No.', 'Group Name', 'Billing Period', 'Adj. Period', 'Invoice Total', 'Stoploss Total', 'Agent Rate', 'Calculation Method', 'Census Ct.', 'Paid Amount'] (10 columns)
+📎 Detail table 5 headers: ['Group No.', 'Group Name', 'Billing Period', 'Adj. Period', 'Invoice Total', 'Stoploss Total', 'Agent Rate', 'Calculation Method', 'Census Ct.', 'Paid Amount'] (10 columns)
+📎 Found 1 unique header patterns
+📎 Header pattern 'group no.' appears in 5 tables
+📎 Creating group with 5 tables (identical headers)
+📎 Grouped 5 detail tables into 1 groups
+📎 Merging group 1 with 5 tables
+INFO:app.services.extraction_utils:✅ Merged table created: 71 rows (enhancements preserved from individual tables)
+📎 Merged detail table 1: 10 headers, 71 rows
+📎 Merged headers: ['Group No.', 'Group Name', 'Billing Period', 'Adj. Period', 'Invoice Total', 'Stoploss Total', 'Agent Rate', 'Calculation Method', 'Census Ct.', 'Paid Amount']
+📎 Enhanced stitching completed: 1 detail table(s) + 0 grand total table(s) = 1 final tables
+INFO:app.services.extraction_utils:Header normalization: 10 headers normalized
+INFO:app.services.enhanced_extraction_service:GPT-5: Verified normalized headers
+INFO:app.services.enhanced_extraction_service:📊 Table 1 summary rows → model:14 heuristic:14 final:14
+INFO:app.services.enhanced_extraction_service:   ↳ Example reasoning row 3: score=1.7 reasons=['Row annotated as GroupSummary', 'Contains summary keyword', 'Matches expected rollup label', "Matches 'Total for Group' pattern", "Contains 'Total for ...' phrase", 'Matches running total of previous detail rows']
+INFO:app.services.enhanced_extraction_service:⭐ GPT-5: Processed 5 tables into 1 tables
+INFO:app.services.enhanced_extraction_service:   Cost: $0.0060
+INFO:app.services.enhanced_extraction_service:   Tokens: 37968
+INFO:app.services.enhanced_extraction_service:✅ Using GPT-5's structured output summary row detection
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1764016970866_qecv8do0h: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1764016970866_qecv8do0h
+INFO:app.services.websocket_service:Completed stage table_detection for upload upload_1764016970866_qecv8do0h
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1764016970866_qecv8do0h: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1764016970866_qecv8do0h
+INFO:app.services.websocket_service:Started stage summary_generation for upload upload_1764016970866_qecv8do0h
+INFO:app.services.conversational_summary_service:🗣️ Generating conversational summary...
+INFO:app.services.conversational_summary_service:🔍 _build_summary_prompt called:
+INFO:app.services.conversational_summary_service:   - use_enhanced: True
+INFO:app.services.conversational_summary_service:   - has_enhanced_data: True
+INFO:app.services.conversational_summary_service:✅ Attaching condensed enhanced context to prompt
+INFO:app.services.conversational_summary_service:✅ SUCCESS: Enhanced prompts imported correctly
+INFO:app.services.conversational_summary_service:🚀 Calling GPT-4o API for summary generation...
+INFO:app.services.conversational_summary_service:   Model: gpt-4o
+INFO:app.services.conversational_summary_service:   Max tokens: 1200
+INFO:app.services.conversational_summary_service:   Prompt length: 2797 chars
+INFO:app.services.conversational_summary_service:   System prompt length: 1421 chars
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.services.conversational_summary_service:📊 Token usage - Input: 1,058, Output: 278
+INFO:app.services.conversational_summary_service:✅ GPT-4o API call successful
+INFO:app.services.conversational_summary_service:✅ Detected structured JSON response from GPT-4o
+INFO:app.services.conversational_summary_service:📊 GPT-4o provided 11 fields: ['carrier_name', 'broker_company', 'statement_date', 'broker_id', 'payment_type', 'total_amount', 'company_count', 'top_contributors', 'commission_structure', 'census_count', 'billing_periods']
+INFO:app.services.conversational_summary_service:📊 Extracted structured fields: broker_company='INNOVATIVE BPS LLC', carrier='ALLIED', company_count=13 (from 13 groups_and_companies)
+INFO:app.services.conversational_summary_service:✅ Extracted structured summary data (8 fields): ['carrier_name', 'broker_company', 'statement_date', 'total_amount', 'company_count', 'broker_id_confidence', 'census_count', 'billing_periods']
+INFO:app.services.conversational_summary_service:✅ Fallback added 1 missing fields: ['broker_id_confidence']
+INFO:app.services.conversational_summary_service:📄 Generated summary length: 497 characters
+INFO:app.services.conversational_summary_service:📊 Final structured data keys: ['carrier_name', 'broker_company', 'statement_date', 'total_amount', 'company_count', 'broker_id_confidence', 'census_count', 'billing_periods', 'broker_id', 'payment_type', 'top_contributors', 'commission_structure']
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1764016970866_qecv8do0h: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1764016970866_qecv8do0h
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1764016970866_qecv8do0h: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1764016970866_qecv8do0h
+INFO:app.services.websocket_service:Completed stage summary_generation for upload upload_1764016970866_qecv8do0h
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1764016970866_qecv8do0h: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1764016970866_qecv8do0h
+INFO:app.services.websocket_service:Started stage validation for upload upload_1764016970866_qecv8do0h
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1764016970866_qecv8do0h: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1764016970866_qecv8do0h
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1764016970866_qecv8do0h: completion
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1764016970866_qecv8do0h
+INFO:app.services.websocket_service:Completed processing for upload upload_1764016970866_qecv8do0h in 407.96 seconds
+INFO:app.api.new_extract:✅ Extraction completed successfully
+INFO:app.services.cancellation_manager:Cleared cancellation status for upload upload_1764016970866_qecv8do0h
+INFO:app.api.new_extract:🔍 Summary row refinement adjusted table 0: [3, 8, 14, 15, 19, 52, 54, 56, 58, 60, 61, 63, 65, 70] → [1, 2, 3, 6, 7, 8, 14, 15, 17, 18, 19, 52, 58, 59, 60, 61, 63, 65, 70]
+INFO:app.api.new_extract:✅ Extraction completed (data NOT saved to DB, will be saved on approval)
+INFO:app.services.audit_logging_service:Audit: data_view by user f6cf1764-5bfc-4352-abd9-81b72b7cf191 on extraction_complete (ID: 5aecca3b-d567-4cb9-989c-877448a3b0bc)
+INFO:app.api.new_extract:🎯 Format Learning: Using carrier ALLIED with ID 5c9324ac-1794-4563-8e0e-8cd5c5317181
+WARNING:app.api.new_extract:🚨 CARRIER MISMATCH DETECTED: File uploaded to d883a865-a54f-41d6-968e-f94c3cb3f589 but extracted as ALLIED (5c9324ac-1794-4563-8e0e-8cd5c5317181)
+INFO:app.api.new_extract:🔄 Reassigning file to correct carrier: ALLIED
+INFO:app.services.gcs_utils:✅ File copied in GCS: statements/5aecca3b-d567-4cb9-989c-877448a3b0bc/8.6.2025.pdf -> statements/5c9324ac-1794-4563-8e0e-8cd5c5317181/8.6.2025.pdf
+INFO:app.services.gcs_utils:✅ File deleted from GCS: statements/5aecca3b-d567-4cb9-989c-877448a3b0bc/8.6.2025.pdf
+INFO:app.services.gcs_utils:🔐 Generating signed URL for: statements/5c9324ac-1794-4563-8e0e-8cd5c5317181/8.6.2025.pdf
+INFO:app.services.gcs_utils:📝 Generating signed URL with:
+INFO:app.services.gcs_utils:   - Content-Type: application/pdf
+INFO:app.services.gcs_utils:   - Content-Disposition: inline
+INFO:app.services.gcs_utils:   - Expiration: 1 hour(s)
+INFO:app.services.gcs_utils:✅ Generated signed URL for GCS file with inline headers: statements/5c9324ac-1794-4563-8e0e-8cd5c5317181/8.6.2025.pdf
+INFO:app.services.gcs_utils:   URL expires at: 2025-11-24 21:49:48.248924
+INFO:app.api.new_extract:✅ File moved to correct carrier folder in GCS: statements/5c9324ac-1794-4563-8e0e-8cd5c5317181/8.6.2025.pdf
+INFO:app.api.new_extract:✅ Updated upload metadata: carrier_id=5c9324ac-1794-4563-8e0e-8cd5c5317181, company_id stays as user's company=d883a865-a54f-41d6-968e-f94c3cb3f589
+INFO:app.api.new_extract:📊 Single table detected, using it for field mapping
+INFO:app.api.new_extract:🎯 Using table 0 for field mapping with 10 headers
+🎯 FormatLearningService: Finding matching format for company 5c9324ac-1794-4563-8e0e-8cd5c5317181
+🎯 FormatLearningService: Headers: ['Group No.', 'Group Name', 'Billing Period', 'Adj. Period', 'Invoice Total', 'Stoploss Total', 'Agent Rate', 'Calculation Method', 'Census Ct.', 'Paid Amount']
+🎯 FormatLearningService: Table structure: {'row_count': 71, 'column_count': 10, 'has_financial_data': True}
+🎯 FormatLearningService: Headers type: <class 'list'>
+🎯 FormatLearningService: Headers length: 10
+🎯 CRUD: Finding best matching format for company 5c9324ac-1794-4563-8e0e-8cd5c5317181
+🎯 CRUD: Input headers: ['Group No.', 'Group Name', 'Billing Period', 'Adj. Period', 'Invoice Total', 'Stoploss Total', 'Agent Rate', 'Calculation Method', 'Census Ct.', 'Paid Amount']
+🎯 CRUD: Input table structure: {'row_count': 71, 'column_count': 10, 'has_financial_data': True}
+🎯 CRUD: Found 2 saved formats for company
+🎯 CRUD: Comparing with saved format:
+🎯 CRUD:   Saved headers: ['Group No.', 'Group Name', 'Billing Period', 'Adj. Period', 'Invoice Total', 'Stoploss Total', 'Agent Rate', 'Calculation Method', 'Census Ct.', 'Paid Amount']
+🎯 CRUD:   Header similarity: 0.8
+🎯 CRUD:   Structure similarity: 1.0
+🎯 CRUD:   Total score: 0.8400000000000001
+🎯 CRUD:   -> New best match with score 0.8400000000000001
+🎯 CRUD: Comparing with saved format:
+🎯 CRUD:   Saved headers: ['Group No.', 'Group Name', 'Billing Period', 'Adj. Period', 'Invoice Total', 'Stoploss Total', 'Agent %', 'Calculation Method', 'Census Ct.', 'Paid Amount']
+🎯 CRUD:   Header similarity: 0.7200000000000001
+🎯 CRUD:   Structure similarity: 1.0
+🎯 CRUD:   Total score: 0.776
+🎯 FormatLearningService: Best match score: 0.8400000000000001
+🎯 FormatLearningService: Found matching format with signature: 6f736ac611e1789c131a993b10321314
+🎯 FormatLearningService: Learned field mapping: {'Agent %': 'Commission Rate', 'Group No.': 'Policy Number', 'Census Ct.': 'Total Subscribers', 'Group Name': 'Client Name', 'Adj. Period': 'Adjustment Period Start', 'Paid Amount': 'Commission Earned', 'Invoice Total': 'Invoice Total', 'Billing Period': 'Coverage Period Start', 'Stoploss Total': 'Stoploss Total', 'Calculation Method': 'Plan Type'}
+🎯 FormatLearningService: Learned table editor settings: {'headers': ['Group No.', 'Group Name', 'Billing Period', 'Adj. Period', 'Invoice Total', 'Stoploss Total', 'Agent Rate', 'Calculation Method', 'Census Ct.', 'Paid Amount'], 'summary_rows': [1, 2, 3, 6, 7, 8, 14, 16, 17, 18, 52, 58, 61, 63, 67, 68, 69, 71, 72, 73, 77, 78, 79, 80], 'corrected_carrier_name': '', 'corrected_statement_date': '2025-08-06', 'user_corrections': {'carrier_name': '', 'statement_date': '2025-08-06'}}
+INFO:app.api.new_extract:🎯 Format Learning: Found matching format with score 0.8400000000000001
+INFO:app.api.new_extract:🎯 Format Learning: Skipping statement date auto-apply (dates are document-specific)
+INFO:app.api.new_extract:✅ Total extracted from document_metadata: $386.61
+WARNING:app.api.new_extract:🛡️ PROTECTED: Document metadata total ($386.61) is LOCKED. Skipping table column scanning to prevent incorrect replacements.
+WARNING:app.api.new_extract:🛡️ ABSOLUTE PROTECTION: existing method is 'document_metadata' ($386.61). Candidate 'calculated_sum' ($3,846.45) is REJECTED regardless of priority. Document metadata is the HIGHEST priority source and can NEVER be replaced!
+INFO:app.api.new_extract:🎯 Format Learning: Total validation result: {'matches': False, 'difference': None, 'difference_percent': None, 'status': 'no_comparison', 'reason': 'Missing total amount for comparison'}
+INFO:app.api.new_extract:📊 Added total to document_metadata: $386.61 (method: document_metadata)
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1764016970866_qecv8do0h: STEP_STARTED
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1764016970866_qecv8do0h
+INFO:app.services.websocket_service:Step started: Understanding Structure (Step 4) for upload_id upload_1764016970866_qecv8do0h
+INFO:app.services.ai_plan_type_detection_service:AI Plan Type Detection Service initialized successfully
+INFO:app.api.new_extract:🔍 AI Plan Type Detection: Detecting plan types during extraction
+INFO:app.services.ai_plan_type_detection_service:🔍 AI Plan Detection: Analyzing document for insurance plan types
+INFO:httpx:HTTP Request: POST https://api.mistral.ai/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.services.ai_plan_type_detection_service:✅ AI successfully detected plan types
+INFO:app.services.ai_plan_type_detection_service:✅ AI Plan Detection: Found 1 plan types with 0.90 confidence
+INFO:app.api.new_extract:✅ AI Plan Detection: 1 plan types with 0.90 confidence
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1764016970866_qecv8do0h: STEP_STARTED
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1764016970866_qecv8do0h
+INFO:app.services.websocket_service:Step started: AI Field Mapping (Step 5) for upload_id upload_1764016970866_qecv8do0h
+INFO:app.api.new_extract:🧠 AI Field Mapping: Starting field mapping during extraction
+INFO:app.api.new_extract:📋 Normalizing headers for AI mapping:
+INFO:app.api.ai_intelligent_mapping:🚀 Enhanced AI Analysis Request: User muhammad@pinecrestconsulting.com
+INFO:app.services.ai_field_mapping_service:🤖 AI Mapping: Analyzing 10 headers with AI intelligence
+INFO:app.services.ai_field_mapping_service:🔍 AI Mapping: carrier_id provided: True (value: 5c9324ac-1794-4563-8e0e-8cd5c5317181)
+INFO:app.services.ai_field_mapping_service:🎯 Carrier ID is valid, attempting to retrieve learned mapping for carrier 5c9324ac-1794-4563-8e0e-8cd5c5317181
+INFO:app.services.ai_field_mapping_service:🔍 Generated format signature for lookup: 6f736ac611e1789c131a993b10321314
+INFO:app.services.ai_field_mapping_service:🔍 Looking up learned format for carrier 5c9324ac-1794-4563-8e0e-8cd5c5317181 with 10 headers
+INFO:app.services.ai_field_mapping_service:✅ Found EXACT match for learned format with signature 6f736ac611e1789c131a993b10321314
+INFO:app.services.ai_field_mapping_service:✅ Learned field mapping has 10 mappings
 INFO:app.services.ai_field_mapping_service:🎯 Found learned mapping for carrier with 1.00 confidence
 INFO:app.services.ai_field_mapping_service:🎯 Using learned mappings directly with match score 1.0
-INFO:app.services.ai_field_mapping_service:✅ Learned field_mapping contains 6 mappings
-INFO:app.services.ai_field_mapping_service:✅ Applied 6 learned mappings directly - returning early
+INFO:app.services.ai_field_mapping_service:✅ Learned field_mapping contains 10 mappings
+INFO:app.services.ai_field_mapping_service:✅ Applied 9 learned mappings directly - returning early
 INFO:app.services.ai_field_mapping_service:✅ Response includes learned_format_used=True flag
 INFO:app.services.ai_plan_type_detection_service:🔍 AI Plan Detection: Analyzing document for insurance plan types
 INFO:httpx:HTTP Request: POST https://api.mistral.ai/v1/chat/completions "HTTP/1.1 200 OK"
 INFO:app.services.ai_plan_type_detection_service:✅ AI successfully detected plan types
 INFO:app.services.ai_plan_type_detection_service:✅ AI Plan Detection: Found 1 plan types with 0.90 confidence
 INFO:app.api.ai_intelligent_mapping:✅ Enhanced AI Analysis Complete: Overall confidence 0.93
-INFO:app.api.new_extract:✅ AI Field Mapping: 6 mappings with sample data, confidence 0.95
+INFO:app.api.new_extract:✅ AI Field Mapping: 9 mappings with sample data, confidence 0.95
 INFO:app.api.new_extract:✅ Conversational summary supplied by extraction pipeline
-INFO:app.api.new_extract:   Summary preview: This is a commission statement from Redirect Health for an unidentified broker, dated May 31, 2025. The document indicates a total payment of $4,861.56, covering 12 different groups. The most signific
-INFO:app.api.new_extract:   Structured data keys: ['statement_date', 'total_amount', 'company_count', 'broker_id_confidence', 'carrier_name', 'broker_company', 'broker_id', 'payment_type', 'top_contributors', 'commission_structure', 'census_count', 'billing_periods']
-INFO:app.services.audit_logging_service:Audit: file_upload by user f6cf1764-5bfc-4352-abd9-81b72b7cf191 on statement_upload (ID: 9d102016-8e5f-48c1-b2e0-47924af5facf)
+INFO:app.api.new_extract:   Summary preview: This is an ABSF Commission Payment Summary from Allied for INNOVATIVE BPS LLC, dated August 6, 2025. The document outlines a total of $386.61 in commissions, encompassing 13 client groups. The top con
+INFO:app.api.new_extract:   Structured data keys: ['carrier_name', 'broker_company', 'statement_date', 'total_amount', 'company_count', 'broker_id_confidence', 'census_count', 'billing_periods', 'broker_id', 'payment_type', 'top_contributors', 'commission_structure']
+INFO:app.services.audit_logging_service:Audit: file_upload by user f6cf1764-5bfc-4352-abd9-81b72b7cf191 on statement_upload (ID: 5aecca3b-d567-4cb9-989c-877448a3b0bc)
 INFO:app.api.new_extract:📤 Sending pre-generated enhanced summary via WebSocket...
-INFO:app.api.new_extract:📊 Sending structured data: {"statement_date": "2025-05-31", "total_amount": "4861.56", "company_count": 12, "broker_id_confidence": 0.7, "carrier_name": "Redirect Health", "broker_company": "Unknown", "broker_id": "null", "paym...
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763980159946_r2amit71i: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763980159946_r2amit71i
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763980159946_r2amit71i: STEP_STARTED
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763980159946_r2amit71i
-INFO:app.services.websocket_service:Step started: Preparing Results (Step 6) for upload_id upload_1763980159946_r2amit71i
-INFO:app.api.new_extract:📊 Calculating invoice total from 2 tables
-INFO:app.api.new_extract:📊 Table 0: Found invoice column at index 2: 'Invoice Amount'
-INFO:app.api.new_extract:✅ Table 0: Calculated from rows: $82,146.00
-INFO:app.api.new_extract:📊 Table 1: Found invoice column at index 0: 'Total Invoice Amount'
-INFO:app.api.new_extract:✅ Table 1: Calculated from rows: $70,498.00
-INFO:app.api.new_extract:✅ TOTAL invoice amount from all tables: $152,644.00
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763980159946_r2amit71i: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763980159946_r2amit71i
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763980159946_r2amit71i: EXTRACTION_COMPLETE
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763980159946_r2amit71i
-INFO:app.services.websocket_service:Extraction complete for upload_id upload_1763980159946_r2amit71i
-INFO:app.api.new_extract:✅ Extraction complete! Sent results via WebSocket for upload_id: upload_1763980159946_r2amit71i
-INFO:     127.0.0.1:58236 - "OPTIONS /api/auto-approve/process-lite HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57842 - "POST /api/extract-tables-smart/ HTTP/1.1" 200 OK
+INFO:app.api.new_extract:📊 Sending structured data: {"carrier_name": "ALLIED", "broker_company": "INNOVATIVE BPS LLC", "statement_date": "2025-08-06", "total_amount": "386.61", "company_count": 13, "broker_id_confidence": 0.7, "census_count": "null", "...
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1764016970866_qecv8do0h: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1764016970866_qecv8do0h
+INFO:app.services.orphan_cleanup_service:🧹 Starting orphan cleanup job...
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1764016970866_qecv8do0h: STEP_STARTED
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1764016970866_qecv8do0h
+INFO:app.services.websocket_service:Step started: Preparing Results (Step 6) for upload_id upload_1764016970866_qecv8do0h
+INFO:app.api.new_extract:📊 Calculating invoice total from 1 tables
+INFO:app.api.new_extract:📊 Table 0: Found invoice column at index 4: 'Invoice Total'
+INFO:app.api.new_extract:✅ Table 0: Calculated from rows: $66,325.44
+INFO:app.api.new_extract:✅ TOTAL invoice amount from all tables: $66,325.44
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1764016970866_qecv8do0h: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1764016970866_qecv8do0h
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1764016970866_qecv8do0h: EXTRACTION_COMPLETE
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1764016970866_qecv8do0h
+INFO:app.services.websocket_service:Extraction complete for upload_id upload_1764016970866_qecv8do0h
+INFO:app.api.new_extract:✅ Extraction complete! Sent results via WebSocket for upload_id: upload_1764016970866_qecv8do0h
+INFO:     127.0.0.1:59247 - "POST /api/extract-tables-smart/ HTTP/1.1" 200 OK
 INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763980159946_r2amit71i, session_id=session_1763980159969_ovr4htnty
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763980159946_r2amit71i, session_id=session_1763980159969_ovr4htnty
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763980159946_r2amit71i
-INFO:app.api.auto_approval:Auto-approval started for upload 9d102016-8e5f-48c1-b2e0-47924af5facf
-INFO:app.services.websocket_service:Broadcasting message to upload_id 9d102016-8e5f-48c1-b2e0-47924af5facf: progress_update
-WARNING:app.services.websocket_service:No active connections found for upload_id 9d102016-8e5f-48c1-b2e0-47924af5facf
-INFO:app.services.websocket_service:Broadcasting message to upload_id 9d102016-8e5f-48c1-b2e0-47924af5facf: progress_update
-WARNING:app.services.websocket_service:No active connections found for upload_id 9d102016-8e5f-48c1-b2e0-47924af5facf
-INFO:app.services.websocket_service:Broadcasting message to upload_id 9d102016-8e5f-48c1-b2e0-47924af5facf: progress_update
-WARNING:app.services.websocket_service:No active connections found for upload_id 9d102016-8e5f-48c1-b2e0-47924af5facf
-INFO:app.api.auto_approval:🔍 Auto-approval: Skipping table 1 - all 1 rows are summary rows during save
-INFO:app.api.auto_approval:🔍 Auto-approval: Filtered 2 tables to 1 commission tables for saving
-INFO:app.api.auto_approval:🤖 Auto-approval: Raw field_mapping from learned format: {'Group ID': 'Policy Number', 'Comm. Rate': 'Commission Rate', 'Group Name': 'Client Name', 'Invoice Amount': 'Premium Total', 'Commission Amount': 'Commission Earned', 'Commissionable Amount': 'Invoice Total'}
-INFO:app.api.auto_approval:🤖 Auto-approval: Using 6 field mappings from learned format
-INFO:app.api.auto_approval:🤖 Auto-approval: Field config list: [{'field': 'Group ID', 'mapping': 'Policy Number'}, {'field': 'Comm. Rate', 'mapping': 'Commission Rate'}, {'field': 'Group Name', 'mapping': 'Client Name'}, {'field': 'Invoice Amount', 'mapping': 'Premium Total'}, {'field': 'Commission Amount', 'mapping': 'Commission Earned'}, {'field': 'Commissionable Amount', 'mapping': 'Invoice Total'}]
-INFO:app.api.table_editor:🎯 Table Editor API: Saving edited tables for upload_id: 9d102016-8e5f-48c1-b2e0-47924af5facf
+INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1764016970866_qecv8do0h, session_id=session_1764016970876_pd1bje7ux
+INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1764016970866_qecv8do0h, session_id=session_1764016970876_pd1bje7ux
+INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1764016970866_qecv8do0h
+INFO:app.services.orphan_cleanup_service:✅ Orphan cleanup completed: no orphans found
+INFO:app.api.auto_approval:Auto-approval started for upload 5aecca3b-d567-4cb9-989c-877448a3b0bc
+INFO:app.services.websocket_service:Broadcasting message to upload_id 5aecca3b-d567-4cb9-989c-877448a3b0bc: progress_update
+WARNING:app.services.websocket_service:No active connections found for upload_id 5aecca3b-d567-4cb9-989c-877448a3b0bc
+INFO:app.services.websocket_service:Broadcasting message to upload_id 5aecca3b-d567-4cb9-989c-877448a3b0bc: progress_update
+WARNING:app.services.websocket_service:No active connections found for upload_id 5aecca3b-d567-4cb9-989c-877448a3b0bc
+INFO:app.services.websocket_service:Broadcasting message to upload_id 5aecca3b-d567-4cb9-989c-877448a3b0bc: progress_update
+WARNING:app.services.websocket_service:No active connections found for upload_id 5aecca3b-d567-4cb9-989c-877448a3b0bc
+INFO:app.api.auto_approval:🔍 Auto-approval: Filtered 1 tables to 1 commission tables for saving
+INFO:app.api.auto_approval:🤖 Auto-approval: Raw field_mapping from learned format: {'Agent %': 'Commission Rate', 'Group No.': 'Policy Number', 'Census Ct.': 'Total Subscribers', 'Group Name': 'Client Name', 'Adj. Period': 'Adjustment Period Start', 'Paid Amount': 'Commission Earned', 'Invoice Total': 'Invoice Total', 'Billing Period': 'Coverage Period Start', 'Stoploss Total': 'Stoploss Total', 'Calculation Method': 'Plan Type'}
+INFO:app.api.auto_approval:🤖 Auto-approval: Using 10 field mappings from learned format
+INFO:app.api.auto_approval:🤖 Auto-approval: Field config list: [{'field': 'Agent %', 'mapping': 'Commission Rate'}, {'field': 'Group No.', 'mapping': 'Policy Number'}, {'field': 'Census Ct.', 'mapping': 'Total Subscribers'}, {'field': 'Group Name', 'mapping': 'Client Name'}, {'field': 'Adj. Period', 'mapping': 'Adjustment Period Start'}, {'field': 'Paid Amount', 'mapping': 'Commission Earned'}, {'field': 'Invoice Total', 'mapping': 'Invoice Total'}, {'field': 'Billing Period', 'mapping': 'Coverage Period Start'}, {'field': 'Stoploss Total', 'mapping': 'Stoploss Total'}, {'field': 'Calculation Method', 'mapping': 'Plan Type'}]
+INFO:app.api.table_editor:🎯 Table Editor API: Saving edited tables for upload_id: 5aecca3b-d567-4cb9-989c-877448a3b0bc
 INFO:app.api.table_editor:🎯 Table Editor API: Tables count: 1
-INFO:app.api.table_editor:🎯 Table Editor API: Selected statement date: {'date': '2025-05-31'}
-INFO:app.api.table_editor:🎯 Table Editor API: Company ID (deprecated): 8340174b-f6ed-42eb-976d-4868bb06c844
+INFO:app.api.table_editor:🎯 Table Editor API: Selected statement date: {'date': '2025-08-06'}
+INFO:app.api.table_editor:🎯 Table Editor API: Company ID (deprecated): 5c9324ac-1794-4563-8e0e-8cd5c5317181
 INFO:app.api.table_editor:🎯 Table Editor API: Carrier ID: None
-INFO:app.api.table_editor:🎯 Table Editor API: Field config received: [{'field': 'Group ID', 'mapping': 'Policy Number'}, {'field': 'Comm. Rate', 'mapping': 'Commission Rate'}, {'field': 'Group Name', 'mapping': 'Client Name'}, {'field': 'Invoice Amount', 'mapping': 'Premium Total'}, {'field': 'Commission Amount', 'mapping': 'Commission Earned'}, {'field': 'Commissionable Amount', 'mapping': 'Invoice Total'}]
+INFO:app.api.table_editor:🎯 Table Editor API: Field config received: [{'field': 'Agent %', 'mapping': 'Commission Rate'}, {'field': 'Group No.', 'mapping': 'Policy Number'}, {'field': 'Census Ct.', 'mapping': 'Total Subscribers'}, {'field': 'Group Name', 'mapping': 'Client Name'}, {'field': 'Adj. Period', 'mapping': 'Adjustment Period Start'}, {'field': 'Paid Amount', 'mapping': 'Commission Earned'}, {'field': 'Invoice Total', 'mapping': 'Invoice Total'}, {'field': 'Billing Period', 'mapping': 'Coverage Period Start'}, {'field': 'Stoploss Total', 'mapping': 'Stoploss Total'}, {'field': 'Calculation Method', 'mapping': 'Plan Type'}]
 INFO:app.api.table_editor:🎯 Table Editor API: Converted 1 tables to database format
 INFO:app.api.table_editor:🎯 Table Editor API: Saved edited tables to database
 INFO:app.api.table_editor:🎯 Table Editor API: Updating upload with tables, statement date, and carrier
-🎯 CRUD: update_upload_tables called for upload_id: 9d102016-8e5f-48c1-b2e0-47924af5facf
+🎯 CRUD: update_upload_tables called for upload_id: 5aecca3b-d567-4cb9-989c-877448a3b0bc
 🎯 CRUD: Tables data length: 1
-🎯 CRUD: Selected statement date: {'date': '2025-05-31'}
+🎯 CRUD: Selected statement date: {'date': '2025-08-06'}
 🎯 CRUD: Carrier ID: None
-🎯 CRUD: Upload not found for ID: 9d102016-8e5f-48c1-b2e0-47924af5facf
+🎯 CRUD: Upload not found for ID: 5aecca3b-d567-4cb9-989c-877448a3b0bc
 INFO:app.api.table_editor:🎯 Table Editor API: Successfully updated upload with statement date and carrier
 WARNING:app.api.table_editor:🎯 Table Editor API: Skipping format learning - no carrier_id available
 INFO:app.api.table_editor:🎯 Table Editor API: Successfully saved 1 edited tables
-INFO:app.services.websocket_service:Broadcasting message to upload_id 9d102016-8e5f-48c1-b2e0-47924af5facf: progress_update
-WARNING:app.services.websocket_service:No active connections found for upload_id 9d102016-8e5f-48c1-b2e0-47924af5facf
-INFO:app.api.auto_approval:Updated format learning usage count for signature: f0d2424f7efd76c2fcfb224d0246d1f1
-INFO:app.services.websocket_service:Broadcasting message to upload_id 9d102016-8e5f-48c1-b2e0-47924af5facf: progress_update
-WARNING:app.services.websocket_service:No active connections found for upload_id 9d102016-8e5f-48c1-b2e0-47924af5facf
-INFO:app.db.crud.statement_upload:✅ Saving statement review for upload 9d102016-8e5f-48c1-b2e0-47924af5facf with valid status: Approved
-INFO:app.db.crud.statement_upload:💾 Upload not found for ID: 9d102016-8e5f-48c1-b2e0-47924af5facf - This is unexpected for remap flow
-WARNING:app.db.crud.statement_upload:⚠️ Statement 9d102016-8e5f-48c1-b2e0-47924af5facf should already exist in database for remap operation
+INFO:app.services.websocket_service:Broadcasting message to upload_id 5aecca3b-d567-4cb9-989c-877448a3b0bc: progress_update
+WARNING:app.services.websocket_service:No active connections found for upload_id 5aecca3b-d567-4cb9-989c-877448a3b0bc
+INFO:app.api.auto_approval:Updated format learning usage count for signature: 6f736ac611e1789c131a993b10321314
+INFO:app.services.websocket_service:Broadcasting message to upload_id 5aecca3b-d567-4cb9-989c-877448a3b0bc: progress_update
+WARNING:app.services.websocket_service:No active connections found for upload_id 5aecca3b-d567-4cb9-989c-877448a3b0bc
+INFO:app.db.crud.statement_upload:✅ Saving statement review for upload 5aecca3b-d567-4cb9-989c-877448a3b0bc with valid status: Approved
+INFO:app.db.crud.statement_upload:💾 Upload not found for ID: 5aecca3b-d567-4cb9-989c-877448a3b0bc - This is unexpected for remap flow
+WARNING:app.db.crud.statement_upload:⚠️ Statement 5aecca3b-d567-4cb9-989c-877448a3b0bc should already exist in database for remap operation
 INFO:app.db.crud.statement_upload:✅ All required fields present, proceeding with record creation
 INFO:app.db.crud.statement_upload:✅ Using user_id: f6cf1764-5bfc-4352-abd9-81b72b7cf191 (from current_user_id)
 INFO:app.db.crud.statement_upload:✅ Retrieved user's company_id d883a865-a54f-41d6-968e-f94c3cb3f589 from users table for user f6cf1764-5bfc-4352-abd9-81b72b7cf191
 INFO:app.db.crud.environment:✅ Found existing default environment 9f4a7a57-5715-4b1e-98a9-b9901726a485 for user f6cf1764-5bfc-4352-abd9-81b72b7cf191 in company d883a865-a54f-41d6-968e-f94c3cb3f589
 INFO:app.db.crud.statement_upload:✅ ALWAYS using user's default environment_id 9f4a7a57-5715-4b1e-98a9-b9901726a485 for consistency
-INFO:app.db.crud.statement_upload:✅ Created new DB record for upload 9d102016-8e5f-48c1-b2e0-47924af5facf
+INFO:app.db.crud.statement_upload:✅ Created new DB record for upload 5aecca3b-d567-4cb9-989c-877448a3b0bc
 INFO:app.db.crud.statement_upload:=== REMAP DEBUG ===
-INFO:app.db.crud.statement_upload:💾 Saving statement review: upload_id=9d102016-8e5f-48c1-b2e0-47924af5facf, status=Approved
-INFO:app.db.crud.statement_upload:📋 Field config being saved: 6 fields
+INFO:app.db.crud.statement_upload:💾 Saving statement review: upload_id=5aecca3b-d567-4cb9-989c-877448a3b0bc, status=Approved
+INFO:app.db.crud.statement_upload:📋 Field config being saved: 10 fields
 INFO:app.db.crud.statement_upload:📊 Final data tables: 1
-INFO:app.db.crud.statement_upload:📅 Selected statement date: {'date': '2025-05-31'}
+INFO:app.db.crud.statement_upload:📅 Selected statement date: {'date': '2025-08-06'}
 INFO:app.db.crud.statement_upload:===================
-💾 Saving statement review: upload_id=9d102016-8e5f-48c1-b2e0-47924af5facf, status=Approved
-📋 Field config being saved: [{'field': 'Group ID', 'mapping': 'Policy Number'}, {'field': 'Comm. Rate', 'mapping': 'Commission Rate'}, {'field': 'Group Name', 'mapping': 'Client Name'}, {'field': 'Invoice Amount', 'mapping': 'Premium Total'}, {'field': 'Commission Amount', 'mapping': 'Commission Earned'}, {'field': 'Commissionable Amount', 'mapping': 'Invoice Total'}]
+💾 Saving statement review: upload_id=5aecca3b-d567-4cb9-989c-877448a3b0bc, status=Approved
+📋 Field config being saved: [{'field': 'Agent %', 'mapping': 'Commission Rate'}, {'field': 'Group No.', 'mapping': 'Policy Number'}, {'field': 'Census Ct.', 'mapping': 'Total Subscribers'}, {'field': 'Group Name', 'mapping': 'Client Name'}, {'field': 'Adj. Period', 'mapping': 'Adjustment Period Start'}, {'field': 'Paid Amount', 'mapping': 'Commission Earned'}, {'field': 'Invoice Total', 'mapping': 'Invoice Total'}, {'field': 'Billing Period', 'mapping': 'Coverage Period Start'}, {'field': 'Stoploss Total', 'mapping': 'Stoploss Total'}, {'field': 'Calculation Method', 'mapping': 'Plan Type'}]
 📊 Final data rows: 1
-📅 Selected statement date being saved: {'date': '2025-05-31'}
-🔍 DEBUG Saving table 0 'Table 1': summaryRows=[11], type=<class 'list'>
-📝 Extracted field_mapping with 6 mappings: {'Group ID': 'Policy Number', 'Comm. Rate': 'Commission Rate', 'Group Name': 'Client Name', 'Invoice Amount': 'Premium Total', 'Commission Amount': 'Commission Earned', 'Commissionable Amount': 'Invoice Total'}
+📅 Selected statement date being saved: {'date': '2025-08-06'}
+🔍 DEBUG Saving table 0 'Table 1': summaryRows=[1, 2, 3, 6, 7, 8, 14, 15, 17, 18, 19, 52, 58, 59, 60, 61, 63, 65, 70], type=<class 'list'>
+📝 Extracted field_mapping with 10 mappings: {'Agent %': 'Commission Rate', 'Group No.': 'Policy Number', 'Census Ct.': 'Total Subscribers', 'Group Name': 'Client Name', 'Adj. Period': 'Adjustment Period Start', 'Paid Amount': 'Commission Earned', 'Invoice Total': 'Invoice Total', 'Billing Period': 'Coverage Period Start', 'Stoploss Total': 'Stoploss Total', 'Calculation Method': 'Plan Type'}
 💰 Calculating extracted_total for manual approval...
-💰 field_mapping keys: ['Group ID', 'Comm. Rate', 'Group Name', 'Invoice Amount', 'Commission Amount', 'Commissionable Amount']
+💰 field_mapping keys: ['Agent %', 'Group No.', 'Census Ct.', 'Group Name', 'Adj. Period', 'Paid Amount', 'Invoice Total', 'Billing Period', 'Stoploss Total', 'Calculation Method']
 💰 Number of tables in final_data: 1
-💰 Found commission field (EXACT MATCH): Commission Amount -> Commission Earned
-💰 Final commission_source_field: Commission Amount
+💰 Found commission field (EXACT MATCH): Paid Amount -> Commission Earned
+💰 Final commission_source_field: Paid Amount
   💰 Processing 1 detail table(s) (excluded 0 grand total tables)
-  📊 Table 0: 6 headers, 14 rows
-  📋 Headers: ['Group ID', 'Group Name', 'Invoice Amount', 'Commissionable Amount', 'Comm. Rate', 'Commission Amount']
-  📋 First row sample: ['G-RDA012300075', 'CG23 Logistics', '$5,824.00', '$5,264.00', '2.00%', '$105.28']
-  💰 Table 0: Commission column 'Commission Amount' at index 5
-    Row 0: [LIST] raw_value = '$105.28' (type: <class 'str'>)
-    Row 0: Added $105.28 (running total: $105.28)
-    Row 1: [LIST] raw_value = '$753.84' (type: <class 'str'>)
-    Row 1: Added $753.84 (running total: $859.12)
-    Row 2: [LIST] raw_value = '$361.68' (type: <class 'str'>)
-    Row 2: Added $361.68 (running total: $1220.80)
-    Row 3: [LIST] raw_value = '$60.90' (type: <class 'str'>)
-    Row 3: Added $60.90 (running total: $1281.70)
-    Row 4: [LIST] raw_value = '$379.32' (type: <class 'str'>)
-    Row 4: Added $379.32 (running total: $1661.02)
-    Row 5: [LIST] raw_value = '$246.18' (type: <class 'str'>)
-    Row 5: Added $246.18 (running total: $1907.20)
-    Row 6: [LIST] raw_value = '$315.84' (type: <class 'str'>)
-    Row 6: Added $315.84 (running total: $2223.04)
-    Row 7: [LIST] raw_value = '$361.68' (type: <class 'str'>)
-    Row 7: Added $361.68 (running total: $2584.72)
-    Row 8: [LIST] raw_value = '$692.88' (type: <class 'str'>)
-    Row 8: Added $692.88 (running total: $3277.60)
-    Row 9: [LIST] raw_value = '$438.60' (type: <class 'str'>)
-    Row 9: Added $438.60 (running total: $3716.20)
-    Row 10: [LIST] raw_value = '$585.36' (type: <class 'str'>)
-    Row 10: Added $585.36 (running total: $4301.56)
-    Row 11: SKIPPED (summary row)
-    Row 12: [LIST] raw_value = '$560.00' (type: <class 'str'>)
-    Row 12: Added $560.00 (running total: $4861.56)
-    Row 13: [LIST] raw_value = '$560.00' (type: <class 'str'>)
-    Row 13: Added $560.00 (running total: $5421.56)
-  ✅ Table 0 total: $5421.56
-💰 AI-extracted total from document: $4861.56
+  📊 Table 0: 10 headers, 71 rows
+  📋 Headers: ['Group No.', 'Group Name', 'Billing Period', 'Adj. Period', 'Invoice Total', 'Stoploss Total', 'Agent Rate', 'Calculation Method', 'Census Ct.', 'Paid Amount']
+  📋 First row sample: ['L213059', 'BOLT LOGISTIC', '8/1/2025', '7/1/2025', '($627.27)', '($266.05)', '22.5%', 'Premium Equivalent', '-1', '($141.14)']
+  💰 Table 0: Commission column 'Paid Amount' at index 9
+    Row 0: [LIST] raw_value = '($141.14)' (type: <class 'str'>)
+    Row 0: Added $-141.14 (running total: $-141.14)
+    Row 1: SKIPPED (summary row)
+    Row 2: SKIPPED (summary row)
+    Row 3: SKIPPED (summary row)
+    Row 4: [LIST] raw_value = '($552.73)' (type: <class 'str'>)
+    Row 4: Added $-552.73 (running total: $-693.87)
+    Row 5: [LIST] raw_value = '$38.12' (type: <class 'str'>)
+    Row 5: Added $38.12 (running total: $-655.75)
+    Row 6: SKIPPED (summary row)
+    Row 7: SKIPPED (summary row)
+    Row 8: SKIPPED (summary row)
+    Row 9: [LIST] raw_value = '$159.51' (type: <class 'str'>)
+    Row 9: Added $159.51 (running total: $-496.24)
+    Row 10: [LIST] raw_value = '$122.04' (type: <class 'str'>)
+    Row 10: Added $122.04 (running total: $-374.20)
+    Row 11: [LIST] raw_value = '$244.08' (type: <class 'str'>)
+    Row 11: Added $244.08 (running total: $-130.12)
+    Row 12: [LIST] raw_value = '$925.23' (type: <class 'str'>)
+    Row 12: Added $925.23 (running total: $795.11)
+    Row 13: [LIST] raw_value = '($61.02)' (type: <class 'str'>)
+    Row 13: Added $-61.02 (running total: $734.09)
+    Row 14: SKIPPED (summary row)
+    Row 15: SKIPPED (summary row)
+    Row 16: [LIST] raw_value = '$68.68' (type: <class 'str'>)
+    Row 16: Added $68.68 (running total: $802.77)
+    Row 17: SKIPPED (summary row)
+    Row 18: SKIPPED (summary row)
+    Row 19: SKIPPED (summary row)
+    Row 20: [LIST] raw_value = '$58.62' (type: <class 'str'>)
+    Row 20: Added $58.62 (running total: $861.39)
+    Row 21: [LIST] raw_value = '($61.14)' (type: <class 'str'>)
+    Row 21: Added $-61.14 (running total: $800.25)
+    Row 22: [LIST] raw_value = '$132.52' (type: <class 'str'>)
+    Row 22: Added $132.52 (running total: $932.77)
+    Row 23: [LIST] raw_value = '$163.29' (type: <class 'str'>)
+    Row 23: Added $163.29 (running total: $1096.06)
+    Row 24: [LIST] raw_value = '$221.70' (type: <class 'str'>)
+    Row 24: Added $221.70 (running total: $1317.76)
+    Row 25: [LIST] raw_value = '$724.20' (type: <class 'str'>)
+    Row 25: Added $724.20 (running total: $2041.96)
+    Row 26: [LIST] raw_value = '$58.62' (type: <class 'str'>)
+    Row 26: Added $58.62 (running total: $2100.58)
+    Row 27: [LIST] raw_value = '($61.14)' (type: <class 'str'>)
+    Row 27: Added $-61.14 (running total: $2039.44)
+    Row 28: [LIST] raw_value = '$58.62' (type: <class 'str'>)
+    Row 28: Added $58.62 (running total: $2098.06)
+    Row 29: [LIST] raw_value = '($15.28)' (type: <class 'str'>)
+    Row 29: Added $-15.28 (running total: $2082.78)
+    Row 30: [LIST] raw_value = '($147.19)' (type: <class 'str'>)
+    Row 30: Added $-147.19 (running total: $1935.59)
+    Row 31: [LIST] raw_value = '($61.14)' (type: <class 'str'>)
+    Row 31: Added $-61.14 (running total: $1874.45)
+    Row 32: [LIST] raw_value = '$58.62' (type: <class 'str'>)
+    Row 32: Added $58.62 (running total: $1933.07)
+    Row 33: [LIST] raw_value = '($61.14)' (type: <class 'str'>)
+    Row 33: Added $-61.14 (running total: $1871.93)
+    Row 34: [LIST] raw_value = '($61.14)' (type: <class 'str'>)
+    Row 34: Added $-61.14 (running total: $1810.79)
+    Row 35: [LIST] raw_value = '($61.14)' (type: <class 'str'>)
+    Row 35: Added $-61.14 (running total: $1749.65)
+    Row 36: [LIST] raw_value = '$58.62' (type: <class 'str'>)
+    Row 36: Added $58.62 (running total: $1808.27)
+    Row 37: [LIST] raw_value = '($61.14)' (type: <class 'str'>)
+    Row 37: Added $-61.14 (running total: $1747.13)
+    Row 38: [LIST] raw_value = '$58.62' (type: <class 'str'>)
+    Row 38: Added $58.62 (running total: $1805.75)
+    Row 39: [LIST] raw_value = '$58.62' (type: <class 'str'>)
+    Row 39: Added $58.62 (running total: $1864.37)
+    Row 40: [LIST] raw_value = '$58.62' (type: <class 'str'>)
+    Row 40: Added $58.62 (running total: $1922.99)
+    Row 41: [LIST] raw_value = '$58.62' (type: <class 'str'>)
+    Row 41: Added $58.62 (running total: $1981.61)
+    Row 42: [LIST] raw_value = '($61.14)' (type: <class 'str'>)
+    Row 42: Added $-61.14 (running total: $1920.47)
+    Row 43: [LIST] raw_value = '$58.62' (type: <class 'str'>)
+    Row 43: Added $58.62 (running total: $1979.09)
+    Row 44: [LIST] raw_value = '$58.62' (type: <class 'str'>)
+    Row 44: Added $58.62 (running total: $2037.71)
+    Row 45: [LIST] raw_value = '$58.62' (type: <class 'str'>)
+    Row 45: Added $58.62 (running total: $2096.33)
+    Row 46: [LIST] raw_value = '$58.62' (type: <class 'str'>)
+    Row 46: Added $58.62 (running total: $2154.95)
+    Row 47: [LIST] raw_value = '($61.14)' (type: <class 'str'>)
+    Row 47: Added $-61.14 (running total: $2093.81)
+    Row 48: [LIST] raw_value = '($61.14)' (type: <class 'str'>)
+    Row 48: Added $-61.14 (running total: $2032.67)
+    Row 49: [LIST] raw_value = '($61.14)' (type: <class 'str'>)
+    Row 49: Added $-61.14 (running total: $1971.53)
+    Row 50: [LIST] raw_value = '($61.14)' (type: <class 'str'>)
+    Row 50: Added $-61.14 (running total: $1910.39)
+    Row 51: [LIST] raw_value = '($61.14)' (type: <class 'str'>)
+    Row 51: Added $-61.14 (running total: $1849.25)
+    Row 52: SKIPPED (summary row)
+    Row 53: [LIST] raw_value = '($61.08)' (type: <class 'str'>)
+    Row 53: Added $-61.08 (running total: $1788.17)
+    Row 54: [LIST] raw_value = '($61.08)' (type: <class 'str'>)
+    Row 54: Added $-61.08 (running total: $1727.09)
+    Row 55: [LIST] raw_value = '($61.08)' (type: <class 'str'>)
+    Row 55: Added $-61.08 (running total: $1666.01)
+    Row 56: [LIST] raw_value = '($61.08)' (type: <class 'str'>)
+    Row 56: Added $-61.08 (running total: $1604.93)
+    Row 57: [LIST] raw_value = '($61.08)' (type: <class 'str'>)
+    Row 57: Added $-61.08 (running total: $1543.85)
+    Row 58: SKIPPED (summary row)
+    Row 59: SKIPPED (summary row)
+    Row 60: SKIPPED (summary row)
+    Row 61: SKIPPED (summary row)
+    Row 62: [LIST] raw_value = '($31.29)' (type: <class 'str'>)
+    Row 62: Added $-31.29 (running total: $1512.56)
+    Row 63: SKIPPED (summary row)
+    Row 64: [LIST] raw_value = '($81.68)' (type: <class 'str'>)
+    Row 64: Added $-81.68 (running total: $1430.88)
+    Row 65: SKIPPED (summary row)
+    Row 66: [LIST] raw_value = '$97.20' (type: <class 'str'>)
+    Row 66: Added $97.20 (running total: $1528.08)
+    Row 67: [LIST] raw_value = '$1,194.57' (type: <class 'str'>)
+    Row 67: Added $1194.57 (running total: $2722.65)
+    Row 68: [LIST] raw_value = '($132.73)' (type: <class 'str'>)
+    Row 68: Added $-132.73 (running total: $2589.92)
+    Row 69: [LIST] raw_value = '$1,256.53' (type: <class 'str'>)
+    Row 69: Added $1256.53 (running total: $3846.45)
+    Row 70: SKIPPED (summary row)
+  ✅ Table 0 total: $3846.45
+💰 AI-extracted total from document: $386.61
 💰 Total comparison:
-   - AI extracted from document: $4861.56
-   - Calculated from table rows: $5421.56
-   - Difference: $560.00 (11.52%)
+   - AI extracted from document: $386.61
+   - Calculated from table rows: $3846.45
+   - Difference: $3459.84 (894.92%)
    - Match: False
 ⚠️ TOTAL MISMATCH DETECTED! Changing status from 'Approved' to 'needs_review'
-💰 Final extracted_total: $5421.56
-✅ Set extracted_total=4861.56 (AI-extracted), calculated_total=5421.56, total_amount_match=False
+💰 Final extracted_total: $3846.45
+✅ Set extracted_total=386.61 (AI-extracted), calculated_total=3846.45, total_amount_match=False
 INFO:app.services.user_profile_service:Recorded contribution: approval for user f6cf1764-5bfc-4352-abd9-81b72b7cf191
-INFO:app.api.review:✅ User contribution recorded for needs_review statement 9d102016-8e5f-48c1-b2e0-47924af5facf
-INFO:app.api.auto_approval:📊 Priority 1: Using total from document_metadata: $4,861.56
-INFO:app.api.auto_approval:💰 Auto-approval: Found PRIMARY commission field: 'Commission Amount' (mapped to 'Commission Earned')
+INFO:app.api.review:✅ User contribution recorded for needs_review statement 5aecca3b-d567-4cb9-989c-877448a3b0bc
+INFO:app.api.auto_approval:📊 Priority 1: Using total from document_metadata: $386.61
+INFO:app.api.auto_approval:💰 Auto-approval: Found PRIMARY commission field: 'Paid Amount' (mapped to 'Commission Earned')
 INFO:app.api.auto_approval:💰 Auto-approval: Calculating total from 1 table(s)
 INFO:app.api.auto_approval:💰 Auto-approval: Processing 1 detail table(s) (excluded 0 grand total tables)
-INFO:app.api.auto_approval:💰 Auto-approval: Table 0: Found 6 headers
-INFO:app.api.auto_approval:💰 Auto-approval: Commission field 'Commission Amount' found at index 5
-INFO:app.api.auto_approval:💰 Auto-approval: Table has 14 rows, 1 summary rows to skip
-INFO:app.api.auto_approval:💰 Auto-approval: Processed 13 data rows from table 0
-INFO:app.api.auto_approval:💰 Auto-approval: Found invoice field (exact match): 'Commissionable Amount' (mapped to 'Invoice Total')
+INFO:app.api.auto_approval:💰 Auto-approval: Table 0: Found 10 headers
+INFO:app.api.auto_approval:💰 Auto-approval: Commission field 'Paid Amount' found at index 9
+INFO:app.api.auto_approval:💰 Auto-approval: Table has 71 rows, 19 summary rows to skip
+INFO:app.api.auto_approval:💰 Auto-approval: Processed 52 data rows from table 0
+INFO:app.api.auto_approval:💰 Auto-approval: Found invoice field (exact match): 'Invoice Total' (mapped to 'Invoice Total')
 INFO:app.api.auto_approval:💰 Auto-approval: Calculating invoice total from 1 table(s)
 INFO:app.api.auto_approval:💰 Auto-approval: Processing 1 detail table(s) for invoice total (excluded 0 grand total tables)
-INFO:app.api.auto_approval:💰 Auto-approval: Invoice field 'Commissionable Amount' found at index 3
-WARNING:app.api.auto_approval:💰 Auto-approval: Row 13: Failed to parse invoice value 'None': could not convert string to float: 'None'
-INFO:app.api.auto_approval:💰 Auto-approval: Processed 12 invoice rows from table 0
+INFO:app.api.auto_approval:💰 Auto-approval: Invoice field 'Invoice Total' found at index 4
+INFO:app.api.auto_approval:💰 Auto-approval: Processed 52 invoice rows from table 0
 INFO:app.api.auto_approval:📊 Total validation:
-INFO:app.api.auto_approval:  - Extracted from file: $4861.56
-INFO:app.api.auto_approval:  - Calculated from table: $5421.56
-INFO:app.api.auto_approval:  - Invoice total calculated: $81026.00
-INFO:app.api.auto_approval:  - Tolerance: 5% or $5.00, whichever is larger = $243.08
-INFO:app.api.auto_approval:  - Difference: $560.00 (11.52%)
+INFO:app.api.auto_approval:  - Extracted from file: $386.61
+INFO:app.api.auto_approval:  - Calculated from table: $3846.45
+INFO:app.api.auto_approval:  - Invoice total calculated: $60574.61
+INFO:app.api.auto_approval:  - Tolerance: 5% or $5.00, whichever is larger = $19.33
+INFO:app.api.auto_approval:  - Difference: $3,459.84 (894.92%)
 INFO:app.api.auto_approval:  - Match: False
 INFO:app.api.auto_approval:📝 Auto-approval COMPLETED with review flag: Learned format applied successfully, but totals don't match. User can review and remap if needed.
 INFO:app.api.auto_approval:✅ Updated DB record with auto-approval metadata
 INFO:app.api.auto_approval:📝 Auto-approval: Status is 'needs_review' - commission data will be processed after user reviews and manually approves the statement
 INFO:app.services.user_profile_service:Recorded contribution: auto_approval for user f6cf1764-5bfc-4352-abd9-81b72b7cf191
-INFO:app.api.auto_approval:✅ User contribution recorded for auto-approved statement 9d102016-8e5f-48c1-b2e0-47924af5facf
-INFO:app.services.websocket_service:Broadcasting message to upload_id 9d102016-8e5f-48c1-b2e0-47924af5facf: progress_update
-WARNING:app.services.websocket_service:No active connections found for upload_id 9d102016-8e5f-48c1-b2e0-47924af5facf
-INFO:app.api.auto_approval:Auto-approval completed for upload 9d102016-8e5f-48c1-b2e0-47924af5facf
-INFO:     127.0.0.1:58238 - "POST /api/auto-approve/process-lite HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58238 - "GET /api/companies/user-specific?environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58307 - "GET /api/companies/?view_mode=my_data&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58238 - "GET /api/companies/user-specific?environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58307 - "GET /api/companies/?view_mode=my_data&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58238 - "GET /api/companies/user-specific?environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58238 - "GET /api/companies/user-specific?environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58725 - "GET /api/companies/user-specific/8340174b-f6ed-42eb-976d-4868bb06c844/statements HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58726 - "GET /api/earned-commission/carrier/user-specific/8340174b-f6ed-42eb-976d-4868bb06c844/stats HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58778 - "GET /api/pdf-preview?gcs_key=statements%2F8340174b-f6ed-42eb-976d-4868bb06c844%2F2025.05.pdf HTTP/1.1" 307 Temporary Redirect
-INFO:     127.0.0.1:58778 - "GET /api/pdf-preview?gcs_key=statements%2F8340174b-f6ed-42eb-976d-4868bb06c844%2F2025.05.pdf HTTP/1.1" 307 Temporary Redirect
-INFO:app.api.statements:🔍 PDF preview requested for: statements/8340174b-f6ed-42eb-976d-4868bb06c844/2025.05.pdf
-INFO:app.api.statements:🔍 Checking if file exists in GCS: statements/8340174b-f6ed-42eb-976d-4868bb06c844/2025.05.pdf
-INFO:app.api.statements:✅ File exists, generating signed URL: statements/8340174b-f6ed-42eb-976d-4868bb06c844/2025.05.pdf
-INFO:app.services.gcs_utils:🔐 Generating signed URL for: statements/8340174b-f6ed-42eb-976d-4868bb06c844/2025.05.pdf
-INFO:app.services.gcs_utils:📝 Generating signed URL with:
-INFO:app.services.gcs_utils:   - Content-Type: application/pdf
-INFO:app.services.gcs_utils:   - Content-Disposition: inline
-INFO:app.services.gcs_utils:   - Expiration: 1 hour(s)
-INFO:app.services.gcs_utils:✅ Generated signed URL for GCS file with inline headers: statements/8340174b-f6ed-42eb-976d-4868bb06c844/2025.05.pdf
-INFO:app.services.gcs_utils:   URL expires at: 2025-11-24 11:32:58.937681
-INFO:app.api.statements:✅ Signed URL generated successfully for: statements/8340174b-f6ed-42eb-976d-4868bb06c844/2025.05.pdf
-INFO:     127.0.0.1:58778 - "GET /api/pdf-preview/?gcs_key=statements%2F8340174b-f6ed-42eb-976d-4868bb06c844%2F2025.05.pdf HTTP/1.1" 200 OK
-INFO:app.api.statements:🔍 PDF preview requested for: statements/8340174b-f6ed-42eb-976d-4868bb06c844/2025.05.pdf
-INFO:app.api.statements:🔍 Checking if file exists in GCS: statements/8340174b-f6ed-42eb-976d-4868bb06c844/2025.05.pdf
-INFO:app.api.statements:✅ File exists, generating signed URL: statements/8340174b-f6ed-42eb-976d-4868bb06c844/2025.05.pdf
-INFO:app.services.gcs_utils:🔐 Generating signed URL for: statements/8340174b-f6ed-42eb-976d-4868bb06c844/2025.05.pdf
-INFO:app.services.gcs_utils:📝 Generating signed URL with:
-INFO:app.services.gcs_utils:   - Content-Type: application/pdf
-INFO:app.services.gcs_utils:   - Content-Disposition: inline
-INFO:app.services.gcs_utils:   - Expiration: 1 hour(s)
-INFO:app.services.gcs_utils:✅ Generated signed URL for GCS file with inline headers: statements/8340174b-f6ed-42eb-976d-4868bb06c844/2025.05.pdf
-INFO:app.services.gcs_utils:   URL expires at: 2025-11-24 11:32:59.202577
-INFO:app.api.statements:✅ Signed URL generated successfully for: statements/8340174b-f6ed-42eb-976d-4868bb06c844/2025.05.pdf
-INFO:     127.0.0.1:58778 - "GET /api/pdf-preview/?gcs_key=statements%2F8340174b-f6ed-42eb-976d-4868bb06c844%2F2025.05.pdf HTTP/1.1" 200 OK
-INFO:app.api.pdf_proxy:🔄 Proxying PDF from: https://storage.googleapis.com/pdf_extraction_files_saver/statements/8340174b-f6ed-42eb-976d-4868bb0...
-INFO:     127.0.0.1:58780 - "GET /api/database-fields/?active_only=true HTTP/1.1" 200 OK
-INFO:httpx:HTTP Request: GET https://storage.googleapis.com/pdf_extraction_files_saver/statements/8340174b-f6ed-42eb-976d-4868bb06c844/2025.05.pdf?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=docsai-table-extractor%40pdf-tables-extractor-465009.iam.gserviceaccount.com%2F20251124%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20251124T103259Z&X-Goog-Expires=3599&X-Goog-SignedHeaders=host&response-content-disposition=inline&response-content-type=application%2Fpdf&X-Goog-Signature=3874dca96e7cabed0438804054ecd43844082d6d094559deefaa93975d6e672558f0ebbc6ca2757ee46592ac872fcd5b1739fc9f90024e8586d05ef77f7b3e1eb0d59282abc3c0ee45a4dd66a64ddb36498a34bdb9f0a38712d9e9b6211e57b0615acfb93e6a1eb12649f7d043dbd14c8533b6d4233c3eab05deac89baf508f437ec6a5b34dc98c10aff9a0f489b7b44297d6f49202c0492807666199f81c20a832455eba7d24bbb17426b3d3b87c239d2214d290bcac7e497f6b8a8ef1be8081b3a4713ea4d28f64fb416cb554ec5b3fb80835adef6195a4cdde7df3d64946e806532169b29c128ef2021232a345f0b9ee658826aeec02cf42b402390053b6f "HTTP/1.1 200 OK"
-INFO:     127.0.0.1:58786 - "GET /api/pdf-proxy?url=https%3A%2F%2Fstorage.googleapis.com%2Fpdf_extraction_files_saver%2Fstatements%2F8340174b-f6ed-42eb-976d-4868bb06c844%2F2025.05.pdf%3FX-Goog-Algorithm%3DGOOG4-RSA-SHA256%26X-Goog-Credential%3Ddocsai-table-extractor%2540pdf-tables-extractor-465009.iam.gserviceaccount.com%252F20251124%252Fauto%252Fstorage%252Fgoog4_request%26X-Goog-Date%3D20251124T103259Z%26X-Goog-Expires%3D3599%26X-Goog-SignedHeaders%3Dhost%26response-content-disposition%3Dinline%26response-content-type%3Dapplication%252Fpdf%26X-Goog-Signature%3D3874dca96e7cabed0438804054ecd43844082d6d094559deefaa93975d6e672558f0ebbc6ca2757ee46592ac872fcd5b1739fc9f90024e8586d05ef77f7b3e1eb0d59282abc3c0ee45a4dd66a64ddb36498a34bdb9f0a38712d9e9b6211e57b0615acfb93e6a1eb12649f7d043dbd14c8533b6d4233c3eab05deac89baf508f437ec6a5b34dc98c10aff9a0f489b7b44297d6f49202c0492807666199f81c20a832455eba7d24bbb17426b3d3b87c239d2214d290bcac7e497f6b8a8ef1be8081b3a4713ea4d28f64fb416cb554ec5b3fb80835adef6195a4cdde7df3d64946e806532169b29c128ef2021232a345f0b9ee658826aeec02cf42b402390053b6f HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58780 - "GET /api/database-fields/?active_only=true HTTP/1.1" 200 OK
-INFO:app.services.orphan_cleanup_service:🧹 Starting orphan cleanup job...
-INFO:app.api.statements:📋 Fetching statements for carrier 8340174b-f6ed-42eb-976d-4868bb06c844 with status filter: ['Approved', 'needs_review']
-INFO:app.services.orphan_cleanup_service:✅ Orphan cleanup completed: no orphans found
-INFO:app.api.statements:✅ Found 5 statements with valid statuses
-INFO:     127.0.0.1:58854 - "GET /api/companies/8340174b-f6ed-42eb-976d-4868bb06c844/statements/ HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58880 - "OPTIONS /api/table-editor/save-tables HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58854 - "POST /api/table-editor/save-tables HTTP/1.1" 307 Temporary Redirect
-INFO:     127.0.0.1:58880 - "OPTIONS /api/table-editor/save-tables/ HTTP/1.1" 200 OK
-INFO:app.api.table_editor:🎯 Table Editor API: Saving edited tables for upload_id: 9d102016-8e5f-48c1-b2e0-47924af5facf
-INFO:app.api.table_editor:🎯 Table Editor API: Tables count: 1
-INFO:app.api.table_editor:🎯 Table Editor API: Selected statement date: {'date': '2025-05-31'}
-INFO:app.api.table_editor:🎯 Table Editor API: Company ID (deprecated): 8340174b-f6ed-42eb-976d-4868bb06c844
-INFO:app.api.table_editor:🎯 Table Editor API: Carrier ID: None
-INFO:app.api.table_editor:🎯 Table Editor API: Field config received: [{'field': 'Group ID', 'mapping': 'Policy Number'}, {'field': 'Comm. Rate', 'mapping': 'Commission Rate'}, {'field': 'Group Name', 'mapping': 'Client Name'}, {'field': 'Invoice Amount', 'mapping': 'Premium Total'}, {'field': 'Commission Amount', 'mapping': 'Commission Earned'}, {'field': 'Commissionable Amount', 'mapping': 'Invoice Total'}]
-INFO:app.api.table_editor:🎯 Table Editor API: Converted 1 tables to database format
-INFO:app.api.table_editor:🎯 Table Editor API: Saved edited tables to database
-INFO:app.api.table_editor:🎯 Table Editor API: Updating upload with tables, statement date, and carrier
-🎯 CRUD: update_upload_tables called for upload_id: 9d102016-8e5f-48c1-b2e0-47924af5facf
-🎯 CRUD: Tables data length: 1
-🎯 CRUD: Selected statement date: {'date': '2025-05-31'}
-🎯 CRUD: Carrier ID: None
-🎯 CRUD: Found upload, updating with tables, statement date, and carrier
-🎯 CRUD: Saved selected statement date to database: {'date': '2025-05-31'}
-🎯 CRUD: Statement date type: <class 'dict'>
-🎯 CRUD: Statement date keys: ['date']
-🎯 CRUD: Also saved statement date and carrier to progress_data
-🎯 CRUD: Successfully updated upload 9d102016-8e5f-48c1-b2e0-47924af5facf with tables, statement date, and carrier
-🎯 CRUD: Final selected_statement_date in database: {'date': '2025-05-31'}
-INFO:app.api.table_editor:🎯 Table Editor API: Successfully updated upload with statement date and carrier
-WARNING:app.api.table_editor:🎯 Table Editor API: Skipping format learning - no carrier_id available
-INFO:app.api.table_editor:🎯 Table Editor API: Successfully saved 1 edited tables
-INFO:     127.0.0.1:58854 - "POST /api/table-editor/save-tables/ HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58902 - "OPTIONS /api/table-editor/learn-format-patterns HTTP/1.1" 200 OK
-INFO:app.api.table_editor:🎯 Format Learning: Using carrier_id from request: 8340174b-f6ed-42eb-976d-4868bb06c844
-INFO:app.api.table_editor:🎯 Format Learning: Extracted 6 field mappings from field_config
-INFO:app.api.table_editor:🎯 Format Learning: Field mappings: {'Group ID': 'Policy Number', 'Comm. Rate': 'Commission Rate', 'Group Name': 'Client Name', 'Invoice Amount': 'Premium Total', 'Commission Amount': 'Commission Earned', 'Commissionable Amount': 'Invoice Total'}
-WARNING:app.db.crud.carrier_format_learning:⚠️ Saving format learning for company 8340174b-f6ed-42eb-976d-4868bb06c844 without status validation. This should only happen in special cases (e.g., manual format creation).
-INFO:app.api.table_editor:Successfully learned format patterns with signature: f0d2424f7efd76c2fcfb224d0246d1f1 for carrier 8340174b-f6ed-42eb-976d-4868bb06c844
-INFO:     127.0.0.1:58854 - "POST /api/table-editor/learn-format-patterns HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58902 - "OPTIONS /api/companies/8340174b-f6ed-42eb-976d-4868bb06c844/mapping?upload_id=9d102016-8e5f-48c1-b2e0-47924af5facf HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58854 - "POST /api/companies/8340174b-f6ed-42eb-976d-4868bb06c844/mapping?upload_id=9d102016-8e5f-48c1-b2e0-47924af5facf HTTP/1.1" 307 Temporary Redirect
-INFO:     127.0.0.1:58902 - "OPTIONS /api/companies/8340174b-f6ed-42eb-976d-4868bb06c844/mapping/?upload_id=9d102016-8e5f-48c1-b2e0-47924af5facf HTTP/1.1" 200 OK
-INFO:app.api.mapping:🎯 Mapping API: Received mapping request for carrier/company 8340174b-f6ed-42eb-976d-4868bb06c844
-INFO:app.api.mapping:🎯 Mapping API: Upload ID: 9d102016-8e5f-48c1-b2e0-47924af5facf
-INFO:app.api.mapping:🎯 Mapping API: Config received - mapping keys: ['Group ID', 'Comm. Rate', 'Group Name', 'Invoice Amount', 'Commission Amount', 'Commissionable Amount']
-INFO:app.api.mapping:🎯 Mapping API: Selected statement date: {'date': '2025-05-31'}
-INFO:app.api.mapping:🎯 Mapping API: Table data rows: 0
-INFO:app.api.mapping:🎯 Mapping API: Headers: ['Group ID', 'Group Name', 'Invoice Amount', 'Commissionable Amount', 'Comm. Rate', 'Commission Amount']
-INFO:app.api.mapping:🎯 Mapping API: Retrieved carrier_id from upload: 8340174b-f6ed-42eb-976d-4868bb06c844
-INFO:app.api.mapping:🎯 Mapping API: Final carrier_id to use: 8340174b-f6ed-42eb-976d-4868bb06c844
-INFO:app.api.mapping:🎯 Mapping API: Saved 6 field mappings for carrier 8340174b-f6ed-42eb-976d-4868bb06c844
-INFO:app.api.mapping:🎯 Mapping API: Saved configuration for carrier 8340174b-f6ed-42eb-976d-4868bb06c844
-WARNING:app.api.mapping:🎯 Mapping API: No statement date or table data provided for commission processing
-WARNING:app.api.mapping:🎯 Mapping API: table_data is None or empty
-INFO:app.api.mapping:🎯 Mapping API: Mapping update completed successfully for carrier 8340174b-f6ed-42eb-976d-4868bb06c844
-INFO:     127.0.0.1:58854 - "POST /api/companies/8340174b-f6ed-42eb-976d-4868bb06c844/mapping/?upload_id=9d102016-8e5f-48c1-b2e0-47924af5facf HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58976 - "OPTIONS /api/review/approve HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58854 - "POST /api/review/approve HTTP/1.1" 307 Temporary Redirect
-INFO:     127.0.0.1:58976 - "OPTIONS /api/review/approve/ HTTP/1.1" 200 OK
-INFO:app.db.crud.statement_upload:✅ Saving statement review for upload 9d102016-8e5f-48c1-b2e0-47924af5facf with valid status: Approved
-INFO:app.db.crud.statement_upload:✅ Updating existing statement 9d102016-8e5f-48c1-b2e0-47924af5facf (REMAP operation)
-INFO:app.db.crud.statement_upload:📋 Current status: needs_review → New status: Approved
-INFO:app.db.crud.statement_upload:=== REMAP DEBUG ===
-INFO:app.db.crud.statement_upload:💾 Saving statement review: upload_id=9d102016-8e5f-48c1-b2e0-47924af5facf, status=Approved
-INFO:app.db.crud.statement_upload:📋 Field config being saved: 6 fields
-INFO:app.db.crud.statement_upload:📊 Final data tables: 1
-INFO:app.db.crud.statement_upload:📅 Selected statement date: {'date': '2025-05-31', 'carrier_name': ''}
-INFO:app.db.crud.statement_upload:===================
-💾 Saving statement review: upload_id=9d102016-8e5f-48c1-b2e0-47924af5facf, status=Approved
-📋 Field config being saved: [{'field': 'Group ID', 'mapping': 'Policy Number'}, {'field': 'Comm. Rate', 'mapping': 'Commission Rate'}, {'field': 'Group Name', 'mapping': 'Client Name'}, {'field': 'Invoice Amount', 'mapping': 'Premium Total'}, {'field': 'Commission Amount', 'mapping': 'Commission Earned'}, {'field': 'Commissionable Amount', 'mapping': 'Invoice Total'}]
-📊 Final data rows: 1
-📅 Selected statement date being saved: {'date': '2025-05-31', 'carrier_name': ''}
-🔍 DEBUG Saving table 0 'Table 1': summaryRows=[11, 13], type=<class 'list'>
-📝 Extracted field_mapping with 6 mappings: {'Group ID': 'Policy Number', 'Comm. Rate': 'Commission Rate', 'Group Name': 'Client Name', 'Invoice Amount': 'Premium Total', 'Commission Amount': 'Commission Earned', 'Commissionable Amount': 'Invoice Total'}
-💰 Calculating extracted_total for manual approval...
-💰 field_mapping keys: ['Group ID', 'Comm. Rate', 'Group Name', 'Invoice Amount', 'Commission Amount', 'Commissionable Amount']
-💰 Number of tables in final_data: 1
-💰 Found commission field (EXACT MATCH): Commission Amount -> Commission Earned
-💰 Final commission_source_field: Commission Amount
-  💰 Processing 1 detail table(s) (excluded 0 grand total tables)
-  📊 Table 0: 6 headers, 14 rows
-  📋 Headers: ['Group ID', 'Group Name', 'Invoice Amount', 'Commissionable Amount', 'Comm. Rate', 'Commission Amount']
-  📋 First row sample: {'Group ID': 'G-RDA012300075', 'Group Name': 'CG23 Logistics', 'Invoice Amount': '$5,824.00', 'Commissionable Amount': '$5,264.00', 'Comm. Rate': '2.00%', 'Commission Amount': '$105.28'}
-  💰 Table 0: Commission column 'Commission Amount' at index 5
-    Row 0: [DICT] raw_value = '$105.28' (type: <class 'str'>)
-    Row 0: Added $105.28 (running total: $105.28)
-    Row 1: [DICT] raw_value = '$753.84' (type: <class 'str'>)
-    Row 1: Added $753.84 (running total: $859.12)
-    Row 2: [DICT] raw_value = '$361.68' (type: <class 'str'>)
-    Row 2: Added $361.68 (running total: $1220.80)
-    Row 3: [DICT] raw_value = '$60.90' (type: <class 'str'>)
-    Row 3: Added $60.90 (running total: $1281.70)
-    Row 4: [DICT] raw_value = '$379.32' (type: <class 'str'>)
-    Row 4: Added $379.32 (running total: $1661.02)
-    Row 5: [DICT] raw_value = '$246.18' (type: <class 'str'>)
-    Row 5: Added $246.18 (running total: $1907.20)
-    Row 6: [DICT] raw_value = '$315.84' (type: <class 'str'>)
-    Row 6: Added $315.84 (running total: $2223.04)
-    Row 7: [DICT] raw_value = '$361.68' (type: <class 'str'>)
-    Row 7: Added $361.68 (running total: $2584.72)
-    Row 8: [DICT] raw_value = '$692.88' (type: <class 'str'>)
-    Row 8: Added $692.88 (running total: $3277.60)
-    Row 9: [DICT] raw_value = '$438.60' (type: <class 'str'>)
-    Row 9: Added $438.60 (running total: $3716.20)
-    Row 10: [DICT] raw_value = '$585.36' (type: <class 'str'>)
-    Row 10: Added $585.36 (running total: $4301.56)
-    Row 11: SKIPPED (summary row)
-    Row 12: [DICT] raw_value = '$560.00' (type: <class 'str'>)
-    Row 12: Added $560.00 (running total: $4861.56)
-    Row 13: SKIPPED (summary row)
-  ✅ Table 0 total: $4861.56
-💰 AI-extracted total from document: $4861.56
-💰 Total comparison:
-   - AI extracted from document: $4861.56
-   - Calculated from table rows: $4861.56
-   - Difference: $0.00 (0.00%)
-   - Match: True
-💰 Final extracted_total: $4861.56
-💰 Calculating extracted_invoice_total for manual approval...
-💰 Found invoice field: Invoice Amount -> Premium Total
-  💰 Calculating invoice total from 1 detail table(s) (excluding grand total tables)
-  📊 Table 0: 6 headers, 14 rows
-  📋 Headers: ['Group ID', 'Group Name', 'Invoice Amount', 'Commissionable Amount', 'Comm. Rate', 'Commission Amount']
-  📋 First row sample: {'Group ID': 'G-RDA012300075', 'Group Name': 'CG23 Logistics', 'Invoice Amount': '$5,824.00', 'Commissionable Amount': '$5,264.00', 'Comm. Rate': '2.00%', 'Commission Amount': '$105.28'}
-  💰 Table 0: Invoice column 'Invoice Amount' at index 2
-    Row 0: [DICT] invoice_value = '$5,824.00'
-    Row 0: Added $5824.00 to invoice (running total: $5824.00)
-    Row 1: [DICT] invoice_value = '$12,564.00'
-    Row 1: Added $12564.00 to invoice (running total: $18388.00)
-    Row 2: [DICT] invoice_value = '$6,028.00'
-    Row 2: Added $6028.00 to invoice (running total: $24416.00)
-    Row 3: [DICT] invoice_value = '$1,015.00'
-    Row 3: Added $1015.00 to invoice (running total: $25431.00)
-    Row 4: [DICT] invoice_value = '$6,322.00'
-    Row 4: Added $6322.00 to invoice (running total: $31753.00)
-    Row 5: [DICT] invoice_value = '$4,103.00'
-    Row 5: Added $4103.00 to invoice (running total: $35856.00)
-    Row 6: [DICT] invoice_value = '$5,824.00'
-    Row 6: Added $5824.00 to invoice (running total: $41680.00)
-    Row 7: [DICT] invoice_value = '$6,028.00'
-    Row 7: Added $6028.00 to invoice (running total: $47708.00)
-    Row 8: [DICT] invoice_value = '$11,548.00'
-    Row 8: Added $11548.00 to invoice (running total: $59256.00)
-    Row 9: [DICT] invoice_value = '$7,310.00'
-    Row 9: Added $7310.00 to invoice (running total: $66566.00)
-    Row 10: [DICT] invoice_value = '$9,756.00'
-    Row 10: Added $9756.00 to invoice (running total: $76322.00)
-    Row 12: [DICT] invoice_value = '$5,824.00'
-    Row 12: Added $5824.00 to invoice (running total: $82146.00)
-  ✅ Table 0 invoice total: $82146.00
-💰 Final extracted_invoice_total: $82146.00
-✅ Set extracted_total=4861.56 (AI-extracted), calculated_total=4861.56, total_amount_match=True
-✅ Set extracted_invoice_total=82146.0
-✅ Statement approved, processing commission data with BULK OPTIMIZATION...
-🚀 BULK PROCESSING: Starting optimized commission processing for upload 9d102016-8e5f-48c1-b2e0-47924af5facf
-🔍 Extracting field mappings from: [{'field': 'Group ID', 'mapping': 'Policy Number'}, {'field': 'Comm. Rate', 'mapping': 'Commission Rate'}, {'field': 'Group Name', 'mapping': 'Client Name'}, {'field': 'Invoice Amount', 'mapping': 'Premium Total'}, {'field': 'Commission Amount', 'mapping': 'Commission Earned'}, {'field': 'Commissionable Amount', 'mapping': 'Invoice Total'}]
-✅ Found client name field: Group Name -> Client Name
-✅ Found invoice field from SOURCE pattern: Invoice Amount -> Premium Total
-✅ Found commission field (exact match): Commission Amount -> Commission Earned
-🔍 Extracted field mappings: {'client_name_field': 'Group Name', 'commission_earned_field': 'Commission Amount', 'invoice_total_field': 'Invoice Amount'}
-   ✅ Client Name: Using 'Group Name'
-   ✅ Commission Earned: Using 'Commission Amount'
-   ✅ Invoice Total: Using 'Invoice Amount'
-✅ OPTIMIZED: Pre-extracted field mappings: client=Group Name, commission=Commission Amount, invoice=Invoice Amount
-👤 Processing for user_id: f6cf1764-5bfc-4352-abd9-81b72b7cf191
-🌍 Processing for environment_id: 9f4a7a57-5715-4b1e-98a9-b9901726a485
-📅 Statement date: 2025-05-31 00:00:00 (month: 5, year: 2025)
-📊 Table 0: Mapped fields - client[1]=Group Name, commission[5]=Commission Amount, invoice[2]=Invoice Amount
-🔍 DEBUG Table 0: summaryRows raw value: [11, 13], type: <class 'list'>
-🔍 Table 0: Excluding 2 summary rows from commission calculations: [11, 13]
-⏭️ Skipping summary row 11 in table 0
-⏭️ Skipping summary row 13 in table 0
-📊 Extracted 12 commission records for bulk processing
-🔍 Found 1 clients with multiple statement rows:
-   1. CG23 Logistics: 3 rows, total commission: $981.12
-📊 Commission Analysis: {'total_records': 12, 'unique_clients': 10, 'clients_with_multiple_rows': 1}
-🔍 Bulk fetch: Looking up 10 unique commission records (with user + month/year isolation)
-✅ Bulk fetch: Found 0 existing records for specified users
-📊 Aggregating 12 individual records by unique constraint...
-✅ Aggregated into 10 unique commission records (with user isolation)
-   📋 CG23 Logistics (user: f6cf1764-5bfc-4352-abd9-81b72b7cf191): $981.12 commission, $17472.00 invoice
-   📋 Alcala Logistics (user: f6cf1764-5bfc-4352-abd9-81b72b7cf191): $753.84 commission, $12564.00 invoice
-   📋 Anam Logistics (user: f6cf1764-5bfc-4352-abd9-81b72b7cf191): $361.68 commission, $6028.00 invoice
-📊 Bulk operations prepared: 0 updates, 10 inserts
-➕ Executing bulk insert for 10 records
-✅ BULK PROCESSING: Successfully processed 12 records
-📈 Performance: Reduced from 600-800 DB operations to 2-3 operations
-INFO:app.services.user_profile_service:Recorded contribution: approval for user f6cf1764-5bfc-4352-abd9-81b72b7cf191
-INFO:app.api.review:✅ User contribution recorded for approved statement 9d102016-8e5f-48c1-b2e0-47924af5facf
-INFO:     127.0.0.1:58854 - "POST /api/review/approve/ HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58854 - "GET /api/companies/user-specific/8340174b-f6ed-42eb-976d-4868bb06c844/statements HTTP/1.1" 200 OK
-🎯 Remove Upload: Found commission record for CG23 Logistics that contains upload 9d102016-8e5f-48c1-b2e0-47924af5facf
-🎯 Remove Upload: Found commission record for Alcala Logistics that contains upload 9d102016-8e5f-48c1-b2e0-47924af5facf
-🎯 Remove Upload: Found commission record for Anam Logistics that contains upload 9d102016-8e5f-48c1-b2e0-47924af5facf
-🎯 Remove Upload: Found commission record for Atlas Logistics Services that contains upload 9d102016-8e5f-48c1-b2e0-47924af5facf
-🎯 Remove Upload: Found commission record for BAMAC Enterprise LLC that contains upload 9d102016-8e5f-48c1-b2e0-47924af5facf
-🎯 Remove Upload: Found commission record for Cannon Logistics, LLC that contains upload 9d102016-8e5f-48c1-b2e0-47924af5facf
-🎯 Remove Upload: Found commission record for JDW Logistics that contains upload 9d102016-8e5f-48c1-b2e0-47924af5facf
-🎯 Remove Upload: Found commission record for Legacy Delivery and Logistics that contains upload 9d102016-8e5f-48c1-b2e0-47924af5facf
-🎯 Remove Upload: Found commission record for Pria Logistics that contains upload 9d102016-8e5f-48c1-b2e0-47924af5facf
-🎯 Remove Upload: Found commission record for Salute Logistics, LLC that contains upload 9d102016-8e5f-48c1-b2e0-47924af5facf
-🎯 Remove Upload: Found 10 commission records to update
-🎯 Remove Upload: Processing commission record for CG23 Logistics
-🎯 Extract Commission: Processing field_config: [{'field': 'Group ID', 'mapping': 'Policy Number'}, {'field': 'Comm. Rate', 'mapping': 'Commission Rate'}, {'field': 'Group Name', 'mapping': 'Client Name'}, {'field': 'Invoice Amount', 'mapping': 'Premium Total'}, {'field': 'Commission Amount', 'mapping': 'Commission Earned'}, {'field': 'Commissionable Amount', 'mapping': 'Invoice Total'}]
-🎯 Extract Commission: Checking field: Group ID -> 
-🎯 Extract Commission: Checking field: Comm. Rate -> 
-🎯 Extract Commission: Checking field: Group Name -> 
-🎯 Extract Commission: Checking field: Invoice Amount -> 
-🎯 Extract Commission: Checking field: Commission Amount -> 
-🎯 Extract Commission: Checking field: Commissionable Amount -> 
-🎯 Extract Commission: Found alternative client name field: 
-🎯 Extract Commission: Found alternative commission field: 
-🎯 Extract Commission: Missing required field: client_name_field=
-🎯 Remove Upload: Deleted upload is from month 5
-🎯 Remove Upload: Removed upload 9d102016-8e5f-48c1-b2e0-47924af5facf from CG23 Logistics, remaining uploads: []
-🎯 Remove Upload: Deleted commission record 78472e64-52fd-435a-9100-685d86b46506 as no uploads remain
-🎯 Remove Upload: Processing commission record for Alcala Logistics
-🎯 Extract Commission: Processing field_config: [{'field': 'Group ID', 'mapping': 'Policy Number'}, {'field': 'Comm. Rate', 'mapping': 'Commission Rate'}, {'field': 'Group Name', 'mapping': 'Client Name'}, {'field': 'Invoice Amount', 'mapping': 'Premium Total'}, {'field': 'Commission Amount', 'mapping': 'Commission Earned'}, {'field': 'Commissionable Amount', 'mapping': 'Invoice Total'}]
-🎯 Extract Commission: Checking field: Group ID -> 
-🎯 Extract Commission: Checking field: Comm. Rate -> 
-🎯 Extract Commission: Checking field: Group Name -> 
-🎯 Extract Commission: Checking field: Invoice Amount -> 
-🎯 Extract Commission: Checking field: Commission Amount -> 
-🎯 Extract Commission: Checking field: Commissionable Amount -> 
-🎯 Extract Commission: Found alternative client name field: 
-🎯 Extract Commission: Found alternative commission field: 
-🎯 Extract Commission: Missing required field: client_name_field=
-🎯 Remove Upload: Deleted upload is from month 5
-🎯 Remove Upload: Removed upload 9d102016-8e5f-48c1-b2e0-47924af5facf from Alcala Logistics, remaining uploads: []
-🎯 Remove Upload: Deleted commission record c43ae74f-2292-4e06-a523-d4929ebbe8eb as no uploads remain
-🎯 Remove Upload: Processing commission record for Anam Logistics
-🎯 Extract Commission: Processing field_config: [{'field': 'Group ID', 'mapping': 'Policy Number'}, {'field': 'Comm. Rate', 'mapping': 'Commission Rate'}, {'field': 'Group Name', 'mapping': 'Client Name'}, {'field': 'Invoice Amount', 'mapping': 'Premium Total'}, {'field': 'Commission Amount', 'mapping': 'Commission Earned'}, {'field': 'Commissionable Amount', 'mapping': 'Invoice Total'}]
-🎯 Extract Commission: Checking field: Group ID -> 
-🎯 Extract Commission: Checking field: Comm. Rate -> 
-🎯 Extract Commission: Checking field: Group Name -> 
-🎯 Extract Commission: Checking field: Invoice Amount -> 
-🎯 Extract Commission: Checking field: Commission Amount -> 
-🎯 Extract Commission: Checking field: Commissionable Amount -> 
-🎯 Extract Commission: Found alternative client name field: 
-🎯 Extract Commission: Found alternative commission field: 
-🎯 Extract Commission: Missing required field: client_name_field=
-🎯 Remove Upload: Deleted upload is from month 5
-🎯 Remove Upload: Removed upload 9d102016-8e5f-48c1-b2e0-47924af5facf from Anam Logistics, remaining uploads: []
-🎯 Remove Upload: Deleted commission record b5f8c660-0e79-4f51-802a-1f0979bfc5c9 as no uploads remain
-🎯 Remove Upload: Processing commission record for Atlas Logistics Services
-🎯 Extract Commission: Processing field_config: [{'field': 'Group ID', 'mapping': 'Policy Number'}, {'field': 'Comm. Rate', 'mapping': 'Commission Rate'}, {'field': 'Group Name', 'mapping': 'Client Name'}, {'field': 'Invoice Amount', 'mapping': 'Premium Total'}, {'field': 'Commission Amount', 'mapping': 'Commission Earned'}, {'field': 'Commissionable Amount', 'mapping': 'Invoice Total'}]
-🎯 Extract Commission: Checking field: Group ID -> 
-🎯 Extract Commission: Checking field: Comm. Rate -> 
-🎯 Extract Commission: Checking field: Group Name -> 
-🎯 Extract Commission: Checking field: Invoice Amount -> 
-🎯 Extract Commission: Checking field: Commission Amount -> 
-🎯 Extract Commission: Checking field: Commissionable Amount -> 
-🎯 Extract Commission: Found alternative client name field: 
-🎯 Extract Commission: Found alternative commission field: 
-🎯 Extract Commission: Missing required field: client_name_field=
-🎯 Remove Upload: Deleted upload is from month 5
-🎯 Remove Upload: Removed upload 9d102016-8e5f-48c1-b2e0-47924af5facf from Atlas Logistics Services, remaining uploads: []
-🎯 Remove Upload: Deleted commission record 53acbfb4-7abe-4336-8d19-24a307a4e3bd as no uploads remain
-🎯 Remove Upload: Processing commission record for BAMAC Enterprise LLC
-🎯 Extract Commission: Processing field_config: [{'field': 'Group ID', 'mapping': 'Policy Number'}, {'field': 'Comm. Rate', 'mapping': 'Commission Rate'}, {'field': 'Group Name', 'mapping': 'Client Name'}, {'field': 'Invoice Amount', 'mapping': 'Premium Total'}, {'field': 'Commission Amount', 'mapping': 'Commission Earned'}, {'field': 'Commissionable Amount', 'mapping': 'Invoice Total'}]
-🎯 Extract Commission: Checking field: Group ID -> 
-🎯 Extract Commission: Checking field: Comm. Rate -> 
-🎯 Extract Commission: Checking field: Group Name -> 
-🎯 Extract Commission: Checking field: Invoice Amount -> 
-🎯 Extract Commission: Checking field: Commission Amount -> 
-🎯 Extract Commission: Checking field: Commissionable Amount -> 
-🎯 Extract Commission: Found alternative client name field: 
-🎯 Extract Commission: Found alternative commission field: 
-🎯 Extract Commission: Missing required field: client_name_field=
-🎯 Remove Upload: Deleted upload is from month 5
-🎯 Remove Upload: Removed upload 9d102016-8e5f-48c1-b2e0-47924af5facf from BAMAC Enterprise LLC, remaining uploads: []
-🎯 Remove Upload: Deleted commission record 13626330-e3fa-49a1-882a-348d93315541 as no uploads remain
-🎯 Remove Upload: Processing commission record for Cannon Logistics, LLC
-🎯 Extract Commission: Processing field_config: [{'field': 'Group ID', 'mapping': 'Policy Number'}, {'field': 'Comm. Rate', 'mapping': 'Commission Rate'}, {'field': 'Group Name', 'mapping': 'Client Name'}, {'field': 'Invoice Amount', 'mapping': 'Premium Total'}, {'field': 'Commission Amount', 'mapping': 'Commission Earned'}, {'field': 'Commissionable Amount', 'mapping': 'Invoice Total'}]
-🎯 Extract Commission: Checking field: Group ID -> 
-🎯 Extract Commission: Checking field: Comm. Rate -> 
-🎯 Extract Commission: Checking field: Group Name -> 
-🎯 Extract Commission: Checking field: Invoice Amount -> 
-🎯 Extract Commission: Checking field: Commission Amount -> 
-🎯 Extract Commission: Checking field: Commissionable Amount -> 
-🎯 Extract Commission: Found alternative client name field: 
-🎯 Extract Commission: Found alternative commission field: 
-🎯 Extract Commission: Missing required field: client_name_field=
-🎯 Remove Upload: Deleted upload is from month 5
-🎯 Remove Upload: Removed upload 9d102016-8e5f-48c1-b2e0-47924af5facf from Cannon Logistics, LLC, remaining uploads: []
-🎯 Remove Upload: Deleted commission record c2e912c2-a21b-4a50-892f-3ff97c35b52d as no uploads remain
-🎯 Remove Upload: Processing commission record for JDW Logistics
-🎯 Extract Commission: Processing field_config: [{'field': 'Group ID', 'mapping': 'Policy Number'}, {'field': 'Comm. Rate', 'mapping': 'Commission Rate'}, {'field': 'Group Name', 'mapping': 'Client Name'}, {'field': 'Invoice Amount', 'mapping': 'Premium Total'}, {'field': 'Commission Amount', 'mapping': 'Commission Earned'}, {'field': 'Commissionable Amount', 'mapping': 'Invoice Total'}]
-🎯 Extract Commission: Checking field: Group ID -> 
-🎯 Extract Commission: Checking field: Comm. Rate -> 
-🎯 Extract Commission: Checking field: Group Name -> 
-🎯 Extract Commission: Checking field: Invoice Amount -> 
-🎯 Extract Commission: Checking field: Commission Amount -> 
-🎯 Extract Commission: Checking field: Commissionable Amount -> 
-🎯 Extract Commission: Found alternative client name field: 
-🎯 Extract Commission: Found alternative commission field: 
-🎯 Extract Commission: Missing required field: client_name_field=
-🎯 Remove Upload: Deleted upload is from month 5
-🎯 Remove Upload: Removed upload 9d102016-8e5f-48c1-b2e0-47924af5facf from JDW Logistics, remaining uploads: []
-🎯 Remove Upload: Deleted commission record c54501d8-9279-4eb2-82f1-8f311f3ea834 as no uploads remain
-🎯 Remove Upload: Processing commission record for Legacy Delivery and Logistics
-🎯 Extract Commission: Processing field_config: [{'field': 'Group ID', 'mapping': 'Policy Number'}, {'field': 'Comm. Rate', 'mapping': 'Commission Rate'}, {'field': 'Group Name', 'mapping': 'Client Name'}, {'field': 'Invoice Amount', 'mapping': 'Premium Total'}, {'field': 'Commission Amount', 'mapping': 'Commission Earned'}, {'field': 'Commissionable Amount', 'mapping': 'Invoice Total'}]
-🎯 Extract Commission: Checking field: Group ID -> 
-🎯 Extract Commission: Checking field: Comm. Rate -> 
-🎯 Extract Commission: Checking field: Group Name -> 
-🎯 Extract Commission: Checking field: Invoice Amount -> 
-🎯 Extract Commission: Checking field: Commission Amount -> 
-🎯 Extract Commission: Checking field: Commissionable Amount -> 
-🎯 Extract Commission: Found alternative client name field: 
-🎯 Extract Commission: Found alternative commission field: 
-🎯 Extract Commission: Missing required field: client_name_field=
-🎯 Remove Upload: Deleted upload is from month 5
-🎯 Remove Upload: Removed upload 9d102016-8e5f-48c1-b2e0-47924af5facf from Legacy Delivery and Logistics, remaining uploads: []
-🎯 Remove Upload: Deleted commission record e3ce53ed-b843-4e07-ad3a-661cb8859427 as no uploads remain
-🎯 Remove Upload: Processing commission record for Pria Logistics
-🎯 Extract Commission: Processing field_config: [{'field': 'Group ID', 'mapping': 'Policy Number'}, {'field': 'Comm. Rate', 'mapping': 'Commission Rate'}, {'field': 'Group Name', 'mapping': 'Client Name'}, {'field': 'Invoice Amount', 'mapping': 'Premium Total'}, {'field': 'Commission Amount', 'mapping': 'Commission Earned'}, {'field': 'Commissionable Amount', 'mapping': 'Invoice Total'}]
-🎯 Extract Commission: Checking field: Group ID -> 
-🎯 Extract Commission: Checking field: Comm. Rate -> 
-🎯 Extract Commission: Checking field: Group Name -> 
-🎯 Extract Commission: Checking field: Invoice Amount -> 
-🎯 Extract Commission: Checking field: Commission Amount -> 
-🎯 Extract Commission: Checking field: Commissionable Amount -> 
-🎯 Extract Commission: Found alternative client name field: 
-🎯 Extract Commission: Found alternative commission field: 
-🎯 Extract Commission: Missing required field: client_name_field=
-🎯 Remove Upload: Deleted upload is from month 5
-🎯 Remove Upload: Removed upload 9d102016-8e5f-48c1-b2e0-47924af5facf from Pria Logistics, remaining uploads: []
-🎯 Remove Upload: Deleted commission record ba05301a-79a1-4c2f-9453-05fbffabdd0e as no uploads remain
-🎯 Remove Upload: Processing commission record for Salute Logistics, LLC
-🎯 Extract Commission: Processing field_config: [{'field': 'Group ID', 'mapping': 'Policy Number'}, {'field': 'Comm. Rate', 'mapping': 'Commission Rate'}, {'field': 'Group Name', 'mapping': 'Client Name'}, {'field': 'Invoice Amount', 'mapping': 'Premium Total'}, {'field': 'Commission Amount', 'mapping': 'Commission Earned'}, {'field': 'Commissionable Amount', 'mapping': 'Invoice Total'}]
-🎯 Extract Commission: Checking field: Group ID -> 
-🎯 Extract Commission: Checking field: Comm. Rate -> 
-🎯 Extract Commission: Checking field: Group Name -> 
-🎯 Extract Commission: Checking field: Invoice Amount -> 
-🎯 Extract Commission: Checking field: Commission Amount -> 
-🎯 Extract Commission: Checking field: Commissionable Amount -> 
-🎯 Extract Commission: Found alternative client name field: 
-🎯 Extract Commission: Found alternative commission field: 
-🎯 Extract Commission: Missing required field: client_name_field=
-🎯 Remove Upload: Deleted upload is from month 5
-🎯 Remove Upload: Removed upload 9d102016-8e5f-48c1-b2e0-47924af5facf from Salute Logistics, LLC, remaining uploads: []
-🎯 Remove Upload: Deleted commission record 069bfb69-5d10-452f-b9f3-42cb3950bca1 as no uploads remain
-Successfully removed upload 9d102016-8e5f-48c1-b2e0-47924af5facf from 10 commission records
-INFO:     127.0.0.1:59137 - "DELETE /api/companies/8340174b-f6ed-42eb-976d-4868bb06c844/statements/ HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59137 - "GET /api/earned-commission/carrier/user-specific/8340174b-f6ed-42eb-976d-4868bb06c844/stats HTTP/1.1" 200 OK
-INFO:app.services.orphan_cleanup_service:🧹 Starting orphan cleanup job...
-INFO:app.services.orphan_cleanup_service:✅ Orphan cleanup completed: no orphans found
+INFO:app.api.auto_approval:✅ User contribution recorded for auto-approved statement 5aecca3b-d567-4cb9-989c-877448a3b0bc
+INFO:app.services.websocket_service:Broadcasting message to upload_id 5aecca3b-d567-4cb9-989c-877448a3b0bc: progress_update
+WARNING:app.services.websocket_service:No active connections found for upload_id 5aecca3b-d567-4cb9-989c-877448a3b0bc
+INFO:app.api.auto_approval:Auto-approval completed for upload 5aecca3b-d567-4cb9-989c-877448a3b0bc
+INFO:     127.0.0.1:59359 - "POST /api/auto-approve/process-lite HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59369 - "GET /api/companies/?view_mode=my_data&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59359 - "GET /api/companies/user-specific?environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59371 - "GET /api/companies/?view_mode=my_data&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59359 - "GET /api/companies/user-specific?environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59373 - "GET /api/earned-commission/carrier/user-specific/5c9324ac-1794-4563-8e0e-8cd5c5317181/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59369 - "GET /api/companies/user-specific/5c9324ac-1794-4563-8e0e-8cd5c5317181/statements HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59359 - "GET /api/companies/user-specific?environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59359 - "GET /api/companies/user-specific?environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK

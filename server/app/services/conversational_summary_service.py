@@ -4,16 +4,21 @@ Transforms technical extraction data into natural, user-friendly summaries
 
 Inspired by Google Gemini's natural language approach to document summarization.
 
-⭐ NOW USES GPT-4 (OpenAI) instead of Claude for consistency with extraction pipeline
+⭐ NOW USES GPT-5 (Responses API) for parity with the GPT-5 Vision extraction pipeline
 """
 
 import logging
 import asyncio
-from typing import Dict, Any, Optional
+import json
+from typing import Dict, Any, Optional, List
 from datetime import datetime
 from openai import AsyncOpenAI
 import os
 import httpx
+
+from .gpt.retry_handler import RateLimitMonitor
+from .gpt.circuit_breaker import CircuitBreaker
+from .gpt.token_optimizer import TokenTracker
 
 logger = logging.getLogger(__name__)
 
@@ -24,12 +29,12 @@ class ConversationalSummaryService:
     
     Inspired by Google Gemini's natural language approach to document summarization.
     
-    ⭐ NOW USES GPT-4 (OpenAI) for consistency with GPT-5 Vision extraction pipeline
+    ⭐ NOW USES GPT-5 Responses API for consistency with GPT-5 Vision extraction pipeline
     """
     
-    def __init__(self):
-        """Initialize with OpenAI GPT for summary generation"""
-        api_key = os.getenv("OPENAI_API_KEY")
+    def __init__(self, api_key: Optional[str] = None):
+        """Initialize GPT-5 Responses API client for conversational summaries."""
+        api_key = api_key or os.getenv("OPENAI_API_KEY")
         timeout_seconds = float(os.getenv("OPENAI_HTTP_TIMEOUT", "600"))
         connect_timeout = float(os.getenv("OPENAI_HTTP_CONNECT_TIMEOUT", "10"))
         write_timeout = float(os.getenv("OPENAI_HTTP_WRITE_TIMEOUT", "60"))
@@ -40,21 +45,364 @@ class ConversationalSummaryService:
             read=timeout_seconds
         )
         max_retries = int(os.getenv("OPENAI_HTTP_MAX_RETRIES", "2"))
-        self.client = AsyncOpenAI(
-            api_key=api_key,
-            timeout=self._http_timeout,
-            max_retries=max_retries
-        ) if api_key else None
-        self.model = "gpt-4o"  # GPT-4o - Fast, high-quality, multimodal model
+        try:
+            self.client = AsyncOpenAI(
+                api_key=api_key,
+                timeout=self._http_timeout,
+                max_retries=max_retries
+            ) if api_key else None
+        except Exception as exc:
+            logger.warning("⚠️ OpenAI client initialization failed for summaries: %s", exc)
+            self.client = None
+        
+        # Model + token planning mirrors GPT-5 Vision extractor
+        self.primary_model = os.getenv("GPT5_SUMMARY_MODEL", os.getenv("GPT5_PRIMARY_MODEL", "gpt-5"))
+        self.mini_model = os.getenv("GPT5_SUMMARY_MINI_MODEL", os.getenv("GPT5_MINI_MODEL", "gpt-5-mini"))
+        self.reasoning_effort = os.getenv("GPT5_SUMMARY_REASONING", "medium")
+        self.max_tokens_default = int(os.getenv("GPT5_SUMMARY_MAX_TOKENS", "2000"))
+        self.mini_max_output_tokens = int(os.getenv("GPT5_SUMMARY_MINI_MAX_TOKENS", "1200"))
+        self.min_output_tokens = int(os.getenv("GPT5_SUMMARY_MIN_OUTPUT_TOKENS", "600"))
+        self.mini_output_tokens = int(os.getenv("GPT5_SUMMARY_MINI_MIN_TOKENS", "400"))
+        self.token_retry_step = int(os.getenv("GPT5_SUMMARY_TOKEN_RETRY_STEP", "400"))
+        self.max_token_retry_attempts = int(os.getenv("GPT5_SUMMARY_TOKEN_RETRY_ATTEMPTS", "2"))
+        self.mini_prompt_char_limit = int(os.getenv("GPT5_SUMMARY_MINI_PROMPT_CHAR_LIMIT", "4000"))
+        self.tokens_per_char_estimate = float(os.getenv("GPT5_SUMMARY_TOKENS_PER_CHAR", "0.35"))
+        
+        # Structured response + resiliency helpers
+        self.structured_response_format = self._build_structured_output_schema()
+        self._disabled_models: set[str] = set()
+        self.rate_limiter = RateLimitMonitor(
+            requests_per_minute=int(os.getenv("GPT5_SUMMARY_REQUESTS_PER_MINUTE", "60")),
+            tokens_per_minute=int(os.getenv("GPT5_SUMMARY_TOKENS_PER_MINUTE", "200000"))
+        )
+        self.circuit_breaker = CircuitBreaker(
+            failure_threshold=int(os.getenv("GPT5_SUMMARY_FAILURE_THRESHOLD", "5")),
+            timeout=int(os.getenv("GPT5_SUMMARY_BREAKER_TIMEOUT", "45")),
+            success_threshold=int(os.getenv("GPT5_SUMMARY_SUCCESS_THRESHOLD", "2"))
+        )
+        self.token_tracker = TokenTracker()
         
         if self.client:
-            logger.info("✅ ConversationalSummaryService initialized with GPT-4o")
+            logger.info(
+                "✅ ConversationalSummaryService initialized with GPT-5 responses "
+                "(primary=%s, mini=%s)",
+                self.primary_model,
+                self.mini_model
+            )
         else:
             logger.warning("⚠️ ConversationalSummaryService initialized without OpenAI API key")
         
     def is_available(self) -> bool:
         """Check if service is ready"""
         return self.client is not None and bool(os.getenv("OPENAI_API_KEY"))
+    
+    def _build_structured_output_schema(self) -> Dict[str, Any]:
+        """Structured output schema to guarantee JSON with summary + key-value data."""
+        return {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "ConversationalSummary",
+                "strict": False,
+                "schema": {
+                    "type": "object",
+                    "properties": {
+                        "conversational_summary": {"type": "string"},
+                        "key_value_data": {
+                            "type": "object",
+                            "properties": {
+                                "carrier_name": {"type": ["string", "null"]},
+                                "broker_company": {"type": ["string", "null"]},
+                                "statement_date": {"type": ["string", "null"]},
+                                "broker_id": {"type": ["string", "null"]},
+                                "payment_type": {"type": ["string", "null"]},
+                                "total_amount": {"type": ["string", "null", "number"]},
+                                "company_count": {"type": ["integer", "string", "null"]},
+                                "top_contributors": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "object",
+                                        "properties": {
+                                            "name": {"type": "string"},
+                                            "amount": {"type": "string"}
+                                        },
+                                        "required": ["name", "amount"]
+                                    }
+                                },
+                                "commission_structure": {"type": ["string", "null"]},
+                                "census_count": {"type": ["string", "integer", "null"]},
+                                "billing_periods": {"type": ["string", "null"]}
+                            },
+                            "additionalProperties": True
+                        }
+                    },
+                    "required": ["conversational_summary", "key_value_data"],
+                    "additionalProperties": True
+                }
+            }
+        }
+    
+    def _get_text_json_schema_payload(self) -> Dict[str, Any]:
+        """Build Responses API structured output payload."""
+        schema_payload = self.structured_response_format.get("json_schema", {})
+        name = schema_payload.get("name", "ConversationalSummary")
+        strict = schema_payload.get("strict", False)
+        schema = schema_payload.get("schema", {})
+        return {
+            "format": {
+                "type": "json_schema",
+                "name": name,
+                "schema": schema,
+                "strict": strict,
+                "json_schema": schema_payload
+            }
+        }
+    
+    def _is_model_disabled(self, model_name: Optional[str]) -> bool:
+        return bool(model_name) and model_name in self._disabled_models
+    
+    def _disable_model(self, model_name: Optional[str]) -> None:
+        if not model_name or model_name in self._disabled_models:
+            return
+        self._disabled_models.add(model_name)
+        logger.warning("⚠️ Model %s disabled for conversational summaries.", model_name)
+    
+    def _get_model_fallback_candidates(self, failed_model: str) -> List[str]:
+        candidates: List[Optional[str]] = []
+        if failed_model == self.mini_model:
+            env_override = os.getenv("GPT5_SUMMARY_MINI_FALLBACK_MODEL")
+            candidates.extend([env_override, self.primary_model, "gpt-5"])
+        else:
+            env_override = os.getenv("GPT5_SUMMARY_PRIMARY_FALLBACK_MODEL")
+            candidates.extend([env_override, self.mini_model, "gpt-5-mini", "gpt-5"])
+        unique: List[str] = []
+        for candidate in candidates:
+            if candidate and candidate not in unique:
+                unique.append(candidate)
+        return unique
+    
+    def _next_fallback_model(self, failed_model: str, tried_models: List[str]) -> Optional[str]:
+        for candidate in self._get_model_fallback_candidates(failed_model):
+            if candidate in tried_models or self._is_model_disabled(candidate):
+                continue
+            return candidate
+        return None
+    
+    def _select_available_model(self, preferred_model: Optional[str]) -> str:
+        preferred = preferred_model or self.primary_model or "gpt-5"
+        if not self._is_model_disabled(preferred):
+            return preferred
+        fallback = self._next_fallback_model(preferred, tried_models=[preferred])
+        return fallback or "gpt-5"
+    
+    def _is_model_not_found_error(self, error: Exception) -> bool:
+        if hasattr(error, "code") and getattr(error, "code") == "model_not_found":
+            return True
+        body = getattr(error, "body", None)
+        if isinstance(body, dict):
+            err = body.get("error", {})
+            if err.get("code") == "model_not_found":
+                return True
+            message = err.get("message", "")
+            if isinstance(message, str) and "does not exist" in message.lower():
+                return True
+        message = str(error).lower()
+        return "model_not_found" in message or "does not exist" in message
+    
+    async def _execute_with_model_failover(self, response_kwargs: Dict[str, Any]):
+        if not self.client:
+            raise ValueError("OpenAI client not initialized")
+        tried_models: List[str] = []
+        while True:
+            current_model = response_kwargs.get("model", self.primary_model)
+            tried_models.append(current_model)
+            try:
+                return await self.client.responses.create(**response_kwargs)
+            except Exception as api_error:
+                if self._is_model_not_found_error(api_error):
+                    self._disable_model(current_model)
+                    fallback = self._next_fallback_model(current_model, tried_models)
+                    if fallback:
+                        logger.warning(
+                            "⚠️ Model %s unavailable for summaries. Retrying with %s.",
+                            current_model,
+                            fallback
+                        )
+                        response_kwargs["model"] = fallback
+                        continue
+                raise
+    
+    def _plan_for_summary_request(self, prompt_length: int, use_enhanced: bool) -> Dict[str, Any]:
+        use_mini = (
+            bool(self.mini_model)
+            and not use_enhanced
+            and prompt_length <= self.mini_prompt_char_limit
+            and not self._is_model_disabled(self.mini_model)
+        )
+        selected_model = self._select_available_model(self.mini_model if use_mini else self.primary_model)
+        token_cap = self.mini_max_output_tokens if use_mini else self.max_tokens_default
+        min_tokens = self.mini_output_tokens if use_mini else self.min_output_tokens
+        estimated_tokens = max(min_tokens, int(prompt_length * self.tokens_per_char_estimate))
+        max_tokens = min(token_cap, max(min_tokens, estimated_tokens))
+        reasoning_effort = "low" if use_mini else self.reasoning_effort
+        return {
+            "model": selected_model,
+            "max_tokens": max_tokens,
+            "token_cap": token_cap,
+            "use_mini": use_mini,
+            "reasoning_effort": reasoning_effort
+        }
+    
+    def _should_scale_output_tokens(
+        self,
+        current_tokens: int,
+        plan: Dict[str, Any],
+        attempts: int
+    ) -> bool:
+        return (
+            attempts < self.max_token_retry_attempts
+            and current_tokens < plan.get("token_cap", self.max_tokens_default)
+        )
+    
+    def _next_token_budget(self, current_tokens: int, plan: Dict[str, Any]) -> int:
+        token_cap = plan.get("token_cap", self.max_tokens_default)
+        return min(token_cap, current_tokens + self.token_retry_step)
+    
+    def _estimate_input_tokens(self, prompt: str, system_prompt: str) -> int:
+        combined_chars = len(prompt) + len(system_prompt or "")
+        estimate = int(combined_chars * 0.25)
+        return max(300, estimate)
+    
+    async def _generate_with_gpt5(
+        self,
+        prompt: str,
+        system_prompt: str,
+        use_enhanced: bool
+    ) -> Dict[str, Any]:
+        plan = self._plan_for_summary_request(len(prompt), use_enhanced)
+        model = plan["model"]
+        max_tokens = plan["max_tokens"]
+        reasoning_effort = plan["reasoning_effort"]
+        
+        messages = [
+            {
+                "role": "system",
+                "content": [{"type": "input_text", "text": system_prompt}]
+            },
+            {
+                "role": "user",
+                "content": [{"type": "input_text", "text": prompt}]
+            }
+        ]
+        
+        estimated_tokens = self._estimate_input_tokens(prompt, system_prompt) + max_tokens
+        self.rate_limiter.wait_if_needed(estimated_tokens)
+        
+        response_kwargs = {
+            "model": model,
+            "input": messages,
+            "text": self._get_text_json_schema_payload(),
+            "max_output_tokens": max_tokens,
+            "reasoning": {"effort": reasoning_effort}
+        }
+        
+        token_retry_attempts = 0
+        current_budget = max_tokens
+        start_time = datetime.now()
+        
+        while True:
+            response_kwargs["max_output_tokens"] = current_budget
+            try:
+                response = await self._execute_with_model_failover(response_kwargs)
+            except TypeError as schema_error:
+                # Fallback to json_object for older SDKs
+                if "json_schema" in str(schema_error).lower():
+                    logger.warning(
+                        "⚠️ Structured outputs unsupported in current SDK for summaries. "
+                        "Falling back to json_object format."
+                    )
+                    response_kwargs["text"] = {"format": {"type": "json_object"}}
+                    response = await self._execute_with_model_failover(response_kwargs)
+                else:
+                    raise
+            
+            output_text = getattr(response, "output_text", "") or ""
+            output_text = output_text.strip()
+            if not output_text:
+                raise ValueError("Empty summary response from GPT-5")
+            
+            incomplete = getattr(response, "status", "").lower() == "incomplete"
+            truncated = not (output_text.endswith("}") or output_text.endswith("]"))
+            
+            if (incomplete or truncated) and self._should_scale_output_tokens(current_budget, plan, token_retry_attempts):
+                token_retry_attempts += 1
+                new_budget = self._next_token_budget(current_budget, plan)
+                logger.warning(
+                    "⚠️ Summary response truncated at %s tokens. Retrying with %s tokens "
+                    "(attempt %s/%s).",
+                    current_budget,
+                    new_budget,
+                    token_retry_attempts,
+                    self.max_token_retry_attempts
+                )
+                current_budget = new_budget
+                continue
+            
+            if truncated:
+                logger.error("❌ Truncated JSON payload from GPT-5 summary response: ...%s", output_text[-120:])
+                raise ValueError(
+                    f"JSON response truncated at {len(output_text)} chars. "
+                    f"Increase GPT5 summary max tokens (current budget: {current_budget})."
+                )
+            break
+        
+        processing_time = (datetime.now() - start_time).total_seconds()
+        
+        try:
+            parsed = json.loads(output_text)
+        except json.JSONDecodeError as exc:
+            logger.error("❌ Failed to parse GPT-5 summary JSON at pos %s: %s", exc.pos, exc.msg)
+            snippet = output_text[max(0, exc.pos - 80): exc.pos + 80]
+            logger.error("Context: ...%s...", snippet)
+            raise ValueError(f"Failed to parse GPT-5 summary JSON: {exc.msg}")
+        
+        usage = getattr(response, "usage", None)
+        input_tokens = getattr(usage, "input_tokens", None) or getattr(usage, "prompt_tokens", 0) or 0
+        output_tokens = getattr(usage, "output_tokens", None) or getattr(usage, "completion_tokens", 0) or 0
+        reasoning_tokens = getattr(usage, "reasoning_tokens", 0)
+        total_tokens = getattr(usage, "total_tokens", 0) or (input_tokens + output_tokens + reasoning_tokens)
+        
+        tokens_used = {
+            "input": input_tokens,
+            "output": output_tokens,
+            "reasoning": reasoning_tokens,
+            "total": total_tokens
+        }
+        
+        cost_summary = self.token_tracker.record_extraction(
+            input_tokens,
+            output_tokens,
+            model=model,
+            reasoning_tokens=reasoning_tokens
+        )
+        self.rate_limiter.record_request(total_tokens)
+        
+        logger.info(
+            "🗣️ GPT-5 summary complete (%s | %s tokens | $%.4f | %.2fs)",
+            model,
+            total_tokens,
+            cost_summary["cost_usd"],
+            processing_time
+        )
+        
+        return {
+            "parsed": parsed,
+            "raw_output": output_text,
+            "model_used": model,
+            "tokens_used": tokens_used,
+            "processing_time_seconds": processing_time,
+            "estimated_cost_usd": cost_summary["cost_usd"],
+            "use_mini": plan["use_mini"]
+        }
     
     def extract_structured_summary_data(
         self,
@@ -75,17 +423,61 @@ class ConversationalSummaryService:
             doc_meta = entities.get('document_metadata', {}) if entities else extraction_data.get('document_metadata', {})
             tables = extraction_data.get('tables', [])
             
+            # ✅ BROKER COMPANY EXTRACTION - Multiple fallback paths for reliability
+            # Priority order:
+            # 1. entities.broker.company_name (Claude enhanced)
+            # 2. document_metadata.broker_company (GPT-5 transformed)
+            # 3. broker_agent.company_name (GPT-5 raw)
+            # 4. Top-level broker_company (fallback)
+            broker_company = None
+            if entities and entities.get('broker', {}).get('company_name'):
+                broker_company = entities['broker']['company_name']
+                logger.debug(f"📋 Broker from entities.broker: {broker_company}")
+            elif doc_meta.get('broker_company'):
+                broker_company = doc_meta.get('broker_company')
+                logger.debug(f"📋 Broker from document_metadata: {broker_company}")
+            elif extraction_data.get('broker_agent', {}).get('company_name'):
+                broker_company = extraction_data['broker_agent']['company_name']
+                logger.debug(f"📋 Broker from broker_agent: {broker_company}")
+            elif extraction_data.get('broker_company'):
+                broker_company = extraction_data.get('broker_company')
+                logger.debug(f"📋 Broker from top-level: {broker_company}")
+            
+            # ✅ CARRIER NAME EXTRACTION - Multiple fallback paths
+            carrier_name = None
+            if entities and entities.get('carrier', {}).get('name'):
+                carrier_name = entities['carrier']['name']
+            elif doc_meta.get('carrier_name'):
+                carrier_name = doc_meta.get('carrier_name')
+            elif extraction_data.get('carrier', {}).get('name'):
+                carrier_name = extraction_data['carrier']['name']
+            elif extraction_data.get('carrier_name'):
+                carrier_name = extraction_data.get('carrier_name')
+            
+            # ✅ CRITICAL FIX: Get company count from groups_and_companies array (most reliable)
+            # GPT sometimes returns row count in business_intelligence.number_of_groups
+            # The actual unique companies are in the groups_and_companies array
+            groups_and_companies = extraction_data.get('groups_and_companies', [])
+            unique_company_count = len(groups_and_companies) if groups_and_companies else None
+            
+            # Fallback: Try business_intelligence if groups_and_companies is empty
+            if not unique_company_count and business_intel:
+                unique_company_count = business_intel.get('number_of_groups')
+            
             # Extract structured fields
             structured_data = {
                 'broker_id': doc_meta.get('statement_number') or doc_meta.get('document_number'),
-                'carrier_name': entities.get('carrier', {}).get('name') if entities else (extraction_data.get('carrier', {}).get('name') or extraction_data.get('carrier_name')),
-                'broker_company': entities.get('broker', {}).get('company_name') if entities else (extraction_data.get('broker_agent', {}).get('company_name') or extraction_data.get('broker_company')),
+                'carrier_name': carrier_name,
+                'broker_company': broker_company,
                 'statement_date': doc_meta.get('statement_date'),
                 'payment_type': doc_meta.get('payment_type'),
                 'total_amount': None,  # Will be processed below
-                'company_count': business_intel.get('number_of_groups') if business_intel else None,
+                'company_count': unique_company_count,  # ✅ Use count from groups_and_companies array
                 'broker_id_confidence': 0.95 if doc_meta.get('statement_number') else 0.7
             }
+            
+            # ✅ LOG EXTRACTION for debugging
+            logger.info(f"📊 Extracted structured fields: broker_company='{broker_company}', carrier='{carrier_name}', company_count={unique_company_count} (from {len(groups_and_companies)} groups_and_companies)")
             
             # Convert total_amount (check doc_meta first, then business_intel)
             total_from_doc = doc_meta.get('total_amount')
@@ -208,119 +600,65 @@ class ConversationalSummaryService:
         use_enhanced: bool = False
     ) -> Dict[str, Any]:
         """
-        Generate a conversational summary from technical extraction data.
-        
-        Args:
-            extraction_data: Raw extraction results (carrier, date, tables, etc.)
-                           OR enhanced extraction with entities and relationships
-            document_context: Additional context (file name, page count, etc.)
-            use_enhanced: If True, use enhanced prompts for better quality
-            
-        Returns:
-            Dictionary with conversational summary and metadata
+        Generate a conversational summary from technical extraction data using GPT-5.
         """
+        if not self.is_available():
+            logger.warning("⚠️ GPT-5 summary service unavailable. Falling back to template summary.")
+            return self._generate_fallback_summary(extraction_data)
+        
+        logger.info("🗣️ Generating conversational summary with GPT-5 (Responses API)...")
+        start_time = datetime.now()
+        structured_data = self.extract_structured_summary_data(extraction_data) or {}
+        
         try:
-            logger.info("🗣️ Generating conversational summary...")
-            start_time = datetime.now()
-            
-            # Build prompt with structured data
             prompt = self._build_summary_prompt(extraction_data, document_context, use_enhanced)
-            
-            # Get appropriate system prompt
             system_prompt = self._get_system_prompt(use_enhanced)
             
-            # Set max tokens for OpenAI (no need for complex rate limiting since we're using GPT-4o)
-            max_output_tokens = 1200 if use_enhanced else 800
-            
-            logger.info(f"🚀 Calling GPT-4o API for summary generation...")
-            logger.info(f"   Model: {self.model}")
-            logger.info(f"   Max tokens: {max_output_tokens}")
-            logger.info(f"   Prompt length: {len(prompt)} chars")
-            logger.info(f"   System prompt length: {len(system_prompt)} chars")
-            
-            # Call OpenAI GPT-4o with optimized parameters for natural language
-            response = await self.client.chat.completions.create(
-                model=self.model,
-                max_completion_tokens=max_output_tokens,
-                temperature=0.7,  # Balanced creativity for natural language
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": prompt}
-                ]
+            gpt_result = await self.circuit_breaker.call(
+                self._generate_with_gpt5,
+                prompt,
+                system_prompt,
+                use_enhanced
             )
             
-            # Track token usage
-            actual_input_tokens = response.usage.prompt_tokens if response.usage else 0
-            actual_output_tokens = response.usage.completion_tokens if response.usage else 0
+            parsed = gpt_result.get("parsed", {}) or {}
+            summary_text = parsed.get("conversational_summary", "").strip()
+            if not summary_text:
+                summary_text = parsed.get("summary", "").strip()
+            key_value_data = parsed.get("key_value_data") or {}
             
-            logger.info(f"📊 Token usage - Input: {actual_input_tokens:,}, Output: {actual_output_tokens:,}")
-            logger.info(f"✅ GPT-4o API call successful")
+            final_structured_data = {**structured_data, **key_value_data}
+            logger.info(
+                "📊 Summary fields merged: GPT=%s, fallback=%s",
+                list(key_value_data.keys()),
+                list(structured_data.keys())
+            )
+            logger.info("📄 Generated summary length: %s characters", len(summary_text))
             
-            # Extract summary from response
-            raw_summary = response.choices[0].message.content if response.choices else ""
-            
-            # Try to parse as JSON (new structured format)
-            try:
-                import json
-                import re
-                
-                # Check if response contains JSON structure
-                json_match = re.search(r'\{[\s\S]*"conversational_summary"[\s\S]*\}', raw_summary)
-                
-                if json_match:
-                    logger.info("✅ Detected structured JSON response from GPT-4o")
-                    json_str = json_match.group(0)
-                    parsed = json.loads(json_str)
-                    
-                    summary_text = parsed.get('conversational_summary', raw_summary).strip()
-                    key_value_data = parsed.get('key_value_data', {})
-                    
-                    logger.info(f"📊 GPT-4o provided {len(key_value_data)} fields: {list(key_value_data.keys())}")
-                    
-                    # Merge with extracted structured data (fallback for missing fields)
-                    structured_data = self.extract_structured_summary_data(extraction_data)
-                    
-                    # Prefer Claude's key-value data if available, fallback to extracted
-                    final_structured_data = {**structured_data, **key_value_data}
-                    
-                    # Log what was added
-                    added_fields = set(structured_data.keys()) - set(key_value_data.keys())
-                    if added_fields:
-                        logger.info(f"✅ Fallback added {len(added_fields)} missing fields: {list(added_fields)}")
-                    
-                else:
-                    # Old format - just text summary
-                    logger.info("⚠️ No structured JSON found, using text-only summary")
-                    summary_text = raw_summary.strip()
-                    final_structured_data = self.extract_structured_summary_data(extraction_data)
-                    
-            except Exception as e:
-                logger.warning(f"⚠️ Could not parse JSON response, using fallback: {e}")
-                summary_text = raw_summary.strip()
-                final_structured_data = self.extract_structured_summary_data(extraction_data)
-            
-            logger.info(f"📄 Generated summary length: {len(summary_text)} characters")
-            logger.info(f"📊 Final structured data keys: {list(final_structured_data.keys())}")
-            
-            processing_time = (datetime.now() - start_time).total_seconds()
+            total_processing_time = (datetime.now() - start_time).total_seconds()
             
             return {
                 "success": True,
                 "summary": summary_text,
-                "structured_data": final_structured_data,  # Includes GPT-4o's key-value data
-                "processing_time": processing_time,
-                "model": self.model,
-                "approach": "conversational_natural_language_with_structured_output"
+                "structured_data": final_structured_data,
+                "processing_time": total_processing_time,
+                "model": gpt_result.get("model_used", self.primary_model),
+                "approach": "gpt5_responses_structured",
+                "tokens_used": gpt_result.get("tokens_used"),
+                "estimated_cost_usd": gpt_result.get("estimated_cost_usd"),
+                "generation_stats": {
+                    "processing_time_seconds": gpt_result.get("processing_time_seconds"),
+                    "use_mini": gpt_result.get("use_mini"),
+                    "rate_limit_usage": self.rate_limiter.get_current_usage(),
+                    "token_tracker": self.token_tracker.get_summary()
+                }
             }
-            
+        
         except Exception as e:
-            logger.error(f"❌ Summary generation failed: {e}")
-            logger.error(f"   Error type: {type(e).__name__}")
-            logger.exception("   Full traceback:")
-            logger.error(f"   Extraction data keys: {list(extraction_data.keys())}")
-            # Fallback to structured format
+            logger.error("❌ GPT-5 summary generation failed: %s", e)
+            logger.exception("Full traceback:")
             fallback_result = self._generate_fallback_summary(extraction_data)
-            logger.warning(f"⚠️ Using fallback summary: {fallback_result.get('summary')}")
+            logger.warning("⚠️ Using fallback summary due to GPT-5 failure.")
             return fallback_result
     
     def _get_system_prompt(self, use_enhanced: bool = False) -> str:
@@ -445,12 +783,33 @@ Remember: You're not just reporting data - you're telling the story of this comm
         elif use_enhanced:
             logger.warning("⚠️ Enhanced mode requested but enhanced data missing; defaulting to compact prompt")
 
+        # ✅ Extract from structured_data if already populated (from extract_structured_summary_data)
+        # This ensures we use the correctly extracted broker_company from multiple fallback paths
         carrier = extraction_data.get('carrier_name') or extraction_data.get('extracted_carrier') or 'Unknown'
-        date = extraction_data.get('statement_date') or extraction_data.get('extracted_date') or 'Unknown date'
-        broker = extraction_data.get('broker_company') or 'Unknown'
+        date = extraction_data.get('statement_metadata', {}).get('statement_date') or extraction_data.get('document_metadata', {}).get('statement_date') or extraction_data.get('extracted_date') or 'Unknown date'
+        
+        # ✅ CRITICAL: Check document_metadata first (transformed by GPT-5), then broker_agent (raw), then fallback
+        broker = (extraction_data.get('document_metadata', {}).get('broker_company') or 
+                 extraction_data.get('broker_agent', {}).get('company_name') or 
+                 extraction_data.get('broker_company') or 
+                 'Unknown')
+        
         tables = extraction_data.get('tables', [])
         total_amount = self._extract_total_amount(tables)
-        company_count = extraction_data.get('document_metadata', {}).get('company_count') or self._count_unique_companies(tables)
+        
+        # ✅ CRITICAL FIX: Get company count from groups_and_companies array (most reliable source)
+        # This array contains the actual extracted unique companies, not row count
+        groups_and_companies = extraction_data.get('groups_and_companies', [])
+        company_count = len(groups_and_companies) if groups_and_companies else None
+        
+        # Fallback: Try business_intelligence if groups_and_companies is empty
+        if not company_count:
+            business_intel = extraction_data.get('business_intelligence', {})
+            company_count = business_intel.get('number_of_groups') if business_intel else None
+        
+        # Final fallback: Count from tables
+        if not company_count:
+            company_count = extraction_data.get('document_metadata', {}).get('company_count') or self._count_unique_companies(tables)
         top_companies = self._get_top_companies(tables, limit=3)
         special_payments = self._identify_special_payments(tables)
         plan_types = self._extract_plan_types(tables)
@@ -790,6 +1149,8 @@ Return ONLY valid JSON:
     def _generate_fallback_summary(self, extraction_data: Dict[str, Any]) -> Dict[str, Any]:
         """Fallback to structured format if AI generation fails"""
         logger.warning("🔄 Generating fallback summary...")
+        structured_data = self.extract_structured_summary_data(extraction_data) or {}
+        doc_metadata = extraction_data.get('document_metadata', {}) or {}
         
         # Try to extract from entities if available (enhanced extraction)
         entities = extraction_data.get('entities', {})
@@ -798,20 +1159,24 @@ Return ONLY valid JSON:
             broker = entities.get('broker', {}).get('company_name') or 'Unknown'
             doc_meta = entities.get('document_metadata', {})
             date = doc_meta.get('statement_date') or 'Unknown'
+            doc_metadata = doc_meta or doc_metadata
             logger.info(f"   Using entity data: carrier={carrier}, broker={broker}, date={date}")
         else:
             # Fall back to standard extraction data
             carrier = extraction_data.get('carrier_name') or extraction_data.get('extracted_carrier') or 'Unknown'
             date = extraction_data.get('statement_date') or extraction_data.get('extracted_date') or 'Unknown'
-            broker = extraction_data.get('broker_company') or 'Unknown'
+            
+            # ✅ CRITICAL: Check multiple paths for broker_company (same as structured data extraction)
+            broker = (doc_metadata.get('broker_company') or 
+                     extraction_data.get('broker_agent', {}).get('company_name') or 
+                     extraction_data.get('broker_company') or 
+                     'Unknown')
+            
             logger.info(f"   Using standard data: carrier={carrier}, broker={broker}, date={date}")
         
         # Try to get document metadata from root level too
-        doc_metadata = extraction_data.get('document_metadata', {})
         if doc_metadata and carrier == 'Unknown':
             carrier = doc_metadata.get('carrier_name', 'Unknown')
-        if doc_metadata and broker == 'Unknown':
-            broker = doc_metadata.get('broker_company', 'Unknown')
         if doc_metadata and date == 'Unknown':
             date = doc_metadata.get('statement_date', 'Unknown')
         
@@ -828,8 +1193,9 @@ Return ONLY valid JSON:
         
         # Add total amount if available
         total_amount = doc_metadata.get('total_amount') if doc_metadata else None
-        if total_amount:
-            summary_parts.append(f"Total commission: ${total_amount:,.2f}")
+        formatted_total = self._format_currency_value(total_amount)
+        if formatted_total != "Not captured":
+            summary_parts.append(f"Total commission: {formatted_total}")
         
         # Add number of groups if available
         tables = extraction_data.get('tables', [])
@@ -847,7 +1213,8 @@ Return ONLY valid JSON:
             "summary": summary,
             "processing_time": 0,
             "model": "fallback",
-            "approach": "template_based"
+            "approach": "template_based",
+            "structured_data": structured_data
         }
     
     # ============================================
