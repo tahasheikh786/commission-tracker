@@ -56,10 +56,11 @@ ENV PYTHONUNBUFFERED=1 \
     USE_TWO_PASS_EXTRACTION=true \
     GPT5_TOTAL_PASS_MAX_TOKENS=4000 \
     WEBSOCKET_BACKLOG_LIMIT=50 \
-    # Gunicorn configuration (matches Render deployment)
-    GUNICORN_TIMEOUT=900 \
-    GUNICORN_GRACEFUL_TIMEOUT=900 \
-    GUNICORN_KEEPALIVE=65
+    # Gunicorn configuration (matches config/timeouts.py - 30-minute extraction support)
+    GUNICORN_TIMEOUT=1800 \
+    GUNICORN_GRACEFUL_TIMEOUT=1800 \
+    GUNICORN_KEEPALIVE=1800 \
+    GUNICORN_WORKERS=1
 
 # Install system dependencies required for OpenCV, EasyOCR, Tesseract, and other packages
 RUN apt-get update && apt-get install -y \
