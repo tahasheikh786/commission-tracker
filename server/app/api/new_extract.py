@@ -1514,6 +1514,11 @@ async def extract_tables_smart(
                         #    2. SECOND PRIORITY: Bottom of Commission Earned/Amount column ONLY
                         # ═══════════════════════════════════════════════════════════════════════════════
                         
+                        # Initialize variables (needed even if we skip scanning due to protection guard)
+                        summary_candidate = None
+                        grand_total_candidate = None
+                        best_summary_candidate = None
+                        
                         # 🛡️ BULLETPROOF GUARD: If document_metadata has a total, SKIP table scanning entirely
                         if current_total_amount is not None and total_extraction_method == 'document_metadata':
                             logger.warning(
@@ -1523,8 +1528,6 @@ async def extract_tables_smart(
                         else:
                             # Only scan tables if document_metadata didn't provide a total
                             logger.info(f"🔍 Total extraction: Document metadata empty, scanning COMMISSION COLUMN at table bottoms")
-                            summary_candidate = None
-                            grand_total_candidate = None
                             
                             # First pass: Look for pure grand total tables (usually have 1-3 rows, all summary rows)
                             for table_idx, table in enumerate(tables):
