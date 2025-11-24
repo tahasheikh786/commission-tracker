@@ -53,7 +53,8 @@ class MappingConfig(BaseModel):
                 sanitized_rows.append(row)
         return sanitized_rows
 
-@router.get("/companies/{company_id}/mapping/", response_model=MappingConfig)
+@router.get("/companies/{company_id}/mapping", response_model=MappingConfig)
+@router.get("/companies/{company_id}/mapping/", response_model=MappingConfig, include_in_schema=False)  # Support both with and without trailing slash
 async def get_company_mapping(
     company_id: str, 
     db: AsyncSession = Depends(get_db),
@@ -65,6 +66,9 @@ async def get_company_mapping(
     
     If upload_id is provided, we retrieve the carrier_id from the statement_upload
     and use that instead of the company_id parameter.
+    
+    ✅ CRITICAL FIX: Supports both /mapping and /mapping/ to prevent 307 redirects
+    that can cause mixed content errors in production HTTPS environments.
     """
     logger.info(f"🎯 Mapping API: Getting mapping for carrier/company {company_id}")
     logger.info(f"🎯 Mapping API: Upload ID: {upload_id}")
@@ -116,7 +120,8 @@ async def get_company_mapping(
         field_config=field_config
     )
 
-@router.post("/companies/{company_id}/mapping/")
+@router.post("/companies/{company_id}/mapping")
+@router.post("/companies/{company_id}/mapping/", include_in_schema=False)  # Support both with and without trailing slash
 async def update_company_mapping(
     company_id: str, 
     config: MappingConfig, 
@@ -130,6 +135,9 @@ async def update_company_mapping(
     
     If upload_id is provided, we retrieve the carrier_id from the statement_upload
     and use that instead of the company_id parameter.
+    
+    ✅ CRITICAL FIX: Supports both /mapping and /mapping/ to prevent 307 redirects
+    that can cause mixed content errors in production HTTPS environments.
     """
     logger.info(f"🎯 Mapping API: Received mapping request for carrier/company {company_id}")
     logger.info(f"🎯 Mapping API: Upload ID: {upload_id}")

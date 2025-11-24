@@ -729,8 +729,14 @@ async def save_statement_review(
                 except (ValueError, TypeError):
                     print(f"⚠️ Could not parse AI-extracted total: {document_metadata.get('total_amount')}")
             
+            # ✅ CRITICAL FIX: Check if calculated total is 0 or very small (< $0.01)
+            # If calculated total is 0, the extraction likely failed and needs review
+            if extracted_total is None or extracted_total < 0.01:
+                print(f"⚠️ CRITICAL: Calculated total is 0 or missing! Setting status to needs_review")
+                status = 'needs_review'
+                total_amount_match = False
             # Compare totals with 5% tolerance
-            if ai_extracted_total is not None and ai_extracted_total > 0:
+            elif ai_extracted_total is not None and ai_extracted_total > 0:
                 difference = abs(ai_extracted_total - extracted_total)
                 difference_percent = (difference / ai_extracted_total) * 100
                 total_amount_match = difference_percent < 5.0  # 5% tolerance
@@ -746,9 +752,14 @@ async def save_statement_review(
                     print(f"⚠️ TOTAL MISMATCH DETECTED! Changing status from '{status}' to 'needs_review'")
                     status = 'needs_review'
             else:
-                # No AI-extracted total available - assume match
-                total_amount_match = True
-                print(f"⚠️ No AI-extracted total available for comparison - assuming match")
+                # No AI-extracted total available - only assume match if calculated total is valid (> 0)
+                if extracted_total > 0:
+                    total_amount_match = True
+                    print(f"⚠️ No AI-extracted total available for comparison - but calculated total is valid (${extracted_total:.2f}), assuming match")
+                else:
+                    total_amount_match = False
+                    status = 'needs_review'
+                    print(f"⚠️ No AI-extracted total AND calculated total is 0 - setting to needs_review")
             
             print(f"💰 Final extracted_total: ${extracted_total:.2f}")
         else:

@@ -36,12 +36,17 @@ class RejectPayload(BaseModel):
     # CRITICAL: Add upload metadata since DB record doesn't exist yet
     upload_metadata: Optional[Dict[str, Any]] = None
 
-@router.post("/approve/")
+@router.post("/approve")
+@router.post("/approve/", include_in_schema=False)  # Support both with and without trailing slash
 async def approve_statement(
     payload: ApprovePayload,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user_hybrid)
 ):
+    """
+    ✅ CRITICAL FIX: Supports both /approve and /approve/ to prevent 307 redirects
+    that can cause mixed content errors in production HTTPS environments.
+    """
     try:
         # Get environment_id from upload_metadata if available
         environment_id = None
