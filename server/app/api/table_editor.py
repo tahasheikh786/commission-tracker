@@ -88,10 +88,14 @@ class GetTablesRequest(BaseModel):
     upload_id: str
 
 
-@router.post("/save-tables/")
+@router.post("/save-tables", response_model=None)
+@router.post("/save-tables/", response_model=None, include_in_schema=False)  # Support both with and without trailing slash
 async def save_tables(request: SaveTablesRequest, db: AsyncSession = Depends(get_db)):
     """
     Save edited tables to the database and learn format patterns.
+    
+    ✅ CRITICAL FIX: Supports both /save-tables and /save-tables/ to prevent 307 redirects
+    that can cause mixed content errors in production HTTPS environments.
     """
     try:
         logger.info(f"🎯 Table Editor API: Saving edited tables for upload_id: {request.upload_id}")

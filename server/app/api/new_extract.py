@@ -346,16 +346,22 @@ async def validate_carrier_metadata_with_db(
 
 
 TOTAL_METHOD_PRIORITY = {
-    'grand_total_table': 95,  # ✅ HIGHEST: Dedicated grand total table (e.g., Table 2 with final totals)
-    'two_pass_authoritative_total': 90,
-    'document_metadata': 88,  # ✅ CRITICAL: GPT extracts from document header/summary - VERY reliable!
-    'summary_row_scan': 85,
-    'table_footer': 80,
-    'table_scan': 75,
-    'business_intelligence': 70,
-    'gpt_summary_regex': 55,
-    'calculated_sum': 40,
-    'calculated': 40,
+    # ═══════════════════════════════════════════════════════════════════════════════
+    # STRICT HIERARCHY FOR TOTAL COMMISSION EXTRACTION
+    # ═══════════════════════════════════════════════════════════════════════════════
+    # ✅ RULE: Higher priority methods can NEVER be replaced by lower priority methods
+    # ✅ BULLETPROOF: document_metadata has explicit guard and can NEVER be replaced
+    # ═══════════════════════════════════════════════════════════════════════════════
+    'document_metadata': 88,  # 🛡️ HIGHEST PRIORITY: GPT-extracted from document - PROTECTED - NEVER REPLACED
+    'grand_total_table': 95,  # Grand total table (if document_metadata missing)
+    'two_pass_authoritative_total': 90,  # Two-pass extraction (if document_metadata missing)
+    'summary_row_scan': 85,  # 📊 SECOND PRIORITY: Bottom of Commission column (if document_metadata missing)
+    'table_footer': 80,  # Table footer scan
+    'table_scan': 75,  # General table scan
+    'business_intelligence': 70,  # Business intelligence totals
+    'gpt_summary_regex': 55,  # Regex extraction from summary
+    'calculated_sum': 40,  # Calculated from detail rows
+    'calculated': 40,  # Generic calculated
     None: 0,
 }
 
@@ -480,9 +486,19 @@ def _extract_commission_total_from_table(
     parse_currency_value
 ) -> Optional[TotalCandidate]:
     """
-    Identify the best commission total candidate from summary rows.
-    Prioritizes rows that contain 'Total for Vendor/Group', 'Commission Total', etc.
-    Returns a TotalCandidate with metadata for downstream validation.
+    Extract commission total from the BOTTOM of the Commission Earned/Commission Amount column ONLY.
+    
+    ✅ STRICT EXTRACTION RULES:
+       1. Find which header most likely can be mapped "Commission Earned" field name
+       2. ONLY scan that specific column (NOT Invoice Amount, NOT Premium, etc.)
+       3. Look at the BOTTOM of that column (summary rows with "Total" keywords)
+       4. Return the value from summary rows that contain total indicators
+    
+    ✅ SECURITY: If no Commission column is found, return None (don't fall back to other columns)
+    ✅ This is the ONLY way totals appear in tables (besides document_metadata)
+    
+    Returns:
+        TotalCandidate with amount from Commission column bottom, or None if not found
     """
     if not table or not parse_currency_value:
         return None
@@ -492,18 +508,30 @@ def _extract_commission_total_from_table(
     if not headers or not rows:
         return None
     
+    # ✅ STEP 1: Find which header most strongly matches "Commission Earned" field name
+    # This uses weighted keyword matching: "commission earned" (weight=8), "commission amount" (weight=7), etc.
     candidate_idx = _detect_commission_column_index(headers)
-    candidate_columns: List[int] = []
-    if candidate_idx is not None:
-        candidate_columns.append(candidate_idx)
-    # Fall back to last column if no commission-like headers detected
-    if not candidate_columns and headers:
-        candidate_columns.append(len(headers) - 1)
+    
+    if candidate_idx is None:
+        logger.warning(
+            f"⚠️ _extract_commission_total_from_table: No commission column found in headers: {headers}. "
+            f"Cannot extract total - will NOT fall back to other columns like Invoice Amount!"
+        )
+        return None  # ✅ SECURITY: Don't fall back to last column - prevents extracting from wrong columns!
+    
+    logger.info(
+        f"📊 _extract_commission_total_from_table: MATCHED header '{headers[candidate_idx]}' to 'Commission Earned' field "
+        f"(column index {candidate_idx} from {len(headers)} headers). Scanning BOTTOM of this column ONLY."
+    )
+    
+    candidate_columns: List[int] = [candidate_idx]  # ✅ STEP 2: Only scan the matched commission column
     
     summary_rows = set(table.get('summaryRows', []) or table.get('summary_rows', []))
     total_rows = len(rows)
     best_candidate: Optional[TotalCandidate] = None
     
+    # ✅ STEP 3: Scan rows from BOTTOM to TOP, looking for summary rows with "Total" keywords
+    # Summary rows are identified by: marked as summaryRows, last 3 rows, or contain total keywords
     for idx, row in enumerate(rows):
         if not row:
             continue
@@ -511,6 +539,7 @@ def _extract_commission_total_from_table(
         if not row_text:
             continue
         
+        # Calculate score based on total indicators (higher score = more likely to be the true total)
         phrase_score = 0.0
         for keyword, weight in SUMMARY_TOTAL_KEYWORDS:
             if keyword in row_text:
@@ -518,15 +547,16 @@ def _extract_commission_total_from_table(
         if "total" in row_text:
             phrase_score = max(phrase_score, 1.0)
         if idx in summary_rows:
-            phrase_score += 3.5
+            phrase_score += 3.5  # Boost if GPT marked it as summary row
         if idx >= total_rows - 3:
-            phrase_score += 1.5
+            phrase_score += 1.5  # Boost if in last 3 rows (typical location for totals)
         if any(term in row_text for term in GLOBAL_TOTAL_KEYWORDS):
-            phrase_score += 4.5
+            phrase_score += 4.5  # Strong boost for "Grand Total", "Total for Vendor", etc.
         
         if phrase_score <= 0:
-            continue
+            continue  # Skip rows that don't look like totals
         
+        # ✅ STEP 4: Extract value from the Commission column (NOT Invoice Amount or other columns)
         for col_idx in candidate_columns:
             if col_idx >= len(row):
                 continue
@@ -535,6 +565,8 @@ def _extract_commission_total_from_table(
                 continue
             
             candidate_score = phrase_score
+            # ✅ Pick the candidate with the HIGHEST score (best match to total indicators)
+            # We do NOT prefer higher amounts - we prefer better-matching rows
             if best_candidate is None or candidate_score > best_candidate.score + 0.25:
                 best_candidate = TotalCandidate(
                     amount=value,
@@ -543,15 +575,15 @@ def _extract_commission_total_from_table(
                     score=candidate_score,
                     source="summary_row"
                 )
-            elif best_candidate and abs(candidate_score - best_candidate.score) <= 0.25:
-                if value > best_candidate.amount:
-                    best_candidate = TotalCandidate(
-                        amount=value,
-                        label=row_text,
-                        row_index=idx,
-                        score=candidate_score,
-                        source="summary_row"
-                    )
+            # ✅ SECURITY: Removed logic that preferred higher amounts when scores were equal
+            # That was causing $75,202 (Invoice Amount) to be picked over $4,861.56 (Commission Amount)
+    
+    if best_candidate:
+        logger.info(
+            f"✅ _extract_commission_total_from_table: Extracted ${best_candidate.amount:,.2f} "
+            f"from COMMISSION COLUMN at row {best_candidate.row_index} "
+            f"(score: {best_candidate.score:.2f}, label: '{best_candidate.label[:50]}')"
+        )
     
     return best_candidate
 
@@ -626,13 +658,30 @@ def _should_replace_total(
 ) -> bool:
     """
     Determine if a newly detected total should override the current one.
-    ✅ NEW: Strictly respects priority order - higher priority methods are NEVER replaced by lower priority.
-    ✅ NEW: Massive discrepancies (> 100%) are rejected regardless of priority (likely extraction error).
+    
+    ✅ STRICT HIERARCHY:
+       1. document_metadata (GPT-extracted) - HIGHEST PRIORITY - NEVER REPLACED
+       2. Commission column bottom scan - ONLY used if document_metadata is missing
+    
+    ✅ BULLETPROOF: document_metadata can NEVER be replaced by any other method
+    ✅ Priority system: higher priority methods are NEVER replaced by lower priority
+    ✅ Massive discrepancies (> 200%) are rejected to prevent extraction errors
     """
     if candidate_amount is None:
+        logger.warning(f"🔍 _should_replace_total: REJECTED - candidate_amount is None")
         return False
     if existing_amount is None:
+        logger.info(f"🔍 _should_replace_total: ACCEPTED - no existing amount, using candidate ${candidate_amount:.2f} ({candidate_method})")
         return True
+    
+    # 🛡️ BULLETPROOF GUARD: document_metadata can NEVER be replaced
+    if existing_method == 'document_metadata':
+        logger.warning(
+            f"🛡️ ABSOLUTE PROTECTION: existing method is 'document_metadata' (${existing_amount:,.2f}). "
+            f"Candidate '{candidate_method}' (${candidate_amount:,.2f}) is REJECTED regardless of priority. "
+            f"Document metadata is the HIGHEST priority source and can NEVER be replaced!"
+        )
+        return False
     
     existing_priority = TOTAL_METHOD_PRIORITY.get(existing_method, 10)
     candidate_priority = TOTAL_METHOD_PRIORITY.get(candidate_method, 10)
@@ -640,42 +689,55 @@ def _should_replace_total(
     tolerance = max(5.0, abs(existing_amount) * 0.05)  # ✅ 5% tolerance
     difference_percent = (difference / max(abs(existing_amount), 1.0)) * 100
     
-    logger.info(
-        f"🔍 _should_replace_total: existing=${existing_amount:.2f} ({existing_method}, priority={existing_priority}) "
-        f"vs candidate=${candidate_amount:.2f} ({candidate_method}, priority={candidate_priority}), "
-        f"diff=${difference:.2f} ({difference_percent:.1f}%), tolerance=${tolerance:.2f}"
+    # ✅ ALWAYS log this check with WARNING level so it shows in production logs
+    logger.warning(
+        f"🔍 _should_replace_total VALIDATION:\n"
+        f"   Existing: ${existing_amount:,.2f} (method={existing_method}, priority={existing_priority})\n"
+        f"   Candidate: ${candidate_amount:,.2f} (method={candidate_method}, priority={candidate_priority})\n"
+        f"   Difference: ${difference:,.2f} ({difference_percent:.1f}%), tolerance=${tolerance:.2f}"
     )
     
-    # ✅ CRITICAL: Reject massive discrepancies (> 100%) - likely extraction error
-    # Example: $9,343 vs $2,560 = 265% difference → reject!
-    if difference_percent > 100:
+    # ✅ CRITICAL: Reject massive discrepancies (> 200%) - likely extraction error
+    # Increased threshold from 100% to 200% to allow legitimate 2x differences
+    # But $75,202 vs $4,861.56 is 1447% - this will still be caught!
+    if difference_percent > 200:
         logger.warning(
-            f"  → REJECTED: Massive discrepancy ({difference_percent:.1f}%) detected! "
-            f"This suggests extraction error. Keeping existing value."
+            f"  ❌ REJECTED: MASSIVE discrepancy ({difference_percent:.1f}%) detected! "
+            f"This is likely an extraction error. Keeping existing value ${existing_amount:,.2f}"
         )
         return False
     
     # ✅ CRITICAL: Lower priority candidates can NEVER replace higher priority values
     # This prevents summary_row_scan (85) from replacing document_metadata (88)
     if candidate_priority < existing_priority:
-        logger.info(f"  → REJECTED: Candidate has lower priority ({candidate_priority} < {existing_priority})")
+        logger.warning(
+            f"  ❌ REJECTED: Candidate has LOWER priority ({candidate_priority} < {existing_priority}). "
+            f"Keeping existing ${existing_amount:,.2f} from {existing_method}"
+        )
         return False
     
     # ✅ Same priority: only replace when candidate provides materially different AND larger value
     if candidate_priority == existing_priority:
         should_replace = difference > tolerance and candidate_amount > existing_amount
-        logger.info(
-            f"  → Same priority - replace only if diff > tolerance AND candidate > existing: {should_replace}"
+        logger.warning(
+            f"  {'✅ ACCEPTED' if should_replace else '❌ REJECTED'}: Same priority - "
+            f"replace only if diff > tolerance AND candidate > existing: {should_replace}"
         )
         return should_replace
     
     # ✅ Higher priority candidate: allow replacement
     # But skip if difference is trivial (just rounding)
     if difference <= tolerance:
-        logger.info(f"  → Candidate has higher priority but difference is trivial - keeping existing")
+        logger.warning(
+            f"  ❌ REJECTED: Candidate has higher priority but difference (${difference:.2f}) "
+            f"is trivial (< ${tolerance:.2f}). Keeping existing"
+        )
         return False
     
-    logger.info(f"  → ACCEPTED: Candidate has higher priority ({candidate_priority} > {existing_priority})")
+    logger.warning(
+        f"  ✅ ACCEPTED: Candidate has HIGHER priority ({candidate_priority} > {existing_priority}). "
+        f"Replacing ${existing_amount:,.2f} with ${candidate_amount:,.2f}"
+    )
     return True
 
 @router.post("/extract-tables-smart/")
@@ -1444,84 +1506,101 @@ async def extract_tables_smart(
                             except Exception as e:
                                 logger.warning(f"Failed to extract current total amount: {e}")
                         
-                        # STRATEGY 3B: Inspect summary rows for vendor/carrier totals
-                        # ✅ CRITICAL FIX: Check ALL tables, prioritizing pure summary/grand total tables
-                        logger.info(f"🔍 Total extraction: Analyzing {len(tables)} tables for grand total")
-                        summary_candidate = None
-                        grand_total_candidate = None
+                        # ═══════════════════════════════════════════════════════════════════════════════
+                        # STRATEGY 3B: Scan COMMISSION COLUMN BOTTOM for total (ONLY if document_metadata is missing)
+                        # ═══════════════════════════════════════════════════════════════════════════════
+                        # ✅ STRICT HIERARCHY:
+                        #    1. FIRST PRIORITY: document_metadata (GPT-extracted) - NEVER replaced
+                        #    2. SECOND PRIORITY: Bottom of Commission Earned/Amount column ONLY
+                        # ═══════════════════════════════════════════════════════════════════════════════
                         
-                        # First pass: Look for pure grand total tables (usually have 1-3 rows, all summary rows)
-                        for table_idx, table in enumerate(tables):
-                            table_type = table.get("table_type", "").lower()
-                            rows = table.get("rows", [])
-                            summary_rows_set = set(table.get("summaryRows", []) or table.get("summary_rows", []))
-                            
-                            logger.debug(
-                                f"  Table {table_idx}: type='{table_type}', rows={len(rows)}, "
-                                f"summary_rows={len(summary_rows_set)}"
+                        # 🛡️ BULLETPROOF GUARD: If document_metadata has a total, SKIP table scanning entirely
+                        if current_total_amount is not None and total_extraction_method == 'document_metadata':
+                            logger.warning(
+                                f"🛡️ PROTECTED: Document metadata total (${current_total_amount:,.2f}) is LOCKED. "
+                                f"Skipping table column scanning to prevent incorrect replacements."
                             )
+                        else:
+                            # Only scan tables if document_metadata didn't provide a total
+                            logger.info(f"🔍 Total extraction: Document metadata empty, scanning COMMISSION COLUMN at table bottoms")
+                            summary_candidate = None
+                            grand_total_candidate = None
                             
-                            # Identify grand total tables:
-                            # 1. Explicitly marked as summary table type
-                            # 2. OR: Very few rows (1-3) where ALL rows are summary rows
-                            # 3. OR: Single-row tables (often grand totals)
-                            is_grand_total_table = (
-                                table_type in ['summary_table', 'total_summary', 'vendor_total', 'grand_total', 'summary'] or
-                                (len(rows) <= 3 and len(rows) > 0 and len(summary_rows_set) == len(rows)) or
-                                (len(rows) == 1)  # Single-row tables are often grand totals
-                            )
+                            # First pass: Look for pure grand total tables (usually have 1-3 rows, all summary rows)
+                            for table_idx, table in enumerate(tables):
+                                table_type = table.get("table_type", "").lower()
+                                rows = table.get("rows", [])
+                                summary_rows_set = set(table.get("summaryRows", []) or table.get("summary_rows", []))
+                                
+                                logger.debug(
+                                    f"  Table {table_idx}: type='{table_type}', rows={len(rows)}, "
+                                    f"summary_rows={len(summary_rows_set)}"
+                                )
+                                
+                                # Identify grand total tables:
+                                # 1. Explicitly marked as summary table type
+                                # 2. OR: Very few rows (1-3) where ALL rows are summary rows
+                                # 3. OR: Single-row tables (often grand totals)
+                                is_grand_total_table = (
+                                    table_type in ['summary_table', 'total_summary', 'vendor_total', 'grand_total', 'summary'] or
+                                    (len(rows) <= 3 and len(rows) > 0 and len(summary_rows_set) == len(rows)) or
+                                    (len(rows) == 1)  # Single-row tables are often grand totals
+                                )
+                                
+                                if is_grand_total_table:
+                                    logger.info(f"  ✓ Table {table_idx} identified as GRAND TOTAL table")
+                                    # ✅ This function ONLY scans the Commission Amount/Earned column (not Invoice Amount)
+                                    candidate = _extract_commission_total_from_table(
+                                        table,
+                                        format_learning_service.parse_currency_value
+                                    )
+                                    if candidate:
+                                        # Boost score for grand total tables
+                                        candidate.score += 10.0  # Make them heavily preferred
+                                        if grand_total_candidate is None or candidate.score > grand_total_candidate.score:
+                                            grand_total_candidate = candidate
+                                            logger.info(
+                                                f"🎯 Found grand total table (table {table_idx}): "
+                                                f"${candidate.amount:.2f} (score: {candidate.score:.2f})"
+                                            )
                             
-                            if is_grand_total_table:
-                                logger.info(f"  ✓ Table {table_idx} identified as GRAND TOTAL table")
-                                candidate = _extract_commission_total_from_table(
-                                    table,
+                            # Second pass: If no grand total table, check summary rows in selected_table
+                            if not grand_total_candidate and selected_table:
+                                # ✅ This function ONLY scans the Commission Amount/Earned column at the BOTTOM
+                                summary_candidate = _extract_commission_total_from_table(
+                                    selected_table,
                                     format_learning_service.parse_currency_value
                                 )
-                                if candidate:
-                                    # Boost score for grand total tables
-                                    candidate.score += 10.0  # Make them heavily preferred
-                                    if grand_total_candidate is None or candidate.score > grand_total_candidate.score:
-                                        grand_total_candidate = candidate
-                                        logger.info(
-                                            f"🎯 Found grand total table (table {table_idx}): "
-                                            f"${candidate.amount:.2f} (score: {candidate.score:.2f})"
-                                        )
-                        
-                        # Second pass: If no grand total table, check summary rows in selected_table
-                        if not grand_total_candidate and selected_table:
-                            summary_candidate = _extract_commission_total_from_table(
-                                selected_table,
-                                format_learning_service.parse_currency_value
-                            )
-                        
-                        # Prefer grand total table over summary rows
-                        best_summary_candidate = grand_total_candidate or summary_candidate
-                        
-                        if best_summary_candidate:
-                            # Use higher confidence for grand total tables
-                            confidence = 0.95 if grand_total_candidate else 0.82
-                            source_label = "grand_total_table" if grand_total_candidate else "summary_row_scan"
                             
-                            should_replace = (
-                                current_total_amount is None or
-                                _should_replace_total(
-                                    current_total_amount,
-                                    total_extraction_method,
-                                    best_summary_candidate.amount,
-                                    source_label
-                                )
-                            )
-                            if should_replace:
-                                if current_total_amount is not None:
-                                    logger.warning(
-                                        f"⚠️ Replacing total_amount {current_total_amount:.2f} "
-                                        f"(method={total_extraction_method}) with {source_label}={best_summary_candidate.amount:.2f}"
+                            # Prefer grand total table over summary rows
+                            best_summary_candidate = grand_total_candidate or summary_candidate
+                            
+                            if best_summary_candidate:
+                                # Use higher confidence for grand total tables
+                                confidence = 0.95 if grand_total_candidate else 0.82
+                                source_label = "grand_total_table" if grand_total_candidate else "summary_row_scan"
+                                
+                                # Only replace if current_total_amount is None (document_metadata guard already passed)
+                                should_replace = (
+                                    current_total_amount is None or
+                                    _should_replace_total(
+                                        current_total_amount,
+                                        total_extraction_method,
+                                        best_summary_candidate.amount,
+                                        source_label
                                     )
-                                else:
-                                    logger.info(f"✅ Total extracted from {source_label}: ${best_summary_candidate.amount:.2f}")
-                                current_total_amount = best_summary_candidate.amount
-                                total_extraction_method = source_label
-                            _record_total_candidate(source_label, best_summary_candidate.amount, confidence, best_summary_candidate.label)
+                                )
+                                if should_replace:
+                                    if current_total_amount is not None:
+                                        logger.warning(
+                                            f"⚠️ Replacing total_amount {current_total_amount:.2f} "
+                                            f"(method={total_extraction_method}) with {source_label}=${best_summary_candidate.amount:.2f}"
+                                        )
+                                    else:
+                                        logger.info(f"✅ Total extracted from {source_label}: ${best_summary_candidate.amount:.2f}")
+                                    current_total_amount = best_summary_candidate.amount
+                                    total_extraction_method = source_label
+                                _record_total_candidate(source_label, best_summary_candidate.amount, confidence, best_summary_candidate.label)
                         
                         # STRATEGY 4: Calculate from paid_amount column and use as authoritative fallback
                         if selected_table:

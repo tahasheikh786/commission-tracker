@@ -1077,13 +1077,16 @@ def _values_within_tolerance(candidate_value: float, target_value: float, tolera
 
 def is_grand_total_table(table: Dict[str, Any]) -> bool:
     """
-    Identify if a table is a grand total/summary table that should NOT be merged or calculated.
+    Identify if a table is a grand total/summary table that should NOT be processed for commissions.
     
     Grand total tables are characterized by:
     1. Very few rows (typically 1-3)
     2. No identifier columns (Group ID, Group Name, Client Name, etc.)
     3. Headers focused on financial totals only
-    4. Often labeled with "Total" in headers
+    4. Often have "Total" in headers
+    5. All rows marked as summary rows
+    
+    ✅ CRITICAL: These tables should be EXCLUDED from commission calculations to prevent double-counting
     """
     headers = table.get("headers", []) or table.get("header", [])
     rows = table.get("rows", [])
@@ -1094,8 +1097,8 @@ def is_grand_total_table(table: Dict[str, Any]) -> bool:
     # Check 1: Very few rows (1-3 rows is typical for grand totals)
     has_few_rows = len(rows) <= 3
     
-    # Check 2: No identifier columns
-    identifier_keywords = ['group id', 'client', 'company', 'policy', 'member', 'subscriber', 'agent', 'producer']
+    # Check 2: No identifier columns (Group ID, Client Name, Policy Number, etc.)
+    identifier_keywords = ['group id', 'client', 'company', 'policy', 'member', 'subscriber', 'agent', 'producer', 'group name']
     has_identifier = any(
         any(keyword in str(header).lower() for keyword in identifier_keywords)
         for header in headers
@@ -1110,16 +1113,30 @@ def is_grand_total_table(table: Dict[str, Any]) -> bool:
     )
     mostly_financial = total_header_count >= len(headers) * 0.8  # 80% of headers are financial
     
-    # Check 4: All rows are summary rows
+    # Check 4: Headers explicitly contain "Total" (strong indicator)
+    has_total_in_headers = any('total' in str(header).lower() for header in headers)
+    
+    # Check 5: All rows are summary rows
     summary_rows = set(table.get("summaryRows", []) or table.get("summary_rows", []))
     all_rows_summary = len(summary_rows) == len(rows) and len(rows) > 0
     
-    # A table is a grand total table if it meets multiple criteria
+    # ✅ A table is a grand total table if it meets multiple criteria
+    # Priority order:
+    # 1. Single row with all financial headers + no identifiers = DEFINITELY grand total
+    # 2. All rows are summaries + few rows + no identifiers = grand total
+    # 3. Few rows + mostly financial + "Total" in headers = grand total
     is_grand_total = (
-        (has_few_rows and lacks_identifier) or  # Few rows + no identifiers
-        (has_few_rows and mostly_financial) or  # Few rows + mostly financial headers
-        (all_rows_summary and has_few_rows)     # All rows are summaries + few rows
+        (len(rows) == 1 and mostly_financial and lacks_identifier) or  # Single row summary table
+        (all_rows_summary and has_few_rows and lacks_identifier) or    # All summary rows, few rows, no IDs
+        (has_few_rows and mostly_financial and has_total_in_headers and lacks_identifier)  # Classic grand total pattern
     )
+    
+    if is_grand_total:
+        logger.info(
+            f"✅ Identified GRAND TOTAL table: {len(rows)} rows, {len(headers)} headers, "
+            f"lacks_identifier={lacks_identifier}, mostly_financial={mostly_financial}, "
+            f"all_rows_summary={all_rows_summary}, has_total_in_headers={has_total_in_headers}"
+        )
     
     return is_grand_total
 

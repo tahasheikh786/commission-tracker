@@ -1,26 +1,25 @@
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763746080555_gjuchgoob, session_id: session_1763746080567_fcr28z8y4
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763746080555_gjuchgoob
-INFO:     10.20.170.104:56346 - "OPTIONS /api/extract-tables-smart/ HTTP/1.1" 200 OK
-INFO:app.api.new_extract:📁 File: 08.06.2025 Allied Innovative Payment 2.pdf, Size: 227321 bytes, Hash: 98272fc00893adae..., User: f6cf1764-5bfc-4352-abd9-81b72b7cf191
+INFO:     10.20.245.226:34518 - "OPTIONS /api/extract-tables-smart/ HTTP/1.1" 200 OK
+     [OPTIONS]200commission-tracker-1.onrender.com/api/extract-tables-smart/clientIP="86.50.75.139" requestID="3b35d6f0-7e6e-414c" responseTimeMS=16 responseBytes=876 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
+INFO:app.api.new_extract:📁 File: 2025.05.pdf, Size: 72109 bytes, Hash: 506a12fe8c1069e0..., User: f6cf1764-5bfc-4352-abd9-81b72b7cf191
 INFO:app.api.new_extract:🔍 Checking for duplicates BEFORE proceeding with upload...
-INFO:app.api.new_extract:✅ No duplicate found - proceeding with upload for file: 08.06.2025 Allied Innovative Payment 2.pdf
-INFO:app.api.new_extract:🚀 Starting extraction: 08.06.2025 Allied Innovative Payment 2.pdf (ID: upload_1763746080555_gjuchgoob)
-INFO:app.services.gcs_utils:✅ File uploaded to GCS: statements/e62dda3a-d8de-4a57-b985-80fb5df9dd4b/08.06.2025 Allied Innovative Payment 2.pdf
-INFO:app.api.new_extract:✅ Uploaded to GCS: statements/e62dda3a-d8de-4a57-b985-80fb5df9dd4b/08.06.2025 Allied Innovative Payment 2.pdf
-INFO:app.services.gcs_utils:🔐 Generating signed URL for: statements/e62dda3a-d8de-4a57-b985-80fb5df9dd4b/08.06.2025 Allied Innovative Payment 2.pdf
+INFO:app.api.new_extract:✅ No duplicate found - proceeding with upload for file: 2025.05.pdf
+INFO:app.api.new_extract:🚀 Starting extraction: 2025.05.pdf (ID: upload_1763980540949_caydha1ce)
+INFO:app.services.gcs_utils:✅ File uploaded to GCS: statements/fabc89d8-b4ce-4d52-8ebb-9dfb0fa39c9d/2025.05.pdf
+INFO:app.api.new_extract:✅ Uploaded to GCS: statements/fabc89d8-b4ce-4d52-8ebb-9dfb0fa39c9d/2025.05.pdf
+INFO:app.services.gcs_utils:🔐 Generating signed URL for: statements/fabc89d8-b4ce-4d52-8ebb-9dfb0fa39c9d/2025.05.pdf
 INFO:app.services.gcs_utils:📝 Generating signed URL with:
 INFO:app.services.gcs_utils:   - Content-Type: application/pdf
 INFO:app.services.gcs_utils:   - Content-Disposition: inline
 INFO:app.services.gcs_utils:   - Expiration: 1 hour(s)
-INFO:app.services.gcs_utils:✅ Generated signed URL for GCS file with inline headers: statements/e62dda3a-d8de-4a57-b985-80fb5df9dd4b/08.06.2025 Allied Innovative Payment 2.pdf
-INFO:app.services.gcs_utils:   URL expires at: 2025-11-21 18:28:03.228809
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_STARTED
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
-INFO:app.services.websocket_service:Step started: Uploading Document (Step 1) for upload_id upload_1763746080555_gjuchgoob
+INFO:app.services.gcs_utils:✅ Generated signed URL for GCS file with inline headers: statements/fabc89d8-b4ce-4d52-8ebb-9dfb0fa39c9d/2025.05.pdf
+INFO:app.services.gcs_utils:   URL expires at: 2025-11-24 11:35:43.734989
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763980540949_caydha1ce: STEP_STARTED
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763980540949_caydha1ce
+INFO:app.services.websocket_service:Step started: Uploading Document (Step 1) for upload_id upload_1763980540949_caydha1ce
 INFO:app.db.crud.environment:✅ Found existing default environment 9f4a7a57-5715-4b1e-98a9-b9901726a485 for user f6cf1764-5bfc-4352-abd9-81b72b7cf191 in company d883a865-a54f-41d6-968e-f94c3cb3f589
 INFO:app.api.new_extract:✅ Using user's default environment 9f4a7a57-5715-4b1e-98a9-b9901726a485 for upload consistency
-INFO:app.api.new_extract:📝 Upload metadata prepared (NOT saved to DB): e62dda3a-d8de-4a57-b985-80fb5df9dd4b
-INFO:app.services.audit_logging_service:Audit: data_view by user f6cf1764-5bfc-4352-abd9-81b72b7cf191 on extraction_process (ID: e62dda3a-d8de-4a57-b985-80fb5df9dd4b)
+INFO:app.api.new_extract:📝 Upload metadata prepared (NOT saved to DB): fabc89d8-b4ce-4d52-8ebb-9dfb0fa39c9d
+INFO:app.services.audit_logging_service:Audit: data_view by user f6cf1764-5bfc-4352-abd9-81b72b7cf191 on extraction_process (ID: fabc89d8-b4ce-4d52-8ebb-9dfb0fa39c9d)
 INFO:app.services.conversational_summary_service:✅ ConversationalSummaryService initialized with GPT-4o
 INFO:app.services.enhanced_extraction_service:================================================================================
 INFO:app.services.enhanced_extraction_service:✅ Enhanced Extraction Service initialized (OPTIMIZED)
@@ -36,243 +35,184 @@ INFO:app.services.enhanced_extraction_service:==================================
 INFO:app.services.enhanced_extraction_service:⭐⭐⭐ ROUTING TO GPT-5 VISION EXTRACTION ⭐⭐⭐
 INFO:app.services.enhanced_extraction_service:   Extraction Method: smart
 INFO:app.services.enhanced_extraction_service:   Features: Structured outputs, token optimization, intelligent page selection
-INFO:app.services.enhanced_extraction_service:   File: pdfs/08.06.2025 Allied Innovative Payment 2.pdf
+INFO:app.services.enhanced_extraction_service:   File: pdfs/2025.05.pdf
 INFO:app.services.enhanced_extraction_service:   NOTE: Function name '_extract_with_claude_progress' is legacy - it USES GPT-5
 INFO:app.services.enhanced_extraction_service:================================================================================
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
-INFO:app.services.websocket_service:Started stage document_processing for upload upload_1763746080555_gjuchgoob
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
-INFO:app.services.websocket_service:Completed stage document_processing for upload upload_1763746080555_gjuchgoob
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763980540949_caydha1ce: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763980540949_caydha1ce
+INFO:app.services.websocket_service:Started stage document_processing for upload upload_1763980540949_caydha1ce
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763980540949_caydha1ce: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763980540949_caydha1ce
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763980540949_caydha1ce: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763980540949_caydha1ce
+INFO:app.services.websocket_service:Completed stage document_processing for upload upload_1763980540949_caydha1ce
 INFO:app.services.enhanced_extraction_service:ℹ️ Carrier from database 'Pinecrestconsulting' has no specific prompt. Continuing detection.
 INFO:app.services.enhanced_extraction_service:No carrier match detected inside provided text snippet.
-INFO:app.services.enhanced_extraction_service:No carrier match detected inside provided text snippet.
-INFO:app.services.enhanced_extraction_service:✓ Using carrier context for GPT prompts: Pinecrestconsulting (options: none)
+INFO:app.services.enhanced_extraction_service:🔎 Detected carrier 'Redirect Health' from contextual text match.
+INFO:app.services.enhanced_extraction_service:✓ Carrier detected from PDF text: Redirect Health
+INFO:app.services.enhanced_extraction_service:✓ Using carrier context for GPT prompts: Redirect Health (options: {'merge_similar_tables': True, 'summary_keywords': ['total', 'grand total', 'subtotal', 'sum', 'broker total', 'group invoices total', 'commission summary'], 'summary_row_templates': ['Group Invoices for Broker Commissions', 'Group ID / Group Name rollups', "Lines that start with 'Total' or end with 'Totals'"], 'expected_rollups': ['Group Total', 'Group Invoices Total', 'Commission Amount Total', 'Allowance Type Total', 'Grand Total'], 'numeric_tolerance_bps': 65, 'row_role_examples': [{'label': 'GroupSummary', 'signature': "Identifier columns blank or show 'Group Total' but dollar columns populated with the sum of above rows."}, {'label': 'AllowanceSummary', 'signature': 'Rows where only the Allowance Type and numeric columns are populated and the numeric values equal the prior block.'}, {'label': 'CarrierSummary', 'signature': 'Rows near the end of a table that restate Invoice Amount, Commissionable Amount, and Commission Amount.'}], 'domain_notes': 'Redirect Health statements bundle 1-2 page tables where writing agent subtotals appear above grand totals. Summary rows frequently blank out the Group ID column but repeat invoice, commissionable, and commission totals.'})
 INFO:app.services.enhanced_extraction_service:📡 Emitting extraction step...
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_STARTED
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
-INFO:app.services.websocket_service:Step started: Analyzing Document (Step 2) for upload_id upload_1763746080555_gjuchgoob
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763980540949_caydha1ce: STEP_STARTED
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763980540949_caydha1ce
+INFO:app.services.websocket_service:Step started: Analyzing Document (Step 2) for upload_id upload_1763980540949_caydha1ce
 INFO:app.services.enhanced_extraction_service:📡 Emitting table_extraction step...
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_STARTED
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
-INFO:app.services.websocket_service:Step started: Reading Commission Data (Step 3) for upload_id upload_1763746080555_gjuchgoob
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
-INFO:app.services.websocket_service:Started stage table_detection for upload upload_1763746080555_gjuchgoob
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
-INFO:app.services.enhanced_extraction_service:⭐ Starting GPT-5 Vision extraction for pdfs/08.06.2025 Allied Innovative Payment 2.pdf (enhanced=True)
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763980540949_caydha1ce: STEP_STARTED
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763980540949_caydha1ce
+INFO:app.services.websocket_service:Step started: Reading Commission Data (Step 3) for upload_id upload_1763980540949_caydha1ce
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763980540949_caydha1ce: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763980540949_caydha1ce
+INFO:app.services.websocket_service:Started stage table_detection for upload upload_1763980540949_caydha1ce
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763980540949_caydha1ce: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763980540949_caydha1ce
+INFO:app.services.enhanced_extraction_service:⭐ Starting GPT-5 Vision extraction for pdfs/2025.05.pdf (enhanced=True)
 INFO:app.services.enhanced_extraction_service:   Using structured outputs for 99.9% reliability
 INFO:app.services.enhanced_extraction_service:   Token optimization: 60-80% savings via intelligent page selection
 INFO:app.services.enhanced_extraction_service:================================================================================
 INFO:app.services.enhanced_extraction_service:🚀 CALLING GPT-5 VISION SERVICE FOR EXTRACTION
-INFO:app.services.enhanced_extraction_service:   File: pdfs/08.06.2025 Allied Innovative Payment 2.pdf
-INFO:app.services.enhanced_extraction_service:   Carrier: Pinecrestconsulting
+INFO:app.services.enhanced_extraction_service:   File: pdfs/2025.05.pdf
+INFO:app.services.enhanced_extraction_service:   Carrier: Redirect Health
 INFO:app.services.enhanced_extraction_service:   Enhanced Mode: True
 INFO:app.services.enhanced_extraction_service:   Max Pages: 100 (intelligent page selection)
 INFO:app.services.enhanced_extraction_service:================================================================================
-INFO:app.services.gpt.enhanced_service:🚀 Starting enhanced extraction for Pinecrestconsulting | upload_1763746083
-INFO:app.services.gpt.vision_extractor:📄 Processing PDF with direct upload method: pdfs/08.06.2025 Allied Innovative Payment 2.pdf
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
-INFO:app.services.gpt.vision_extractor:📏 Document has 7 pages (> 6 single-call limit). Using chunked extraction.
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
-INFO:app.services.gpt.vision_extractor:📤 Uploading PDF: /tmp/tmpcpd_wua2.pdf
-INFO:     10.219.18.220:32798 - "GET /health HTTP/1.1" 200 OK
+INFO:app.services.gpt.enhanced_service:🚀 Starting enhanced extraction for Redirect Health | upload_1763980544
+INFO:app.services.gpt.vision_extractor:📄 Processing PDF with direct upload method: pdfs/2025.05.pdf
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763980540949_caydha1ce: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763980540949_caydha1ce
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763980540949_caydha1ce: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763980540949_caydha1ce
+INFO:app.services.gpt.vision_extractor:📤 Uploading PDF: pdfs/2025.05.pdf
+INFO:     10.219.18.220:46386 - "GET /health HTTP/1.1" 200 OK
 INFO:httpx:HTTP Request: POST https://api.openai.com/v1/files "HTTP/1.1 200 OK"
-INFO:app.services.gpt.vision_extractor:✅ PDF uploaded: file-8ksmjjtXcwEnQjL9aLY42f
-INFO:app.services.gpt.dynamic_prompts:🔍 GPT: Looking up carrier prompt: 'Pinecrestconsulting' → normalized: 'pinecrestconsulting'
-INFO:app.services.gpt.dynamic_prompts:❌ No carrier-specific prompt found for 'Pinecrestconsulting', using standard prompt only
-INFO:app.services.gpt.dynamic_prompts:   Available carriers: ['UnitedHealthcare', 'United Healthcare', 'UHC', 'United Health Group', 'UnitedHealth', 'Redirect Health']
-INFO:app.services.gpt.vision_extractor:📋 Extracting from PDF using Responses API (file_id: file-8ksmjjtXcwEnQjL9aLY42f)
-INFO:     10.219.18.220:32804 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
-INFO:     10.219.18.220:51476 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.18.220:51484 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.18.220:51480 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
-INFO:     10.219.18.220:43350 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.18.220:43366 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
-INFO:     10.219.18.220:43512 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.18.220:43524 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
-INFO:     10.219.18.220:39780 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.18.220:39804 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.18.220:39790 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
-INFO:     10.219.18.220:43994 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.18.220:44006 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
-INFO:     10.219.18.220:38648 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.18.220:38660 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
-INFO:     10.219.18.220:46828 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.18.220:46840 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.18.220:46842 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
-INFO:     10.219.18.220:56064 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.18.220:56078 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
-INFO:     10.219.18.220:49724 - "GET /health HTTP/1.1" 200 OK
+INFO:app.services.gpt.vision_extractor:✅ PDF uploaded: file-VBvYYfndDeD1Qs5PY4LSFM
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763980540949_caydha1ce: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763980540949_caydha1ce
+INFO:app.services.gpt.dynamic_prompts:🔍 GPT: Looking up carrier prompt: 'Redirect Health' → normalized: 'redirecthealth'
+INFO:app.services.gpt.dynamic_prompts:✅ MATCH FOUND! Using carrier-specific prompt for: Redirect Health
+INFO:app.services.gpt.vision_extractor:📋 Applied carrier-specific instructions for Redirect Health
+INFO:app.services.gpt.vision_extractor:📋 Extracting from PDF using Responses API (file_id: file-VBvYYfndDeD1Qs5PY4LSFM)
+INFO:     10.219.18.220:46394 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.220:46396 - "GET /health HTTP/1.1" 200 OK
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763980540949_caydha1ce: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763980540949_caydha1ce
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763980540949_caydha1ce: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763980540949_caydha1ce
+INFO:     10.219.18.220:46544 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.220:46556 - "GET /health HTTP/1.1" 200 OK
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763980540949_caydha1ce: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763980540949_caydha1ce
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763980540949_caydha1ce: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763980540949_caydha1ce
+INFO:     10.219.18.220:38362 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.220:38378 - "GET /health HTTP/1.1" 200 OK
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763980540949_caydha1ce: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763980540949_caydha1ce
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763980540949_caydha1ce: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763980540949_caydha1ce
+INFO:     10.219.18.220:38698 - "GET /health HTTP/1.1" 200 OK
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763980540949_caydha1ce: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763980540949_caydha1ce
+INFO:     10.219.18.220:38706 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.220:38700 - "GET /health HTTP/1.1" 200 OK
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763980540949_caydha1ce: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763980540949_caydha1ce
+INFO:     10.219.18.220:52912 - "GET /health HTTP/1.1" 200 OK
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763980540949_caydha1ce: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763980540949_caydha1ce
+INFO:     10.219.18.220:52922 - "GET /health HTTP/1.1" 200 OK
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763980540949_caydha1ce: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763980540949_caydha1ce
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763980540949_caydha1ce: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763980540949_caydha1ce
+INFO:     10.219.18.220:43828 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.220:43834 - "GET /health HTTP/1.1" 200 OK
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763980540949_caydha1ce: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763980540949_caydha1ce
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763980540949_caydha1ce: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763980540949_caydha1ce
+INFO:     10.219.18.220:50694 - "GET /health HTTP/1.1" 200 OK
 INFO:httpx:HTTP Request: POST https://api.openai.com/v1/responses "HTTP/1.1 200 OK"
-INFO:app.services.gpt.vision_extractor:📊 Response length: 15586 characters
-INFO:app.services.gpt.vision_extractor:✅ Extraction complete: 3 tables, 13030 tokens, $0.0018
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
-INFO:app.services.gpt.vision_extractor:📤 Uploading PDF: /tmp/tmpk46_kgaz.pdf
-INFO:httpx:HTTP Request: POST https://api.openai.com/v1/files "HTTP/1.1 200 OK"
-INFO:app.services.gpt.vision_extractor:✅ PDF uploaded: file-N393wsMbP3qFEJnx6Vxozs
-INFO:app.services.gpt.dynamic_prompts:🔍 GPT: Looking up carrier prompt: 'Pinecrestconsulting' → normalized: 'pinecrestconsulting'
-INFO:app.services.gpt.dynamic_prompts:❌ No carrier-specific prompt found for 'Pinecrestconsulting', using standard prompt only
-INFO:app.services.gpt.dynamic_prompts:   Available carriers: ['UnitedHealthcare', 'United Healthcare', 'UHC', 'United Health Group', 'UnitedHealth', 'Redirect Health']
-INFO:app.services.gpt.vision_extractor:📋 Extracting from PDF using Responses API (file_id: file-N393wsMbP3qFEJnx6Vxozs)
-INFO:     10.219.18.220:49728 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
-INFO:     10.219.18.220:60538 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.18.220:60548 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.18.220:60558 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
-INFO:     10.219.18.220:39830 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.18.220:39846 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
-INFO:     10.219.18.220:42616 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.18.220:42628 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
-INFO:     10.219.18.220:37420 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.18.220:37446 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.18.220:37434 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
-INFO:     10.219.18.220:38504 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.18.220:38520 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
-INFO:     10.219.18.220:42058 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.18.220:42060 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
-INFO:     10.219.18.220:58624 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.orphan_cleanup_service:🧹 Starting orphan cleanup job...
-INFO:app.services.orphan_cleanup_service:✅ Orphan cleanup completed: no orphans found
-INFO:httpx:HTTP Request: POST https://api.openai.com/v1/responses "HTTP/1.1 200 OK"
-INFO:app.services.gpt.vision_extractor:📊 Response length: 11747 characters
-INFO:app.services.gpt.vision_extractor:✅ Extraction complete: 3 tables, 10677 tokens, $0.0016
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
-INFO:app.services.gpt.vision_extractor:📤 Uploading PDF: /tmp/tmpwgjdcsh2.pdf
-INFO:     10.219.18.220:58640 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.18.220:58650 - "GET /health HTTP/1.1" 200 OK
-INFO:httpx:HTTP Request: POST https://api.openai.com/v1/files "HTTP/1.1 200 OK"
-INFO:app.services.gpt.vision_extractor:✅ PDF uploaded: file-SA2Ero1pCZSZVjpAf9J8Eq
-INFO:app.services.gpt.dynamic_prompts:🔍 GPT: Looking up carrier prompt: 'Pinecrestconsulting' → normalized: 'pinecrestconsulting'
-INFO:app.services.gpt.dynamic_prompts:❌ No carrier-specific prompt found for 'Pinecrestconsulting', using standard prompt only
-INFO:app.services.gpt.dynamic_prompts:   Available carriers: ['UnitedHealthcare', 'United Healthcare', 'UHC', 'United Health Group', 'UnitedHealth', 'Redirect Health']
-INFO:app.services.gpt.vision_extractor:📋 Extracting from PDF using Responses API (file_id: file-SA2Ero1pCZSZVjpAf9J8Eq)
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
-INFO:     10.219.18.220:33082 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.18.220:33092 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
-INFO:     10.219.18.220:40722 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.18.220:40736 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
-INFO:     10.219.18.220:47382 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.18.220:47390 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.18.220:47398 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
-INFO:     10.219.18.220:50828 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.18.220:50830 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
-INFO:     10.219.18.220:52648 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.18.220:52656 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
-INFO:     10.219.18.220:49204 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.18.220:49218 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.18.220:49220 - "GET /health HTTP/1.1" 200 OK
-INFO:httpx:HTTP Request: POST https://api.openai.com/v1/responses "HTTP/1.1 200 OK"
-INFO:app.services.gpt.vision_extractor:📊 Response length: 8987 characters
-INFO:app.services.gpt.vision_extractor:✅ Extraction complete: 1 tables, 7686 tokens, $0.0010
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
-INFO:app.services.gpt.vision_extractor:✅ Document processing complete: 7 tables, $0.0000
-INFO:app.services.gpt.monitoring:✅ Extraction success | upload_id=upload_1763746083 | pages=1 | tokens=31393 | cost=$0.0043 | time=226.36s
-INFO:app.services.gpt.enhanced_service:✅ Extraction complete: 7 tables, $0.0043, 226.36s
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763980540949_caydha1ce: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763980540949_caydha1ce
+INFO:app.services.gpt.vision_extractor:📊 Response length: 11462 characters
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763980540949_caydha1ce: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763980540949_caydha1ce
+INFO:app.services.gpt.vision_extractor:✅ Extraction complete: 3 tables, 8952 tokens, $0.0013
+INFO:app.services.gpt.vision_extractor:✅ Document processing complete: 3 tables, $0.0013
+INFO:app.services.gpt.monitoring:✅ Extraction success | upload_id=upload_1763980544 | pages=1 | tokens=8952 | cost=$0.0013 | time=60.82s
+INFO:app.services.gpt.enhanced_service:✅ Extraction complete: 3 tables, $0.0013, 60.82s
 INFO:app.services.enhanced_extraction_service:================================================================================
 INFO:app.services.enhanced_extraction_service:✅ GPT-5 VISION SERVICE COMPLETED SUCCESSFULLY
 INFO:app.services.enhanced_extraction_service:   Success: True
-INFO:app.services.enhanced_extraction_service:   Tables Extracted: 7
-INFO:app.services.enhanced_extraction_service:   Tokens Used: 31393
-INFO:app.services.enhanced_extraction_service:   Cost: $0.0043
+INFO:app.services.enhanced_extraction_service:   Tables Extracted: 3
+INFO:app.services.enhanced_extraction_service:   Tokens Used: 8952
+INFO:app.services.enhanced_extraction_service:   Cost: $0.0013
 INFO:app.services.enhanced_extraction_service:================================================================================
 INFO:app.services.enhanced_extraction_service:⚡ Transforming GPT-5 Vision results to compatible format
 INFO:app.services.enhanced_extraction_service:📊 GPT-5 extraction results:
-INFO:app.services.enhanced_extraction_service:   - Tables: 7
-INFO:app.services.enhanced_extraction_service:   - Groups/Companies: 26
-INFO:app.services.enhanced_extraction_service:   - Writing Agents: 3
-INFO:app.services.enhanced_extraction_service:   - Carrier: ALLIED
-INFO:app.services.enhanced_extraction_service:   - Broker: INNOVATIVE BPS LLC
-INFO:app.services.enhanced_extraction_service:   - Statement Date: 2025-08-06
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
-INFO:app.services.enhanced_extraction_service:✅ GPT-5 metadata extracted: carrier=ALLIED, date=2025-08-06, broker=INNOVATIVE BPS LLC
-INFO:app.services.enhanced_extraction_service:   Cost: $0.0043, Tokens: 31393
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
-📎 Enhanced multi-strategy stitching: Processing 7 tables
-📎 Canonical header identified: ['Group No.', 'Group Name', 'Billing Period', 'Adj. Period', 'Invoice Total', 'Stoploss Total', 'Agent Rate', 'Calculation Method', 'Census Ct.', 'Paid Amount'] (10 columns)
-📎 Table 1 headers: ['Group No.', 'Group Name', 'Billing Period', 'Adj. Period', 'Invoice Total', 'Stoploss Total', 'Agent Rate', 'Calculation Method', 'Census Ct.', 'Paid Amount'] (10 columns)
-📎 Table 2 headers: ['Group No.', 'Group Name', 'Billing Period', 'Adj. Period', 'Invoice Total', 'Stoploss Total', 'Agent Rate', 'Calculation Method', 'Census Ct.', 'Paid Amount'] (10 columns)
-📎 Table 3 headers: ['Group No.', 'Group Name', 'Billing Period', 'Adj. Period', 'Invoice Total', 'Stoploss Total', 'Agent Rate', 'Calculation Method', 'Census Ct.', 'Paid Amount'] (10 columns)
-📎 Table 4 headers: ['Group No.', 'Group Name', 'Billing Period', 'Adj. Period', 'Invoice Total', 'Stoploss Total', 'Agent Rate', 'Calculation Method', 'Census Ct.', 'Paid Amount'] (10 columns)
-📎 Table 5 headers: ['Group No.', 'Group Name', 'Billing Period', 'Adj. Period', 'Invoice Total', 'Stoploss Total', 'Agent Rate', 'Calculation Method', 'Census Ct.', 'Paid Amount'] (10 columns)
-📎 Table 6 headers: ['Group No.', 'Group Name', 'Billing Period', 'Adj. Period', 'Invoice Total', 'Stoploss Total', 'Agent Rate', 'Calculation Method', 'Census Ct.', 'Paid Amount'] (10 columns)
-📎 Table 7 headers: ['Group No.', 'Group Name', 'Billing Period', 'Adj. Period', 'Invoice Total', 'Stoploss Total', 'Agent Rate', 'Calculation Method', 'Census Ct.', 'Paid Amount'] (10 columns)
-📎 Found 1 unique header patterns
-📎 Header pattern 'group no.' appears in 7 tables
-📎 Creating group with 7 tables (identical headers)
-📎 Grouped 7 tables into 1 groups
-📎 Merging group 1 with 7 tables
-INFO:app.services.extraction_utils:✅ Merged table created: 74 rows (enhancements preserved from individual tables)
-📎 Merged table 1: 10 headers, 74 rows
-📎 Merged headers: ['Group No.', 'Group Name', 'Billing Period', 'Adj. Period', 'Invoice Total', 'Stoploss Total', 'Agent Rate', 'Calculation Method', 'Census Ct.', 'Paid Amount']
-📎 Enhanced stitching completed: 1 final tables
-INFO:app.services.extraction_utils:Header normalization: 10 headers normalized
+INFO:app.services.enhanced_extraction_service:   - Tables: 3
+INFO:app.services.enhanced_extraction_service:   - Groups/Companies: 12
+INFO:app.services.enhanced_extraction_service:   - Writing Agents: 0
+INFO:app.services.enhanced_extraction_service:   - Carrier: Redirect Health
+INFO:app.services.enhanced_extraction_service:   - Broker: Innovative BPS LLC
+INFO:app.services.enhanced_extraction_service:   - Statement Date: 2025-05-31
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763980540949_caydha1ce: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763980540949_caydha1ce
+INFO:app.services.enhanced_extraction_service:✅ GPT-5 metadata extracted: carrier=Redirect Health, date=2025-05-31, broker=Innovative BPS LLC
+INFO:app.services.enhanced_extraction_service:   Cost: $0.0013, Tokens: 8952
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763980540949_caydha1ce: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763980540949_caydha1ce
+📎 Enhanced multi-strategy stitching: Processing 3 tables
+📎 Canonical header identified: ['Group ID', 'Group Name', 'Invoice Amount', 'Commissionable Amount', 'Comm. Rate', 'Commission Amount'] (6 columns)
+📎 Table 1 headers: ['Group ID', 'Group Name', 'Invoice Amount', 'Commissionable Amount', 'Comm. Rate', 'Commission Amount'] (6 columns)
+📎 Table 2 headers: ['Group ID', 'Group Name', 'Invoice Amount', 'Commissionable Amount', 'Allowance Type', 'Commission Amount'] (6 columns)
+📎 Table 3 headers: ['Total Invoice Amount', 'Commissionable Amount', 'Commission Amount'] (3 columns)
+📎 Found 3 unique header patterns
+📎 Fuzzy merge enabled. Attempting to combine similar header groups (threshold=0.8).
+📎 Similarity breakdown for tables:
+   Header: 0.905
+   Column count: 1.000
+   Row format: 1.000
+   Data pattern: 0.833
+   Structure: 0.667
+   Final score: 0.913
+📎 Fuzzy merge: combining group 1 with 2 (similarity=0.913)
+   🔍 Smart column splitting detected - using enhanced similarity
+   Smart splitting similarity: phrase=0.894, word=0.400, combined=0.746
+📎 Similarity breakdown for tables:
+   Header: 0.746
+   Column count: 0.500
+   Row format: 0.500
+   Data pattern: 0.333
+   Structure: 0.667
+   Final score: 0.565
+📎 Grouped 3 tables into 2 groups
+📎 Merging group 1 with 2 tables
+INFO:app.services.extraction_utils:✅ Merged table created: 14 rows (enhancements preserved from individual tables)
+📎 Merged table 1: 6 headers, 14 rows
+📎 Merged headers: ['Group ID', 'Group Name', 'Invoice Amount', 'Commissionable Amount', 'Comm. Rate', 'Commission Amount']
+📎 Merging group 2 with 1 tables
+📎 Merged table 2: 3 headers, 1 rows
+📎 Merged headers: ['Total Invoice Amount', 'Commissionable Amount', 'Commission Amount']
+📎 Enhanced stitching completed: 2 final tables
+INFO:app.services.extraction_utils:✅ Merged table created: 1 rows (enhancements preserved from individual tables)
+INFO:app.services.extraction_utils:Header normalization: 6 headers normalized
 INFO:app.services.enhanced_extraction_service:GPT-5: Verified normalized headers
-INFO:app.services.enhanced_extraction_service:📊 Table 1 summary rows → model:13 heuristic:13 final:13
-INFO:app.services.enhanced_extraction_service:   ↳ Example reasoning row 3: score=1.7 reasons=['Row annotated as GroupSummary', 'Contains summary keyword', 'Matches expected rollup label', "Matches 'Total for Group' pattern", "Contains 'Total for ...' phrase", 'Matches running total of previous detail rows']
-INFO:app.services.enhanced_extraction_service:⭐ GPT-5: Processed 7 tables into 1 tables
-INFO:app.services.enhanced_extraction_service:   Cost: $0.0043
-INFO:app.services.enhanced_extraction_service:   Tokens: 31393
+INFO:app.services.extraction_utils:Header normalization: 3 headers normalized
+INFO:app.services.enhanced_extraction_service:GPT-5: Verified normalized headers
+INFO:app.services.enhanced_extraction_service:📊 Table 1 summary rows → model:2 heuristic:2 final:2
+INFO:app.services.enhanced_extraction_service:   ↳ Example reasoning row 11: score=1.1 reasons=['Row annotated as GroupSummary', 'Identifier columns blank', 'Matches running total of previous detail rows']
+INFO:app.services.enhanced_extraction_service:📊 Table 2 summary rows → model:1 heuristic:1 final:1
+INFO:app.services.enhanced_extraction_service:   ↳ Example reasoning row 0: score=0.55 reasons=['Row annotated as CarrierSummary', 'Row is mostly numeric']
+INFO:app.services.enhanced_extraction_service:⭐ GPT-5: Processed 3 tables into 2 tables
+INFO:app.services.enhanced_extraction_service:   Cost: $0.0013
+INFO:app.services.enhanced_extraction_service:   Tokens: 8952
 INFO:app.services.enhanced_extraction_service:✅ Using GPT-5's structured output summary row detection
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
-INFO:app.services.websocket_service:Completed stage table_detection for upload upload_1763746080555_gjuchgoob
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
-INFO:app.services.websocket_service:Started stage summary_generation for upload upload_1763746080555_gjuchgoob
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763980540949_caydha1ce: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763980540949_caydha1ce
+INFO:app.services.websocket_service:Completed stage table_detection for upload upload_1763980540949_caydha1ce
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763980540949_caydha1ce: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763980540949_caydha1ce
+INFO:app.services.websocket_service:Started stage summary_generation for upload upload_1763980540949_caydha1ce
 INFO:app.services.conversational_summary_service:🗣️ Generating conversational summary...
 INFO:app.services.conversational_summary_service:🔍 _build_summary_prompt called:
 INFO:app.services.conversational_summary_service:   - use_enhanced: True
@@ -283,285 +223,306 @@ INFO:app.services.conversational_summary_service:🎯 Building enhanced summary 
 INFO:app.services.conversational_summary_service:   - Entities: []
 INFO:app.services.conversational_summary_service:   - Relationships: []
 INFO:app.services.conversational_summary_service:   - Business Intelligence: ['number_of_groups', 'number_of_agents', 'total_commission', 'top_contributors']
-INFO:app.services.conversational_summary_service:✅ Using root-level groups_and_companies: 26 items
-INFO:app.services.conversational_summary_service:✅ Using root-level writing_agents: 3 items
+INFO:app.services.conversational_summary_service:✅ Using root-level groups_and_companies: 12 items
 INFO:app.services.conversational_summary_service:✅ SUCCESS: Enhanced prompts module imported
 INFO:app.services.conversational_summary_service:🚀 Using EnhancedClaudePrompts.get_intelligent_summarization_prompt()
 INFO:app.services.conversational_summary_service:✅ SUCCESS: Enhanced prompts imported correctly
 INFO:app.services.conversational_summary_service:🚀 Calling GPT-4o API for summary generation...
 INFO:app.services.conversational_summary_service:   Model: gpt-4o
 INFO:app.services.conversational_summary_service:   Max tokens: 1200
-INFO:app.services.conversational_summary_service:   Prompt length: 120708 chars
+INFO:app.services.conversational_summary_service:   Prompt length: 38633 chars
 INFO:app.services.conversational_summary_service:   System prompt length: 1421 chars
-INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
-INFO:openai._base_client:Retrying request to /chat/completions in 0.380965 seconds
-INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
-INFO:openai._base_client:Retrying request to /chat/completions in 0.912383 seconds
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
-INFO:     10.219.18.220:40552 - "GET /health HTTP/1.1" 200 OK
-INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
-ERROR:app.services.conversational_summary_service:❌ Summary generation failed: Error code: 429 - {'error': {'message': 'Request too large for gpt-4o in organization org-DXuWxsjx0mXX2seALxBQOck1 on tokens per min (TPM): Limit 30000, Requested 30560. The input or output tokens must be reduced in order to run successfully. Visit https://platform.openai.com/account/rate-limits to learn more.', 'type': 'tokens', 'param': None, 'code': 'rate_limit_exceeded'}}
-ERROR:app.services.conversational_summary_service:   Error type: RateLimitError
-ERROR:app.services.conversational_summary_service:   Full traceback:
-Traceback (most recent call last):
-  File "/app/app/services/conversational_summary_service.py", line 227, in generate_conversational_summary
-    response = await self.client.chat.completions.create(
-               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/site-packages/openai/resources/chat/completions/completions.py", line 2585, in create
-    return await self._post(
-           ^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/site-packages/openai/_base_client.py", line 1794, in post
-    return await self.request(cast_to, opts, stream=stream, stream_cls=stream_cls)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/site-packages/openai/_base_client.py", line 1594, in request
-    raise self._make_status_error_from_response(err.response) from None
-openai.RateLimitError: Error code: 429 - {'error': {'message': 'Request too large for gpt-4o in organization org-DXuWxsjx0mXX2seALxBQOck1 on tokens per min (TPM): Limit 30000, Requested 30560. The input or output tokens must be reduced in order to run successfully. Visit https://platform.openai.com/account/rate-limits to learn more.', 'type': 'tokens', 'param': None, 'code': 'rate_limit_exceeded'}}
-ERROR:app.services.conversational_summary_service:   Extraction data keys: ['success', 'tables', 'extraction_method', 'file_type', 'document_metadata', 'extracted_carrier', 'extracted_date', 'groups_and_companies', 'writing_agents', 'business_intelligence', 'summary', 'total_tokens_used', 'estimated_cost_usd', 'processing_time_seconds', 'quality_summary', 'metadata', 'extraction_quality', 'structured_data', 'extraction_pipeline']
-WARNING:app.services.conversational_summary_service:🔄 Generating fallback summary...
-INFO:app.services.conversational_summary_service:   Using standard data: carrier=ALLIED, broker=Unknown, date=2025-08-06
-WARNING:app.services.conversational_summary_service:   Fallback summary: Commission statement from ALLIED. for period ending 2025-08-06. prepared for INNOVATIVE BPS LLC. Total commission: $2,100.58. 74 commission entries across 1 table(s).
-WARNING:app.services.conversational_summary_service:⚠️ Using fallback summary: Commission statement from ALLIED. for period ending 2025-08-06. prepared for INNOVATIVE BPS LLC. Total commission: $2,100.58. 74 commission entries across 1 table(s).
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
-INFO:app.services.websocket_service:Completed stage summary_generation for upload upload_1763746080555_gjuchgoob
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
-INFO:app.services.websocket_service:Started stage validation for upload upload_1763746080555_gjuchgoob
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: progress_update
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: completion
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
-INFO:app.services.websocket_service:Completed processing for upload upload_1763746080555_gjuchgoob in 231.66 seconds
+INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:app.services.conversational_summary_service:📊 Token usage - Input: 9,698, Output: 305
+INFO:app.services.conversational_summary_service:✅ GPT-4o API call successful
+INFO:app.services.conversational_summary_service:✅ Detected structured JSON response from GPT-4o
+INFO:app.services.conversational_summary_service:📊 GPT-4o provided 11 fields: ['carrier_name', 'broker_company', 'statement_date', 'broker_id', 'payment_type', 'total_amount', 'company_count', 'top_contributors', 'commission_structure', 'census_count', 'billing_periods']
+INFO:app.services.conversational_summary_service:✅ Extracted structured summary data (4 fields): ['statement_date', 'total_amount', 'company_count', 'broker_id_confidence']
+INFO:app.services.conversational_summary_service:✅ Fallback added 1 missing fields: ['broker_id_confidence']
+INFO:app.services.conversational_summary_service:📄 Generated summary length: 615 characters
+INFO:app.services.conversational_summary_service:📊 Final structured data keys: ['statement_date', 'total_amount', 'company_count', 'broker_id_confidence', 'carrier_name', 'broker_company', 'broker_id', 'payment_type', 'top_contributors', 'commission_structure', 'census_count', 'billing_periods']
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763980540949_caydha1ce: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763980540949_caydha1ce
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763980540949_caydha1ce: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763980540949_caydha1ce
+INFO:app.services.websocket_service:Completed stage summary_generation for upload upload_1763980540949_caydha1ce
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763980540949_caydha1ce: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763980540949_caydha1ce
+INFO:app.services.websocket_service:Started stage validation for upload upload_1763980540949_caydha1ce
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763980540949_caydha1ce: progress_update
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763980540949_caydha1ce
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763980540949_caydha1ce: completion
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763980540949_caydha1ce
+INFO:app.services.websocket_service:Completed processing for upload upload_1763980540949_caydha1ce in 64.54 seconds
 INFO:app.api.new_extract:✅ Extraction completed successfully
-INFO:app.services.cancellation_manager:Cleared cancellation status for upload upload_1763746080555_gjuchgoob
-INFO:app.api.new_extract:🔍 Summary row refinement adjusted table 0: [3, 8, 14, 15, 19, 53, 55, 57, 59, 61, 62, 64, 73] → [3, 8, 14, 15, 19, 53, 59, 60, 61, 62, 64, 73]
+INFO:app.services.cancellation_manager:Cleared cancellation status for upload upload_1763980540949_caydha1ce
+INFO:app.api.new_extract:🔍 Summary row refinement adjusted table 1: [0] → []
 INFO:app.api.new_extract:✅ Extraction completed (data NOT saved to DB, will be saved on approval)
-INFO:app.services.audit_logging_service:Audit: data_view by user f6cf1764-5bfc-4352-abd9-81b72b7cf191 on extraction_complete (ID: e62dda3a-d8de-4a57-b985-80fb5df9dd4b)
-INFO:app.api.new_extract:🎯 Format Learning: Using carrier ALLIED with ID 5c9324ac-1794-4563-8e0e-8cd5c5317181
-WARNING:app.api.new_extract:🚨 CARRIER MISMATCH DETECTED: File uploaded to d883a865-a54f-41d6-968e-f94c3cb3f589 but extracted as ALLIED (5c9324ac-1794-4563-8e0e-8cd5c5317181)
-INFO:app.api.new_extract:🔄 Reassigning file to correct carrier: ALLIED
-INFO:app.services.gcs_utils:✅ File copied in GCS: statements/e62dda3a-d8de-4a57-b985-80fb5df9dd4b/08.06.2025 Allied Innovative Payment 2.pdf -> statements/5c9324ac-1794-4563-8e0e-8cd5c5317181/08.06.2025 Allied Innovative Payment 2.pdf
-INFO:app.services.gcs_utils:✅ File deleted from GCS: statements/e62dda3a-d8de-4a57-b985-80fb5df9dd4b/08.06.2025 Allied Innovative Payment 2.pdf
-INFO:app.services.gcs_utils:🔐 Generating signed URL for: statements/5c9324ac-1794-4563-8e0e-8cd5c5317181/08.06.2025 Allied Innovative Payment 2.pdf
+INFO:app.services.audit_logging_service:Audit: data_view by user f6cf1764-5bfc-4352-abd9-81b72b7cf191 on extraction_complete (ID: fabc89d8-b4ce-4d52-8ebb-9dfb0fa39c9d)
+INFO:app.api.new_extract:🎯 Format Learning: Using carrier Redirect Health with ID 8340174b-f6ed-42eb-976d-4868bb06c844
+WARNING:app.api.new_extract:🚨 CARRIER MISMATCH DETECTED: File uploaded to d883a865-a54f-41d6-968e-f94c3cb3f589 but extracted as Redirect Health (8340174b-f6ed-42eb-976d-4868bb06c844)
+INFO:app.api.new_extract:🔄 Reassigning file to correct carrier: Redirect Health
+INFO:app.services.gcs_utils:✅ File copied in GCS: statements/fabc89d8-b4ce-4d52-8ebb-9dfb0fa39c9d/2025.05.pdf -> statements/8340174b-f6ed-42eb-976d-4868bb06c844/2025.05.pdf
+INFO:app.services.gcs_utils:✅ File deleted from GCS: statements/fabc89d8-b4ce-4d52-8ebb-9dfb0fa39c9d/2025.05.pdf
+INFO:app.services.gcs_utils:🔐 Generating signed URL for: statements/8340174b-f6ed-42eb-976d-4868bb06c844/2025.05.pdf
 INFO:app.services.gcs_utils:📝 Generating signed URL with:
-🎯 FormatLearningService: Finding matching format for company 5c9324ac-1794-4563-8e0e-8cd5c5317181
 INFO:app.services.gcs_utils:   - Content-Type: application/pdf
 INFO:app.services.gcs_utils:   - Content-Disposition: inline
 INFO:app.services.gcs_utils:   - Expiration: 1 hour(s)
-INFO:app.services.gcs_utils:✅ Generated signed URL for GCS file with inline headers: statements/5c9324ac-1794-4563-8e0e-8cd5c5317181/08.06.2025 Allied Innovative Payment 2.pdf
-INFO:app.services.gcs_utils:   URL expires at: 2025-11-21 18:31:56.312600
-INFO:app.api.new_extract:✅ File moved to correct carrier folder in GCS: statements/5c9324ac-1794-4563-8e0e-8cd5c5317181/08.06.2025 Allied Innovative Payment 2.pdf
-INFO:app.api.new_extract:✅ Updated upload metadata: carrier_id=5c9324ac-1794-4563-8e0e-8cd5c5317181, company_id stays as user's company=d883a865-a54f-41d6-968e-f94c3cb3f589
-INFO:app.api.new_extract:📊 Single table detected, using it for field mapping
-INFO:app.api.new_extract:🎯 Using table 0 for field mapping with 10 headers
-🎯 FormatLearningService: Headers: ['Group No.', 'Group Name', 'Billing Period', 'Adj. Period', 'Invoice Total', 'Stoploss Total', 'Agent Rate', 'Calculation Method', 'Census Ct.', 'Paid Amount']
-🎯 FormatLearningService: Table structure: {'row_count': 74, 'column_count': 10, 'has_financial_data': True}
+INFO:app.services.gcs_utils:✅ Generated signed URL for GCS file with inline headers: statements/8340174b-f6ed-42eb-976d-4868bb06c844/2025.05.pdf
+INFO:app.services.gcs_utils:   URL expires at: 2025-11-24 11:36:49.906028
+INFO:app.api.new_extract:✅ File moved to correct carrier folder in GCS: statements/8340174b-f6ed-42eb-976d-4868bb06c844/2025.05.pdf
+INFO:app.api.new_extract:✅ Updated upload metadata: carrier_id=8340174b-f6ed-42eb-976d-4868bb06c844, company_id stays as user's company=d883a865-a54f-41d6-968e-f94c3cb3f589
+INFO:app.api.new_extract:🔍 Multiple tables detected (2), analyzing for field mapping suitability
+INFO:app.api.new_extract:   Table 0: type=, rows=14, score=79
+INFO:app.api.new_extract:   Table 1: type=, rows=1, score=61
+INFO:app.api.new_extract:🎯 INTELLIGENT SELECTION: Using table 0 for field mapping
+INFO:app.api.new_extract:   Reasoning: Selected table 0 (table_type=, rows=14, commission_headers=3, score=79)
+INFO:app.api.new_extract:🎯 Using table 0 for field mapping with 6 headers
+🎯 FormatLearningService: Finding matching format for company 8340174b-f6ed-42eb-976d-4868bb06c844
+🎯 FormatLearningService: Headers: ['Group ID', 'Group Name', 'Invoice Amount', 'Commissionable Amount', 'Comm. Rate', 'Commission Amount']
+🎯 FormatLearningService: Table structure: {'row_count': 14, 'column_count': 6, 'has_financial_data': True}
 🎯 FormatLearningService: Headers type: <class 'list'>
-🎯 FormatLearningService: Headers length: 10
-🎯 CRUD: Finding best matching format for company 5c9324ac-1794-4563-8e0e-8cd5c5317181
-🎯 CRUD: Input headers: ['Group No.', 'Group Name', 'Billing Period', 'Adj. Period', 'Invoice Total', 'Stoploss Total', 'Agent Rate', 'Calculation Method', 'Census Ct.', 'Paid Amount']
-🎯 CRUD: Input table structure: {'row_count': 74, 'column_count': 10, 'has_financial_data': True}
+🎯 FormatLearningService: Headers length: 6
+🎯 CRUD: Finding best matching format for company 8340174b-f6ed-42eb-976d-4868bb06c844
+🎯 CRUD: Input headers: ['Group ID', 'Group Name', 'Invoice Amount', 'Commissionable Amount', 'Comm. Rate', 'Commission Amount']
+🎯 CRUD: Input table structure: {'row_count': 14, 'column_count': 6, 'has_financial_data': True}
+INFO:app.services.orphan_cleanup_service:🧹 Starting orphan cleanup job...
+INFO:     10.219.18.220:50702 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.219.18.220:50700 - "GET /health HTTP/1.1" 200 OK
 🎯 CRUD: Found 1 saved formats for company
 🎯 CRUD: Comparing with saved format:
-🎯 CRUD:   Saved headers: ['Group No.', 'Group Name', 'Billing Period', 'Adj. Period', 'Invoice Total', 'Stoploss Total', 'Agent %', 'Calculation Method', 'Census Ct.', 'Paid Amount']
-🎯 CRUD:   Header similarity: 0.7200000000000001
+🎯 CRUD:   Saved headers: ['Group ID', 'Group Name', 'Invoice Amount', 'Commissionable Amount', 'Comm. Rate', 'Commission Amount']
+🎯 CRUD:   Header similarity: 0.8
 🎯 CRUD:   Structure similarity: 1.0
-🎯 CRUD:   Total score: 0.776
-🎯 CRUD:   -> New best match with score 0.776
-🎯 FormatLearningService: Best match score: 0.776
-🎯 FormatLearningService: Found matching format with signature: 434609905947a9e8728df0b79ba381ce
-🎯 FormatLearningService: Learned field mapping: {'Agent %': 'Commission Rate', 'Group No.': 'Policy Number', 'Census Ct.': 'Total Subscribers', 'Group Name': 'Client Name', 'Adj. Period': 'Adjustment Period Start', 'Paid Amount': 'Commission Earned', 'Invoice Total': 'Invoice Total', 'Billing Period': 'Coverage Period Start', 'Stoploss Total': 'Stoploss Total', 'Calculation Method': 'Plan Type'}
-🎯 FormatLearningService: Learned table editor settings: {'carrier_name': 'ALLIED', 'corrected_carrier_name': 'ALLIED', 'statement_date': '2025-01-08', 'corrected_statement_date': '2025-01-08', 'statement_total_amount': 9336.9, 'total_amount_field_name': 'Invoice Total'}
-INFO:app.api.new_extract:🎯 Format Learning: Found matching format with score 0.776
-INFO:app.api.new_extract:🎯 Format Learning: Applying corrected carrier name from learned format: ALLIED
+🎯 CRUD:   Total score: 0.8400000000000001
+🎯 CRUD:   -> New best match with score 0.8400000000000001
+🎯 FormatLearningService: Best match score: 0.8400000000000001
+🎯 FormatLearningService: Found matching format with signature: f0d2424f7efd76c2fcfb224d0246d1f1
+🎯 FormatLearningService: Learned field mapping: {'Group ID': 'Policy Number', 'Comm. Rate': 'Commission Rate', 'Group Name': 'Client Name', 'Invoice Amount': 'Premium Total', 'Commission Amount': 'Commission Earned', 'Commissionable Amount': 'Invoice Total'}
+🎯 FormatLearningService: Learned table editor settings: {'headers': ['Group ID', 'Group Name', 'Invoice Amount', 'Commissionable Amount', 'Comm. Rate', 'Commission Amount'], 'summary_rows': [], 'corrected_carrier_name': '', 'corrected_statement_date': '2025-05-31', 'user_corrections': {'carrier_name': '', 'statement_date': '2025-05-31'}}
+INFO:app.api.new_extract:🎯 Format Learning: Found matching format with score 0.8400000000000001
 INFO:app.api.new_extract:🎯 Format Learning: Skipping statement date auto-apply (dates are document-specific)
-INFO:app.api.new_extract:✅ Total extracted from document_metadata: $2100.58
-WARNING:app.api.new_extract:⚠️ Replacing total_amount 2100.58 (method=document_metadata) with summary_row_scan=3604.95
-INFO:app.api.new_extract:🎯 Format Learning: Total validation result: {'matches': False, 'extracted_amount': 3604.95, 'learned_amount': 9336.9, 'difference': 5731.95, 'difference_percent': 61.39, 'status': 'mismatch', 'tolerance_percent': 5.0}
-INFO:app.api.new_extract:📊 Added total to document_metadata: $3604.95 (method: summary_row_scan)
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_STARTED
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
-INFO:app.services.websocket_service:Step started: Understanding Structure (Step 4) for upload_id upload_1763746080555_gjuchgoob
+INFO:app.api.new_extract:✅ Total extracted from document_metadata: $4861.56
+WARNING:app.api.new_extract:⚠️ Replacing total_amount 4861.56 (method=document_metadata) with summary_row_scan=75202.00
+INFO:app.api.new_extract:🎯 Format Learning: Total validation result: {'matches': False, 'difference': None, 'difference_percent': None, 'status': 'no_comparison', 'reason': 'Missing total amount for comparison'}
+INFO:app.api.new_extract:📊 Added total to document_metadata: $75202.00 (method: summary_row_scan)
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763980540949_caydha1ce: STEP_STARTED
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763980540949_caydha1ce
+INFO:app.services.websocket_service:Step started: Understanding Structure (Step 4) for upload_id upload_1763980540949_caydha1ce
 INFO:app.services.ai_plan_type_detection_service:AI Plan Type Detection Service initialized successfully
 INFO:app.api.new_extract:🔍 AI Plan Type Detection: Detecting plan types during extraction
 INFO:app.services.ai_plan_type_detection_service:🔍 AI Plan Detection: Analyzing document for insurance plan types
 INFO:httpx:HTTP Request: POST https://api.mistral.ai/v1/chat/completions "HTTP/1.1 200 OK"
 INFO:app.services.ai_plan_type_detection_service:✅ AI successfully detected plan types
-INFO:app.services.ai_plan_type_detection_service:✅ AI Plan Detection: Found 1 plan types with 0.85 confidence
-INFO:app.api.new_extract:✅ AI Plan Detection: 1 plan types with 0.85 confidence
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_STARTED
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
-INFO:app.services.websocket_service:Step started: AI Field Mapping (Step 5) for upload_id upload_1763746080555_gjuchgoob
+INFO:app.services.ai_plan_type_detection_service:✅ AI Plan Detection: Found 1 plan types with 0.90 confidence
+INFO:app.api.new_extract:✅ AI Plan Detection: 1 plan types with 0.90 confidence
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763980540949_caydha1ce: STEP_STARTED
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763980540949_caydha1ce
+INFO:app.services.websocket_service:Step started: AI Field Mapping (Step 5) for upload_id upload_1763980540949_caydha1ce
 INFO:app.api.new_extract:🧠 AI Field Mapping: Starting field mapping during extraction
 INFO:app.api.new_extract:📋 Normalizing headers for AI mapping:
 INFO:app.api.ai_intelligent_mapping:🚀 Enhanced AI Analysis Request: User muhammad@pinecrestconsulting.com
-INFO:app.services.ai_field_mapping_service:🤖 AI Mapping: Analyzing 10 headers with AI intelligence
-INFO:app.services.ai_field_mapping_service:🔍 AI Mapping: carrier_id provided: True (value: 5c9324ac-1794-4563-8e0e-8cd5c5317181)
-INFO:     10.219.18.220:40568 - "GET /health HTTP/1.1" 200 OK
-INFO:app.services.ai_field_mapping_service:🎯 Carrier ID is valid, attempting to retrieve learned mapping for carrier 5c9324ac-1794-4563-8e0e-8cd5c5317181
-INFO:app.services.ai_field_mapping_service:🔍 Generated format signature for lookup: 6f736ac611e1789c131a993b10321314
-INFO:app.services.ai_field_mapping_service:🔍 Looking up learned format for carrier 5c9324ac-1794-4563-8e0e-8cd5c5317181 with 10 headers
-INFO:app.services.ai_field_mapping_service:❌ No exact match found, trying fuzzy matching...
-INFO:app.services.ai_field_mapping_service:🔍 Found 1 saved formats for fuzzy matching
-INFO:app.services.ai_field_mapping_service:🔍 Format signature 434609905947a9e8728df0b79ba381ce: similarity = 0.72
-INFO:app.services.ai_field_mapping_service:✅ New best match with similarity 0.72
-INFO:app.services.ai_field_mapping_service:✅ Found similar format with 0.72 similarity score
-INFO:app.services.ai_field_mapping_service:🎯 Found learned mapping for carrier with 0.72 confidence
-INFO:httpx:HTTP Request: POST https://api.mistral.ai/v1/chat/completions "HTTP/1.1 200 OK"
-INFO:app.services.ai_field_mapping_service:✅ AI successfully generated field mappings
-INFO:app.services.ai_field_mapping_service:✅ AI Mapping: Generated 10 mappings with 0.89 confidence
+INFO:app.services.ai_field_mapping_service:🤖 AI Mapping: Analyzing 6 headers with AI intelligence
+INFO:app.services.ai_field_mapping_service:🔍 AI Mapping: carrier_id provided: True (value: 8340174b-f6ed-42eb-976d-4868bb06c844)
+INFO:     10.219.18.220:47966 - "GET /health HTTP/1.1" 200 OK
+INFO:app.services.ai_field_mapping_service:🎯 Carrier ID is valid, attempting to retrieve learned mapping for carrier 8340174b-f6ed-42eb-976d-4868bb06c844
+INFO:app.services.ai_field_mapping_service:🔍 Generated format signature for lookup: f0d2424f7efd76c2fcfb224d0246d1f1
+INFO:app.services.ai_field_mapping_service:🔍 Looking up learned format for carrier 8340174b-f6ed-42eb-976d-4868bb06c844 with 6 headers
+INFO:app.services.orphan_cleanup_service:✅ Orphan cleanup completed: no orphans found
+INFO:app.services.ai_field_mapping_service:✅ Found EXACT match for learned format with signature f0d2424f7efd76c2fcfb224d0246d1f1
+INFO:app.services.ai_field_mapping_service:✅ Learned field mapping has 6 mappings
+INFO:app.services.ai_field_mapping_service:🎯 Found learned mapping for carrier with 1.00 confidence
+INFO:app.services.ai_field_mapping_service:🎯 Using learned mappings directly with match score 1.0
+INFO:app.services.ai_field_mapping_service:✅ Learned field_mapping contains 6 mappings
+INFO:app.services.ai_field_mapping_service:✅ Applied 6 learned mappings directly - returning early
+INFO:app.services.ai_field_mapping_service:✅ Response includes learned_format_used=True flag
 INFO:app.services.ai_plan_type_detection_service:🔍 AI Plan Detection: Analyzing document for insurance plan types
-INFO:     10.219.18.220:46248 - "GET /health HTTP/1.1" 200 OK
 INFO:httpx:HTTP Request: POST https://api.mistral.ai/v1/chat/completions "HTTP/1.1 200 OK"
 INFO:app.services.ai_plan_type_detection_service:✅ AI successfully detected plan types
 INFO:app.services.ai_plan_type_detection_service:✅ AI Plan Detection: Found 1 plan types with 0.90 confidence
-INFO:app.api.ai_intelligent_mapping:✅ Enhanced AI Analysis Complete: Overall confidence 0.89
-INFO:app.api.new_extract:✅ AI Field Mapping: 10 mappings with sample data, confidence 0.89
+INFO:app.api.ai_intelligent_mapping:✅ Enhanced AI Analysis Complete: Overall confidence 0.93
+INFO:app.api.new_extract:✅ AI Field Mapping: 6 mappings with sample data, confidence 0.95
 INFO:app.api.new_extract:✅ Conversational summary supplied by extraction pipeline
-INFO:app.api.new_extract:   Summary preview: Commission statement from ALLIED. for period ending 2025-08-06. prepared for INNOVATIVE BPS LLC. Total commission: $2,100.58. 74 commission entries across 1 table(s).
-INFO:app.api.new_extract:   Structured data keys: []
-INFO:app.services.audit_logging_service:Audit: file_upload by user f6cf1764-5bfc-4352-abd9-81b72b7cf191 on statement_upload (ID: e62dda3a-d8de-4a57-b985-80fb5df9dd4b)
+INFO:app.api.new_extract:   Summary preview: This is a commission statement from Redirect Health for Innovative BPS LLC, dated May 31, 2025. The document reports a total of $4,861.56 in commissions across 14 groups, with Alcala Logistics leading
+INFO:app.api.new_extract:   Structured data keys: ['statement_date', 'total_amount', 'company_count', 'broker_id_confidence', 'carrier_name', 'broker_company', 'broker_id', 'payment_type', 'top_contributors', 'commission_structure', 'census_count', 'billing_periods']
+INFO:app.services.audit_logging_service:Audit: file_upload by user f6cf1764-5bfc-4352-abd9-81b72b7cf191 on statement_upload (ID: fabc89d8-b4ce-4d52-8ebb-9dfb0fa39c9d)
 INFO:app.api.new_extract:📤 Sending pre-generated enhanced summary via WebSocket...
-INFO:app.api.new_extract:📊 Sending structured data: {}...
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_PROGRESS
-INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763746080555_gjuchgoob
-ERROR:app.services.websocket_service:Timeout sending message to upload_id=upload_1763746080555_gjuchgoob, session_id=session_1763746080567_fcr28z8y4
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763746080555_gjuchgoob, session_id=session_1763746080567_fcr28z8y4
-ERROR:app.services.websocket_service:Timeout sending message to upload_id=upload_1763746080555_gjuchgoob, session_id=session_1763746080567_fcr28z8y4
+INFO:app.api.new_extract:📊 Sending structured data: {"statement_date": "2025-05-31", "total_amount": "4861.56", "company_count": 14, "broker_id_confidence": 0.7, "carrier_name": "Redirect Health", "broker_company": "Innovative BPS LLC", "broker_id": nu...
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763980540949_caydha1ce: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763980540949_caydha1ce
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763980540949_caydha1ce: STEP_STARTED
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763980540949_caydha1ce
+INFO:app.services.websocket_service:Step started: Preparing Results (Step 6) for upload_id upload_1763980540949_caydha1ce
+INFO:app.api.new_extract:📊 Calculating invoice total from 2 tables
+INFO:app.api.new_extract:📊 Table 0: Found invoice column at index 2: 'Invoice Amount'
+INFO:app.api.new_extract:✅ Table 0: Calculated from rows: $164,292.00
+INFO:app.api.new_extract:📊 Table 1: Found invoice column at index 0: 'Total Invoice Amount'
+INFO:app.api.new_extract:✅ Table 1: Calculated from rows: $70,498.00
+INFO:app.api.new_extract:✅ TOTAL invoice amount from all tables: $234,790.00
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763980540949_caydha1ce: STEP_PROGRESS
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763980540949_caydha1ce
+INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763980540949_caydha1ce: EXTRACTION_COMPLETE
+INFO:app.services.websocket_service:Found 1 connections for upload_id upload_1763980540949_caydha1ce
+INFO:app.services.websocket_service:Extraction complete for upload_id upload_1763980540949_caydha1ce
+INFO:app.api.new_extract:✅ Extraction complete! Sent results via WebSocket for upload_id: upload_1763980540949_caydha1ce
+INFO:     10.219.18.220:47974 - "GET /health HTTP/1.1" 200 OK
+INFO:     10.20.245.226:34518 - "POST /api/extract-tables-smart/ HTTP/1.1" 200 OK
+     [POST]200commission-tracker-1.onrender.com/api/extract-tables-smart/clientIP="86.50.75.139" requestID="3ccb90a0-2ace-4bb8" responseTimeMS=79207 responseBytes=6669 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
+     [OPTIONS]200commission-tracker-1.onrender.com/api/auto-approve/process-liteclientIP="86.50.75.139" requestID="c546fa03-7415-40e9" responseTimeMS=2 responseBytes=920 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
+INFO:     10.20.245.226:34518 - "OPTIONS /api/auto-approve/process-lite HTTP/1.1" 200 OK
+INFO:app.api.auto_approval:Auto-approval started for upload fabc89d8-b4ce-4d52-8ebb-9dfb0fa39c9d
+INFO:app.services.websocket_service:Broadcasting message to upload_id fabc89d8-b4ce-4d52-8ebb-9dfb0fa39c9d: progress_update
+WARNING:app.services.websocket_service:No active connections found for upload_id fabc89d8-b4ce-4d52-8ebb-9dfb0fa39c9d
+INFO:app.services.websocket_service:Broadcasting message to upload_id fabc89d8-b4ce-4d52-8ebb-9dfb0fa39c9d: progress_update
+WARNING:app.services.websocket_service:No active connections found for upload_id fabc89d8-b4ce-4d52-8ebb-9dfb0fa39c9d
+INFO:app.services.websocket_service:Broadcasting message to upload_id fabc89d8-b4ce-4d52-8ebb-9dfb0fa39c9d: progress_update
+WARNING:app.services.websocket_service:No active connections found for upload_id fabc89d8-b4ce-4d52-8ebb-9dfb0fa39c9d
+INFO:app.api.auto_approval:🔍 Auto-approval: Filtered 2 tables to 2 commission tables for saving
+INFO:app.api.auto_approval:🤖 Auto-approval: Raw field_mapping from learned format: {'Group ID': 'Policy Number', 'Comm. Rate': 'Commission Rate', 'Group Name': 'Client Name', 'Invoice Amount': 'Premium Total', 'Commission Amount': 'Commission Earned', 'Commissionable Amount': 'Invoice Total'}
+INFO:app.api.auto_approval:🤖 Auto-approval: Using 6 field mappings from learned format
+INFO:app.api.auto_approval:🤖 Auto-approval: Field config list: [{'field': 'Group ID', 'mapping': 'Policy Number'}, {'field': 'Comm. Rate', 'mapping': 'Commission Rate'}, {'field': 'Group Name', 'mapping': 'Client Name'}, {'field': 'Invoice Amount', 'mapping': 'Premium Total'}, {'field': 'Commission Amount', 'mapping': 'Commission Earned'}, {'field': 'Commissionable Amount', 'mapping': 'Invoice Total'}]
+INFO:app.api.table_editor:🎯 Table Editor API: Saving edited tables for upload_id: fabc89d8-b4ce-4d52-8ebb-9dfb0fa39c9d
+INFO:app.api.table_editor:🎯 Table Editor API: Tables count: 2
+INFO:app.api.table_editor:🎯 Table Editor API: Selected statement date: {'date': '2025-05-31'}
+INFO:app.api.table_editor:🎯 Table Editor API: Company ID (deprecated): 8340174b-f6ed-42eb-976d-4868bb06c844
+INFO:app.api.table_editor:🎯 Table Editor API: Carrier ID: None
+INFO:app.api.table_editor:🎯 Table Editor API: Field config received: [{'field': 'Group ID', 'mapping': 'Policy Number'}, {'field': 'Comm. Rate', 'mapping': 'Commission Rate'}, {'field': 'Group Name', 'mapping': 'Client Name'}, {'field': 'Invoice Amount', 'mapping': 'Premium Total'}, {'field': 'Commission Amount', 'mapping': 'Commission Earned'}, {'field': 'Commissionable Amount', 'mapping': 'Invoice Total'}]
+INFO:app.api.table_editor:🎯 Table Editor API: Converted 2 tables to database format
+INFO:app.api.table_editor:🎯 Table Editor API: Saved edited tables to database
+INFO:app.api.table_editor:🎯 Table Editor API: Updating upload with tables, statement date, and carrier
+🎯 CRUD: update_upload_tables called for upload_id: fabc89d8-b4ce-4d52-8ebb-9dfb0fa39c9d
+🎯 CRUD: Tables data length: 2
+🎯 CRUD: Selected statement date: {'date': '2025-05-31'}
+🎯 CRUD: Carrier ID: None
+🎯 CRUD: Upload not found for ID: fabc89d8-b4ce-4d52-8ebb-9dfb0fa39c9d
+INFO:app.api.table_editor:🎯 Table Editor API: Successfully updated upload with statement date and carrier
+WARNING:app.api.table_editor:🎯 Table Editor API: Skipping format learning - no carrier_id available
+INFO:app.api.table_editor:🎯 Table Editor API: Successfully saved 2 edited tables
+INFO:app.services.websocket_service:Broadcasting message to upload_id fabc89d8-b4ce-4d52-8ebb-9dfb0fa39c9d: progress_update
+WARNING:app.services.websocket_service:No active connections found for upload_id fabc89d8-b4ce-4d52-8ebb-9dfb0fa39c9d
 INFO:     connection closed
-ERROR:asyncio:Task exception was never retrieved
-future: <Task finished name='Task-1351' coro=<WebSocket.close() done, defined at /usr/local/lib/python3.11/site-packages/starlette/websockets.py:180> exception=RuntimeError('Cannot call "send" once a close message has been sent.')>
-Traceback (most recent call last):
-  File "/usr/local/lib/python3.11/site-packages/starlette/websockets.py", line 181, in close
-    await self.send({"type": "websocket.close", "code": code, "reason": reason or ""})
-  File "/usr/local/lib/python3.11/site-packages/starlette/websockets.py", line 98, in send
-    raise RuntimeError('Cannot call "send" once a close message has been sent.')
-RuntimeError: Cannot call "send" once a close message has been sent.
-ERROR:app.services.websocket_service:Error broadcasting to session session_1763746080567_fcr28z8y4: 
-Traceback (most recent call last):
-  File "/usr/local/lib/python3.11/site-packages/websockets/legacy/protocol.py", line 1301, in close_connection
-    await self.transfer_data_task
-  File "/usr/local/lib/python3.11/site-packages/websockets/legacy/protocol.py", line 963, in transfer_data
-    message = await self.read_message()
-              ^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/site-packages/websockets/legacy/protocol.py", line 1033, in read_message
-    frame = await self.read_data_frame(max_size=self.max_size)
-            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/site-packages/websockets/legacy/protocol.py", line 1108, in read_data_frame
-    frame = await self.read_frame(max_size)
-            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/site-packages/websockets/legacy/protocol.py", line 1165, in read_frame
-    frame = await Frame.read(
-            ^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/site-packages/websockets/legacy/framing.py", line 68, in read
-    data = await reader(2)
-           ^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/asyncio/streams.py", line 750, in readexactly
-    await self._wait_for_data('readexactly')
-  File "/usr/local/lib/python3.11/asyncio/streams.py", line 543, in _wait_for_data
-    await self._waiter
-asyncio.exceptions.CancelledError
-The above exception was the direct cause of the following exception:
-Traceback (most recent call last):
-  File "/usr/local/lib/python3.11/site-packages/uvicorn/protocols/websockets/websockets_impl.py", line 332, in asgi_send
-    await self.send(data)  # type: ignore[arg-type]
-    ^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/site-packages/websockets/legacy/protocol.py", line 635, in send
-    await self.ensure_open()
-  File "/usr/local/lib/python3.11/site-packages/websockets/legacy/protocol.py", line 948, in ensure_open
-    raise self.connection_closed_exc()
-websockets.exceptions.ConnectionClosedError: sent 1011 (internal error) keepalive ping timeout; no close frame received
-The above exception was the direct cause of the following exception:
-Traceback (most recent call last):
-  File "/usr/local/lib/python3.11/site-packages/starlette/websockets.py", line 86, in send
-    await self._send(message)
-  File "/usr/local/lib/python3.11/site-packages/starlette/_exception_handler.py", line 39, in sender
-    await send(message)
-  File "/usr/local/lib/python3.11/site-packages/uvicorn/protocols/websockets/websockets_impl.py", line 345, in asgi_send
-    raise ClientDisconnected from exc
-uvicorn.protocols.utils.ClientDisconnected
-During handling of the above exception, another exception occurred:
-Traceback (most recent call last):
-  File "/app/app/services/websocket_service.py", line 272, in broadcast_to_upload
-    await asyncio.wait_for(
-  File "/usr/local/lib/python3.11/asyncio/tasks.py", line 489, in wait_for
-    return fut.result()
-           ^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/site-packages/starlette/websockets.py", line 166, in send_text
-    await self.send({"type": "websocket.send", "text": data})
-  File "/usr/local/lib/python3.11/site-packages/starlette/websockets.py", line 89, in send
-    raise WebSocketDisconnect(code=1006)
-starlette.websockets.WebSocketDisconnect
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_STARTED
-WARNING:app.services.websocket_service:No active connections found for upload_id upload_1763746080555_gjuchgoob
-INFO:app.services.websocket_service:Step started: Preparing Results (Step 6) for upload_id upload_1763746080555_gjuchgoob
-INFO:app.api.new_extract:📊 Calculating invoice total from 1 tables
-INFO:app.api.new_extract:📊 Table 0: Found invoice column at index 4: 'Invoice Total'
-INFO:app.api.new_extract:✅ Table 0: Calculated from rows: $66,325.44
-INFO:app.api.new_extract:✅ TOTAL invoice amount from all tables: $66,325.44
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: STEP_PROGRESS
-WARNING:app.services.websocket_service:No active connections found for upload_id upload_1763746080555_gjuchgoob
-INFO:app.services.websocket_service:Broadcasting message to upload_id upload_1763746080555_gjuchgoob: EXTRACTION_COMPLETE
-WARNING:app.services.websocket_service:No active connections found for upload_id upload_1763746080555_gjuchgoob
-INFO:app.services.websocket_service:Extraction complete for upload_id upload_1763746080555_gjuchgoob
-INFO:app.api.new_extract:✅ Extraction complete! Sent results via WebSocket for upload_id: upload_1763746080555_gjuchgoob
-WARNING:app.api.websocket:WebSocket disconnected during message handling: WebSocket is not connected. Need to call "accept" first.
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763746080555_gjuchgoob
-INFO:     10.20.174.248:40256 - "POST /api/extract-tables-smart/ HTTP/1.1" 200 OK
-INFO:     10.219.18.220:50190 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.18.220:50202 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.18.220:50200 - "GET /health HTTP/1.1" 200 OK
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763746080555_gjuchgoob. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763746080555_gjuchgoob, session_id: session_1763746371900_415uve3zk
-INFO:     10.20.16.82:59196 - "WebSocket /api/ws/progress/upload_1763746080555_gjuchgoob?session_id=session_1763746371900_415uve3zk" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763746080555_gjuchgoob, session_id=session_1763746371900_415uve3zk, timeout=1800s
-INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763746080555_gjuchgoob, session_id: session_1763746371900_415uve3zk
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763746080555_gjuchgoob
-INFO:     10.219.18.220:37094 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.18.220:37104 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.18.220:37504 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.18.220:37518 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.18.220:44182 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.18.220:44192 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.18.220:44204 - "GET /health HTTP/1.1" 200 OK
-INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763746080555_gjuchgoob, session_id=session_1763746371900_415uve3zk
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763746080555_gjuchgoob, session_id=session_1763746371900_415uve3zk
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763746080555_gjuchgoob
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763746080555_gjuchgoob. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763746080555_gjuchgoob, session_id: session_1763746401538_ygyrrxef3
-INFO:     10.20.33.62:36860 - "WebSocket /api/ws/progress/upload_1763746080555_gjuchgoob?session_id=session_1763746401538_ygyrrxef3" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763746080555_gjuchgoob, session_id=session_1763746401538_ygyrrxef3, timeout=1800s
-INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763746080555_gjuchgoob, session_id: session_1763746401538_ygyrrxef3
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763746080555_gjuchgoob
-INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763746080555_gjuchgoob, session_id=session_1763746401538_ygyrrxef3
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763746080555_gjuchgoob, session_id=session_1763746401538_ygyrrxef3
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763746080555_gjuchgoob
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763746080555_gjuchgoob. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763746080555_gjuchgoob, session_id: session_1763746402539_5kwk62jpw
-INFO:     10.20.148.164:38526 - "WebSocket /api/ws/progress/upload_1763746080555_gjuchgoob?session_id=session_1763746402539_5kwk62jpw" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763746080555_gjuchgoob, session_id=session_1763746402539_5kwk62jpw, timeout=1800s
-INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763746080555_gjuchgoob, session_id: session_1763746402539_5kwk62jpw
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763746080555_gjuchgoob
-INFO:     10.219.18.220:57912 - "GET /health HTTP/1.1" 200 OK
-INFO:     connection closed
-INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763746080555_gjuchgoob, session_id=session_1763746402539_5kwk62jpw
-INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763746080555_gjuchgoob, session_id=session_1763746402539_5kwk62jpw
-INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763746080555_gjuchgoob
-WARNING:app.api.websocket:WebSocket connection without explicit token for upload_id=upload_1763746080555_gjuchgoob. This is allowed for progress tracking, but consider implementing token passing for production.
-INFO:app.api.websocket:Attempting to connect WebSocket for upload_id: upload_1763746080555_gjuchgoob, session_id: session_1763746406539_8a34pghpr
-INFO:     10.20.166.78:58878 - "WebSocket /api/ws/progress/upload_1763746080555_gjuchgoob?session_id=session_1763746406539_8a34pghpr" [accepted]
-INFO:app.services.websocket_service:WebSocket connected: upload_id=upload_1763746080555_gjuchgoob, session_id=session_1763746406539_8a34pghpr, timeout=1800s
-INFO:     connection open
-INFO:app.api.websocket:WebSocket connected successfully for upload_id: upload_1763746080555_gjuchgoob, session_id: session_1763746406539_8a34pghpr
-INFO:app.api.websocket:Started keepalive task for upload_id=upload_1763746080555_gjuchgoob
-INFO:     10.219.18.220:57926 - "GET /health HTTP/1.1" 200 OK
-INFO:     10.219.18.220:58512 - "GET /health HTTP/1.1" 200 OK
-INFO:     connection closed
+INFO:app.api.websocket:WebSocket disconnected: upload_id=upload_1763980540949_caydha1ce, session_id=session_1763980540959_kchp43sfm
+INFO:app.services.websocket_service:WebSocket disconnected: upload_id=upload_1763980540949_caydha1ce, session_id=session_1763980540959_kchp43sfm
+INFO:app.api.websocket:WebSocket cleanup completed for upload_id=upload_1763980540949_caydha1ce
+INFO:app.api.auto_approval:Updated format learning usage count for signature: f0d2424f7efd76c2fcfb224d0246d1f1
+INFO:app.services.websocket_service:Broadcasting message to upload_id fabc89d8-b4ce-4d52-8ebb-9dfb0fa39c9d: progress_update
+WARNING:app.services.websocket_service:No active connections found for upload_id fabc89d8-b4ce-4d52-8ebb-9dfb0fa39c9d
+INFO:app.db.crud.statement_upload:✅ Saving statement review for upload fabc89d8-b4ce-4d52-8ebb-9dfb0fa39c9d with valid status: Approved
+INFO:app.db.crud.statement_upload:💾 Upload not found for ID: fabc89d8-b4ce-4d52-8ebb-9dfb0fa39c9d - This is unexpected for remap flow
+WARNING:app.db.crud.statement_upload:⚠️ Statement fabc89d8-b4ce-4d52-8ebb-9dfb0fa39c9d should already exist in database for remap operation
+INFO:app.db.crud.statement_upload:✅ All required fields present, proceeding with record creation
+INFO:app.db.crud.statement_upload:✅ Using user_id: f6cf1764-5bfc-4352-abd9-81b72b7cf191 (from current_user_id)
+INFO:app.db.crud.statement_upload:✅ Retrieved user's company_id d883a865-a54f-41d6-968e-f94c3cb3f589 from users table for user f6cf1764-5bfc-4352-abd9-81b72b7cf191
+INFO:app.db.crud.environment:✅ Found existing default environment 9f4a7a57-5715-4b1e-98a9-b9901726a485 for user f6cf1764-5bfc-4352-abd9-81b72b7cf191 in company d883a865-a54f-41d6-968e-f94c3cb3f589
+INFO:app.db.crud.statement_upload:✅ ALWAYS using user's default environment_id 9f4a7a57-5715-4b1e-98a9-b9901726a485 for consistency
+INFO:app.db.crud.statement_upload:✅ Created new DB record for upload fabc89d8-b4ce-4d52-8ebb-9dfb0fa39c9d
+INFO:app.db.crud.statement_upload:=== REMAP DEBUG ===
+INFO:app.db.crud.statement_upload:💾 Saving statement review: upload_id=fabc89d8-b4ce-4d52-8ebb-9dfb0fa39c9d, status=Approved
+INFO:app.db.crud.statement_upload:📋 Field config being saved: 6 fields
+INFO:app.db.crud.statement_upload:📊 Final data tables: 2
+INFO:app.db.crud.statement_upload:📅 Selected statement date: {'date': '2025-05-31'}
+INFO:app.db.crud.statement_upload:===================
+💾 Saving statement review: upload_id=fabc89d8-b4ce-4d52-8ebb-9dfb0fa39c9d, status=Approved
+📋 Field config being saved: [{'field': 'Group ID', 'mapping': 'Policy Number'}, {'field': 'Comm. Rate', 'mapping': 'Commission Rate'}, {'field': 'Group Name', 'mapping': 'Client Name'}, {'field': 'Invoice Amount', 'mapping': 'Premium Total'}, {'field': 'Commission Amount', 'mapping': 'Commission Earned'}, {'field': 'Commissionable Amount', 'mapping': 'Invoice Total'}]
+📊 Final data rows: 2
+📅 Selected statement date being saved: {'date': '2025-05-31'}
+🔍 DEBUG Saving table 0 'Table 1': summaryRows=[11, 13], type=<class 'list'>
+🔍 DEBUG Saving table 1 'Table 2': summaryRows=[], type=<class 'list'>
+📝 Extracted field_mapping with 6 mappings: {'Group ID': 'Policy Number', 'Comm. Rate': 'Commission Rate', 'Group Name': 'Client Name', 'Invoice Amount': 'Premium Total', 'Commission Amount': 'Commission Earned', 'Commissionable Amount': 'Invoice Total'}
+💰 Calculating extracted_total for manual approval...
+💰 field_mapping keys: ['Group ID', 'Comm. Rate', 'Group Name', 'Invoice Amount', 'Commission Amount', 'Commissionable Amount']
+💰 Number of tables in final_data: 2
+💰 Found commission field (EXACT MATCH): Commission Amount -> Commission Earned
+💰 Final commission_source_field: Commission Amount
+  📊 Table 0: 6 headers, 14 rows
+  📋 Headers: ['Group ID', 'Group Name', 'Invoice Amount', 'Commissionable Amount', 'Comm. Rate', 'Commission Amount']
+  📋 First row sample: ['G-RDA012300075', 'CG23 Logistics', '$5,824.00', '$5,264.00', '2.00%', '$105.28']
+  💰 Table 0: Commission column 'Commission Amount' at index 5
+    Row 0: [LIST] raw_value = '$105.28' (type: <class 'str'>)
+    Row 0: Added $105.28 (running total: $105.28)
+    Row 1: [LIST] raw_value = '$753.84' (type: <class 'str'>)
+    Row 1: Added $753.84 (running total: $859.12)
+    Row 2: [LIST] raw_value = '$361.68' (type: <class 'str'>)
+    Row 2: Added $361.68 (running total: $1220.80)
+    Row 3: [LIST] raw_value = '$60.90' (type: <class 'str'>)
+    Row 3: Added $60.90 (running total: $1281.70)
+    Row 4: [LIST] raw_value = '$379.32' (type: <class 'str'>)
+    Row 4: Added $379.32 (running total: $1661.02)
+    Row 5: [LIST] raw_value = '$246.18' (type: <class 'str'>)
+    Row 5: Added $246.18 (running total: $1907.20)
+    Row 6: [LIST] raw_value = '$315.84' (type: <class 'str'>)
+    Row 6: Added $315.84 (running total: $2223.04)
+    Row 7: [LIST] raw_value = '$361.68' (type: <class 'str'>)
+    Row 7: Added $361.68 (running total: $2584.72)
+    Row 8: [LIST] raw_value = '$692.88' (type: <class 'str'>)
+    Row 8: Added $692.88 (running total: $3277.60)
+    Row 9: [LIST] raw_value = '$438.60' (type: <class 'str'>)
+    Row 9: Added $438.60 (running total: $3716.20)
+    Row 10: [LIST] raw_value = '$585.36' (type: <class 'str'>)
+    Row 10: Added $585.36 (running total: $4301.56)
+    Row 11: SKIPPED (summary row)
+    Row 12: [LIST] raw_value = '$560.00' (type: <class 'str'>)
+    Row 12: Added $560.00 (running total: $4861.56)
+    Row 13: SKIPPED (summary row)
+  ✅ Table 0 total: $4861.56
+  📊 Table 1: 3 headers, 1 rows
+  📋 Headers: ['Total Invoice Amount', 'Commissionable Amount', 'Commission Amount']
+  📋 First row sample: ['$70,498.00', '$70,498.00', '$4,861.56']
+  💰 Table 1: Commission column 'Commission Amount' at index 2
+    Row 0: [LIST] raw_value = '$4,861.56' (type: <class 'str'>)
+    Row 0: Added $4861.56 (running total: $9723.12)
+  ✅ Table 1 total: $4861.56
+💰 AI-extracted total from document: $75202.00
+💰 Total comparison:
+   - AI extracted from document: $75202.00
+   - Calculated from table rows: $9723.12
+   - Difference: $65478.88 (87.07%)
+   - Match: False
+⚠️ TOTAL MISMATCH DETECTED! Changing status from 'Approved' to 'needs_review'
+💰 Final extracted_total: $9723.12
+✅ Set extracted_total=75202.0 (AI-extracted), calculated_total=9723.12, total_amount_match=False
+INFO:app.services.user_profile_service:Recorded contribution: approval for user f6cf1764-5bfc-4352-abd9-81b72b7cf191
+INFO:app.api.review:✅ User contribution recorded for needs_review statement fabc89d8-b4ce-4d52-8ebb-9dfb0fa39c9d
+INFO:app.api.auto_approval:📊 Priority 1: Using total from document_metadata: $75,202.00
+INFO:app.api.auto_approval:💰 Auto-approval: Found PRIMARY commission field: 'Commission Amount' (mapped to 'Commission Earned')
+INFO:app.api.auto_approval:💰 Auto-approval: Calculating total from 2 table(s)
+INFO:app.api.auto_approval:💰 Auto-approval: Table 0: Found 6 headers
+INFO:app.api.auto_approval:💰 Auto-approval: Commission field 'Commission Amount' found at index 5
+INFO:app.api.auto_approval:💰 Auto-approval: Table has 14 rows, 2 summary rows to skip
+INFO:app.api.auto_approval:💰 Auto-approval: Processed 12 data rows from table 0
+INFO:app.api.auto_approval:💰 Auto-approval: Table 1: Found 3 headers
+INFO:app.api.auto_approval:💰 Auto-approval: Commission field 'Commission Amount' found at index 2
+INFO:app.api.auto_approval:💰 Auto-approval: Table has 1 rows, 0 summary rows to skip
+INFO:app.api.auto_approval:💰 Auto-approval: Processed 1 data rows from table 1
+INFO:app.api.auto_approval:💰 Auto-approval: Found invoice field (exact match): 'Commissionable Amount' (mapped to 'Invoice Total')
+INFO:app.api.auto_approval:💰 Auto-approval: Calculating invoice total from 2 table(s)
+INFO:app.api.auto_approval:💰 Auto-approval: Invoice field 'Commissionable Amount' found at index 3
+INFO:app.api.auto_approval:💰 Auto-approval: Processed 12 invoice rows from table 0
+INFO:app.api.auto_approval:💰 Auto-approval: Invoice field 'Commissionable Amount' found at index 1
+INFO:app.api.auto_approval:💰 Auto-approval: Processed 1 invoice rows from table 1
+INFO:app.api.auto_approval:📊 Total validation:
+INFO:app.api.auto_approval:  - Extracted from file: $75202.00
+INFO:app.api.auto_approval:  - Calculated from table: $9723.12
+INFO:app.api.auto_approval:  - Invoice total calculated: $151524.00
+INFO:app.api.auto_approval:  - Difference: $65,478.88 (87.07%)
+INFO:app.api.auto_approval:  - Match: False
+WARNING:app.api.auto_approval:⚠️ Auto-approval: Totals don't match, setting status to 'needs_review' for manual review
+INFO:     10.219.18.220:44926 - "GET /health HTTP/1.1" 200 OK
+INFO:app.api.auto_approval:✅ Updated DB record with auto-approval metadata
+INFO:app.api.auto_approval:⚠️ Auto-approval: Status is 'needs_review', skipping commission data processing
+     [GET]commission-tracker-1.onrender.com/api/ws/progress/upload_1763980540949_caydha1ce?session_id=session_1763980540959_kchp43sfmclientIP="86.50.75.139" requestID="" responseTimeMS=81579 responseBytes=0 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
+INFO:app.services.user_profile_service:Recorded contribution: auto_approval for user f6cf1764-5bfc-4352-abd9-81b72b7cf191
+INFO:app.api.auto_approval:✅ User contribution recorded for auto-approved statement fabc89d8-b4ce-4d52-8ebb-9dfb0fa39c9d
+INFO:app.services.websocket_service:Broadcasting message to upload_id fabc89d8-b4ce-4d52-8ebb-9dfb0fa39c9d: progress_update
+WARNING:app.services.websocket_service:No active connections found for upload_id fabc89d8-b4ce-4d52-8ebb-9dfb0fa39c9d
+INFO:app.api.auto_approval:Auto-approval completed for upload fabc89d8-b4ce-4d52-8ebb-9dfb0fa39c9d
+INFO:     10.20.245.226:34518 - "POST /api/auto-approve/process-lite HTTP/1.1" 200 OK
+     [POST]200commission-tracker-1.onrender.com/api/auto-approve/process-liteclientIP="86.50.75.139" requestID="f1e8c37a-6ef3-4aea" responseTimeMS=2176 responseBytes=1099 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
+INFO:     10.20.245.226:34518 - "GET /api/companies/user-specific?environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
+INFO:     10.21.101.173:37174 - "GET /api/companies/?view_mode=my_data&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
+     [GET]200commission-tracker-1.onrender.com/api/companies/?view_mode=my_data&environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485clientIP="86.50.75.139" requestID="75955324-06e3-45e7" responseTimeMS=689 responseBytes=1140 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
+INFO:     10.20.245.226:34518 - "GET /api/companies/user-specific?environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485 HTTP/1.1" 200 OK
+     [GET]200commission-tracker-1.onrender.com/api/companies/user-specific?environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485clientIP="86.50.75.139" requestID="fa41da67-f7c4-41e2" responseTimeMS=737 responseBytes=1062 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
+INFO:     10.219.18.220:44934 - "GET /health HTTP/1.1" 200 OK
+     [GET]200commission-tracker-1.onrender.com/api/companies/user-specific?environment_id=9f4a7a57-5715-4b1e-98a9-b9901726a485clientIP="86.50.75.139" requestID="eac2aa9e-81e2-44bf" responseTimeMS=704 responseBytes=1062 userAgent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
